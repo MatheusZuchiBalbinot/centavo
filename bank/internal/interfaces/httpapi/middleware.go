@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"centavo/bank/internal/platform/correlation"
 )
 
 const correlationHeader = "X-Correlation-Id"
@@ -18,8 +20,6 @@ const requestDeadline = 5 * time.Second
 
 // correlationFormat keeps log lines and stored ids free of control characters.
 var correlationFormat = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,128}$`)
-
-type correlationKey struct{}
 
 // withRequestContext attaches the correlation id and the request deadline.
 func withRequestContext(next http.Handler, logger *slog.Logger) http.Handler {
@@ -34,7 +34,7 @@ func withRequestContext(next http.Handler, logger *slog.Logger) http.Handler {
 		ctx, cancel := context.WithTimeout(r.Context(), requestDeadline)
 		defer cancel()
 
-		ctx = context.WithValue(ctx, correlationKey{}, correlationID)
+		ctx = correlation.With(ctx, correlationID)
 		w.Header().Set(correlationHeader, correlationID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -65,7 +65,5 @@ func newCorrelationID() (string, error) {
 }
 
 func correlationIDFrom(ctx context.Context) string {
-	correlationID, _ := ctx.Value(correlationKey{}).(string)
-
-	return correlationID
+	return correlation.From(ctx)
 }
