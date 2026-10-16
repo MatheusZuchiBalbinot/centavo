@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	mathrand "math/rand/v2"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -92,7 +93,9 @@ func NewRegistry() *Registry {
 	return &Registry{active: map[string]*mode{}}
 }
 
-// Set validates and activates a mode, replacing the participant's previous one.
+// Set validates and activates a mode, replacing the participant's previous
+// one. Setting the same mode again only extends its life: the lab renews it
+// like a lease, without restarting the outage window or the sequence of lies.
 func (r *Registry) Set(config Config, now time.Time) error {
 	m, err := newMode(config, now)
 	if err != nil {
@@ -101,6 +104,15 @@ func (r *Registry) Set(config Config, now time.Time) error {
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
+	existing, isActive := r.active[config.ParticipantID]
+
+	isRenewal := isActive && reflect.DeepEqual(existing.config, config) && now.Before(existing.expiresAt)
+	if isRenewal {
+		existing.expiresAt = m.expiresAt
+
+		return nil
+	}
 
 	r.active[config.ParticipantID] = m
 
@@ -155,8 +167,11 @@ func (d Decider) Outage() (OutageMode, bool) {
 
 	result := draw(d, answer{}, func(m *mode) answer {
 		isDown := m.hasOutage && d.now.Before(m.outageUntil)
+		if !isDown {
+			return answer{}
+		}
 
-		return answer{mode: m.config.Outage.Mode, isDown: isDown}
+		return answer{mode: m.config.Outage.Mode, isDown: true}
 	})
 
 	return result.mode, result.isDown

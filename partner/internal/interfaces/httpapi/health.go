@@ -35,6 +35,7 @@ func NewAdminHandler(info BuildInfo, api API, chaos http.Handler) http.Handler {
 	mux.Handle("GET "+HealthPath, healthHandler{response: response})
 	mux.HandleFunc("POST /internal/incoming", api.incoming)
 	mux.HandleFunc("GET /internal/truth", api.truthExport)
+	mux.HandleFunc("GET /internal/pending", api.pending)
 
 	if chaos != nil {
 		mux.Handle("/chaos/", chaos)

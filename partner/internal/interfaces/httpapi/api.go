@@ -289,6 +289,18 @@ func (a API) truthExport(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, export)
 }
 
+// pending counts the webhooks still to be sent, for the lab's quiescence.
+func (a API) pending(w http.ResponseWriter, r *http.Request) {
+	count, err := a.store.PendingDeliveries(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal"})
+
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]int{"pending_deliveries": count})
+}
+
 func (a API) validate(request submitRequest) error {
 	isValid := endToEndPattern.MatchString(request.EndToEndID) && a.participants[request.ParticipantID] && request.AmountCents > 0 && request.DestinationKey != ""
 	if !isValid {

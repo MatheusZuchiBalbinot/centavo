@@ -110,3 +110,45 @@ func TestSet_RejectsInvalidModes(t *testing.T) {
 		}
 	}
 }
+
+func TestSet_RenewingKeepsTheOutageWindowAndTheLies(t *testing.T) {
+	registry := modes.NewRegistry()
+	config := modes.Config{ParticipantID: "centavo-robust", TTL: "30s", Seed: "0x1", RejectRate: 0.5, Outage: &modes.OutageConfig{Until: "+10s", Mode: modes.OutageServiceUnavailable}}
+
+	err := registry.Set(config, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	first := registry.For("centavo-robust", now).Reject()
+
+	err = registry.Set(config, now.Add(8*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, isDown := registry.For("centavo-robust", now.Add(11*time.Second)).Outage()
+	if isDown {
+		t.Fatal("renewing the mode restarted the outage window")
+	}
+
+	again := modes.NewRegistry()
+	_ = again.Set(config, now)
+	_ = again.For("centavo-robust", now).Reject()
+	second := again.For("centavo-robust", now).Reject()
+
+	if registry.For("centavo-robust", now.Add(9*time.Second)).Reject() != second {
+		t.Fatalf("renewing the mode restarted the sequence of lies (first %t)", first)
+	}
+}
+
+// TestOutage_WithAModeThatDeclaresNone is a regression test: an active mode
+// without an outage used to dereference a nil pointer on every request.
+func TestOutage_WithAModeThatDeclaresNone(t *testing.T) {
+	registry := lying(t, modes.Config{TimeoutAfterProcess: 0.1})
+
+	_, isDown := registry.For("centavo-robust", now).Outage()
+	if isDown {
+		t.Fatal("a mode without an outage made the partner unavailable")
+	}
+}
