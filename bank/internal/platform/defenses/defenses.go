@@ -204,5 +204,15 @@ func (p Profile) Notes() []string {
 		notes = append(notes, "partner_idempotency without outbox: the naive relay picks a new end_to_end_id per attempt anyway")
 	}
 
+	isRecoveryWithoutGuards := p.IsEnabled(Recovery) && !p.IsEnabled(StateMachine)
+	if isRecoveryWithoutGuards {
+		notes = append(notes, "recovery without state_machine: the sweeper walks to the partner's status by overwriting, with no guard against a concurrent webhook")
+	}
+
+	isRetryWithoutOutbox := p.IsEnabled(ResilientClient) && !p.IsEnabled(Outbox)
+	if isRetryWithoutOutbox {
+		notes = append(notes, "resilient_client without outbox: the naive relay has no message to reschedule, so a doubtful send still fails")
+	}
+
 	return notes
 }

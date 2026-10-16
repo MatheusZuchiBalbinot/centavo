@@ -31,32 +31,48 @@ type PartnerEvent struct {
 }
 
 // NaiveWebhook applies partner events as they arrive, in the request that
-// carries them (docs/architecture.md, section 5.4): no inbox, no dedup, the
-// status overwritten by whatever the event says.
+// carries them (docs/architecture.md, section 5.4): no inbox, no dedup.
 type NaiveWebhook struct {
 	unitOfWork UnitOfWork
+	events     eventApplier
 }
 
 // NewNaiveWebhook builds the handler's use case.
-func NewNaiveWebhook(unitOfWork UnitOfWork) NaiveWebhook {
-	return NaiveWebhook{unitOfWork: unitOfWork}
+func NewNaiveWebhook(unitOfWork UnitOfWork, machine StateMachine) NaiveWebhook {
+	return NaiveWebhook{unitOfWork: unitOfWork, events: eventApplier{machine: machine}}
 }
 
-// Apply runs the event's effect.
+// Apply runs the event's effect. With the guarded machine (D7), an event
+// that does not fit the transfer is refused, and the partner delivers it
+// again later.
 func (w NaiveWebhook) Apply(ctx context.Context, event PartnerEvent) error {
 	return w.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
-		return applyEvent(ctx, stores, event)
+		return w.events.apply(ctx, stores, event)
 	})
 }
 
-func applyEvent(ctx context.Context, stores Stores, event PartnerEvent) error {
+// eventApplier turns a partner event into its effect.
+type eventApplier struct {
+	machine StateMachine
+}
+
+// expectedFrom is the status each transfer event speaks for (docs/domain.md,
+// section 8.3). Reaching another status, created to confirmed for one, needs
+// the partner's authoritative status, never just the webhook.
+var expectedFrom = map[string]transfer.Status{
+	EventSettled:  transfer.StatusSent,
+	EventRejected: transfer.StatusSent,
+	EventReturned: transfer.StatusConfirmed,
+}
+
+func (a eventApplier) apply(ctx context.Context, stores Stores, event PartnerEvent) error {
 	switch event.Type {
 	case EventSettled:
-		return applyTransferEvent(ctx, stores, event, StatusChange{To: transfer.StatusConfirmed})
+		return a.applyTransferEvent(ctx, stores, event, transfer.StatusConfirmed)
 	case EventRejected:
-		return applyTransferEvent(ctx, stores, event, StatusChange{To: transfer.StatusFailed, FailureCode: failureCodeOf(event)})
+		return a.applyTransferEvent(ctx, stores, event, transfer.StatusFailed)
 	case EventReturned:
-		return applyTransferEvent(ctx, stores, event, StatusChange{To: transfer.StatusReversed})
+		return a.applyTransferEvent(ctx, stores, event, transfer.StatusReversed)
 	case EventIncoming:
 		return creditIncoming(ctx, stores, event)
 	default:
@@ -64,15 +80,19 @@ func applyEvent(ctx context.Context, stores Stores, event PartnerEvent) error {
 	}
 }
 
-func applyTransferEvent(ctx context.Context, stores Stores, event PartnerEvent, change StatusChange) error {
+func (a eventApplier) applyTransferEvent(ctx context.Context, stores Stores, event PartnerEvent, to transfer.Status) error {
 	external, err := stores.FindExternalTransferByEndToEnd(ctx, event.EndToEndID)
 	if err != nil {
 		return err
 	}
 
-	change.TransferID = external.ID
+	command := TransitionCommand{TransferID: external.ID, From: expectedFrom[event.Type], To: to, Cause: causeWebhook, CorrelationID: event.ID}
 
-	return overwrite(ctx, stores, overwriteCommand{external: external, change: change, cause: causeWebhook, correlationID: event.ID})
+	if to == transfer.StatusFailed {
+		command.FailureCode = failureCodeOf(event)
+	}
+
+	return a.machine.Move(ctx, stores, command)
 }
 
 func failureCodeOf(event PartnerEvent) string {

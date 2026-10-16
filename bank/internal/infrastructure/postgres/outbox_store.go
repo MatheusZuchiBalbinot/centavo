@@ -46,7 +46,7 @@ WHERE id IN (
     ORDER BY next_attempt_at, id
     LIMIT $3
     FOR UPDATE SKIP LOCKED)
-RETURNING id, aggregate_id, lease_token, correlation_id`
+RETURNING id, aggregate_id, lease_token, attempts, correlation_id`
 
 // ClaimOutbox leases up to limit messages.
 func (s LedgerStore) ClaimOutbox(ctx context.Context, owner string, ttl time.Duration, limit int) ([]application.OutboxClaim, error) {
@@ -60,7 +60,7 @@ func (s LedgerStore) ClaimOutbox(ctx context.Context, owner string, ttl time.Dur
 
 func scanOutboxClaim(row pgx.CollectableRow) (application.OutboxClaim, error) {
 	var claim application.OutboxClaim
-	err := row.Scan(&claim.ID, &claim.AggregateID, &claim.Token, &claim.CorrelationID)
+	err := row.Scan(&claim.ID, &claim.AggregateID, &claim.Token, &claim.Attempts, &claim.CorrelationID)
 
 	return claim, err
 }
@@ -83,23 +83,57 @@ func (s LedgerStore) FinishOutbox(ctx context.Context, id, token int64) (bool, e
 	return tag.RowsAffected() == 1, nil
 }
 
-const lockExternalTransferSQL = `SELECT status::text FROM external_transfers WHERE id = $1 FOR UPDATE`
-
 // LockExternalTransfer locks the transfer until the transaction ends and
-// returns its status.
-func (s LedgerStore) LockExternalTransfer(ctx context.Context, id transfer.ID) (transfer.Status, error) {
-	var status string
+// returns it.
+func (s LedgerStore) LockExternalTransfer(ctx context.Context, id transfer.ID) (application.ExternalTransfer, error) {
+	row := s.db.QueryRow(ctx, `SELECT `+externalTransferColumns+` FROM external_transfers WHERE id = $1 FOR UPDATE`, uuid.UUID(id))
 
-	err := s.db.QueryRow(ctx, lockExternalTransferSQL, uuid.UUID(id)).Scan(&status)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", transfer.ErrTransferNotFound
-	}
+	return scanExternalTransfer(row)
+}
 
+// advanceStatusSQL is the compare-and-set of docs/domain.md, section 13.5.
+const advanceStatusSQL = `
+UPDATE external_transfers
+SET status = $2::external_transfer_status,
+    status_seq = status_seq + 1,
+    failure_code = CASE WHEN $2::external_transfer_status = 'failed' THEN $3 ELSE NULL END,
+    updated_at = now()
+WHERE id = $1 AND status_seq = $4`
+
+// errStaleStatus is a compare-and-set that lost: the caller read the status
+// without the lock, which the guarded machine never does.
+var errStaleStatus = errors.New("transfer status changed since it was read")
+
+// AdvanceStatus changes the status if the sequence is still the one seen.
+func (s LedgerStore) AdvanceStatus(ctx context.Context, change application.StatusChange, seenSeq int) error {
+	tag, err := s.db.Exec(ctx, advanceStatusSQL, uuid.UUID(change.TransferID), string(change.To), change.FailureCode, seenSeq)
 	if err != nil {
-		return "", fmt.Errorf("locking external transfer: %w", err)
+		return fmt.Errorf("advancing status: %w", err)
 	}
 
-	return transfer.Status(status), nil
+	if tag.RowsAffected() != 1 {
+		return errStaleStatus
+	}
+
+	return nil
+}
+
+// deferOutboxSQL hands the message back for later, under the same fencing
+// as finishOutboxSQL.
+const deferOutboxSQL = `
+UPDATE outbox_messages
+SET next_attempt_at = now() + $3::bigint * interval '1 millisecond', last_error = $4,
+    lease_owner = NULL, lease_expires_at = NULL
+WHERE id = $1 AND lease_token = $2 AND status = 'pending'`
+
+// DeferOutbox reschedules the message if the token still owns it.
+func (s LedgerStore) DeferOutbox(ctx context.Context, id, token int64, delay time.Duration, reason string) (bool, error) {
+	tag, err := s.db.Exec(ctx, deferOutboxSQL, id, token, delay.Milliseconds(), reason)
+	if err != nil {
+		return false, fmt.Errorf("deferring outbox message: %w", err)
+	}
+
+	return tag.RowsAffected() == 1, nil
 }
 
 // insertInboxSQL is defense D5's intake: the unique (source, event_id) of the

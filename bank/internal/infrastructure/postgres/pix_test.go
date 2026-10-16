@@ -38,7 +38,7 @@ func newPixBank(t *testing.T) pixBank {
 		writes:     w,
 		unitOfWork: unitOfWork,
 		create:     application.NewCreatePixOut(application.RowLocker{}, application.NewNotifyAfterCommit(postgres.NewNotifyPublisher(w.bank.pool))),
-		webhook:    application.NewNaiveWebhook(unitOfWork),
+		webhook:    application.NewNaiveWebhook(unitOfWork, application.OverwriteTransitions{}),
 		get:        application.NewGetExternalTransfer(postgres.NewLedgerStore(w.bank.pool)),
 	}
 }
@@ -132,7 +132,7 @@ func TestNaiveRelay_RecordsWhatThePartnerAnswered(t *testing.T) {
 
 			var calls atomic.Int32
 
-			relay := application.NewNaiveRelay(p.unitOfWork, fakePartner(t, tc.status, &calls))
+			relay := application.NewNaiveRelay(p.unitOfWork, fakePartner(t, tc.status, &calls), application.OverwriteTransitions{})
 
 			err := relay.Relay(t.Context(), created.TransferID)
 			if err != nil {

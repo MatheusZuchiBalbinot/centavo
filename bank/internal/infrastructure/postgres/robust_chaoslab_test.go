@@ -13,6 +13,7 @@ import (
 
 	"centavo/bank/internal/application"
 	"centavo/bank/internal/domain/ledger"
+	"centavo/bank/internal/domain/transfer"
 	"centavo/bank/internal/infrastructure/postgres"
 	"centavo/bank/internal/platform/correlation"
 	"centavo/bank/internal/platform/defenses"
@@ -179,12 +180,13 @@ func TestBalance_ConcurrentDebits_WithoutBalanceLocking(t *testing.T) {
 // and the mark share the transaction, so the next pass applies it once.
 func TestInbox_CrashBetweenApplyAndMark_AppliesOnce(t *testing.T) {
 	p := newOutboxBank(t)
-	intake, processor := newInbox(p)
+	intake, processor := newInbox(p, statusAnswer(transfer.PartnerSettled))
 	drainInbox(t, processor)
 
 	account := p.bank.newCustomer(t)
 	p.bank.fund(t, account, 10_000)
 	created := p.createPixOut(t, account, 4_500)
+	p.markSent(t, created.TransferID)
 	settled := application.PartnerEvent{ID: "evt_fp06_" + created.EndToEndID, Type: application.EventSettled, EndToEndID: created.EndToEndID, AmountCents: 4_500}
 
 	err := intake.Apply(correlation.With(t.Context(), settled.ID), settled)

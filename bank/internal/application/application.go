@@ -76,6 +76,7 @@ type Stores interface {
 	PixStore
 	OutboxStore
 	InboxStore
+	LeaseStore
 }
 
 // UnitOfWork runs fn with stores whose writes commit together (D1) or one by

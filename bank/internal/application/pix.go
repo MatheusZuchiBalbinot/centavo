@@ -67,7 +67,7 @@ type TransitionRecord struct {
 	CreatedAt           time.Time
 }
 
-// StatusChange is an overwrite of a transfer's status, as the naive code does it.
+// StatusChange is the new status of a transfer.
 type StatusChange struct {
 	TransferID  transfer.ID
 	To          transfer.Status
@@ -96,8 +96,11 @@ type PixStore interface {
 	// returns what it was and the new sequence number.
 	OverwriteStatus(ctx context.Context, change StatusChange) (transfer.Status, int, error)
 	// LockExternalTransfer locks the transfer for the rest of the
-	// transaction and returns its status.
-	LockExternalTransfer(ctx context.Context, id transfer.ID) (transfer.Status, error)
+	// transaction and returns it.
+	LockExternalTransfer(ctx context.Context, id transfer.ID) (ExternalTransfer, error)
+	// AdvanceStatus is the guarded compare-and-set: it changes the status
+	// only if the sequence number is still the one read under the lock.
+	AdvanceStatus(ctx context.Context, change StatusChange, seenSeq int) error
 	InsertIncoming(ctx context.Context, incoming IncomingRecord) error
 	// ListCreated returns transfers still in created, oldest first.
 	ListCreated(ctx context.Context, limit int) ([]transfer.ID, error)
@@ -279,11 +282,12 @@ type PartnerSubmitter interface {
 type NaiveRelay struct {
 	unitOfWork UnitOfWork
 	partner    PartnerSubmitter
+	machine    StateMachine
 }
 
 // NewNaiveRelay builds the relay.
-func NewNaiveRelay(unitOfWork UnitOfWork, partner PartnerSubmitter) NaiveRelay {
-	return NaiveRelay{unitOfWork: unitOfWork, partner: partner}
+func NewNaiveRelay(unitOfWork UnitOfWork, partner PartnerSubmitter, machine StateMachine) NaiveRelay {
+	return NaiveRelay{unitOfWork: unitOfWork, partner: partner, machine: machine}
 }
 
 // Relay sends one transfer. Each attempt gets a new end_to_end_id, so a
@@ -380,13 +384,13 @@ func (r NaiveRelay) record(ctx context.Context, external ExternalTransfer, answe
 		}
 	}
 
-	return r.change(ctx, external, changeFor(external, answer), causeRelay)
-}
+	command := answerCommand(external, answer)
 
-func (r NaiveRelay) change(ctx context.Context, external ExternalTransfer, change StatusChange, cause string) error {
-	return r.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
-		return overwrite(ctx, stores, overwriteCommand{external: external, change: change, cause: cause})
+	err := r.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
+		return r.machine.Move(ctx, stores, command)
 	})
+
+	return ignoreMovedOn(err)
 }
 
 // nextAttemptOf reads the attempt from E<id>-<attempt>; the fixed id means
@@ -403,62 +407,6 @@ func nextAttemptOf(endToEndID string) int {
 	}
 
 	return attempt + 1
-}
-
-type overwriteCommand struct {
-	external      ExternalTransfer
-	change        StatusChange
-	cause         string
-	correlationID string
-}
-
-// overwrite is the naive transition: it writes the new status whatever the
-// current one is, records the jump in the history and posts the ledger
-// transaction the target status implies (FC25, FC26).
-func overwrite(ctx context.Context, stores Stores, command overwriteCommand) error {
-	from, seq, err := stores.OverwriteStatus(ctx, command.change)
-	if err != nil {
-		return err
-	}
-
-	posting := postingTowards(command.change.To)
-
-	var ledgerTransactionID *ledger.TransactionID
-
-	if posting != transfer.PostingNone {
-		transactionID, err := postTransferStep(ctx, stores, command.external, posting)
-		if err != nil {
-			return err
-		}
-
-		ledgerTransactionID = &transactionID
-	}
-
-	correlationID := command.correlationID
-	if correlationID == "" {
-		correlationID = command.external.ClientRef
-	}
-
-	transition := TransitionRecord{TransferID: command.external.ID, Seq: seq, From: &from, To: command.change.To, Cause: command.cause, LedgerTransactionID: ledgerTransactionID, CorrelationID: correlationID}
-
-	return stores.InsertTransition(ctx, transition)
-}
-
-// postingTowards is what the naive code posts for a target status, without
-// asking where the transfer comes from.
-func postingTowards(to transfer.Status) transfer.Posting {
-	switch to {
-	case transfer.StatusConfirmed:
-		return transfer.PostingSettle
-	case transfer.StatusFailed:
-		return transfer.PostingRefund
-	case transfer.StatusReversed:
-		return transfer.PostingReturn
-	case transfer.StatusCreated, transfer.StatusSent:
-		return transfer.PostingNone
-	default:
-		return transfer.PostingNone
-	}
 }
 
 // postTransferStep writes one step of a transfer's saga in the ledger

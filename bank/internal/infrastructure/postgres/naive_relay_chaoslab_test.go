@@ -37,7 +37,7 @@ func TestNaiveRelay_FailpointMatchesTheTransfersClientRef(t *testing.T) {
 
 	var calls atomic.Int32
 
-	relay := application.NewNaiveRelay(p.unitOfWork, fakePartner(t, http.StatusAccepted, &calls))
+	relay := application.NewNaiveRelay(p.unitOfWork, fakePartner(t, http.StatusAccepted, &calls), application.OverwriteTransitions{})
 
 	err = relay.Relay(t.Context(), created.TransferID)
 	if !errors.Is(err, failpoint.ErrSynthetic) {

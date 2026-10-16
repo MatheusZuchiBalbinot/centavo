@@ -21,6 +21,8 @@ const (
 	WebhookAfterReceiveBeforeAck Name = "webhook.after_receive_before_ack"
 	// InboxAfterApplyBeforeMark is FP06: the event is applied, not yet marked.
 	InboxAfterApplyBeforeMark Name = "inbox.after_apply_before_mark"
+	// SweeperAfterStatusBeforeTransition is FP11: the partner answered, the sweeper wrote nothing yet.
+	SweeperAfterStatusBeforeTransition Name = "sweeper.after_status_before_transition"
 )
 
 // Hit marks the passage through a named point. It returns an error only when

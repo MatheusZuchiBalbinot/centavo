@@ -73,7 +73,8 @@ func newOutboxBank(t *testing.T) pixBank {
 }
 
 func (p pixBank) relay(partner application.PartnerSubmitter, endToEnd application.EndToEndPolicy, leaseTTL time.Duration) application.OutboxRelay {
-	config := application.OutboxRelayConfig{UnitOfWork: p.unitOfWork, Partner: partner, EndToEnd: endToEnd, Owner: "relay-" + uuid.NewString()[:8], LeaseTTL: leaseTTL, Logger: discardLogger()}
+	machine := application.GuardedTransitions{}
+	config := application.OutboxRelayConfig{UnitOfWork: p.unitOfWork, Partner: partner, EndToEnd: endToEnd, Machine: machine, Doubt: application.NewGiveUpOnDoubt(machine), Owner: "relay-" + uuid.NewString()[:8], LeaseTTL: leaseTTL, Logger: discardLogger()}
 
 	return application.NewOutboxRelay(config)
 }
@@ -292,9 +293,32 @@ func TestOutbox_AnswerDoesNotOverwriteAWebhook(t *testing.T) {
 	}
 }
 
+// markSent records the partner's acceptance, as the relay would.
+func (p pixBank) markSent(t *testing.T, id transfer.ID) {
+	t.Helper()
+
+	command := application.TransitionCommand{TransferID: id, From: transfer.StatusCreated, To: transfer.StatusSent, Cause: "relay"}
+
+	err := p.unitOfWork.Run(t.Context(), func(ctx context.Context, stores application.Stores) error {
+		return application.GuardedTransitions{}.Move(ctx, stores, command)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// statusAnswer is a partner that answers every status query the same way.
+type statusAnswer transfer.PartnerStatus
+
+func (a statusAnswer) Status(context.Context, string) (application.AuthoritativeStatus, error) {
+	return application.AuthoritativeStatus{Status: transfer.PartnerStatus(a)}, nil
+}
+
 // newInbox is D5 over the test database.
-func newInbox(p pixBank) (application.InboxIntake, application.InboxProcessor) {
-	return application.NewInboxIntake(p.unitOfWork), application.NewInboxProcessor(p.unitOfWork, discardLogger())
+func newInbox(p pixBank, partner application.PartnerStatusReader) (application.InboxIntake, application.InboxProcessor) {
+	config := application.InboxProcessorConfig{UnitOfWork: p.unitOfWork, Machine: application.GuardedTransitions{}, Partner: partner, Logger: discardLogger()}
+
+	return application.NewInboxIntake(p.unitOfWork), application.NewInboxProcessor(config)
 }
 
 func drainInbox(t *testing.T, processor application.InboxProcessor) {
@@ -330,7 +354,7 @@ func countRows(t *testing.T, p pixBank, query string, args ...any) int {
 // is settled once.
 func TestInbox_DuplicateEventID_IsIgnored(t *testing.T) {
 	p := newOutboxBank(t)
-	intake, processor := newInbox(p)
+	intake, processor := newInbox(p, statusAnswer(transfer.PartnerSettled))
 	drainInbox(t, processor)
 
 	account := p.bank.newCustomer(t)
@@ -364,7 +388,7 @@ func TestInbox_DuplicateEventID_IsIgnored(t *testing.T) {
 // credit it once, and the second is closed, not retried forever.
 func TestInbox_SecondCreditOfAPixInIsADuplicate(t *testing.T) {
 	p := newOutboxBank(t)
-	intake, processor := newInbox(p)
+	intake, processor := newInbox(p, nil)
 	drainInbox(t, processor)
 
 	account := p.bank.newCustomer(t)
@@ -393,7 +417,7 @@ func TestInbox_SecondCreditOfAPixInIsADuplicate(t *testing.T) {
 // can never apply instead of retrying it.
 func TestInbox_EventForAnUnknownTransferIsAConflict(t *testing.T) {
 	p := newOutboxBank(t)
-	intake, processor := newInbox(p)
+	intake, processor := newInbox(p, nil)
 	drainInbox(t, processor)
 
 	id, err := transfer.NewID()

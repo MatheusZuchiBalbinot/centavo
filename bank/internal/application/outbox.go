@@ -41,6 +41,7 @@ type OutboxClaim struct {
 	ID            int64
 	AggregateID   uuid.UUID
 	Token         int64
+	Attempts      int
 	CorrelationID string
 }
 
@@ -51,6 +52,9 @@ type OutboxStore interface {
 	ClaimOutbox(ctx context.Context, owner string, ttl time.Duration, limit int) ([]OutboxClaim, error)
 	// FinishOutbox marks the message delivered if the token still owns it.
 	FinishOutbox(ctx context.Context, id, token int64) (bool, error)
+	// DeferOutbox releases the message for another attempt after delay, if
+	// the token still owns it.
+	DeferOutbox(ctx context.Context, id, token int64, delay time.Duration, reason string) (bool, error)
 }
 
 // OutboxPublication is defense D4 (docs/domain.md, section 13.7): the
@@ -107,6 +111,8 @@ type OutboxRelay struct {
 	unitOfWork UnitOfWork
 	partner    PartnerSubmitter
 	endToEnd   EndToEndPolicy
+	machine    StateMachine
+	doubt      DoubtPolicy
 	owner      string
 	leaseTTL   time.Duration
 	logger     *slog.Logger
@@ -117,6 +123,8 @@ type OutboxRelayConfig struct {
 	UnitOfWork UnitOfWork
 	Partner    PartnerSubmitter
 	EndToEnd   EndToEndPolicy
+	Machine    StateMachine
+	Doubt      DoubtPolicy
 	// Owner names this relay in the leases it takes.
 	Owner string
 	// LeaseTTL is how long a message stays with this relay before another
@@ -127,7 +135,7 @@ type OutboxRelayConfig struct {
 
 // NewOutboxRelay builds the relay.
 func NewOutboxRelay(config OutboxRelayConfig) OutboxRelay {
-	return OutboxRelay{unitOfWork: config.UnitOfWork, partner: config.Partner, endToEnd: config.EndToEnd, owner: config.Owner, leaseTTL: config.LeaseTTL, logger: config.Logger}
+	return OutboxRelay{unitOfWork: config.UnitOfWork, partner: config.Partner, endToEnd: config.EndToEnd, machine: config.Machine, doubt: config.Doubt, owner: config.Owner, leaseTTL: config.LeaseTTL, logger: config.Logger}
 }
 
 // Run polls the outbox until ctx ends. Polling is the source of truth; a
@@ -190,7 +198,7 @@ func (r OutboxRelay) deliver(ctx context.Context, claim OutboxClaim) error {
 	}
 
 	if external.Status != transfer.StatusCreated {
-		return r.finish(ctx, claim, external, nil)
+		return r.finish(ctx, claim, nil)
 	}
 
 	external, err = r.useEndToEnd(ctx, external)
@@ -208,9 +216,15 @@ func (r OutboxRelay) deliver(ctx context.Context, claim OutboxClaim) error {
 		return err
 	}
 
-	change := changeFor(external, answer)
+	if answer == PartnerUnknown {
+		return r.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
+			return r.doubt.OnUnknown(ctx, stores, claim, external)
+		})
+	}
 
-	return r.finish(ctx, claim, external, &change)
+	command := answerCommand(external, answer)
+
+	return r.finish(ctx, claim, &command)
 }
 
 // useEndToEnd switches the transfer to the id this send uses; with D6 it
@@ -234,7 +248,7 @@ func (r OutboxRelay) useEndToEnd(ctx context.Context, external ExternalTransfer)
 
 // finish closes the message and applies the partner's answer in one commit;
 // a stale token aborts both.
-func (r OutboxRelay) finish(ctx context.Context, claim OutboxClaim, external ExternalTransfer, change *StatusChange) error {
+func (r OutboxRelay) finish(ctx context.Context, claim OutboxClaim, command *TransitionCommand) error {
 	return r.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
 		isOurs, err := stores.FinishOutbox(ctx, claim.ID, claim.Token)
 		if err != nil {
@@ -245,23 +259,11 @@ func (r OutboxRelay) finish(ctx context.Context, claim OutboxClaim, external Ext
 			return errLeaseLost
 		}
 
-		if change == nil {
+		if command == nil {
 			return nil
 		}
 
-		// A webhook may have moved the transfer on while the partner was
-		// answering; the relay's answer only speaks for a transfer still
-		// waiting for it. The lock orders this commit with the webhook's.
-		status, err := stores.LockExternalTransfer(ctx, external.ID)
-		if err != nil {
-			return err
-		}
-
-		if status != transfer.StatusCreated {
-			return nil
-		}
-
-		return overwrite(ctx, stores, overwriteCommand{external: external, change: *change, cause: causeRelay})
+		return ignoreMovedOn(r.machine.Move(ctx, stores, *command))
 	})
 }
 
@@ -279,15 +281,32 @@ func (r OutboxRelay) load(ctx context.Context, id transfer.ID) (ExternalTransfer
 	return external, err
 }
 
-// changeFor is what the partner's answer does to the transfer. Without
-// defense D9 a timeout counts as a failure (FC21).
-func changeFor(external ExternalTransfer, answer PartnerAnswer) StatusChange {
+// answerCommand is what the partner's answer does to a transfer in created.
+// Only the naive relay gets here with a doubtful answer, and takes it for a
+// failure (FC21).
+func answerCommand(external ExternalTransfer, answer PartnerAnswer) TransitionCommand {
+	command := TransitionCommand{TransferID: external.ID, From: transfer.StatusCreated, Cause: causeRelay}
+
 	switch answer {
 	case PartnerAccepted:
-		return StatusChange{TransferID: external.ID, To: transfer.StatusSent}
+		command.To = transfer.StatusSent
 	case PartnerRejected:
-		return StatusChange{TransferID: external.ID, To: transfer.StatusFailed, FailureCode: failurePartner}
+		command.To = transfer.StatusFailed
+		command.FailureCode = failurePartner
 	default:
-		return StatusChange{TransferID: external.ID, To: transfer.StatusFailed, FailureCode: failureTimeout}
+		command.To = transfer.StatusFailed
+		command.FailureCode = failureTimeout
 	}
+
+	return command
+}
+
+// ignoreMovedOn drops the guarded machine's refusal: the transfer moved on
+// while the partner was answering, and that answer no longer speaks for it.
+func ignoreMovedOn(err error) error {
+	if errors.Is(err, transfer.ErrInvalidStateTransition) {
+		return nil
+	}
+
+	return err
 }

@@ -129,8 +129,9 @@ func TestNotes_ExplainDefensesThatNeedTransactions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The fixed end_to_end_id is only used by the outbox relay.
-	if len(withoutOutbox.Notes()) != 1 {
+	// The fixed end_to_end_id and the rescheduling of doubtful sends both
+	// need the outbox relay.
+	if len(withoutOutbox.Notes()) != 2 {
 		t.Fatalf("notes for %s: %v", withoutOutbox, withoutOutbox.Notes())
 	}
 

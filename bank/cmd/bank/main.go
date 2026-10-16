@@ -196,7 +196,7 @@ func newUseCases(pool *pgxpool.Pool, cfg config.Config) (httpapi.UseCases, error
 			Create:        application.NewCreatePixOut(moneyDependencies.Locker, publication),
 			Publisher:     publication,
 			Get:           application.NewGetExternalTransfer(store),
-			Webhook:       newWebhook(profile, moneyDependencies.UnitOfWork),
+			Webhook:       newWebhook(profile, moneyDependencies.UnitOfWork, newStateMachine(profile)),
 			WebhookSecret: []byte(cfg.Partner.WebhookSecret),
 		},
 	}
@@ -215,12 +215,21 @@ func newPublication(pool *pgxpool.Pool, profile defenses.Profile) application.Pu
 }
 
 // newWebhook picks D5: write to the inbox, or apply in the request.
-func newWebhook(profile defenses.Profile, unitOfWork application.UnitOfWork) httpapi.WebhookApplier {
+func newWebhook(profile defenses.Profile, unitOfWork application.UnitOfWork, machine application.StateMachine) httpapi.WebhookApplier {
 	if profile.IsEnabled(defenses.Inbox) {
 		return application.NewInboxIntake(unitOfWork)
 	}
 
-	return application.NewNaiveWebhook(unitOfWork)
+	return application.NewNaiveWebhook(unitOfWork, machine)
+}
+
+// newStateMachine picks D7: guarded transitions, or the naive overwrite.
+func newStateMachine(profile defenses.Profile) application.StateMachine {
+	if profile.IsEnabled(defenses.StateMachine) {
+		return application.GuardedTransitions{}
+	}
+
+	return application.OverwriteTransitions{}
 }
 
 // newIdempotency picks D3. Its key shares the commit of the effect, so it
@@ -290,12 +299,7 @@ func serveWorker(ctx context.Context, cfg config.Config, logger *slog.Logger) er
 		go workers.CleanKeys(ctx, postgres.NewLedgerStore(pool), logger)
 	}
 
-	err = startRelay(ctx, pool, cfg, logger)
-	if err != nil {
-		return err
-	}
-
-	err = startInbox(ctx, pool, cfg, logger)
+	err = startSaga(ctx, pool, cfg, logger)
 	if err != nil {
 		return err
 	}
@@ -305,9 +309,24 @@ func serveWorker(ctx context.Context, cfg config.Config, logger *slog.Logger) er
 	return httpserver.Run(ctx, servers...)
 }
 
-// startRelay starts what sends PIX out to the partner: the outbox relay
-// with D4, or the naive LISTEN relay of phase F6.
-func startRelay(ctx context.Context, pool *pgxpool.Pool, cfg config.Config, logger *slog.Logger) error {
+// partner is what the worker calls on the partner: sends and status queries.
+type partner interface {
+	application.PartnerSubmitter
+	application.PartnerStatusReader
+}
+
+// sagaDependencies are shared by the worker's PIX loops.
+type sagaDependencies struct {
+	unitOfWork application.UnitOfWork
+	machine    application.StateMachine
+	partner    partner
+	owner      string
+	logger     *slog.Logger
+}
+
+// startSaga starts the worker's PIX loops, each in the variant the profile
+// picks: the relay (D4, D6, D9), the inbox processor (D5) and the sweeper (D8).
+func startSaga(ctx context.Context, pool *pgxpool.Pool, cfg config.Config, logger *slog.Logger) error {
 	err := cfg.Partner.RequireEndpoint()
 	if err != nil {
 		return err
@@ -318,21 +337,48 @@ func startRelay(ctx context.Context, pool *pgxpool.Pool, cfg config.Config, logg
 		return err
 	}
 
-	partner := partnerclient.New(cfg.Partner.BaseURL, cfg.Partner.ParticipantID)
+	saga := sagaDependencies{unitOfWork: moneyDependencies.UnitOfWork, machine: newStateMachine(cfg.Defenses), partner: newPartner(cfg), owner: cmp.Or(cfg.Chaos.Instance, instanceName()), logger: logger}
 
-	if cfg.Defenses.IsEnabled(defenses.Outbox) {
-		relayConfig := application.OutboxRelayConfig{UnitOfWork: moneyDependencies.UnitOfWork, Partner: partner, EndToEnd: newEndToEnd(cfg.Defenses), Owner: cmp.Or(cfg.Chaos.Instance, instanceName()), LeaseTTL: application.OutboxLeaseTTL, Logger: logger}
-		go application.NewOutboxRelay(relayConfig).Run(ctx)
+	startRelay(ctx, pool, cfg.Defenses, saga)
 
-		return nil
+	if cfg.Defenses.IsEnabled(defenses.Inbox) {
+		processorConfig := application.InboxProcessorConfig{UnitOfWork: saga.unitOfWork, Machine: saga.machine, Partner: saga.partner, Logger: logger}
+		go application.NewInboxProcessor(processorConfig).Run(ctx)
 	}
 
-	relay := application.NewNaiveRelay(moneyDependencies.UnitOfWork, partner)
-
-	go postgres.Listen(ctx, pool, postgres.PixOutChannel, workers.RelayNotified(relay, logger), logger)
-	go relayPendingOnBoot(ctx, relay, logger)
+	if cfg.Defenses.IsEnabled(defenses.Recovery) {
+		sweeperConfig := application.SweeperConfig{UnitOfWork: saga.unitOfWork, Machine: saga.machine, Partner: saga.partner, Owner: saga.owner, Logger: logger}
+		go application.NewSweeper(sweeperConfig).Run(ctx)
+	}
 
 	return nil
+}
+
+// newPartner picks D9's circuit breaker around the partner client.
+func newPartner(cfg config.Config) partner {
+	client := partnerclient.New(cfg.Partner.BaseURL, cfg.Partner.ParticipantID)
+
+	if cfg.Defenses.IsEnabled(defenses.ResilientClient) {
+		return partnerclient.NewBreaker(client)
+	}
+
+	return client
+}
+
+// startRelay starts what sends PIX out to the partner: the outbox relay
+// with D4, or the naive LISTEN relay of phase F6.
+func startRelay(ctx context.Context, pool *pgxpool.Pool, profile defenses.Profile, saga sagaDependencies) {
+	if profile.IsEnabled(defenses.Outbox) {
+		relayConfig := application.OutboxRelayConfig{UnitOfWork: saga.unitOfWork, Partner: saga.partner, EndToEnd: newEndToEnd(profile), Machine: saga.machine, Doubt: newDoubt(profile, saga.machine), Owner: saga.owner, LeaseTTL: application.OutboxLeaseTTL, Logger: saga.logger}
+		go application.NewOutboxRelay(relayConfig).Run(ctx)
+
+		return
+	}
+
+	relay := application.NewNaiveRelay(saga.unitOfWork, saga.partner, saga.machine)
+
+	go postgres.Listen(ctx, pool, postgres.PixOutChannel, workers.RelayNotified(relay, saga.logger), saga.logger)
+	go relayPendingOnBoot(ctx, relay, saga.logger)
 }
 
 // newEndToEnd picks D6: one end_to_end_id per transfer, or one per attempt.
@@ -344,20 +390,13 @@ func newEndToEnd(profile defenses.Profile) application.EndToEndPolicy {
 	return application.NewEndToEndPerAttempt{}
 }
 
-// startInbox runs the inbox processor when D5 writes webhooks to the inbox.
-func startInbox(ctx context.Context, pool *pgxpool.Pool, cfg config.Config, logger *slog.Logger) error {
-	if !cfg.Defenses.IsEnabled(defenses.Inbox) {
-		return nil
+// newDoubt picks D9's answer to a doubtful send: retry later, or give up.
+func newDoubt(profile defenses.Profile, machine application.StateMachine) application.DoubtPolicy {
+	if profile.IsEnabled(defenses.ResilientClient) {
+		return application.RetryOnDoubt{}
 	}
 
-	moneyDependencies, err := newMoneyDependencies(pool, cfg.Defenses)
-	if err != nil {
-		return err
-	}
-
-	go application.NewInboxProcessor(moneyDependencies.UnitOfWork, logger).Run(ctx)
-
-	return nil
+	return application.NewGiveUpOnDoubt(machine)
 }
 
 func relayPendingOnBoot(ctx context.Context, relay application.NaiveRelay, logger *slog.Logger) {

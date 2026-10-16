@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -33,6 +34,9 @@ const (
 const (
 	outcomeApplied   = "applied"
 	outcomeDuplicate = "duplicate"
+	// outcomeResynced is an event that did not fit the transfer's status:
+	// the processor asked the partner and walked to its answer instead.
+	outcomeResynced = "resynced"
 )
 
 // errNoInboxEvent ends a processor pass with nothing to do.
@@ -81,12 +85,25 @@ func (i InboxIntake) Apply(ctx context.Context, event PartnerEvent) error {
 // marks it, so a crash in between leaves neither (FC07).
 type InboxProcessor struct {
 	unitOfWork UnitOfWork
+	events     eventApplier
+	machine    StateMachine
+	partner    PartnerStatusReader
 	logger     *slog.Logger
 }
 
+// InboxProcessorConfig wires a processor.
+type InboxProcessorConfig struct {
+	UnitOfWork UnitOfWork
+	Machine    StateMachine
+	// Partner answers the status queries of a resync, which only the
+	// guarded machine (D7) asks for.
+	Partner PartnerStatusReader
+	Logger  *slog.Logger
+}
+
 // NewInboxProcessor builds the processor.
-func NewInboxProcessor(unitOfWork UnitOfWork, logger *slog.Logger) InboxProcessor {
-	return InboxProcessor{unitOfWork: unitOfWork, logger: logger}
+func NewInboxProcessor(config InboxProcessorConfig) InboxProcessor {
+	return InboxProcessor{unitOfWork: config.UnitOfWork, events: eventApplier{machine: config.Machine}, machine: config.Machine, partner: config.Partner, logger: config.Logger}
 }
 
 // Run drains the inbox, then polls it until ctx ends.
@@ -139,7 +156,7 @@ func (p InboxProcessor) RunOnce(ctx context.Context) (bool, error) {
 		// failpoint events, so the checker can tell its story.
 		ctx = correlation.With(ctx, event.CorrelationID)
 
-		err = applyEvent(ctx, stores, event.Event)
+		err = p.events.apply(ctx, stores, event.Event)
 		if err != nil {
 			return err
 		}
@@ -170,12 +187,20 @@ func (p InboxProcessor) settleFailure(ctx context.Context, claimed InboxEvent, c
 		return cause
 	}
 
+	if errors.Is(cause, transfer.ErrInvalidStateTransition) {
+		cause = p.resync(ctx, claimed)
+	}
+
+	if cause == nil {
+		return nil
+	}
+
 	return p.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
 		if errors.Is(cause, ErrAlreadyCredited) {
 			return stores.FinishInbox(ctx, claimed.ID, InboxProcessed, outcomeDuplicate)
 		}
 
-		isUnappliable := errors.Is(cause, transfer.ErrTransferNotFound) || errors.Is(cause, ErrUnknownEvent)
+		isUnappliable := errors.Is(cause, transfer.ErrTransferNotFound) || errors.Is(cause, ErrUnknownEvent) || isUnresolvable(cause)
 		if isUnappliable {
 			p.logger.WarnContext(ctx, "inbox event in conflict", "inbox_id", claimed.ID, "event_id", claimed.Event.ID, "error", cause)
 
@@ -185,5 +210,39 @@ func (p InboxProcessor) settleFailure(ctx context.Context, claimed InboxEvent, c
 		p.logger.WarnContext(ctx, "deferring inbox event", "inbox_id", claimed.ID, "event_id", claimed.Event.ID, "error", cause)
 
 		return stores.DeferInbox(ctx, claimed.ID, inboxRetryDelay, cause.Error())
+	})
+}
+
+// resync handles an event that does not fit the transfer's status: out of
+// order, repeated under a new id, or contradictory (docs/architecture.md,
+// section 5.5). The partner is asked outside any transaction, and the
+// transfer walks to its answer in a new one, which also closes the event.
+func (p InboxProcessor) resync(ctx context.Context, claimed InboxEvent) error {
+	ctx = correlation.With(ctx, claimed.CorrelationID)
+
+	authoritative, err := p.partner.Status(ctx, claimed.Event.EndToEndID)
+	if err != nil {
+		return fmt.Errorf("%w: %w", errPartnerUnreachable, err)
+	}
+
+	return p.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
+		external, err := stores.FindExternalTransferByEndToEnd(ctx, claimed.Event.EndToEndID)
+		if err != nil {
+			return err
+		}
+
+		walk := pathWalk{transferID: external.ID, authoritative: authoritative, cause: causeResync, correlationID: claimed.Event.ID}
+
+		err = walkPath(ctx, stores, p.machine, walk)
+		if err != nil {
+			return err
+		}
+
+		err = failpoint.Hit(ctx, failpoint.InboxAfterApplyBeforeMark)
+		if err != nil {
+			return err
+		}
+
+		return stores.FinishInbox(ctx, claimed.ID, InboxProcessed, outcomeResynced)
 	})
 }
