@@ -21,6 +21,8 @@ x-bank-env: &bank-env
   CENTAVO_ENV: chaoslab
   CENTAVO_DEFENSES: ${CENTAVO_DEFENSES:-robust}
   CENTAVO_CHAOS_TOKEN: ${CENTAVO_CHAOS_TOKEN:?run ./entrypoint.sh to generate .env}
+  PARTNER_PARTICIPANT_ID: centavo-robust
+  PARTNER_WEBHOOK_SECRET: ${PARTNER_WEBHOOK_SECRET:?run ./entrypoint.sh to generate .env}
 
 x-bank-healthcheck: &bank-healthcheck
   test: ["CMD", "/app/bank", "healthcheck"]
@@ -111,6 +113,7 @@ services:
     environment:
       <<: *bank-env
       DATABASE_URL: postgres://bank_app:${BANK_APP_PASSWORD}@toxiproxy:15433/bank_robust?sslmode=disable
+      PARTNER_BASE_URL: http://toxiproxy:18081
       CENTAVO_INSTANCE: bank-worker-1
       GOMEMLIMIT: 56MiB
     volumes:
@@ -130,6 +133,7 @@ services:
     environment:
       <<: *bank-env
       DATABASE_URL: postgres://bank_app:${BANK_APP_PASSWORD}@toxiproxy:15434/bank_robust?sslmode=disable
+      PARTNER_BASE_URL: http://toxiproxy:18082
       CENTAVO_INSTANCE: bank-worker-2
       GOMEMLIMIT: 56MiB
     volumes:
@@ -153,7 +157,15 @@ services:
     command: ["serve"]
     environment:
       CENTAVO_ENV: chaoslab
+      CENTAVO_CHAOS_TOKEN: ${CENTAVO_CHAOS_TOKEN:?run ./entrypoint.sh to generate .env}
+      PARTNER_DB_PATH: /data/truth.db
+      # Webhooks go back through Toxiproxy, so network chaos reaches them too.
+      PARTNER_PARTICIPANTS: centavo-robust=http://toxiproxy:18080/webhooks/partner
+      PARTNER_WEBHOOK_SECRET: ${PARTNER_WEBHOOK_SECRET:?run ./entrypoint.sh to generate .env}
       GOMEMLIMIT: 56MiB
+    volumes:
+      # The truth lives apart from the bank's PostgreSQL (ADR-014).
+      - partner-data:/data
     healthcheck:
       test: ["CMD", "/app/partner", "healthcheck"]
       interval: 5s
@@ -181,6 +193,8 @@ services:
       # The bot reaches Docker only through docker-proxy (lock 5).
       DOCKER_HOST: tcp://docker-proxy:2375
       CENTAVO_COMPOSE_PROJECT: ${COMPOSE_PROJECT_NAME:-centavo}
+      PARTNER_ADMIN_URL: http://partner:9092
+      PARTNER_PARTICIPANT_ID: centavo-robust
     volumes:
       - lab-data:/data
       - lab-events:/lab/events
@@ -204,3 +218,4 @@ volumes:
   pgdata: {}
   lab-data: {}
   lab-events: {}
+  partner-data: {}
