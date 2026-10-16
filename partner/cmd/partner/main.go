@@ -16,12 +16,16 @@ import (
 	"syscall"
 	"time"
 
+	"centavo/partner/internal/engine"
 	"centavo/partner/internal/interfaces/httpapi"
+	"centavo/partner/internal/modes"
 	"centavo/partner/internal/platform/buildinfo"
+	"centavo/partner/internal/platform/chaos"
 	"centavo/partner/internal/platform/chaosbuild"
 	"centavo/partner/internal/platform/chaoskill"
 	"centavo/partner/internal/platform/config"
 	"centavo/partner/internal/platform/httpserver"
+	"centavo/partner/internal/truth"
 )
 
 const (
@@ -101,14 +105,40 @@ func serve(ctx context.Context) error {
 		logger.WarnContext(ctx, "chaoslab build: chaos code is compiled into this binary", "marker", chaosbuild.Sentinel(), "version", buildinfo.Version())
 	}
 
+	store, err := truth.Open(ctx, cfg.DBPath)
+	if err != nil {
+		return err
+	}
+	defer closeStore(store, logger)
+
+	registry := modes.NewRegistry()
+	participants := make([]engine.Participant, 0, len(cfg.Participants))
+	participantIDs := make([]string, 0, len(cfg.Participants))
+
+	for _, participant := range cfg.Participants {
+		participants = append(participants, engine.Participant{ID: participant.ID, WebhookURL: participant.WebhookURL})
+		participantIDs = append(participantIDs, participant.ID)
+	}
+
+	worker := engine.New(engine.Config{Store: store, Modes: registry, Participants: participants, Secret: []byte(cfg.WebhookSecret), Logger: logger})
+	go worker.Run(ctx)
+
+	api := httpapi.NewAPI(httpapi.APIConfig{Store: store, Modes: registry, Participants: participantIDs, Logger: logger})
 	buildInfo := httpapi.BuildInfo{Version: buildinfo.Version(), ChaosBuild: chaosbuild.IsEnabled(), Env: string(cfg.Env)}
-	adminHandler := httpapi.NewAdminHandler(buildInfo)
-	apiServer := httpserver.New(apiAddr, http.NewServeMux())
+	adminHandler := httpapi.NewAdminHandler(buildInfo, api, chaos.Handler(cfg.ChaosToken, registry))
+	apiServer := httpserver.New(apiAddr, api.Handler())
 	adminServer := httpserver.New(adminAddr, adminHandler)
 
-	logger.InfoContext(ctx, "serving", "api_addr", apiAddr, "admin_addr", adminAddr)
+	logger.InfoContext(ctx, "serving", "api_addr", apiAddr, "admin_addr", adminAddr, "participants", participantIDs)
 
 	return httpserver.Run(ctx, apiServer, adminServer)
+}
+
+func closeStore(store *truth.Store, logger *slog.Logger) {
+	err := store.Close()
+	if err != nil {
+		logger.Warn("closing the truth", "error", err)
+	}
 }
 
 func probeHealth(ctx context.Context) error {

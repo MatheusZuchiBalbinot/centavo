@@ -1,0 +1,134 @@
+package truth
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"time"
+)
+
+// TransferView is a transfer as the lab sees it in the truth.
+type TransferView struct {
+	EndToEndID        string    `json:"end_to_end_id"`
+	ParticipantID     string    `json:"participant_id"`
+	AmountCents       int64     `json:"amount_cents"`
+	DestinationKey    string    `json:"destination_key"`
+	Status            Status    `json:"status"`
+	RejectReason      string    `json:"reject_reason,omitempty"`
+	IsDoubleProcessed bool      `json:"double_processed"`
+	CreatedAt         time.Time `json:"created_at"`
+}
+
+// IncomingView is an incoming PIX as the lab sees it in the truth.
+type IncomingView struct {
+	EndToEndID    string    `json:"end_to_end_id"`
+	ParticipantID string    `json:"participant_id"`
+	AccountID     string    `json:"account_id"`
+	AmountCents   int64     `json:"amount_cents"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
+// Export is the whole truth of one participant, double processing included:
+// what the checker compares the bank against (docs/invariants-and-checker.md, section 2).
+type Export struct {
+	ParticipantID string           `json:"participant_id"`
+	Transfers     []TransferView   `json:"transfers"`
+	Statement     []StatementEntry `json:"statement"`
+	Incoming      []IncomingView   `json:"incoming"`
+	// PendingDeliveries is how many webhooks are still to be sent.
+	PendingDeliveries int `json:"pending_deliveries"`
+}
+
+// Truth exports everything about one participant.
+func (s *Store) Truth(ctx context.Context, participantID string) (Export, error) {
+	export := Export{ParticipantID: participantID, Transfers: []TransferView{}, Statement: []StatementEntry{}, Incoming: []IncomingView{}}
+
+	transfers, err := s.transferViews(ctx, participantID)
+	if err != nil {
+		return Export{}, err
+	}
+
+	export.Transfers = transfers
+
+	statement, err := s.Statement(ctx, participantID, 0, maxExportEntries)
+	if err != nil {
+		return Export{}, err
+	}
+
+	export.Statement = append(export.Statement, statement...)
+
+	export.Incoming, err = s.incoming(ctx, participantID)
+	if err != nil {
+		return Export{}, err
+	}
+
+	export.PendingDeliveries, err = s.PendingDeliveries(ctx)
+
+	return export, err
+}
+
+func (s *Store) transferViews(ctx context.Context, participantID string) ([]TransferView, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT end_to_end_id, participant_id, amount_cents, destination_key, status, reject_reason, is_double, created_at FROM transfers WHERE participant_id = ? ORDER BY created_at, end_to_end_id`, participantID)
+	if err != nil {
+		return nil, fmt.Errorf("exporting transfers: %w", err)
+	}
+	defer rows.Close()
+
+	views := []TransferView{}
+
+	for rows.Next() {
+		var (
+			view    TransferView
+			created int64
+		)
+
+		err := rows.Scan(&view.EndToEndID, &view.ParticipantID, &view.AmountCents, &view.DestinationKey, &view.Status, &view.RejectReason, &view.IsDoubleProcessed, &created)
+		if err != nil {
+			return nil, err
+		}
+
+		view.CreatedAt = time.Unix(0, created).UTC()
+		views = append(views, view)
+	}
+
+	return views, rows.Err()
+}
+
+// maxExportEntries bounds one export; a 72-hour run stays far below it.
+const maxExportEntries = 10_000_000
+
+func (s *Store) incoming(ctx context.Context, participantID string) ([]IncomingView, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT end_to_end_id, participant_id, account_id, amount_cents, created_at FROM incoming WHERE participant_id = ? ORDER BY created_at, end_to_end_id`, participantID)
+	if err != nil {
+		return nil, fmt.Errorf("exporting incoming: %w", err)
+	}
+	defer rows.Close()
+
+	views := []IncomingView{}
+
+	for rows.Next() {
+		var (
+			view    IncomingView
+			created int64
+		)
+
+		err := rows.Scan(&view.EndToEndID, &view.ParticipantID, &view.AccountID, &view.AmountCents, &created)
+		if err != nil {
+			return nil, err
+		}
+
+		view.CreatedAt = time.Unix(0, created).UTC()
+		views = append(views, view)
+	}
+
+	return views, rows.Err()
+}
+
+func marshalEvent(event Event) ([]byte, error) {
+	payload, err := json.Marshal(event)
+	if err != nil {
+		return nil, fmt.Errorf("encoding a webhook: %w", err)
+	}
+
+	return payload, nil
+}

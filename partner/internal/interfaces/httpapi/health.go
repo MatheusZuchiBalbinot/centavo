@@ -26,12 +26,19 @@ type healthResponse struct {
 	Status     string `json:"status"`
 }
 
-// NewAdminHandler serves the admin and chaos port (9092).
-func NewAdminHandler(info BuildInfo) http.Handler {
+// NewAdminHandler serves the admin and chaos port (9092). The lab-only
+// routes live here, never on the client port; chaos is nil outside chaoslab builds.
+func NewAdminHandler(info BuildInfo, api API, chaos http.Handler) http.Handler {
 	response := healthResponse{Service: "partner", Version: info.Version, ChaosBuild: info.ChaosBuild, Env: info.Env, Status: healthStatusOK}
 
 	mux := http.NewServeMux()
 	mux.Handle("GET "+HealthPath, healthHandler{response: response})
+	mux.HandleFunc("POST /internal/incoming", api.incoming)
+	mux.HandleFunc("GET /internal/truth", api.truthExport)
+
+	if chaos != nil {
+		mux.Handle("/chaos/", chaos)
+	}
 
 	return mux
 }

@@ -18,7 +18,7 @@ type healthBody struct {
 
 func TestHealth_ReportsBuild(t *testing.T) {
 	info := httpapi.BuildInfo{Version: "test", ChaosBuild: true, Env: "chaoslab"}
-	handler := httpapi.NewAdminHandler(info)
+	handler := httpapi.NewAdminHandler(info, httpapi.API{}, nil)
 	request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, httpapi.HealthPath, nil)
 	recorder := httptest.NewRecorder()
 
