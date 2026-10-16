@@ -74,6 +74,8 @@ type Stores interface {
 	KeyStore
 	CustomerCreator
 	PixStore
+	OutboxStore
+	InboxStore
 }
 
 // UnitOfWork runs fn with stores whose writes commit together (D1) or one by

@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"centavo/bank/internal/application"
 	"centavo/bank/internal/domain/ledger"
 	"centavo/bank/internal/infrastructure/postgres"
@@ -169,5 +171,54 @@ func TestBalance_ConcurrentDebits_WithoutBalanceLocking(t *testing.T) {
 
 	if failures == 0 {
 		t.Fatal("without row locks, concurrent debits never collided; the control proves nothing")
+	}
+}
+
+// TestInbox_CrashBetweenApplyAndMark_AppliesOnce is FC07: the processor
+// stopped after applying an event and before marking it (FP06). The effect
+// and the mark share the transaction, so the next pass applies it once.
+func TestInbox_CrashBetweenApplyAndMark_AppliesOnce(t *testing.T) {
+	p := newOutboxBank(t)
+	intake, processor := newInbox(p)
+	drainInbox(t, processor)
+
+	account := p.bank.newCustomer(t)
+	p.bank.fund(t, account, 10_000)
+	created := p.createPixOut(t, account, 4_500)
+	settled := application.PartnerEvent{ID: "evt_fp06_" + created.EndToEndID, Type: application.EventSettled, EndToEndID: created.EndToEndID, AmountCents: 4_500}
+
+	err := intake.Apply(correlation.With(t.Context(), settled.ID), settled)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	failpoint.DisarmAll()
+	failpoint.ConfigureEvents(failpoint.EventsConfig{Dir: t.TempDir(), Service: "bank-worker", Instance: "test"})
+	t.Cleanup(failpoint.DisarmAll)
+
+	rule := failpoint.Rule{Action: failpoint.ActionError, Arg: "crash", Probability: 1, MaxFires: 1, Match: failpoint.Match{CorrelationID: settled.ID}, TTL: "1m"}
+
+	err = failpoint.Arm(failpoint.InboxAfterApplyBeforeMark, rule, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	drainInbox(t, processor)
+
+	pending := countRows(t, p, `SELECT count(*) FROM inbox_events WHERE event_id = $1 AND status = 'pending'`, settled.ID)
+	if pending != 1 {
+		t.Fatal("the crashed event left the inbox")
+	}
+
+	_, err = p.bank.pool.Exec(t.Context(), `UPDATE inbox_events SET next_attempt_at = now() WHERE event_id = $1`, settled.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	drainInbox(t, processor)
+
+	settlements := countRows(t, p, `SELECT count(*) FROM ledger_transactions WHERE external_transfer_id = $1 AND kind = 'pix_out_settle'`, uuid.UUID(created.TransferID))
+	if settlements != 1 {
+		t.Fatalf("%d settlements after a crash between apply and mark, want 1", settlements)
 	}
 }

@@ -48,6 +48,7 @@ var known = []Name{
 	RelayAfterPartnerCallBeforeSave,
 	PixOutAfterSaveBeforePublish,
 	WebhookAfterReceiveBeforeAck,
+	InboxAfterApplyBeforeMark,
 }
 
 // specPattern is name=[probability%]action[(argument)][*max_fires].

@@ -119,9 +119,19 @@ func TestNotes_ExplainDefensesThatNeedTransactions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Both balance_locking and idempotency depend on atomic_ledger.
-	if len(weakened.Notes()) != 2 {
+	// balance_locking, idempotency, outbox and inbox depend on atomic_ledger.
+	if len(weakened.Notes()) != 4 {
 		t.Fatalf("notes for %s: %v", weakened, weakened.Notes())
+	}
+
+	withoutOutbox, err := defenses.ParseProfile("robust,-outbox")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The fixed end_to_end_id is only used by the outbox relay.
+	if len(withoutOutbox.Notes()) != 1 {
+		t.Fatalf("notes for %s: %v", withoutOutbox, withoutOutbox.Notes())
 	}
 
 	for _, raw := range []string{"robust", "naive", "robust,-balance_locking"} {

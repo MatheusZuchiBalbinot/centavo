@@ -181,6 +181,7 @@ func newUseCases(pool *pgxpool.Pool, cfg config.Config) (httpapi.UseCases, error
 		return httpapi.UseCases{}, err
 	}
 
+	publication := newPublication(pool, profile)
 	writerDependencies := application.WriterDependencies{UnitOfWork: moneyDependencies.UnitOfWork, Keys: idempotencyStrategy.Keys, Retries: idempotencyStrategy.Retries}
 
 	useCases := httpapi.UseCases{
@@ -192,15 +193,34 @@ func newUseCases(pool *pgxpool.Pool, cfg config.Config) (httpapi.UseCases, error
 		Deposit:      application.NewDeposit(moneyDependencies),
 		Transfer:     application.NewTransferInternal(moneyDependencies),
 		Pix: httpapi.PixUseCases{
-			Create:        application.NewCreatePixOut(moneyDependencies.Locker),
-			Publisher:     postgres.NewNotifyPublisher(pool),
+			Create:        application.NewCreatePixOut(moneyDependencies.Locker, publication),
+			Publisher:     publication,
 			Get:           application.NewGetExternalTransfer(store),
-			Webhook:       application.NewNaiveWebhook(moneyDependencies.UnitOfWork),
+			Webhook:       newWebhook(profile, moneyDependencies.UnitOfWork),
 			WebhookSecret: []byte(cfg.Partner.WebhookSecret),
 		},
 	}
 
 	return useCases, nil
+}
+
+// newPublication picks D4: the outbox row in the transfer's own commit, or
+// the naive NOTIFY after it.
+func newPublication(pool *pgxpool.Pool, profile defenses.Profile) application.Publication {
+	if profile.IsEnabled(defenses.Outbox) {
+		return application.OutboxPublication{}
+	}
+
+	return application.NewNotifyAfterCommit(postgres.NewNotifyPublisher(pool))
+}
+
+// newWebhook picks D5: write to the inbox, or apply in the request.
+func newWebhook(profile defenses.Profile, unitOfWork application.UnitOfWork) httpapi.WebhookApplier {
+	if profile.IsEnabled(defenses.Inbox) {
+		return application.NewInboxIntake(unitOfWork)
+	}
+
+	return application.NewNaiveWebhook(unitOfWork)
 }
 
 // newIdempotency picks D3. Its key shares the commit of the effect, so it
@@ -275,13 +295,18 @@ func serveWorker(ctx context.Context, cfg config.Config, logger *slog.Logger) er
 		return err
 	}
 
+	err = startInbox(ctx, pool, cfg, logger)
+	if err != nil {
+		return err
+	}
+
 	logger.InfoContext(ctx, "serving", "admin_addr", adminAddr)
 
 	return httpserver.Run(ctx, servers...)
 }
 
-// startRelay is the naive relay of phase F6: LISTEN for new transfers and
-// send each one to the partner.
+// startRelay starts what sends PIX out to the partner: the outbox relay
+// with D4, or the naive LISTEN relay of phase F6.
 func startRelay(ctx context.Context, pool *pgxpool.Pool, cfg config.Config, logger *slog.Logger) error {
 	err := cfg.Partner.RequireEndpoint()
 	if err != nil {
@@ -294,10 +319,43 @@ func startRelay(ctx context.Context, pool *pgxpool.Pool, cfg config.Config, logg
 	}
 
 	partner := partnerclient.New(cfg.Partner.BaseURL, cfg.Partner.ParticipantID)
+
+	if cfg.Defenses.IsEnabled(defenses.Outbox) {
+		relayConfig := application.OutboxRelayConfig{UnitOfWork: moneyDependencies.UnitOfWork, Partner: partner, EndToEnd: newEndToEnd(cfg.Defenses), Owner: cmp.Or(cfg.Chaos.Instance, instanceName()), LeaseTTL: application.OutboxLeaseTTL, Logger: logger}
+		go application.NewOutboxRelay(relayConfig).Run(ctx)
+
+		return nil
+	}
+
 	relay := application.NewNaiveRelay(moneyDependencies.UnitOfWork, partner)
 
 	go postgres.Listen(ctx, pool, postgres.PixOutChannel, workers.RelayNotified(relay, logger), logger)
 	go relayPendingOnBoot(ctx, relay, logger)
+
+	return nil
+}
+
+// newEndToEnd picks D6: one end_to_end_id per transfer, or one per attempt.
+func newEndToEnd(profile defenses.Profile) application.EndToEndPolicy {
+	if profile.IsEnabled(defenses.PartnerIdempotency) {
+		return application.FixedEndToEnd{}
+	}
+
+	return application.NewEndToEndPerAttempt{}
+}
+
+// startInbox runs the inbox processor when D5 writes webhooks to the inbox.
+func startInbox(ctx context.Context, pool *pgxpool.Pool, cfg config.Config, logger *slog.Logger) error {
+	if !cfg.Defenses.IsEnabled(defenses.Inbox) {
+		return nil
+	}
+
+	moneyDependencies, err := newMoneyDependencies(pool, cfg.Defenses)
+	if err != nil {
+		return err
+	}
+
+	go application.NewInboxProcessor(moneyDependencies.UnitOfWork, logger).Run(ctx)
 
 	return nil
 }

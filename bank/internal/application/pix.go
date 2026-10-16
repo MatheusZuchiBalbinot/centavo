@@ -95,6 +95,9 @@ type PixStore interface {
 	// OverwriteStatus sets the status without checking the current one and
 	// returns what it was and the new sequence number.
 	OverwriteStatus(ctx context.Context, change StatusChange) (transfer.Status, int, error)
+	// LockExternalTransfer locks the transfer for the rest of the
+	// transaction and returns its status.
+	LockExternalTransfer(ctx context.Context, id transfer.ID) (transfer.Status, error)
 	InsertIncoming(ctx context.Context, incoming IncomingRecord) error
 	// ListCreated returns transfers still in created, oldest first.
 	ListCreated(ctx context.Context, limit int) ([]transfer.ID, error)
@@ -118,12 +121,13 @@ type PixOutResult struct {
 
 // CreatePixOut reserves the amount and creates the transfer (BR08).
 type CreatePixOut struct {
-	locker Locker
+	locker      Locker
+	publication Publication
 }
 
 // NewCreatePixOut builds the use case.
-func NewCreatePixOut(locker Locker) CreatePixOut {
-	return CreatePixOut{locker: locker}
+func NewCreatePixOut(locker Locker, publication Publication) CreatePixOut {
+	return CreatePixOut{locker: locker, publication: publication}
 }
 
 // Apply runs inside the writer's unit of work: lock, check funds, move the
@@ -191,6 +195,11 @@ func (c CreatePixOut) Apply(ctx context.Context, stores Stores, operationID ledg
 		return PixOutResult{}, err
 	}
 
+	err = c.publication.WithinCommit(ctx, stores, external, input.Write.CorrelationID)
+	if err != nil {
+		return PixOutResult{}, err
+	}
+
 	return PixOutResult{TransferID: id, EndToEndID: external.EndToEndID, Status: transfer.StatusCreated, CreatedAt: createdAt}, nil
 }
 
@@ -199,16 +208,45 @@ type Publisher interface {
 	Publish(ctx context.Context, id transfer.ID) error
 }
 
-// PublishAfterCommit is the naive publication: once the transfer is
+// Publication is defense D4's strategy: how a new transfer reaches a relay.
+type Publication interface {
+	// WithinCommit runs in the unit of work that creates the transfer.
+	WithinCommit(ctx context.Context, stores Stores, external ExternalTransfer, correlationID string) error
+	// AfterCommit runs once the transfer is committed.
+	AfterCommit(ctx context.Context, id transfer.ID) error
+}
+
+// NotifyAfterCommit is the naive publication: once the transfer is
 // committed, a NOTIFY tells the workers. Dying between the two, or having
 // no worker listening, leaves the transfer in created forever (FC04).
-func PublishAfterCommit(ctx context.Context, publisher Publisher, id transfer.ID) error {
+type NotifyAfterCommit struct {
+	publisher Publisher
+}
+
+// NewNotifyAfterCommit builds the naive publication.
+func NewNotifyAfterCommit(publisher Publisher) NotifyAfterCommit {
+	return NotifyAfterCommit{publisher: publisher}
+}
+
+// WithinCommit does nothing: the naive bank publishes after the commit.
+func (NotifyAfterCommit) WithinCommit(context.Context, Stores, ExternalTransfer, string) error {
+	return nil
+}
+
+// AfterCommit sends the NOTIFY.
+func (n NotifyAfterCommit) AfterCommit(ctx context.Context, id transfer.ID) error {
+	return n.publisher.Publish(ctx, id)
+}
+
+// PublishAfterCommit runs the step after the commit, with FP04 before it.
+// With the outbox (D4) the step does nothing and the failpoint is harmless.
+func PublishAfterCommit(ctx context.Context, publication Publication, id transfer.ID) error {
 	err := failpoint.Hit(ctx, failpoint.PixOutAfterSaveBeforePublish)
 	if err != nil {
 		return err
 	}
 
-	return publisher.Publish(ctx, id)
+	return publication.AfterCommit(ctx, id)
 }
 
 // PartnerAnswer is how the partner answered a submission.
@@ -333,21 +371,16 @@ func (r NaiveRelay) claim(ctx context.Context, id transfer.ID, seen, next string
 }
 
 func (r NaiveRelay) record(ctx context.Context, external ExternalTransfer, answer PartnerAnswer) error {
-	switch answer {
-	case PartnerAccepted:
+	if answer == PartnerAccepted {
 		// FP03: the partner took the PIX; dying here leaves it created and a
 		// later attempt sends it again under a new id (FC05).
 		err := failpoint.Hit(ctx, failpoint.RelayAfterPartnerCallBeforeSave)
 		if err != nil {
 			return err
 		}
-
-		return r.change(ctx, external, StatusChange{TransferID: external.ID, To: transfer.StatusSent}, causeRelay)
-	case PartnerRejected:
-		return r.change(ctx, external, StatusChange{TransferID: external.ID, To: transfer.StatusFailed, FailureCode: failurePartner}, causeRelay)
-	default:
-		return r.change(ctx, external, StatusChange{TransferID: external.ID, To: transfer.StatusFailed, FailureCode: failureTimeout}, causeRelay)
 	}
+
+	return r.change(ctx, external, changeFor(external, answer), causeRelay)
 }
 
 func (r NaiveRelay) change(ctx context.Context, external ExternalTransfer, change StatusChange, cause string) error {

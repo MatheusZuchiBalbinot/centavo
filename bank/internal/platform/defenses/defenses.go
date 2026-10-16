@@ -189,5 +189,20 @@ func (p Profile) Notes() []string {
 		notes = append(notes, "idempotency without atomic_ledger: the key cannot share a commit with the effect, so the naive variant runs")
 	}
 
+	isOutboxWithoutTransaction := p.IsEnabled(Outbox) && !p.IsEnabled(AtomicLedger)
+	if isOutboxWithoutTransaction {
+		notes = append(notes, "outbox without atomic_ledger: the message and the transfer commit apart, so a crash between them still loses the message")
+	}
+
+	isInboxWithoutTransaction := p.IsEnabled(Inbox) && !p.IsEnabled(AtomicLedger)
+	if isInboxWithoutTransaction {
+		notes = append(notes, "inbox without atomic_ledger: an event's effect and its mark commit apart, so a crash between them applies it twice")
+	}
+
+	isFixedIDWithoutOutbox := p.IsEnabled(PartnerIdempotency) && !p.IsEnabled(Outbox)
+	if isFixedIDWithoutOutbox {
+		notes = append(notes, "partner_idempotency without outbox: the naive relay picks a new end_to_end_id per attempt anyway")
+	}
+
 	return notes
 }

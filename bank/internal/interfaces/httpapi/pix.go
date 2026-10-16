@@ -48,7 +48,7 @@ type WebhookApplier interface {
 // PixUseCases are the PIX entry points of the API.
 type PixUseCases struct {
 	Create    PixOutCreator
-	Publisher application.Publisher
+	Publisher application.Publication
 	Get       PixOutGetter
 	Webhook   WebhookApplier
 	// WebhookSecret signs the partner's webhooks.
