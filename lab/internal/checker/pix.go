@@ -174,6 +174,17 @@ func (t *truthIndex) addEntry(entry truthEntry, roundTransfers map[string]bool) 
 	}
 }
 
+// distinctPixOf counts the end_to_end_ids among a transfer's entries.
+func distinctPixOf(entries []truthEntry) int {
+	seen := map[string]bool{}
+
+	for _, entry := range entries {
+		seen[entry.EndToEndID] = true
+	}
+
+	return len(seen)
+}
+
 func (t *truthIndex) settlementsOf(endToEndID, base string) int {
 	count := 0
 
@@ -293,8 +304,11 @@ func (e *evaluation) checkTransit() {
 	}
 }
 
-// checkAgreement is I6 without reconciliation (phase F6): every settlement
-// and return in the truth has exactly one ledger transaction, and back.
+// checkAgreement is I6 for one transfer: every PIX the partner settled or
+// returned has exactly one ledger transaction, and back. A PIX is an
+// end_to_end_id: the same one settled twice is the partner's double
+// processing, which the S term accounts for, while a naive retry's new id is
+// a second PIX the bank must book (or never have sent).
 func (e *evaluation) checkAgreement(transfer snapshot.ExternalTransfer, index truthIndex) {
 	base := fixedEndToEnd(transfer.ID)
 
@@ -303,7 +317,7 @@ func (e *evaluation) checkAgreement(transfer snapshot.ExternalTransfer, index tr
 		counts[transaction.Kind]++
 	}
 
-	settled, returned := len(index.settlements[base]), len(index.returns[base])
+	settled, returned := distinctPixOf(index.settlements[base]), distinctPixOf(index.returns[base])
 
 	if settled != counts[snapshot.TransactionPixOutSettle] {
 		e.add(e.transferViolation(transfer, InvariantI6, RuleI6Settlements, fmt.Sprintf("o parceiro liquidou a transferência %s %d vez(es), o ledger registra %d", transfer.ID, settled, counts[snapshot.TransactionPixOutSettle])))

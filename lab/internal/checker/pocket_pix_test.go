@@ -195,6 +195,22 @@ func TestPocketPix_PartnerDoubleProcessing(t *testing.T) {
 	assertBreaks(t, p.evaluate(), RuleI1cDoubleProcess, RuleI1cPartnerReserve)
 }
 
+// TestPocketPix_ReconciledDoubleProcessingPasses: the reconciliation booked
+// the second settlement against suspense (D10), so the reserve mirror and
+// what the partner owes both agree with the truth.
+func TestPocketPix_ReconciledDoubleProcessingPasses(t *testing.T) {
+	p := newPixRound(t)
+	alice := p.createAccount()
+	p.deposit(alice, 10_000)
+
+	transfer := p.pixOut(alice, 4_500)
+	p.step(transfer, statusCreated, statusConfirmed)
+	p.partnerSays(transfer, truthSettled, entrySettlement, entrySettlement)
+	p.apply("", snapshot.TransactionReconciliationAdjustment, map[string]int64{settlement: 4_500, suspense: -4_500})
+
+	assertPasses(t, p.evaluate())
+}
+
 func TestPocketPix_IncomingCreditedOrNot(t *testing.T) {
 	p := newPixRound(t)
 	alice := p.createAccount()

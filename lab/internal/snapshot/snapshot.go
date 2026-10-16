@@ -43,13 +43,14 @@ const (
 
 // Ledger transaction kinds the checker reads.
 const (
-	TransactionDeposit          = "deposit"
-	TransactionInternalTransfer = "internal_transfer"
-	TransactionPixOutReserve    = "pix_out_reserve"
-	TransactionPixOutSettle     = "pix_out_settle"
-	TransactionPixOutRefund     = "pix_out_refund"
-	TransactionPixOutReturn     = "pix_out_return"
-	TransactionPixInCredit      = "pix_in_credit"
+	TransactionDeposit                  = "deposit"
+	TransactionInternalTransfer         = "internal_transfer"
+	TransactionPixOutReserve            = "pix_out_reserve"
+	TransactionPixOutSettle             = "pix_out_settle"
+	TransactionPixOutRefund             = "pix_out_refund"
+	TransactionPixOutReturn             = "pix_out_return"
+	TransactionPixInCredit              = "pix_in_credit"
+	TransactionReconciliationAdjustment = "reconciliation_adjustment"
 )
 
 var ErrMalformedExport = errors.New("malformed export")
