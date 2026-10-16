@@ -1,0 +1,11 @@
+name: concurrency-hotspot
+description: Dezesseis clientes concorrentes sobre quatro contas, sem nenhuma falha injetada (FC41, PM-001).
+duration: 10m
+workload:
+  profile: ledger-only
+  clients: 16
+  rate_per_second: 100
+  accounts: 4
+  # Shared on purpose: concurrent debits on the same account are the point.
+  exclusive_accounts: false
+  client_mix: {polite: 1.0}
