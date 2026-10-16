@@ -1,0 +1,37 @@
+# 2026/10/16 11:28:16.863522 [TestMutations_AreAllDetectedByTheExpectedRule/add_a_phantom_transaction] [rapid] draw accounts: 2
+# 2026/10/16 11:28:16.863526 [TestMutations_AreAllDetectedByTheExpectedRule/add_a_phantom_transaction] [rapid] draw funding: 1
+# 2026/10/16 11:28:16.863531 [TestMutations_AreAllDetectedByTheExpectedRule/add_a_phantom_transaction] [rapid] draw funding: 1
+# 2026/10/16 11:28:16.863534 [TestMutations_AreAllDetectedByTheExpectedRule/add_a_phantom_transaction] [rapid] draw steps: 1
+# 2026/10/16 11:28:16.863534 [TestMutations_AreAllDetectedByTheExpectedRule/add_a_phantom_transaction] [rapid] draw from: "acc-01"
+# 2026/10/16 11:28:16.863536 [TestMutations_AreAllDetectedByTheExpectedRule/add_a_phantom_transaction] [rapid] draw amount: 1
+# 2026/10/16 11:28:16.863536 [TestMutations_AreAllDetectedByTheExpectedRule/add_a_phantom_transaction] [rapid] draw kind: 0
+# 2026/10/16 11:28:16.863539 [TestMutations_AreAllDetectedByTheExpectedRule/add_a_phantom_transaction] [rapid] draw account: "acc-01"
+# 2026/10/16 11:28:16.863540 [TestMutations_AreAllDetectedByTheExpectedRule/add_a_phantom_transaction] [rapid] draw phantom: 1
+# 2026/10/16 11:28:16.863561 [TestMutations_AreAllDetectedByTheExpectedRule/add_a_phantom_transaction] mutation "add a phantom transaction" went undetected by I2.phantom (broken rules: [I1c.term_d])
+# 
+v0.4.8#6778526087111661750
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
