@@ -28,7 +28,11 @@ import (
 	"centavo/bank/internal/platform/chaos"
 	"centavo/bank/internal/platform/chaosbuild"
 	"centavo/bank/internal/platform/config"
+	"centavo/bank/internal/platform/defenses"
 	"centavo/bank/internal/platform/httpserver"
+
+	// Registers the naive variants; the package is empty outside chaoslab builds.
+	_ "centavo/bank/internal/platform/naive"
 	"centavo/bank/migrations"
 )
 
@@ -132,7 +136,17 @@ func serveAPI(ctx context.Context, cfg config.Config, logger *slog.Logger) error
 
 	buildInfo := newBuildInfo(roleAPI, cfg)
 	adminHandler := httpapi.NewAdminHandler(buildInfo, pool)
-	apiHandler := httpapi.NewAPIHandler(newUseCases(pool), logger)
+	err = checkSchema(ctx, pool, cfg, logger)
+	if err != nil {
+		return err
+	}
+
+	useCases, err := newUseCases(pool, cfg.Defenses)
+	if err != nil {
+		return err
+	}
+
+	apiHandler := httpapi.NewAPIHandler(useCases, logger)
 	apiServer := httpserver.New(apiAddr, apiHandler)
 	adminServer := httpserver.New(adminAddr, adminHandler)
 
@@ -146,17 +160,52 @@ func serveAPI(ctx context.Context, cfg config.Config, logger *slog.Logger) error
 	return httpserver.Run(ctx, servers...)
 }
 
-func newUseCases(pool *pgxpool.Pool) httpapi.UseCases {
+func newUseCases(pool *pgxpool.Pool, profile defenses.Profile) (httpapi.UseCases, error) {
 	store := postgres.NewLedgerStore(pool)
-	moneyDependencies := application.MoneyDependencies{Positions: store, Ledger: store}
 
-	return httpapi.UseCases{
+	moneyDependencies, err := newMoneyDependencies(pool, profile)
+	if err != nil {
+		return httpapi.UseCases{}, err
+	}
+
+	useCases := httpapi.UseCases{
 		OpenAccount:  application.NewOpenAccount(store),
 		GetAccount:   application.NewGetAccount(store),
 		GetStatement: application.NewGetStatement(store, store),
 		Deposit:      application.NewDeposit(moneyDependencies),
 		Transfer:     application.NewTransferInternal(moneyDependencies),
 	}
+
+	return useCases, nil
+}
+
+// newMoneyDependencies is the composition root of docs/architecture.md,
+// section 8.2: the robust strategy unless the profile turns its defense off,
+// in which case the naive variant registered by platform/naive.
+func newMoneyDependencies(pool *pgxpool.Pool, profile defenses.Profile) (application.MoneyDependencies, error) {
+	deps := defenses.Dependencies{Pool: pool}
+	unitOfWork := application.UnitOfWork(postgres.NewUnitOfWork(pool))
+	locker := application.Locker(application.RowLocker{})
+
+	if !profile.IsEnabled(defenses.AtomicLedger) {
+		naive, err := defenses.Naive[application.UnitOfWork](defenses.AtomicLedger, deps)
+		if err != nil {
+			return application.MoneyDependencies{}, err
+		}
+
+		unitOfWork = naive
+	}
+
+	if !profile.IsEnabled(defenses.BalanceLocking) {
+		naive, err := defenses.Naive[application.Locker](defenses.BalanceLocking, deps)
+		if err != nil {
+			return application.MoneyDependencies{}, err
+		}
+
+		locker = naive
+	}
+
+	return application.MoneyDependencies{UnitOfWork: unitOfWork, Locker: locker}, nil
 }
 
 func serveWorker(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
@@ -167,6 +216,11 @@ func serveWorker(ctx context.Context, cfg config.Config, logger *slog.Logger) er
 		return err
 	}
 	defer pool.Close()
+
+	err = checkSchema(ctx, pool, cfg, logger)
+	if err != nil {
+		return err
+	}
 
 	buildInfo := newBuildInfo(roleWorker, cfg)
 	adminHandler := httpapi.NewAdminHandler(buildInfo, pool)
@@ -212,7 +266,56 @@ func migrate(ctx context.Context, cfg config.Config, logger *slog.Logger) error 
 		return fmt.Errorf("loading base migrations: %w", err)
 	}
 
-	return postgres.MigrateBase(ctx, cfg.DatabaseURL, baseMigrations, logger)
+	err = postgres.MigrateBase(ctx, cfg.DatabaseURL, baseMigrations, logger)
+	if err != nil {
+		return err
+	}
+
+	defenseMigrations, err := defenseMigrationsOf(cfg.Defenses)
+	if err != nil {
+		return err
+	}
+
+	return postgres.MigrateDefenses(ctx, cfg.DatabaseURL, defenseMigrations, logger)
+}
+
+// defenseMigrationsOf lists the defenses that have constraints of their own.
+func defenseMigrationsOf(profile defenses.Profile) ([]postgres.DefenseMigrations, error) {
+	var list []postgres.DefenseMigrations
+
+	for _, defense := range defenses.All() {
+		files, hasMigrations, err := migrations.Defense(string(defense))
+		if err != nil {
+			return nil, fmt.Errorf("loading %s migrations: %w", defense, err)
+		}
+
+		if hasMigrations {
+			list = append(list, postgres.DefenseMigrations{Name: string(defense), Files: files, IsEnabled: profile.IsEnabled(defense)})
+		}
+	}
+
+	return list, nil
+}
+
+// checkSchema is the startup validation of docs/architecture.md, section 8.2,
+// step 3. A mismatch refuses to start; an unreachable database does not,
+// because under chaos it comes back, and bank migrate already ran before.
+func checkSchema(ctx context.Context, pool *pgxpool.Pool, cfg config.Config, logger *slog.Logger) error {
+	defenseMigrations, err := defenseMigrationsOf(cfg.Defenses)
+	if err != nil {
+		return err
+	}
+
+	err = postgres.CheckDefenseSchema(ctx, pool, defenseMigrations)
+	if errors.Is(err, postgres.ErrSchemaProfileMismatch) {
+		return err
+	}
+
+	if err != nil {
+		logger.WarnContext(ctx, "could not check the defense schema at startup", "error", err)
+	}
+
+	return nil
 }
 
 func probeHealth(ctx context.Context) error {
@@ -244,6 +347,8 @@ func newBuildInfo(selectedRole role, cfg config.Config) httpapi.BuildInfo {
 		ChaosBuild: chaosbuild.IsEnabled(),
 		Env:        string(cfg.Env),
 		Defenses:   cfg.Defenses.String(),
+		// Notes explain combinations that weaken another defense.
+		DefenseNotes: cfg.Defenses.Notes(),
 	}
 }
 

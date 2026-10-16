@@ -1,17 +1,18 @@
 // Package application runs the bank's use cases over storage interfaces.
 //
-// The money-moving use cases here are the naive variants of phase F1
-// (docs/architecture.md, section 5.2): every write is its own autocommit
-// statement, the debited balance is read and written back by the application,
-// and the idempotency key is only recorded as client_ref. They are the code a
-// reasonable developer writes in a hurry, and they carry three known bugs:
-// partial writes on a crash (FC01), lost updates under concurrency (FC41) and
-// re-execution on retry (FC02). The robust variants arrive with defenses D1 to
-// D3 and keep these behind the naive profile.
+// The money-moving use cases take two strategies that the defense profile
+// picks (docs/architecture.md, section 8): a UnitOfWork, which is one
+// transaction with D1 and plain autocommit without it, and a Locker, which
+// takes the balance row locks in id order with D2 and nothing without it.
+// With both off, the steps below are exactly the naive bank of phase F1:
+// partial writes on a crash (FC01) and lost updates under concurrency (FC41).
+// The idempotency key is still only recorded as client_ref until D3 (FC02).
 package application
 
 import (
+	"bytes"
 	"context"
+	"slices"
 	"time"
 
 	"centavo/bank/internal/domain/idempotency"
@@ -60,10 +61,50 @@ type StatementReader interface {
 	ReadStatement(ctx context.Context, query StatementQuery) ([]ledger.StatementLine, error)
 }
 
-// MoneyDependencies are the stores a money-moving use case writes to.
+// PositionLocker takes the row locks of balances for the rest of the unit of work.
+type PositionLocker interface {
+	LockPositions(ctx context.Context, ids []ledger.AccountID) error
+}
+
+// Stores are the repositories of one unit of work.
+type Stores interface {
+	PositionStore
+	PositionLocker
+	LedgerWriter
+}
+
+// UnitOfWork runs fn with stores whose writes commit together (D1) or one by
+// one (naive). fn's error rolls a real transaction back.
+type UnitOfWork interface {
+	Run(ctx context.Context, fn func(ctx context.Context, stores Stores) error) error
+}
+
+// Locker decides which balance rows a use case locks before reading them.
+type Locker interface {
+	Lock(ctx context.Context, stores Stores, ids []ledger.AccountID) error
+}
+
+// RowLocker is defense D2: it locks every balance the use case will touch,
+// in id order, before reading any of them. The id order is what keeps two
+// transfers in opposite directions from deadlocking.
+type RowLocker struct{}
+
+// Lock sorts the ids and locks their rows.
+func (RowLocker) Lock(ctx context.Context, stores Stores, ids []ledger.AccountID) error {
+	ordered := slices.Clone(ids)
+	slices.SortFunc(ordered, compareAccountIDs)
+
+	return stores.LockPositions(ctx, slices.Compact(ordered))
+}
+
+func compareAccountIDs(a, b ledger.AccountID) int {
+	return bytes.Compare(a[:], b[:])
+}
+
+// MoneyDependencies are the strategies a money-moving use case runs on.
 type MoneyDependencies struct {
-	Positions PositionStore
-	Ledger    LedgerWriter
+	UnitOfWork UnitOfWork
+	Locker     Locker
 }
 
 // WriteContext identifies the client request behind a write.

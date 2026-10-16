@@ -41,6 +41,8 @@ type BuildInfo struct {
 	ChaosBuild bool
 	Env        string
 	Defenses   string
+	// DefenseNotes explain profiles where a defense depends on one that is off.
+	DefenseNotes []string
 }
 
 type healthResponse struct {
@@ -49,6 +51,7 @@ type healthResponse struct {
 	ChaosBuild bool                   `json:"chaos_build"`
 	Env        string                 `json:"env"`
 	Defenses   string                 `json:"defenses"`
+	Notes      []string               `json:"defense_notes,omitempty"`
 	Status     healthStatus           `json:"status"`
 	Checks     map[string]checkResult `json:"checks"`
 }
@@ -95,6 +98,7 @@ func (h healthHandler) response(status healthStatus, databaseResult checkResult)
 		ChaosBuild: h.info.ChaosBuild,
 		Env:        h.info.Env,
 		Defenses:   h.info.Defenses,
+		Notes:      h.info.DefenseNotes,
 		Status:     status,
 		Checks:     map[string]checkResult{"database": databaseResult},
 	}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"centavo/bank/internal/application"
@@ -15,16 +16,50 @@ import (
 	"centavo/bank/internal/domain/money"
 )
 
-// LedgerStore implements the account, position and ledger interfaces of the
-// application layer. Every method is a single autocommit statement on the
-// pool; atomicity across statements is the caller's concern.
-type LedgerStore struct {
-	pool *pgxpool.Pool
+// querier is what both a pool and a transaction offer: on a pool every
+// statement is its own autocommit, inside a transaction they commit together.
+type querier interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
-// NewLedgerStore wraps a pool.
+// LedgerStore implements the account, position and ledger interfaces of the
+// application layer. Every method is a single statement; whether statements
+// commit together depends on the querier it was built on.
+type LedgerStore struct {
+	db querier
+}
+
+// NewLedgerStore runs every statement in its own autocommit on the pool.
 func NewLedgerStore(pool *pgxpool.Pool) LedgerStore {
-	return LedgerStore{pool: pool}
+	return LedgerStore{db: pool}
+}
+
+const lockPositionsSQL = `
+SELECT account_id
+FROM account_balances
+WHERE account_id = ANY($1::uuid[])
+ORDER BY account_id
+FOR UPDATE`
+
+// LockPositions takes the row locks of the accounts' balances in id order,
+// so two transfers in opposite directions never wait for each other in a
+// cycle (docs/domain.md, section 6). The locks last until the transaction ends.
+func (s LedgerStore) LockPositions(ctx context.Context, ids []ledger.AccountID) error {
+	uuids := make([]uuid.UUID, 0, len(ids))
+	for _, id := range ids {
+		uuids = append(uuids, uuid.UUID(id))
+	}
+
+	rows, err := s.db.Query(ctx, lockPositionsSQL, uuids)
+	if err != nil {
+		return fmt.Errorf("locking positions: %w", err)
+	}
+
+	rows.Close()
+
+	return rows.Err()
 }
 
 // customerFloorCents is BR01: customer balances never go below zero.
@@ -45,7 +80,7 @@ SELECT created_at FROM account`
 func (s LedgerStore) CreateCustomer(ctx context.Context, account ledger.Account) (time.Time, error) {
 	var createdAt time.Time
 
-	err := s.pool.QueryRow(ctx, createCustomerSQL, uuid.UUID(account.ID), account.HolderName, customerFloorCents).Scan(&createdAt)
+	err := s.db.QueryRow(ctx, createCustomerSQL, uuid.UUID(account.ID), account.HolderName, customerFloorCents).Scan(&createdAt)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("creating customer account: %w", err)
 	}
@@ -65,7 +100,7 @@ func (s LedgerStore) FindCustomer(ctx context.Context, id ledger.AccountID) (led
 
 	var balanceCents int64
 
-	err := s.pool.QueryRow(ctx, findCustomerSQL, uuid.UUID(id)).Scan(&account.HolderName, &account.CreatedAt, &balanceCents)
+	err := s.db.QueryRow(ctx, findCustomerSQL, uuid.UUID(id)).Scan(&account.HolderName, &account.CreatedAt, &balanceCents)
 	if err != nil {
 		return ledger.Account{}, money.Balance{}, notFoundOr(err, "reading customer account")
 	}
@@ -82,7 +117,7 @@ WHERE b.account_id = $1 AND a.kind = 'customer'`
 // ReadCustomerPosition reads a customer's balance and last entry position,
 // without locking the row.
 func (s LedgerStore) ReadCustomerPosition(ctx context.Context, id ledger.AccountID) (ledger.Position, error) {
-	row := s.pool.QueryRow(ctx, readCustomerPositionSQL, uuid.UUID(id))
+	row := s.db.QueryRow(ctx, readCustomerPositionSQL, uuid.UUID(id))
 
 	position, err := scanPosition(row)
 	if err != nil {
@@ -99,7 +134,7 @@ WHERE account_id = $1`
 
 // OverwritePosition stores a position the caller computed.
 func (s LedgerStore) OverwritePosition(ctx context.Context, id ledger.AccountID, position ledger.Position) error {
-	tag, err := s.pool.Exec(ctx, overwritePositionSQL, uuid.UUID(id), int64(position.Balance.Cents()), int64(position.LastSeq))
+	tag, err := s.db.Exec(ctx, overwritePositionSQL, uuid.UUID(id), int64(position.Balance.Cents()), int64(position.LastSeq))
 	if err != nil {
 		return fmt.Errorf("overwriting position: %w", err)
 	}
@@ -119,7 +154,7 @@ RETURNING balance_cents, last_entry_seq`
 
 // IncrementBalance adds delta in the database and returns the new position.
 func (s LedgerStore) IncrementBalance(ctx context.Context, id ledger.AccountID, delta money.Cents) (ledger.Position, error) {
-	row := s.pool.QueryRow(ctx, incrementBalanceSQL, uuid.UUID(id), int64(delta))
+	row := s.db.QueryRow(ctx, incrementBalanceSQL, uuid.UUID(id), int64(delta))
 
 	position, err := scanPosition(row)
 	if err != nil {
@@ -138,7 +173,7 @@ RETURNING created_at`
 func (s LedgerStore) InsertTransaction(ctx context.Context, transaction ledger.Transaction) (time.Time, error) {
 	var createdAt time.Time
 
-	row := s.pool.QueryRow(ctx, insertTransactionSQL, uuid.UUID(transaction.ID), string(transaction.Kind), uuid.UUID(transaction.OperationID), transaction.ClientRef, transaction.CorrelationID)
+	row := s.db.QueryRow(ctx, insertTransactionSQL, uuid.UUID(transaction.ID), string(transaction.Kind), uuid.UUID(transaction.OperationID), transaction.ClientRef, transaction.CorrelationID)
 
 	err := row.Scan(&createdAt)
 	if err != nil {
@@ -154,7 +189,7 @@ VALUES ($1, $2, $3, $4, $5)`
 
 // InsertEntry appends one ledger entry.
 func (s LedgerStore) InsertEntry(ctx context.Context, entry ledger.Entry) error {
-	_, err := s.pool.Exec(ctx, insertEntrySQL, uuid.UUID(entry.TransactionID), uuid.UUID(entry.AccountID), int64(entry.Amount), int64(entry.Seq), int64(entry.BalanceAfter.Cents()))
+	_, err := s.db.Exec(ctx, insertEntrySQL, uuid.UUID(entry.TransactionID), uuid.UUID(entry.AccountID), int64(entry.Amount), int64(entry.Seq), int64(entry.BalanceAfter.Cents()))
 	if err != nil {
 		return fmt.Errorf("inserting ledger entry: %w", err)
 	}
@@ -173,7 +208,7 @@ LIMIT $3`
 
 // ReadStatement reads one page of an account's entries.
 func (s LedgerStore) ReadStatement(ctx context.Context, query application.StatementQuery) ([]ledger.StatementLine, error) {
-	rows, err := s.pool.Query(ctx, readStatementSQL, uuid.UUID(query.AccountID), int64(query.AfterSeq), query.Limit)
+	rows, err := s.db.Query(ctx, readStatementSQL, uuid.UUID(query.AccountID), int64(query.AfterSeq), query.Limit)
 	if err != nil {
 		return nil, fmt.Errorf("reading statement: %w", err)
 	}

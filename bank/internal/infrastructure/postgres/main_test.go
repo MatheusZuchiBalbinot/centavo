@@ -128,9 +128,52 @@ func migrate(ctx context.Context) error {
 		return err
 	}
 
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	err = postgres.MigrateBase(ctx, database.migratorURL, baseMigrations, discardLogger())
+	if err != nil {
+		return err
+	}
 
-	return postgres.MigrateBase(ctx, database.migratorURL, baseMigrations, logger)
+	return migrateDefenses(ctx, true)
+}
+
+// migrateDefenses puts the D1 and D2 constraints in (robust) or takes them out.
+func migrateDefenses(ctx context.Context, isRobust bool) error {
+	return migrateSchema(ctx, schema{hasAtomicLedger: isRobust, hasBalanceLocking: isRobust})
+}
+
+// schema says which defense constraints the test database has.
+type schema struct {
+	hasAtomicLedger   bool
+	hasBalanceLocking bool
+}
+
+func migrateSchema(ctx context.Context, wanted schema) error {
+	return postgres.MigrateDefenses(ctx, database.migratorURL, schemaMigrations(wanted), discardLogger())
+}
+
+func defenseMigrations(isEnabled bool) []postgres.DefenseMigrations {
+	return schemaMigrations(schema{hasAtomicLedger: isEnabled, hasBalanceLocking: isEnabled})
+}
+
+func schemaMigrations(wanted schema) []postgres.DefenseMigrations {
+	enabled := map[string]bool{"atomic_ledger": wanted.hasAtomicLedger, "balance_locking": wanted.hasBalanceLocking}
+
+	var list []postgres.DefenseMigrations
+
+	for _, name := range []string{"atomic_ledger", "balance_locking"} {
+		files, _, err := migrations.Defense(name)
+		if err != nil {
+			panic(err)
+		}
+
+		list = append(list, postgres.DefenseMigrations{Name: name, Files: files, IsEnabled: enabled[name]})
+	}
+
+	return list
+}
+
+func discardLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
 func terminate(container *tcpostgres.PostgresContainer) {

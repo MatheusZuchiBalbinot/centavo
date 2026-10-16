@@ -26,32 +26,52 @@ type TransferResult struct {
 
 // TransferInternal moves money between two customers (docs/domain.md, section 6).
 type TransferInternal struct {
-	positions PositionStore
-	ledger    LedgerWriter
-	poster    poster
+	unitOfWork UnitOfWork
+	locker     Locker
 }
 
 // NewTransferInternal builds the use case.
 func NewTransferInternal(deps MoneyDependencies) TransferInternal {
-	return TransferInternal{positions: deps.Positions, ledger: deps.Ledger, poster: poster{positions: deps.Positions, entries: deps.Ledger}}
+	return TransferInternal{unitOfWork: deps.UnitOfWork, locker: deps.Locker}
 }
 
-// Execute runs the naive transfer of docs/architecture.md, section 5.2: the
-// source balance is read without a lock, checked and overwritten with the
-// value computed here, so two concurrent debits can both pass the check and
-// one of them is lost.
+// Execute locks both balances in id order (D2), checks funds in the domain
+// and writes the transaction, the debit and the credit in one unit of work
+// (D1). Without D2 the source balance is read unlocked and overwritten with
+// the value computed here, so two concurrent debits can both pass the check
+// and one of them is lost (FC41); without D1 a crash at FP01 leaves the debit
+// without its credit (FC01).
 func (t TransferInternal) Execute(ctx context.Context, input TransferInput) (TransferResult, error) {
 	err := ledger.CheckTransferAccounts(input.From, input.To)
 	if err != nil {
 		return TransferResult{}, err
 	}
 
-	source, err := t.positions.ReadCustomerPosition(ctx, input.From)
+	var result TransferResult
+
+	err = t.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
+		var err error
+
+		result, err = t.transfer(ctx, stores, input)
+
+		return err
+	})
+
+	return result, err
+}
+
+func (t TransferInternal) transfer(ctx context.Context, stores Stores, input TransferInput) (TransferResult, error) {
+	err := t.locker.Lock(ctx, stores, []ledger.AccountID{input.From, input.To})
 	if err != nil {
 		return TransferResult{}, err
 	}
 
-	_, err = t.positions.ReadCustomerPosition(ctx, input.To)
+	source, err := stores.ReadCustomerPosition(ctx, input.From)
+	if err != nil {
+		return TransferResult{}, err
+	}
+
+	_, err = stores.ReadCustomerPosition(ctx, input.To)
 	if err != nil {
 		return TransferResult{}, err
 	}
@@ -66,30 +86,33 @@ func (t TransferInternal) Execute(ctx context.Context, input TransferInput) (Tra
 		return TransferResult{}, err
 	}
 
-	createdAt, err := t.ledger.InsertTransaction(ctx, transaction)
+	createdAt, err := stores.InsertTransaction(ctx, transaction)
 	if err != nil {
 		return TransferResult{}, err
 	}
 
-	err = t.positions.OverwritePosition(ctx, input.From, debited)
+	err = stores.OverwritePosition(ctx, input.From, debited)
 	if err != nil {
 		return TransferResult{}, err
 	}
 
 	debit := ledger.Entry{TransactionID: transaction.ID, AccountID: input.From, Amount: input.Amount.Negated(), Seq: debited.LastSeq, BalanceAfter: debited.Balance}
 
-	err = t.ledger.InsertEntry(ctx, debit)
+	err = stores.InsertEntry(ctx, debit)
 	if err != nil {
 		return TransferResult{}, err
 	}
 
-	// FP01: the debit is already written; dying here destroys money (FC01).
+	// FP01: the debit is written; with D1 it is not committed yet, and dying
+	// here rolls everything back. Without D1 it destroys money (FC01).
 	err = failpoint.Hit(ctx, failpoint.TransferAfterDebitBeforeCredit)
 	if err != nil {
 		return TransferResult{}, err
 	}
 
-	_, err = t.poster.post(ctx, transaction.ID, input.To, input.Amount.Cents())
+	entries := poster{positions: stores, entries: stores}
+
+	_, err = entries.post(ctx, transaction.ID, input.To, input.Amount.Cents())
 	if err != nil {
 		return TransferResult{}, err
 	}

@@ -23,22 +23,42 @@ type DepositResult struct {
 }
 
 // Deposit credits a customer and debits sys_external_cash (docs/domain.md,
-// section 7), one autocommit statement at a time.
+// section 7).
 type Deposit struct {
-	positions PositionReader
-	ledger    LedgerWriter
-	poster    poster
+	unitOfWork UnitOfWork
+	locker     Locker
 }
 
 // NewDeposit builds the use case.
 func NewDeposit(deps MoneyDependencies) Deposit {
-	return Deposit{positions: deps.Positions, ledger: deps.Ledger, poster: poster{positions: deps.Positions, entries: deps.Ledger}}
+	return Deposit{unitOfWork: deps.UnitOfWork, locker: deps.Locker}
 }
 
-// Execute runs the naive deposit: a crash between two statements leaves a
-// transaction with only some of its entries.
+// Execute locks the customer's balance (D2), then writes the transaction and
+// its two entries in one unit of work (D1). sys_external_cash is updated by
+// increment, never locked up front: every deposit touches it, and taking it
+// last keeps it out of any lock cycle.
 func (d Deposit) Execute(ctx context.Context, input DepositInput) (DepositResult, error) {
-	_, err := d.positions.ReadCustomerPosition(ctx, input.AccountID)
+	var result DepositResult
+
+	err := d.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
+		var err error
+
+		result, err = d.deposit(ctx, stores, input)
+
+		return err
+	})
+
+	return result, err
+}
+
+func (d Deposit) deposit(ctx context.Context, stores Stores, input DepositInput) (DepositResult, error) {
+	err := d.locker.Lock(ctx, stores, []ledger.AccountID{input.AccountID})
+	if err != nil {
+		return DepositResult{}, err
+	}
+
+	_, err = stores.ReadCustomerPosition(ctx, input.AccountID)
 	if err != nil {
 		return DepositResult{}, err
 	}
@@ -48,17 +68,19 @@ func (d Deposit) Execute(ctx context.Context, input DepositInput) (DepositResult
 		return DepositResult{}, err
 	}
 
-	createdAt, err := d.ledger.InsertTransaction(ctx, transaction)
+	createdAt, err := stores.InsertTransaction(ctx, transaction)
 	if err != nil {
 		return DepositResult{}, err
 	}
 
-	customer, err := d.poster.post(ctx, transaction.ID, input.AccountID, input.Amount.Cents())
+	entries := poster{positions: stores, entries: stores}
+
+	customer, err := entries.post(ctx, transaction.ID, input.AccountID, input.Amount.Cents())
 	if err != nil {
 		return DepositResult{}, err
 	}
 
-	_, err = d.poster.post(ctx, transaction.ID, ledger.ExternalCashAccountID(), input.Amount.Negated())
+	_, err = entries.post(ctx, transaction.ID, ledger.ExternalCashAccountID(), input.Amount.Negated())
 	if err != nil {
 		return DepositResult{}, err
 	}

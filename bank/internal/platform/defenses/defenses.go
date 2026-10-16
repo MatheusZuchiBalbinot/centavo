@@ -173,3 +173,16 @@ func parseModifier(modifier string) (Defense, error) {
 func compareCatalogOrder(a, b Defense) int {
 	return slices.Index(all, a) - slices.Index(all, b)
 }
+
+// Notes explains the combinations where one defense depends on another that
+// is off (docs/architecture.md, section 8.2, step 3); /internal/health shows them.
+func (p Profile) Notes() []string {
+	var notes []string
+
+	isLockingWithoutTransaction := p.IsEnabled(BalanceLocking) && !p.IsEnabled(AtomicLedger)
+	if isLockingWithoutTransaction {
+		notes = append(notes, "balance_locking without atomic_ledger: each row lock ends with its own statement, so it serializes nothing")
+	}
+
+	return notes
+}

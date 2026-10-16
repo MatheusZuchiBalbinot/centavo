@@ -112,3 +112,25 @@ func TestProfile_AnyDisabledSet_RoundTripsThroughCanonicalString(t *testing.T) {
 		}
 	})
 }
+
+func TestNotes_ExplainLockingWithoutTransactions(t *testing.T) {
+	weakened, err := defenses.ParseProfile("robust,-atomic_ledger")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(weakened.Notes()) != 1 {
+		t.Fatalf("notes for %s: %v", weakened, weakened.Notes())
+	}
+
+	for _, raw := range []string{"robust", "naive", "robust,-balance_locking"} {
+		profile, err := defenses.ParseProfile(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if len(profile.Notes()) != 0 {
+			t.Errorf("%s has unexpected notes: %v", raw, profile.Notes())
+		}
+	}
+}

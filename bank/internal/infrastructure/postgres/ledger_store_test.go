@@ -32,7 +32,7 @@ func newBank(t *testing.T) bank {
 
 	pool := newPool(t, database.appURL)
 	store := postgres.NewLedgerStore(pool)
-	moneyDependencies := application.MoneyDependencies{Positions: store, Ledger: store}
+	moneyDependencies := application.MoneyDependencies{UnitOfWork: postgres.NewUnitOfWork(pool), Locker: application.RowLocker{}}
 
 	return bank{
 		pool:         pool,
