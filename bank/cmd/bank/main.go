@@ -17,6 +17,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"centavo/bank/internal/application"
 	"centavo/bank/internal/infrastructure/postgres"
 	"centavo/bank/internal/interfaces/httpapi"
 	"centavo/bank/internal/platform/buildinfo"
@@ -119,12 +122,26 @@ func serveAPI(ctx context.Context, cfg config.Config, logger *slog.Logger) error
 
 	buildInfo := newBuildInfo(roleAPI, cfg)
 	adminHandler := httpapi.NewAdminHandler(buildInfo, pool)
-	apiServer := httpserver.New(apiAddr, http.NewServeMux())
+	apiHandler := httpapi.NewAPIHandler(newUseCases(pool), logger)
+	apiServer := httpserver.New(apiAddr, apiHandler)
 	adminServer := httpserver.New(adminAddr, adminHandler)
 
 	logger.InfoContext(ctx, "serving", "api_addr", apiAddr, "admin_addr", adminAddr)
 
 	return httpserver.Run(ctx, apiServer, adminServer)
+}
+
+func newUseCases(pool *pgxpool.Pool) httpapi.UseCases {
+	store := postgres.NewLedgerStore(pool)
+	moneyDependencies := application.MoneyDependencies{Positions: store, Ledger: store}
+
+	return httpapi.UseCases{
+		OpenAccount:  application.NewOpenAccount(store),
+		GetAccount:   application.NewGetAccount(store),
+		GetStatement: application.NewGetStatement(store, store),
+		Deposit:      application.NewDeposit(moneyDependencies),
+		Transfer:     application.NewTransferInternal(moneyDependencies),
+	}
 }
 
 func serveWorker(ctx context.Context, cfg config.Config, logger *slog.Logger) error {

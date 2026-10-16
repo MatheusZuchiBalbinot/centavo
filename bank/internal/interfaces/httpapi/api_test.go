@@ -1,0 +1,283 @@
+package httpapi_test
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
+	"centavo/bank/internal/application"
+	"centavo/bank/internal/domain/ledger"
+	"centavo/bank/internal/domain/money"
+	"centavo/bank/internal/interfaces/httpapi"
+)
+
+const validKey = "r0001-p01-000001"
+
+var errStorageDown = errors.New("connection refused to 10.0.0.5:5432 by bank_app")
+
+type fakeTransfer struct {
+	received application.TransferInput
+	result   application.TransferResult
+	err      error
+}
+
+func (f *fakeTransfer) Execute(_ context.Context, input application.TransferInput) (application.TransferResult, error) {
+	f.received = input
+
+	return f.result, f.err
+}
+
+type fakeDeposit struct {
+	err error
+}
+
+func (f fakeDeposit) Execute(_ context.Context, input application.DepositInput) (application.DepositResult, error) {
+	return application.DepositResult{Balance: money.NewBalance(input.Amount.Cents())}, f.err
+}
+
+type fakeStatement struct {
+	received application.StatementQuery
+}
+
+func (f *fakeStatement) Execute(_ context.Context, query application.StatementQuery) (application.StatementPage, error) {
+	f.received = query
+
+	return application.StatementPage{}, nil
+}
+
+type unusedAccounts struct{}
+
+func (unusedAccounts) Execute(context.Context, ledger.AccountID) (application.AccountView, error) {
+	return application.AccountView{}, ledger.ErrAccountNotFound
+}
+
+type fakeOpenAccount struct{}
+
+func (fakeOpenAccount) Execute(_ context.Context, holderName string) (application.AccountView, error) {
+	name, err := ledger.ParseHolderName(holderName)
+
+	return application.AccountView{Account: ledger.Account{HolderName: name}}, err
+}
+
+type apiFixture struct {
+	handler   http.Handler
+	transfer  *fakeTransfer
+	statement *fakeStatement
+}
+
+func newFixture(depositErr error) apiFixture {
+	transfer := &fakeTransfer{}
+	statement := &fakeStatement{}
+	useCases := httpapi.UseCases{
+		OpenAccount:  fakeOpenAccount{},
+		GetAccount:   unusedAccounts{},
+		GetStatement: statement,
+		Deposit:      fakeDeposit{err: depositErr},
+		Transfer:     transfer,
+	}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	return apiFixture{handler: httpapi.NewAPIHandler(useCases, logger), transfer: transfer, statement: statement}
+}
+
+type apiRequest struct {
+	method  string
+	path    string
+	body    string
+	headers map[string]string
+}
+
+type errorEnvelope struct {
+	Error struct {
+		Code          string `json:"code"`
+		Message       string `json:"message"`
+		CorrelationID string `json:"correlation_id"`
+	} `json:"error"`
+}
+
+func (f apiFixture) do(t *testing.T, request apiRequest) *httptest.ResponseRecorder {
+	t.Helper()
+
+	httpRequest := httptest.NewRequestWithContext(t.Context(), request.method, request.path, strings.NewReader(request.body))
+	for name, value := range request.headers {
+		httpRequest.Header.Set(name, value)
+	}
+
+	recorder := httptest.NewRecorder()
+	f.handler.ServeHTTP(recorder, httpRequest)
+
+	return recorder
+}
+
+func decodeError(t *testing.T, recorder *httptest.ResponseRecorder) errorEnvelope {
+	t.Helper()
+
+	var envelope errorEnvelope
+
+	err := json.NewDecoder(recorder.Body).Decode(&envelope)
+	if err != nil {
+		t.Fatalf("error body is not JSON: %v", err)
+	}
+
+	return envelope
+}
+
+func newAccountIDs(t *testing.T) (string, string) {
+	t.Helper()
+
+	first, err := ledger.NewAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	second, err := ledger.NewAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return first.String(), second.String()
+}
+
+func TestTransfer_PassesTheRequestToTheUseCase(t *testing.T) {
+	fixture := newFixture(nil)
+	from, to := newAccountIDs(t)
+	fixture.transfer.result = application.TransferResult{FromBalance: money.NewBalance(8_750), CreatedAt: time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)}
+	body := `{"from_account_id": "` + from + `", "to_account_id": "` + to + `", "amount_cents": 1250}`
+	headers := map[string]string{"Idempotency-Key": validKey, "X-Correlation-Id": validKey}
+
+	recorder := fixture.do(t, apiRequest{method: http.MethodPost, path: "/v1/transfers", body: body, headers: headers})
+
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("status %d: %s", recorder.Code, recorder.Body)
+	}
+
+	received := fixture.transfer.received
+	isForwarded := received.From.String() == from && received.To.String() == to && received.Amount.Cents() == 1_250 && string(received.Write.Key) == validKey && received.Write.CorrelationID == validKey
+	if !isForwarded {
+		t.Fatalf("use case received %+v", received)
+	}
+
+	if !strings.Contains(recorder.Body.String(), `"from_balance_cents":8750`) {
+		t.Fatalf("response body: %s", recorder.Body)
+	}
+
+	if recorder.Header().Get("X-Correlation-Id") != validKey {
+		t.Fatalf("correlation id not echoed: %q", recorder.Header().Get("X-Correlation-Id"))
+	}
+}
+
+func TestWrites_MapErrorsToStableCodes(t *testing.T) {
+	from, to := newAccountIDs(t)
+	transferBody := func(amount string) string {
+		return `{"from_account_id": "` + from + `", "to_account_id": "` + to + `", "amount_cents": ` + amount + `}`
+	}
+	withKey := map[string]string{"Idempotency-Key": validKey}
+
+	cases := []struct {
+		name        string
+		request     apiRequest
+		transferErr error
+		depositErr  error
+		wantStatus  int
+		wantCode    string
+	}{
+		{name: "missing key", request: apiRequest{method: http.MethodPost, path: "/v1/transfers", body: transferBody("10")}, wantStatus: 400, wantCode: "IDEMPOTENCY_KEY_MISSING"},
+		{name: "malformed key", request: apiRequest{method: http.MethodPost, path: "/v1/transfers", body: transferBody("10"), headers: map[string]string{"Idempotency-Key": "bad key"}}, wantStatus: 400, wantCode: "VALIDATION_FAILED"},
+		{name: "unknown field", request: apiRequest{method: http.MethodPost, path: "/v1/transfers", body: `{"from_account_id": "` + from + `", "is_admin": true}`, headers: withKey}, wantStatus: 400, wantCode: "VALIDATION_FAILED"},
+		{name: "two objects", request: apiRequest{method: http.MethodPost, path: "/v1/transfers", body: transferBody("10") + transferBody("10"), headers: withKey}, wantStatus: 400, wantCode: "VALIDATION_FAILED"},
+		{name: "zero amount", request: apiRequest{method: http.MethodPost, path: "/v1/transfers", body: transferBody("0"), headers: withKey}, wantStatus: 400, wantCode: "VALIDATION_FAILED"},
+		{name: "amount above limit", request: apiRequest{method: http.MethodPost, path: "/v1/transfers", body: transferBody("100000001"), headers: withKey}, wantStatus: 422, wantCode: "AMOUNT_ABOVE_LIMIT"},
+		{name: "insufficient funds", request: apiRequest{method: http.MethodPost, path: "/v1/transfers", body: transferBody("10"), headers: withKey}, transferErr: ledger.ErrInsufficientFunds, wantStatus: 422, wantCode: "INSUFFICIENT_FUNDS"},
+		{name: "same account", request: apiRequest{method: http.MethodPost, path: "/v1/transfers", body: transferBody("10"), headers: withKey}, transferErr: ledger.ErrSameAccount, wantStatus: 422, wantCode: "SAME_ACCOUNT_TRANSFER"},
+		{name: "unknown account", request: apiRequest{method: http.MethodPost, path: "/v1/transfers", body: transferBody("10"), headers: withKey}, transferErr: ledger.ErrAccountNotFound, wantStatus: 404, wantCode: "ACCOUNT_NOT_FOUND"},
+		{name: "deadline", request: apiRequest{method: http.MethodPost, path: "/v1/transfers", body: transferBody("10"), headers: withKey}, transferErr: context.DeadlineExceeded, wantStatus: 503, wantCode: "TEMPORARILY_UNAVAILABLE"},
+		{name: "storage failure", request: apiRequest{method: http.MethodPost, path: "/v1/deposits", body: `{"account_id": "` + from + `", "amount_cents": 10}`, headers: withKey}, depositErr: errStorageDown, wantStatus: 500, wantCode: "INTERNAL"},
+		{name: "bad correlation id", request: apiRequest{method: http.MethodPost, path: "/v1/deposits", body: `{}`, headers: map[string]string{"Idempotency-Key": validKey, "X-Correlation-Id": "line\nbreak"}}, wantStatus: 400, wantCode: "VALIDATION_FAILED"},
+		{name: "invalid holder name", request: apiRequest{method: http.MethodPost, path: "/v1/accounts", body: `{"holder_name": "   "}`, headers: withKey}, wantStatus: 400, wantCode: "VALIDATION_FAILED"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fixture := newFixture(tc.depositErr)
+			fixture.transfer.err = tc.transferErr
+
+			recorder := fixture.do(t, tc.request)
+
+			if recorder.Code != tc.wantStatus {
+				t.Fatalf("status: got %d, want %d (%s)", recorder.Code, tc.wantStatus, recorder.Body)
+			}
+
+			envelope := decodeError(t, recorder)
+			if envelope.Error.Code != tc.wantCode {
+				t.Fatalf("code: got %q, want %q", envelope.Error.Code, tc.wantCode)
+			}
+		})
+	}
+}
+
+func TestInternalError_NeverLeaksTheCause(t *testing.T) {
+	fixture := newFixture(errStorageDown)
+	from, _ := newAccountIDs(t)
+	headers := map[string]string{"Idempotency-Key": validKey, "X-Correlation-Id": validKey}
+	request := apiRequest{method: http.MethodPost, path: "/v1/deposits", body: `{"account_id": "` + from + `", "amount_cents": 10}`, headers: headers}
+
+	recorder := fixture.do(t, request)
+
+	body := recorder.Body.String()
+	if strings.Contains(body, "10.0.0.5") || strings.Contains(body, "bank_app") {
+		t.Fatalf("500 body leaks the cause: %s", body)
+	}
+
+	envelope := decodeError(t, recorder)
+	if envelope.Error.CorrelationID != validKey {
+		t.Fatalf("correlation id: got %q", envelope.Error.CorrelationID)
+	}
+}
+
+func TestStatement_ParsesQueryParameters(t *testing.T) {
+	from, _ := newAccountIDs(t)
+
+	cases := []struct {
+		name       string
+		query      string
+		wantStatus int
+		wantQuery  application.StatementQuery
+	}{
+		{name: "defaults", query: "", wantStatus: 200, wantQuery: application.StatementQuery{AfterSeq: 0, Limit: application.DefaultStatementLimit}},
+		{name: "explicit", query: "?after_seq=7&limit=20", wantStatus: 200, wantQuery: application.StatementQuery{AfterSeq: 7, Limit: 20}},
+		{name: "not a number", query: "?limit=ten", wantStatus: 400},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fixture := newFixture(nil)
+
+			recorder := fixture.do(t, apiRequest{method: http.MethodGet, path: "/v1/accounts/" + from + "/statement" + tc.query})
+
+			if recorder.Code != tc.wantStatus {
+				t.Fatalf("status: got %d, want %d (%s)", recorder.Code, tc.wantStatus, recorder.Body)
+			}
+
+			isSuccess := tc.wantStatus == http.StatusOK
+			if !isSuccess {
+				return
+			}
+
+			received := fixture.statement.received
+			if received.AfterSeq != tc.wantQuery.AfterSeq || received.Limit != tc.wantQuery.Limit {
+				t.Fatalf("use case received %+v", received)
+			}
+
+			if !strings.Contains(recorder.Body.String(), `"entries":[]`) {
+				t.Fatalf("an empty page must be an empty list: %s", recorder.Body)
+			}
+		})
+	}
+}
