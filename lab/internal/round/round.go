@@ -15,9 +15,12 @@ import (
 	"strconv"
 	"time"
 
+	"centavo/lab/internal/checker"
+	"centavo/lab/internal/export"
 	"centavo/lab/internal/history"
 	"centavo/lab/internal/loadgen"
 	"centavo/lab/internal/seed"
+	"centavo/lab/internal/snapshot"
 	"centavo/lab/scenarios"
 )
 
@@ -40,13 +43,19 @@ type Options struct {
 	RoundsDir  string
 	LabVersion string
 	Logger     *slog.Logger
+	// Export reads the part of the ledger the round touched.
+	Export func(ctx context.Context, request export.Request) (snapshot.Snapshot, error)
+	// Check runs the checker on the archived round and returns its verdict.
+	Check func(ctx context.Context, roundDir string) (checker.Verdict, error)
 }
 
-// Result is where a round was archived and what its history looks like.
+// Result is where a round was archived, what its history looks like and
+// what the checker concluded.
 type Result struct {
 	ID      string
 	Dir     string
 	History history.Report
+	Verdict checker.Verdict
 }
 
 // IsClean reports whether the history is well formed and every operation ended.
@@ -64,6 +73,7 @@ type manifest struct {
 	StartedAt      time.Time       `json:"started_at"`
 	FinishedAt     time.Time       `json:"finished_at"`
 	History        historySummary  `json:"history"`
+	Verdict        checker.Verdict `json:"verdict,omitempty"`
 	Error          string          `json:"error,omitempty"`
 	Workload       workloadSummary `json:"workload"`
 }
@@ -122,11 +132,86 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	}
 
 	result := Result{ID: id, Dir: dir, History: report}
-	roundManifest := newManifest(options, result, startedAt, runErr)
 
-	err = writeManifest(dir, roundManifest)
+	// The checker reads round.json for the report header, so it is written
+	// before the check and again with the verdict.
+	err = writeManifest(dir, newManifest(options, result, startedAt, runErr))
+	if err != nil {
+		return result, errors.Join(runErr, err)
+	}
+
+	if runErr != nil {
+		return result, runErr
+	}
+
+	result.Verdict, runErr = exportAndCheck(ctx, options, result)
+
+	err = writeManifest(dir, newManifest(options, result, startedAt, runErr))
 
 	return result, errors.Join(runErr, err)
+}
+
+// exportAndCheck takes the ledger snapshot of the round and runs the checker on it.
+func exportAndCheck(ctx context.Context, options Options, result Result) (checker.Verdict, error) {
+	accounts, err := createdAccounts(result.Dir)
+	if err != nil {
+		return "", err
+	}
+
+	s, err := options.Export(ctx, export.Request{Round: result.ID, AccountIDs: accounts})
+	if err != nil {
+		return "", err
+	}
+
+	err = snapshot.Write(result.Dir, s)
+	if err != nil {
+		return "", err
+	}
+
+	options.Logger.InfoContext(ctx, "ledger exported", "round", result.ID, "transactions", len(s.Transactions), "entries", len(s.Entries))
+
+	return options.Check(ctx, result.Dir)
+}
+
+// createdAccounts lists the accounts the history says the round opened: the
+// export reads exactly those, so older rounds never leak into this verdict.
+func createdAccounts(dir string) ([]string, error) {
+	file, err := os.Open(filepath.Join(dir, historyFile)) //nolint:gosec // G304: dir comes from allocate, inside the configured rounds directory.
+	if err != nil {
+		return nil, fmt.Errorf("opening history: %w", err)
+	}
+	defer file.Close()
+
+	var accounts []string
+
+	decoder := json.NewDecoder(file)
+
+	for decoder.More() {
+		var record history.Record
+
+		err := decoder.Decode(&record)
+		if err != nil {
+			return nil, fmt.Errorf("reading history: %w", err)
+		}
+
+		isCreated := record.Type == history.TypeOK && record.F == history.FunctionCreateAccount
+		if !isCreated {
+			continue
+		}
+
+		var created struct {
+			AccountID string `json:"account_id"`
+		}
+
+		err = json.Unmarshal(record.Value, &created)
+		if err != nil {
+			return nil, fmt.Errorf("reading a created account: %w", err)
+		}
+
+		accounts = append(accounts, created.AccountID)
+	}
+
+	return accounts, nil
 }
 
 // allocate creates the next rNNNN directory; Mkdir failing on an existing
@@ -207,6 +292,7 @@ func newManifest(options Options, result Result, startedAt time.Time, runErr err
 		LabVersion:     options.LabVersion,
 		StartedAt:      startedAt,
 		FinishedAt:     time.Now().UTC(),
+		Verdict:        result.Verdict,
 		History: historySummary{
 			Records:      report.Records,
 			Invocations:  report.Invocations,

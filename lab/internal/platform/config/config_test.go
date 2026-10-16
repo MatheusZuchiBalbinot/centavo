@@ -2,6 +2,7 @@ package config_test
 
 import (
 	"errors"
+	"maps"
 	"testing"
 
 	"centavo/lab/internal/platform/config"
@@ -16,14 +17,14 @@ func lookupFrom(values map[string]string) config.LookupFunc {
 }
 
 func TestLoadRun(t *testing.T) {
-	valid := map[string]string{"BANK_API_URL": "http://toxiproxy:28080", "ARTIFACT_STORE": "file:///data/rounds/"}
+	valid := map[string]string{"BANK_API_URL": "http://toxiproxy:28080", "ARTIFACT_STORE": "file:///data/rounds/", "AUDITOR_DATABASE_URL": "postgres://bank_auditor:secret@postgres:5432/bank_robust"}
 
 	got, err := config.LoadRun(lookupFrom(valid))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if got.BankURL != "http://toxiproxy:28080" || got.RoundsDir != "/data/rounds" {
+	if got.BankURL != "http://toxiproxy:28080" || got.RoundsDir != "/data/rounds" || got.AuditorURL != valid["AUDITOR_DATABASE_URL"] {
 		t.Fatalf("got %+v", got)
 	}
 
@@ -39,11 +40,13 @@ func TestLoadRun(t *testing.T) {
 		{name: "s3 store", key: "ARTIFACT_STORE", value: "s3://bucket/rounds", want: config.ErrUnsupportedStore},
 		{name: "relative file store", key: "ARTIFACT_STORE", value: "file://data/rounds", want: config.ErrUnsupportedStore},
 		{name: "missing store", key: "ARTIFACT_STORE", value: "", want: config.ErrMissingVariable},
+		{name: "missing auditor", key: "AUDITOR_DATABASE_URL", value: "", want: config.ErrMissingVariable},
+		{name: "auditor is not postgres", key: "AUDITOR_DATABASE_URL", value: "mysql://auditor@db/bank", want: config.ErrInvalidAuditor},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			values := map[string]string{"BANK_API_URL": valid["BANK_API_URL"], "ARTIFACT_STORE": valid["ARTIFACT_STORE"]}
+			values := maps.Clone(valid)
 			values[tc.key] = tc.value
 
 			_, err := config.LoadRun(lookupFrom(values))

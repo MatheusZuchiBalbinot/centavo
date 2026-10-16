@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Centavo: laboratório de caos</title>
+  <link rel="stylesheet" href="/app.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Pular para o conteúdo</a>
+  <header class="banner">
+    <p>Ambiente de laboratório: as falhas aqui são injetadas de propósito.</p>
+  </header>
+  <main id="main" tabindex="-1">
+    <h1>Invariantes do Centavo</h1>
+
+    <section aria-labelledby="live-title">
+      <h2 id="live-title">Ao vivo</h2>
+      <p class="meta" id="live-at">Aguardando a primeira leitura do auditor.</p>
+      <ul class="checks" id="live-checks" aria-live="polite"></ul>
+    </section>
+
+    <section aria-labelledby="round-title">
+      <h2 id="round-title">Última rodada</h2>
+      <div id="round" aria-live="polite">
+        <p class="meta">Nenhuma rodada verificada ainda. Rode <code>lab run --scenario smoke</code>.</p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

@@ -11,6 +11,7 @@ import (
 const (
 	bankURLVariable       = "BANK_API_URL"
 	artifactStoreVariable = "ARTIFACT_STORE"
+	auditorURLVariable    = "AUDITOR_DATABASE_URL"
 	fileScheme            = "file"
 )
 
@@ -18,21 +19,60 @@ var (
 	ErrMissingVariable  = errors.New("required environment variable is not set")
 	ErrInvalidBankURL   = errors.New("BANK_API_URL must be an absolute http or https URL")
 	ErrUnsupportedStore = errors.New("ARTIFACT_STORE must be a file:// URL with an absolute path")
+	ErrInvalidAuditor   = errors.New("AUDITOR_DATABASE_URL must be a postgres:// URL")
 )
 
 // LookupFunc reads one environment variable; os.LookupEnv satisfies it.
 type LookupFunc func(key string) (string, bool)
 
-// Run is the configuration of `lab run`.
-type Run struct {
-	// BankURL is the bank's client API, through the client_api proxy.
-	BankURL string
+// Serve is the configuration of `lab serve`.
+type Serve struct {
 	// RoundsDir is where rounds are archived.
 	RoundsDir string
+	// AuditorURL connects straight to PostgreSQL as bank_auditor, never
+	// through Toxiproxy: auditing is not a chaos target.
+	AuditorURL string
+}
+
+// Run is the configuration of `lab run`.
+type Run struct {
+	Serve
+	// BankURL is the bank's client API, through the client_api proxy.
+	BankURL string
+}
+
+// LoadServe reads the configuration of `lab serve`.
+func LoadServe(lookup LookupFunc) (Serve, error) {
+	store, err := require(lookup, artifactStoreVariable)
+	if err != nil {
+		return Serve{}, err
+	}
+
+	roundsDir, err := roundsDirOf(store)
+	if err != nil {
+		return Serve{}, err
+	}
+
+	auditorURL, err := require(lookup, auditorURLVariable)
+	if err != nil {
+		return Serve{}, err
+	}
+
+	err = validateAuditorURL(auditorURL)
+	if err != nil {
+		return Serve{}, err
+	}
+
+	return Serve{RoundsDir: roundsDir, AuditorURL: auditorURL}, nil
 }
 
 // LoadRun reads the configuration of `lab run`.
 func LoadRun(lookup LookupFunc) (Run, error) {
+	serve, err := LoadServe(lookup)
+	if err != nil {
+		return Run{}, err
+	}
+
 	bankURL, err := require(lookup, bankURLVariable)
 	if err != nil {
 		return Run{}, err
@@ -43,17 +83,22 @@ func LoadRun(lookup LookupFunc) (Run, error) {
 		return Run{}, err
 	}
 
-	store, err := require(lookup, artifactStoreVariable)
+	return Run{Serve: serve, BankURL: bankURL}, nil
+}
+
+// validateAuditorURL never echoes the URL back: it carries a password.
+func validateAuditorURL(raw string) error {
+	parsed, err := url.Parse(raw)
 	if err != nil {
-		return Run{}, err
+		return ErrInvalidAuditor
 	}
 
-	roundsDir, err := roundsDirOf(store)
-	if err != nil {
-		return Run{}, err
+	isPostgres := parsed.Scheme == "postgres" || parsed.Scheme == "postgresql"
+	if !isPostgres || parsed.Host == "" {
+		return ErrInvalidAuditor
 	}
 
-	return Run{BankURL: bankURL, RoundsDir: roundsDir}, nil
+	return nil
 }
 
 func validateBankURL(raw string) error {
