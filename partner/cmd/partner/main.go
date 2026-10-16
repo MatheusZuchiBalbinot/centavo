@@ -2,6 +2,7 @@
 //
 //	partner serve        partner API (:8081) and admin and chaos port (:9092)
 //	partner healthcheck  probes the local admin port; used by the container healthcheck
+//	partner chaos-kill   SIGKILLs the main process of the container (chaoslab builds only)
 package main
 
 import (
@@ -18,6 +19,7 @@ import (
 	"centavo/partner/internal/interfaces/httpapi"
 	"centavo/partner/internal/platform/buildinfo"
 	"centavo/partner/internal/platform/chaosbuild"
+	"centavo/partner/internal/platform/chaoskill"
 	"centavo/partner/internal/platform/config"
 	"centavo/partner/internal/platform/httpserver"
 )
@@ -25,6 +27,7 @@ import (
 const (
 	commandServe       = "serve"
 	commandHealthcheck = "healthcheck"
+	commandChaosKill   = "chaos-kill"
 )
 
 const (
@@ -32,6 +35,8 @@ const (
 	adminAddr          = ":9092"
 	healthcheckURL     = "http://127.0.0.1:9092" + httpapi.HealthPath
 	healthcheckTimeout = 3 * time.Second
+	// binaryPath is where the image installs the partner; chaos-kill looks for it.
+	binaryPath = "/app/partner"
 )
 
 const (
@@ -48,7 +53,7 @@ func main() {
 
 func run(args []string) int {
 	if len(args) != 1 {
-		fmt.Fprintln(os.Stderr, "usage: partner serve | healthcheck")
+		fmt.Fprintln(os.Stderr, "usage: partner serve | healthcheck | chaos-kill")
 
 		return exitUsage
 	}
@@ -70,6 +75,8 @@ func runCommand(ctx context.Context, command string) error {
 	switch command {
 	case commandServe:
 		return serve(ctx)
+	case commandChaosKill:
+		return chaoskill.KillMain(binaryPath)
 	case commandHealthcheck:
 		return probeHealth(ctx)
 	default:
