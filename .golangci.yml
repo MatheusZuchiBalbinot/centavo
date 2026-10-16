@@ -23,6 +23,12 @@ linters:
   exclusions:
     presets:
       - std-error-handling
+    rules:
+      # Tests read the files they just wrote in t.TempDir and serve fixed
+      # bodies from fake servers; gosec's taint rules only add noise there.
+      - path: _test\.go
+        linters:
+          - gosec
 
 formatters:
   enable:
