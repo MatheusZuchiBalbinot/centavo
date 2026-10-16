@@ -115,6 +115,13 @@ var mixes = map[scenarios.Profile][]weightedFunction{
 		{function: history.FunctionReadBalance, weight: 7},
 		{function: history.FunctionReadStatement, weight: 3},
 	},
+	scenarios.ProfilePaymentsOut: {
+		{function: history.FunctionPixOut, weight: 50},
+		{function: history.FunctionDeposit, weight: 20},
+		{function: history.FunctionTransfer, weight: 15},
+		{function: history.FunctionReadBalance, weight: 10},
+		{function: history.FunctionReadStatement, weight: 5},
+	},
 }
 
 // Shares of the PIX out that go to a key the partner does not know, so the

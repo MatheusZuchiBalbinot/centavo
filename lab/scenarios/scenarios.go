@@ -31,9 +31,12 @@ const (
 	ProfileLedgerOnly    Profile = "ledger-only"
 	ProfileBalanced      Profile = "balanced"
 	ProfilePaymentsHeavy Profile = "payments-heavy"
+	// ProfilePaymentsOut has no PIX in: a scenario that cuts every webhook
+	// leaves a PIX in for the reconciliation alone to find (F9).
+	ProfilePaymentsOut Profile = "payments-out"
 )
 
-var workloadProfiles = []Profile{ProfileLedgerOnly, ProfileBalanced, ProfilePaymentsHeavy}
+var workloadProfiles = []Profile{ProfileLedgerOnly, ProfileBalanced, ProfilePaymentsHeavy, ProfilePaymentsOut}
 
 // ClientProfile is how a client behaves around timeouts and retries.
 type ClientProfile string
