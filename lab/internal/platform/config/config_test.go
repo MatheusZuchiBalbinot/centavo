@@ -1,0 +1,55 @@
+package config_test
+
+import (
+	"errors"
+	"testing"
+
+	"centavo/lab/internal/platform/config"
+)
+
+func lookupFrom(values map[string]string) config.LookupFunc {
+	return func(key string) (string, bool) {
+		value, isSet := values[key]
+
+		return value, isSet
+	}
+}
+
+func TestLoadRun(t *testing.T) {
+	valid := map[string]string{"BANK_API_URL": "http://toxiproxy:28080", "ARTIFACT_STORE": "file:///data/rounds/"}
+
+	got, err := config.LoadRun(lookupFrom(valid))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got.BankURL != "http://toxiproxy:28080" || got.RoundsDir != "/data/rounds" {
+		t.Fatalf("got %+v", got)
+	}
+
+	cases := []struct {
+		name  string
+		key   string
+		value string
+		want  error
+	}{
+		{name: "missing bank url", key: "BANK_API_URL", value: "", want: config.ErrMissingVariable},
+		{name: "relative bank url", key: "BANK_API_URL", value: "toxiproxy:28080", want: config.ErrInvalidBankURL},
+		{name: "javascript bank url", key: "BANK_API_URL", value: "javascript:alert(1)", want: config.ErrInvalidBankURL},
+		{name: "s3 store", key: "ARTIFACT_STORE", value: "s3://bucket/rounds", want: config.ErrUnsupportedStore},
+		{name: "relative file store", key: "ARTIFACT_STORE", value: "file://data/rounds", want: config.ErrUnsupportedStore},
+		{name: "missing store", key: "ARTIFACT_STORE", value: "", want: config.ErrMissingVariable},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			values := map[string]string{"BANK_API_URL": valid["BANK_API_URL"], "ARTIFACT_STORE": valid["ARTIFACT_STORE"]}
+			values[tc.key] = tc.value
+
+			_, err := config.LoadRun(lookupFrom(values))
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("got %v, want %v", err, tc.want)
+			}
+		})
+	}
+}

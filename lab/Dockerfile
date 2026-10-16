@@ -17,10 +17,13 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOWORK=off \
     go build -trimpath \
     -ldflags "-s -w -X centavo/lab/internal/platform/buildinfo.version=$VERSION" \
     -o /out/lab ./cmd/lab
+# The rounds volume takes its owner from this directory on first use.
+RUN mkdir -p /out/data/rounds
 
 FROM gcr.io/distroless/static-debian13:nonroot
 
 COPY --from=build /out/lab /app/lab
+COPY --from=build --chown=nonroot:nonroot /out/data /data
 
 USER nonroot:nonroot
 
