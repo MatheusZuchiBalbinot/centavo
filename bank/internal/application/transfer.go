@@ -6,6 +6,7 @@ import (
 
 	"centavo/bank/internal/domain/ledger"
 	"centavo/bank/internal/domain/money"
+	"centavo/bank/internal/platform/failpoint"
 )
 
 // TransferInput asks to move money between two customer accounts.
@@ -78,6 +79,12 @@ func (t TransferInternal) Execute(ctx context.Context, input TransferInput) (Tra
 	debit := ledger.Entry{TransactionID: transaction.ID, AccountID: input.From, Amount: input.Amount.Negated(), Seq: debited.LastSeq, BalanceAfter: debited.Balance}
 
 	err = t.ledger.InsertEntry(ctx, debit)
+	if err != nil {
+		return TransferResult{}, err
+	}
+
+	// FP01: the debit is already written; dying here destroys money (FC01).
+	err = failpoint.Hit(ctx, failpoint.TransferAfterDebitBeforeCredit)
 	if err != nil {
 		return TransferResult{}, err
 	}

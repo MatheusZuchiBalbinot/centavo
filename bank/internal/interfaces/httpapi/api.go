@@ -13,6 +13,7 @@ import (
 	"centavo/bank/internal/domain/idempotency"
 	"centavo/bank/internal/domain/ledger"
 	"centavo/bank/internal/domain/money"
+	"centavo/bank/internal/platform/failpoint"
 )
 
 const (
@@ -110,7 +111,7 @@ func (a apiHandlers) openAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, newAccountResponse(view))
+	a.respondWritten(w, r, newAccountResponse(view))
 }
 
 func (a apiHandlers) getAccount(w http.ResponseWriter, r *http.Request) {
@@ -197,7 +198,7 @@ func (a apiHandlers) deposit(w http.ResponseWriter, r *http.Request) {
 		BalanceCents:  int64(result.Balance.Cents()),
 		CreatedAt:     result.CreatedAt.UTC(),
 	}
-	writeJSON(w, http.StatusCreated, response)
+	a.respondWritten(w, r, response)
 }
 
 type transferRequest struct {
@@ -232,7 +233,20 @@ func (a apiHandlers) transfer(w http.ResponseWriter, r *http.Request) {
 		FromBalanceCents: int64(result.FromBalance.Cents()),
 		CreatedAt:        result.CreatedAt.UTC(),
 	}
-	writeJSON(w, http.StatusCreated, response)
+	a.respondWritten(w, r, response)
+}
+
+// respondWritten answers a write that is already applied. FP02 sits here:
+// dying now leaves the client without an answer for a committed write (FC02).
+func (a apiHandlers) respondWritten(w http.ResponseWriter, r *http.Request, body any) {
+	err := failpoint.Hit(r.Context(), failpoint.APIAfterCommitBeforeResponse)
+	if err != nil {
+		writeError(w, r, a.logger, err)
+
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, body)
 }
 
 func depositInputOf(w http.ResponseWriter, r *http.Request) (application.DepositInput, error) {

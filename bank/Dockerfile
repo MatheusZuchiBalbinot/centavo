@@ -19,10 +19,13 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOWORK=off \
     go build -trimpath -tags "$BUILD_TAGS" \
     -ldflags "-s -w -X centavo/bank/internal/platform/buildinfo.version=$VERSION" \
     -o /out/bank ./cmd/bank
+# The shared events volume takes its owner from this directory on first use.
+RUN mkdir -p /out/events
 
 FROM gcr.io/distroless/static-debian13:nonroot
 
 COPY --from=build /out/bank /app/bank
+COPY --from=build --chown=nonroot:nonroot /out/events /lab/events
 
 USER nonroot:nonroot
 

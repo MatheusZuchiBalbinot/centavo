@@ -4,9 +4,11 @@
 //	bank worker       background loops and admin port (:9090)
 //	bank migrate      applies the base migrations and exits
 //	bank healthcheck  probes the local admin port; used by the container healthcheck
+//	bank chaos-kill   SIGKILLs the main process of the container (chaoslab builds only)
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -23,6 +25,7 @@ import (
 	"centavo/bank/internal/infrastructure/postgres"
 	"centavo/bank/internal/interfaces/httpapi"
 	"centavo/bank/internal/platform/buildinfo"
+	"centavo/bank/internal/platform/chaos"
 	"centavo/bank/internal/platform/chaosbuild"
 	"centavo/bank/internal/platform/config"
 	"centavo/bank/internal/platform/httpserver"
@@ -36,14 +39,17 @@ const (
 	roleWorker      role = "worker"
 	roleMigrate     role = "migrate"
 	roleHealthcheck role = "healthcheck"
+	roleChaosKill   role = "chaos-kill"
 )
 
 const (
-	apiAddr              = ":8080"
-	adminAddr            = ":9090"
-	healthcheckURL       = "http://127.0.0.1:9090" + httpapi.HealthPath
-	healthcheckTimeout   = 3 * time.Second
-	apiMaxConnections    = 10
+	apiAddr            = ":8080"
+	adminAddr          = ":9090"
+	healthcheckURL     = "http://127.0.0.1:9090" + httpapi.HealthPath
+	healthcheckTimeout = 3 * time.Second
+	apiMaxConnections  = 10
+	// binaryPath is where the images install the bank; chaos-kill looks for it.
+	binaryPath           = "/app/bank"
 	workerMaxConnections = 5
 )
 
@@ -61,7 +67,7 @@ func main() {
 
 func run(args []string) int {
 	if len(args) != 1 {
-		fmt.Fprintln(os.Stderr, "usage: bank api | worker | migrate | healthcheck")
+		fmt.Fprintln(os.Stderr, "usage: bank api | worker | migrate | healthcheck | chaos-kill")
 
 		return exitUsage
 	}
@@ -84,6 +90,10 @@ func run(args []string) int {
 func runRole(ctx context.Context, selectedRole role) error {
 	if selectedRole == roleHealthcheck {
 		return probeHealth(ctx)
+	}
+
+	if selectedRole == roleChaosKill {
+		return chaos.KillMain(binaryPath)
 	}
 
 	cfg, err := config.Load(os.LookupEnv)
@@ -126,9 +136,14 @@ func serveAPI(ctx context.Context, cfg config.Config, logger *slog.Logger) error
 	apiServer := httpserver.New(apiAddr, apiHandler)
 	adminServer := httpserver.New(adminAddr, adminHandler)
 
+	servers, err := withChaos(roleAPI, cfg, apiServer, adminServer)
+	if err != nil {
+		return err
+	}
+
 	logger.InfoContext(ctx, "serving", "api_addr", apiAddr, "admin_addr", adminAddr)
 
-	return httpserver.Run(ctx, apiServer, adminServer)
+	return httpserver.Run(ctx, servers...)
 }
 
 func newUseCases(pool *pgxpool.Pool) httpapi.UseCases {
@@ -157,9 +172,38 @@ func serveWorker(ctx context.Context, cfg config.Config, logger *slog.Logger) er
 	adminHandler := httpapi.NewAdminHandler(buildInfo, pool)
 	adminServer := httpserver.New(adminAddr, adminHandler)
 
+	servers, err := withChaos(roleWorker, cfg, adminServer)
+	if err != nil {
+		return err
+	}
+
 	logger.InfoContext(ctx, "serving", "admin_addr", adminAddr)
 
-	return httpserver.Run(ctx, adminServer)
+	return httpserver.Run(ctx, servers...)
+}
+
+// withChaos arms the chaos controls and adds the chaos port; a production
+// build gets back exactly the servers it passed in.
+func withChaos(selectedRole role, cfg config.Config, servers ...*http.Server) ([]*http.Server, error) {
+	chaosConfig := chaos.Config{
+		Token:         cfg.Chaos.Token,
+		FailpointSpec: cfg.Chaos.FailpointSpec,
+		Seed:          cfg.Chaos.Seed,
+		Service:       "bank-" + string(selectedRole),
+		Instance:      cmp.Or(cfg.Chaos.Instance, instanceName()),
+	}
+
+	err := chaos.Setup(chaosConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	chaosServer := chaos.Server(chaosConfig)
+	if chaosServer == nil {
+		return servers, nil
+	}
+
+	return append(servers, chaosServer), nil
 }
 
 func migrate(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
