@@ -11,6 +11,7 @@ import (
 	"centavo/bank/internal/domain/idempotency"
 	"centavo/bank/internal/domain/ledger"
 	"centavo/bank/internal/domain/money"
+	"centavo/bank/internal/domain/transfer"
 )
 
 // errorCode is the machine-readable code clients branch on (docs/domain.md,
@@ -21,6 +22,7 @@ const (
 	codeValidationFailed       errorCode = "VALIDATION_FAILED"
 	codeIdempotencyKeyMissing  errorCode = "IDEMPOTENCY_KEY_MISSING"
 	codeAccountNotFound        errorCode = "ACCOUNT_NOT_FOUND"
+	codeTransferNotFound       errorCode = "TRANSFER_NOT_FOUND"
 	codeSameAccountTransfer    errorCode = "SAME_ACCOUNT_TRANSFER"
 	codeInsufficientFunds      errorCode = "INSUFFICIENT_FUNDS"
 	codeAmountAboveLimit       errorCode = "AMOUNT_ABOVE_LIMIT"
@@ -56,6 +58,7 @@ var errorMappings = []errorMapping{
 	{target: money.ErrAmountNotPositive, status: http.StatusBadRequest, code: codeValidationFailed},
 	{target: application.ErrInvalidStatementQuery, status: http.StatusBadRequest, code: codeValidationFailed},
 	{target: ledger.ErrAccountNotFound, status: http.StatusNotFound, code: codeAccountNotFound},
+	{target: transfer.ErrTransferNotFound, status: http.StatusNotFound, code: codeTransferNotFound},
 	{target: ledger.ErrSameAccount, status: http.StatusUnprocessableEntity, code: codeSameAccountTransfer},
 	{target: ledger.ErrInsufficientFunds, status: http.StatusUnprocessableEntity, code: codeInsufficientFunds},
 	{target: money.ErrAmountAboveLimit, status: http.StatusUnprocessableEntity, code: codeAmountAboveLimit},

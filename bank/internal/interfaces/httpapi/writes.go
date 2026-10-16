@@ -78,7 +78,7 @@ func (a apiHandlers) openAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	a.runWrite(w, r, accountsEndpoint, body, a.applyOpenAccount(request.HolderName))
+	a.runWrite(w, r, writeRequest{endpoint: accountsEndpoint, body: body, apply: a.applyOpenAccount(request.HolderName)})
 }
 
 func (a apiHandlers) applyOpenAccount(holderName string) applyFunc {
@@ -107,7 +107,7 @@ func (a apiHandlers) deposit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	a.runWrite(w, r, depositsEndpoint, body, a.applyDeposit(input))
+	a.runWrite(w, r, writeRequest{endpoint: depositsEndpoint, body: body, apply: a.applyDeposit(input)})
 }
 
 func (a apiHandlers) applyDeposit(input application.DepositInput) applyFunc {
@@ -143,7 +143,7 @@ func (a apiHandlers) transfer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	a.runWrite(w, r, transfersEndpoint, body, a.applyTransfer(input))
+	a.runWrite(w, r, writeRequest{endpoint: transfersEndpoint, body: body, apply: a.applyTransfer(input)})
 }
 
 func (a apiHandlers) applyTransfer(input application.TransferInput) applyFunc {
@@ -163,9 +163,18 @@ func (a apiHandlers) applyTransfer(input application.TransferInput) applyFunc {
 	}
 }
 
+// writeRequest is one client write as the handler prepared it.
+type writeRequest struct {
+	endpoint string
+	body     []byte
+	apply    applyFunc
+	// afterCommit runs once the write is committed; nil for most writes.
+	afterCommit func(ctx context.Context) error
+}
+
 // runWrite runs the write through the writer and sends the stored answer:
 // the same bytes on the first try and on every retry.
-func (a apiHandlers) runWrite(w http.ResponseWriter, r *http.Request, endpoint string, body []byte, apply applyFunc) {
+func (a apiHandlers) runWrite(w http.ResponseWriter, r *http.Request, request writeRequest) {
 	key, err := idempotency.ParseKey(r.Header.Get(idempotencyHeader))
 	if err != nil {
 		writeError(w, r, a.logger, err)
@@ -173,13 +182,22 @@ func (a apiHandlers) runWrite(w http.ResponseWriter, r *http.Request, endpoint s
 		return
 	}
 
-	write := application.Write{Key: key, Endpoint: endpoint, RequestHash: idempotency.HashRequest(endpoint, body), Apply: apply}
+	write := application.Write{Key: key, Endpoint: request.endpoint, RequestHash: idempotency.HashRequest(request.endpoint, request.body), Apply: request.apply}
 
 	response, err := a.useCases.Writer.Execute(r.Context(), write)
 	if err != nil {
 		writeError(w, r, a.logger, err)
 
 		return
+	}
+
+	if request.afterCommit != nil {
+		err = request.afterCommit(r.Context())
+		if err != nil {
+			writeError(w, r, a.logger, err)
+
+			return
+		}
 	}
 
 	// FP02: the write is committed and the answer not sent (FC02).

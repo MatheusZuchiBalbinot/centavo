@@ -42,7 +42,13 @@ const (
 )
 
 // known lists the failpoints compiled into the bank; arming any other name fails.
-var known = []Name{TransferAfterDebitBeforeCredit, APIAfterCommitBeforeResponse}
+var known = []Name{
+	TransferAfterDebitBeforeCredit,
+	APIAfterCommitBeforeResponse,
+	RelayAfterPartnerCallBeforeSave,
+	PixOutAfterSaveBeforePublish,
+	WebhookAfterReceiveBeforeAck,
+}
 
 // specPattern is name=[probability%]action[(argument)][*max_fires].
 var specPattern = regexp.MustCompile(`^([a-z_.]+)=(?:([0-9]+(?:\.[0-9]+)?)%)?([a-z]+)(?:\(([^)]*)\))?(?:\*([0-9]+))?$`)

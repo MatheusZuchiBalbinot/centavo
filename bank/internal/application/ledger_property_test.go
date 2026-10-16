@@ -20,6 +20,10 @@ import (
 // memoryLedger is an in-memory bank with transactional semantics: a unit of
 // work edits a copy and publishes it only when fn succeeds.
 type memoryLedger struct {
+	// The property moves money between customers only; PIX is covered by
+	// the integration tests, so its store is left unimplemented here.
+	application.PixStore
+
 	positions    map[ledger.AccountID]ledger.Position
 	isCustomer   map[ledger.AccountID]bool
 	transactions []ledger.Transaction

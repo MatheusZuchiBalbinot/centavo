@@ -73,6 +73,7 @@ type Stores interface {
 	LedgerWriter
 	KeyStore
 	CustomerCreator
+	PixStore
 }
 
 // UnitOfWork runs fn with stores whose writes commit together (D1) or one by
@@ -127,7 +128,7 @@ func newTransaction(kind ledger.TransactionKind, write WriteContext, operationID
 	transaction := ledger.Transaction{
 		ID:            transactionID,
 		Kind:          kind,
-		OperationID:   operationID,
+		OperationID:   &operationID,
 		ClientRef:     string(write.Key),
 		CorrelationID: write.CorrelationID,
 	}

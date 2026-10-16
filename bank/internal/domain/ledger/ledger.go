@@ -31,9 +31,13 @@ const (
 	AccountKindSystem   AccountKind = "system"
 )
 
-// externalCashAccountID is seeded by the base migration 00002_ledger.sql;
-// system account ids are fixed data, so the bank never has to look them up.
-var externalCashAccountID = AccountID(uuid.MustParse("00000000-0000-7000-8000-000000000001"))
+// The system accounts are seeded by the base migration 00002_ledger.sql;
+// their ids are fixed data, so the bank never has to look them up.
+var (
+	externalCashAccountID      = AccountID(uuid.MustParse("00000000-0000-7000-8000-000000000001"))
+	pixOutTransitAccountID     = AccountID(uuid.MustParse("00000000-0000-7000-8000-000000000002"))
+	partnerSettlementAccountID = AccountID(uuid.MustParse("00000000-0000-7000-8000-000000000003"))
+)
 
 // TransactionKind is the kind of a ledger transaction.
 type TransactionKind string
@@ -41,6 +45,11 @@ type TransactionKind string
 const (
 	TransactionKindDeposit          TransactionKind = "deposit"
 	TransactionKindInternalTransfer TransactionKind = "internal_transfer"
+	TransactionKindPixOutReserve    TransactionKind = "pix_out_reserve"
+	TransactionKindPixOutSettle     TransactionKind = "pix_out_settle"
+	TransactionKindPixOutRefund     TransactionKind = "pix_out_refund"
+	TransactionKindPixOutReturn     TransactionKind = "pix_out_return"
+	TransactionKindPixInCredit      TransactionKind = "pix_in_credit"
 )
 
 // Seq is the position of an entry within its account: 1, 2, 3...
@@ -73,12 +82,18 @@ type Position struct {
 }
 
 // Transaction is the header of a ledger transaction; its entries sum to zero.
+// Every transaction names its cause (ledger_tx_has_cause): the client
+// operation, the external transfer or the incoming PIX behind it.
 type Transaction struct {
 	ID            TransactionID
 	Kind          TransactionKind
-	OperationID   OperationID
+	OperationID   *OperationID
 	ClientRef     string
 	CorrelationID string
+	// ExternalTransferID is the PIX out the transaction belongs to.
+	ExternalTransferID *uuid.UUID
+	// IncomingTransferID is the PIX in the transaction credits.
+	IncomingTransferID *uuid.UUID
 }
 
 // Entry is one immutable line that changes the balance of an account.
@@ -125,6 +140,18 @@ func NewOperationID() (OperationID, error) {
 // by direct deposit (docs/domain.md, section 3.2).
 func ExternalCashAccountID() AccountID {
 	return externalCashAccountID
+}
+
+// PixOutTransitAccountID is sys_pix_out_transit: money reserved for PIX out
+// that has not settled or come back yet.
+func PixOutTransitAccountID() AccountID {
+	return pixOutTransitAccountID
+}
+
+// PartnerSettlementAccountID is sys_partner_settlement: the mirror of the
+// bank's reserve at the partner.
+func PartnerSettlementAccountID() AccountID {
+	return partnerSettlementAccountID
 }
 
 // ParseAccountID reads an account id from its canonical text form.

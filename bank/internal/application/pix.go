@@ -1,0 +1,447 @@
+package application
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+
+	"centavo/bank/internal/domain/ledger"
+	"centavo/bank/internal/domain/money"
+	"centavo/bank/internal/domain/transfer"
+	"centavo/bank/internal/platform/failpoint"
+)
+
+// The PIX use cases of phase F6 are naive by design (docs/architecture.md,
+// sections 5.4 and 5.5): the publication is a NOTIFY that is lost when no
+// worker listens (FC04), the relay sends a new end_to_end_id on every
+// attempt (FC05) and gives up on a timeout (FC21), and the webhook handler
+// applies the effect directly, overwriting the status (FC24 to FC26). The
+// robust variants arrive with defenses D4 to D9.
+
+// Causes recorded in the transition history.
+const (
+	causeAPI          = "api"
+	causeRelay        = "relay"
+	causeWebhook      = "webhook"
+	failurePartner    = "partner_rejected"
+	failureTimeout    = "partner_timeout"
+	firstRelayAttempt = 1
+)
+
+var (
+	ErrUnknownEvent = errors.New("unknown partner event")
+	// ErrAlreadyCredited means the incoming PIX was credited before (BR12).
+	ErrAlreadyCredited = errors.New("incoming PIX already credited")
+)
+
+// ExternalTransfer is a PIX out as stored.
+type ExternalTransfer struct {
+	ID             transfer.ID
+	EndToEndID     string
+	OperationID    ledger.OperationID
+	ClientRef      string
+	AccountID      ledger.AccountID
+	Amount         money.Amount
+	DestinationKey string
+	Status         transfer.Status
+	StatusSeq      int
+	FailureCode    string
+	CreatedAt      time.Time
+}
+
+// TransitionRecord is one line of a transfer's state history.
+type TransitionRecord struct {
+	TransferID          transfer.ID
+	Seq                 int
+	From                *transfer.Status
+	To                  transfer.Status
+	Cause               string
+	LedgerTransactionID *ledger.TransactionID
+	CorrelationID       string
+	CreatedAt           time.Time
+}
+
+// StatusChange is an overwrite of a transfer's status, as the naive code does it.
+type StatusChange struct {
+	TransferID  transfer.ID
+	To          transfer.Status
+	FailureCode string
+}
+
+// IncomingRecord is a PIX in as stored.
+type IncomingRecord struct {
+	ID            uuid.UUID
+	EndToEndID    string
+	AccountID     ledger.AccountID
+	Amount        money.Amount
+	SourceEventID string
+}
+
+// PixStore keeps external transfers, their transitions and incoming PIX.
+type PixStore interface {
+	InsertExternalTransfer(ctx context.Context, external ExternalTransfer) (time.Time, error)
+	InsertTransition(ctx context.Context, transition TransitionRecord) error
+	FindExternalTransfer(ctx context.Context, id transfer.ID) (ExternalTransfer, []TransitionRecord, error)
+	FindExternalTransferByEndToEnd(ctx context.Context, endToEndID string) (ExternalTransfer, error)
+	// ClaimAttempt moves the transfer from one end_to_end_id to the next, so
+	// only one relay sends each attempt.
+	ClaimAttempt(ctx context.Context, id transfer.ID, seen, next string) (bool, error)
+	// OverwriteStatus sets the status without checking the current one and
+	// returns what it was and the new sequence number.
+	OverwriteStatus(ctx context.Context, change StatusChange) (transfer.Status, int, error)
+	InsertIncoming(ctx context.Context, incoming IncomingRecord) error
+}
+
+// PixOutInput asks to send money out through the partner.
+type PixOutInput struct {
+	AccountID      ledger.AccountID
+	Amount         money.Amount
+	DestinationKey string
+	Write          WriteContext
+}
+
+// PixOutResult is what the client gets back: the transfer starts as created.
+type PixOutResult struct {
+	TransferID transfer.ID
+	EndToEndID string
+	Status     transfer.Status
+	CreatedAt  time.Time
+}
+
+// CreatePixOut reserves the amount and creates the transfer (BR08).
+type CreatePixOut struct {
+	locker Locker
+}
+
+// NewCreatePixOut builds the use case.
+func NewCreatePixOut(locker Locker) CreatePixOut {
+	return CreatePixOut{locker: locker}
+}
+
+// Apply runs inside the writer's unit of work: lock, check funds, move the
+// amount to sys_pix_out_transit and record the transfer and its first state.
+func (c CreatePixOut) Apply(ctx context.Context, stores Stores, operationID ledger.OperationID, input PixOutInput) (PixOutResult, error) {
+	err := c.locker.Lock(ctx, stores, []ledger.AccountID{input.AccountID})
+	if err != nil {
+		return PixOutResult{}, err
+	}
+
+	source, err := stores.ReadCustomerPosition(ctx, input.AccountID)
+	if err != nil {
+		return PixOutResult{}, err
+	}
+
+	debited, err := source.Debit(input.Amount)
+	if err != nil {
+		return PixOutResult{}, err
+	}
+
+	id, err := transfer.NewID()
+	if err != nil {
+		return PixOutResult{}, err
+	}
+
+	external := ExternalTransfer{ID: id, EndToEndID: id.EndToEndID(), OperationID: operationID, ClientRef: string(input.Write.Key), AccountID: input.AccountID, Amount: input.Amount, DestinationKey: input.DestinationKey, Status: transfer.StatusCreated, StatusSeq: 1}
+
+	createdAt, err := stores.InsertExternalTransfer(ctx, external)
+	if err != nil {
+		return PixOutResult{}, err
+	}
+
+	transaction, err := newTransaction(ledger.TransactionKindPixOutReserve, input.Write, operationID)
+	if err != nil {
+		return PixOutResult{}, err
+	}
+
+	transferUUID := uuid.UUID(id)
+	transaction.ExternalTransferID = &transferUUID
+
+	_, err = stores.InsertTransaction(ctx, transaction)
+	if err != nil {
+		return PixOutResult{}, err
+	}
+
+	err = stores.OverwritePosition(ctx, input.AccountID, debited)
+	if err != nil {
+		return PixOutResult{}, err
+	}
+
+	err = stores.InsertEntry(ctx, ledger.Entry{TransactionID: transaction.ID, AccountID: input.AccountID, Amount: input.Amount.Negated(), Seq: debited.LastSeq, BalanceAfter: debited.Balance})
+	if err != nil {
+		return PixOutResult{}, err
+	}
+
+	_, err = poster{positions: stores, entries: stores}.post(ctx, transaction.ID, ledger.PixOutTransitAccountID(), input.Amount.Cents())
+	if err != nil {
+		return PixOutResult{}, err
+	}
+
+	first := TransitionRecord{TransferID: id, Seq: 1, To: transfer.StatusCreated, Cause: causeAPI, LedgerTransactionID: &transaction.ID, CorrelationID: input.Write.CorrelationID}
+
+	err = stores.InsertTransition(ctx, first)
+	if err != nil {
+		return PixOutResult{}, err
+	}
+
+	return PixOutResult{TransferID: id, EndToEndID: external.EndToEndID, Status: transfer.StatusCreated, CreatedAt: createdAt}, nil
+}
+
+// Publisher wakes a relay for a new transfer.
+type Publisher interface {
+	Publish(ctx context.Context, id transfer.ID) error
+}
+
+// PublishAfterCommit is the naive publication: once the transfer is
+// committed, a NOTIFY tells the workers. Dying between the two, or having
+// no worker listening, leaves the transfer in created forever (FC04).
+func PublishAfterCommit(ctx context.Context, publisher Publisher, id transfer.ID) error {
+	err := failpoint.Hit(ctx, failpoint.PixOutAfterSaveBeforePublish)
+	if err != nil {
+		return err
+	}
+
+	return publisher.Publish(ctx, id)
+}
+
+// PartnerAnswer is how the partner answered a submission.
+type PartnerAnswer int
+
+const (
+	// PartnerAccepted is 202 processing, or 200 with the current status.
+	PartnerAccepted PartnerAnswer = iota
+	// PartnerRejected is a definitive refusal (422).
+	PartnerRejected
+	// PartnerUnknown is a timeout, a 5xx or a broken connection: the partner
+	// may or may not have processed the transfer.
+	PartnerUnknown
+)
+
+// PartnerSubmission is one PIX sent to the partner.
+type PartnerSubmission struct {
+	EndToEndID     string
+	AmountCents    money.Cents
+	DestinationKey string
+	CorrelationID  string
+}
+
+// PartnerSubmitter sends a PIX to the partner.
+type PartnerSubmitter interface {
+	Submit(ctx context.Context, submission PartnerSubmission) PartnerAnswer
+}
+
+// NaiveRelay sends transfers to the partner (docs/architecture.md, section 5.4).
+type NaiveRelay struct {
+	unitOfWork UnitOfWork
+	partner    PartnerSubmitter
+}
+
+// NewNaiveRelay builds the relay.
+func NewNaiveRelay(unitOfWork UnitOfWork, partner PartnerSubmitter) NaiveRelay {
+	return NaiveRelay{unitOfWork: unitOfWork, partner: partner}
+}
+
+// Relay sends one transfer. Each attempt gets a new end_to_end_id, so a
+// retry the partner already processed is paid twice (FC05); a timeout is
+// taken as a failure and refunded, though the partner may have paid (FC21).
+func (r NaiveRelay) Relay(ctx context.Context, id transfer.ID) error {
+	var external ExternalTransfer
+
+	err := r.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
+		var err error
+
+		external, _, err = stores.FindExternalTransfer(ctx, id)
+
+		return err
+	})
+	if err != nil {
+		return err
+	}
+
+	if external.Status != transfer.StatusCreated {
+		return nil
+	}
+
+	attempt := nextAttemptOf(external.EndToEndID)
+	attemptID := id.AttemptEndToEndID(attempt)
+
+	isClaimed, err := r.claim(ctx, id, external.EndToEndID, attemptID)
+	if err != nil || !isClaimed {
+		return err
+	}
+
+	submission := PartnerSubmission{EndToEndID: attemptID, AmountCents: external.Amount.Cents(), DestinationKey: external.DestinationKey, CorrelationID: external.ClientRef}
+	answer := r.partner.Submit(ctx, submission)
+
+	return r.record(ctx, external, answer)
+}
+
+func (r NaiveRelay) claim(ctx context.Context, id transfer.ID, seen, next string) (bool, error) {
+	var isClaimed bool
+
+	err := r.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
+		var err error
+
+		isClaimed, err = stores.ClaimAttempt(ctx, id, seen, next)
+
+		return err
+	})
+
+	return isClaimed, err
+}
+
+func (r NaiveRelay) record(ctx context.Context, external ExternalTransfer, answer PartnerAnswer) error {
+	switch answer {
+	case PartnerAccepted:
+		// FP03: the partner took the PIX; dying here leaves it created and a
+		// later attempt sends it again under a new id (FC05).
+		err := failpoint.Hit(ctx, failpoint.RelayAfterPartnerCallBeforeSave)
+		if err != nil {
+			return err
+		}
+
+		return r.change(ctx, external, StatusChange{TransferID: external.ID, To: transfer.StatusSent}, causeRelay)
+	case PartnerRejected:
+		return r.change(ctx, external, StatusChange{TransferID: external.ID, To: transfer.StatusFailed, FailureCode: failurePartner}, causeRelay)
+	default:
+		return r.change(ctx, external, StatusChange{TransferID: external.ID, To: transfer.StatusFailed, FailureCode: failureTimeout}, causeRelay)
+	}
+}
+
+func (r NaiveRelay) change(ctx context.Context, external ExternalTransfer, change StatusChange, cause string) error {
+	return r.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
+		return overwrite(ctx, stores, overwriteCommand{external: external, change: change, cause: cause})
+	})
+}
+
+// nextAttemptOf reads the attempt from E<id>-<attempt>; the fixed id means
+// no attempt yet.
+func nextAttemptOf(endToEndID string) int {
+	_, suffix, hasAttempt := strings.Cut(endToEndID, "-")
+	if !hasAttempt {
+		return firstRelayAttempt
+	}
+
+	attempt, err := strconv.Atoi(suffix)
+	if err != nil {
+		return firstRelayAttempt
+	}
+
+	return attempt + 1
+}
+
+type overwriteCommand struct {
+	external      ExternalTransfer
+	change        StatusChange
+	cause         string
+	correlationID string
+}
+
+// overwrite is the naive transition: it writes the new status whatever the
+// current one is, records the jump in the history and posts the ledger
+// transaction the target status implies (FC25, FC26).
+func overwrite(ctx context.Context, stores Stores, command overwriteCommand) error {
+	from, seq, err := stores.OverwriteStatus(ctx, command.change)
+	if err != nil {
+		return err
+	}
+
+	posting := postingTowards(command.change.To)
+
+	var ledgerTransactionID *ledger.TransactionID
+
+	if posting != transfer.PostingNone {
+		transactionID, err := postTransferStep(ctx, stores, command.external, posting)
+		if err != nil {
+			return err
+		}
+
+		ledgerTransactionID = &transactionID
+	}
+
+	correlationID := command.correlationID
+	if correlationID == "" {
+		correlationID = command.external.ClientRef
+	}
+
+	transition := TransitionRecord{TransferID: command.external.ID, Seq: seq, From: &from, To: command.change.To, Cause: command.cause, LedgerTransactionID: ledgerTransactionID, CorrelationID: correlationID}
+
+	return stores.InsertTransition(ctx, transition)
+}
+
+// postingTowards is what the naive code posts for a target status, without
+// asking where the transfer comes from.
+func postingTowards(to transfer.Status) transfer.Posting {
+	switch to {
+	case transfer.StatusConfirmed:
+		return transfer.PostingSettle
+	case transfer.StatusFailed:
+		return transfer.PostingRefund
+	case transfer.StatusReversed:
+		return transfer.PostingReturn
+	case transfer.StatusCreated, transfer.StatusSent:
+		return transfer.PostingNone
+	default:
+		return transfer.PostingNone
+	}
+}
+
+// postTransferStep writes one step of a transfer's saga in the ledger
+// (docs/domain.md, section 4.1).
+func postTransferStep(ctx context.Context, stores Stores, external ExternalTransfer, posting transfer.Posting) (ledger.TransactionID, error) {
+	kind, entries, err := stepEntries(external, posting)
+	if err != nil {
+		return ledger.TransactionID{}, err
+	}
+
+	transactionID, err := ledger.NewTransactionID()
+	if err != nil {
+		return ledger.TransactionID{}, err
+	}
+
+	transferUUID := uuid.UUID(external.ID)
+	transaction := ledger.Transaction{ID: transactionID, Kind: kind, CorrelationID: external.ClientRef, ExternalTransferID: &transferUUID}
+
+	_, err = stores.InsertTransaction(ctx, transaction)
+	if err != nil {
+		return ledger.TransactionID{}, err
+	}
+
+	writer := poster{positions: stores, entries: stores}
+
+	for _, entry := range entries {
+		_, err = writer.post(ctx, transactionID, entry.account, entry.delta)
+		if err != nil {
+			return ledger.TransactionID{}, err
+		}
+	}
+
+	return transactionID, nil
+}
+
+type stepEntry struct {
+	account ledger.AccountID
+	delta   money.Cents
+}
+
+func stepEntries(external ExternalTransfer, posting transfer.Posting) (ledger.TransactionKind, []stepEntry, error) {
+	amount := external.Amount.Cents()
+	transit, settlement, customer := ledger.PixOutTransitAccountID(), ledger.PartnerSettlementAccountID(), external.AccountID
+
+	switch posting {
+	case transfer.PostingSettle:
+		return ledger.TransactionKindPixOutSettle, []stepEntry{{transit, -amount}, {settlement, amount}}, nil
+	case transfer.PostingRefund:
+		return ledger.TransactionKindPixOutRefund, []stepEntry{{transit, -amount}, {customer, amount}}, nil
+	case transfer.PostingReturn:
+		return ledger.TransactionKindPixOutReturn, []stepEntry{{settlement, -amount}, {customer, amount}}, nil
+	case transfer.PostingNone:
+		return "", nil, fmt.Errorf("no ledger step for %s", posting)
+	default:
+		return "", nil, fmt.Errorf("unknown posting %q", posting)
+	}
+}

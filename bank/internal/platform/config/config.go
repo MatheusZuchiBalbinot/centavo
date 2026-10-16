@@ -27,6 +27,9 @@ const (
 	failpointsVariable  = "CENTAVO_FAILPOINTS"
 	chaosSeedVariable   = "CENTAVO_CHAOS_SEED"
 	instanceVariable    = "CENTAVO_INSTANCE"
+	partnerURLVariable  = "PARTNER_BASE_URL"
+	participantVariable = "PARTNER_PARTICIPANT_ID"
+	webhookSecretVar    = "PARTNER_WEBHOOK_SECRET"
 	// minChaosTokenLength rejects guessable tokens (32 bytes of hex is 64).
 	minChaosTokenLength = 32
 )
@@ -39,6 +42,8 @@ var (
 	ErrWeakChaosToken         = errors.New("the chaoslab build needs CENTAVO_CHAOS_TOKEN with at least 32 characters")
 	ErrChaosConfigProduction  = errors.New("the production build refuses chaos configuration")
 	ErrInvalidChaosSeed       = errors.New("CENTAVO_CHAOS_SEED must be a 64-bit number")
+	ErrWeakWebhookSecret      = errors.New("the api role needs PARTNER_WEBHOOK_SECRET with at least 32 characters")
+	ErrMissingPartner         = errors.New("the worker role needs PARTNER_BASE_URL and PARTNER_PARTICIPANT_ID")
 )
 
 // LookupFunc reads one environment variable; os.LookupEnv satisfies it.
@@ -50,6 +55,32 @@ type Config struct {
 	Defenses    defenses.Profile
 	DatabaseURL string
 	Chaos       Chaos
+	Partner     Partner
+}
+
+// Partner is how the bank reaches the PIX partner and checks its webhooks.
+type Partner struct {
+	BaseURL       string
+	ParticipantID string
+	WebhookSecret string
+}
+
+// RequireWebhookSecret is the api role's check: unsigned webhooks never get in.
+func (p Partner) RequireWebhookSecret() error {
+	if len(p.WebhookSecret) < minChaosTokenLength {
+		return ErrWeakWebhookSecret
+	}
+
+	return nil
+}
+
+// RequireEndpoint is the worker role's check: the relay must know the partner.
+func (p Partner) RequireEndpoint() error {
+	if p.BaseURL == "" || p.ParticipantID == "" {
+		return ErrMissingPartner
+	}
+
+	return nil
 }
 
 // Chaos is the chaos configuration; only a chaoslab build accepts it.
@@ -88,7 +119,12 @@ func Load(lookup LookupFunc) (Config, error) {
 		return Config{}, err
 	}
 
-	return Config{Env: env, Defenses: profile, DatabaseURL: databaseURL, Chaos: chaos}, nil
+	baseURL, _ := lookup(partnerURLVariable)
+	participant, _ := lookup(participantVariable)
+	secret, _ := lookup(webhookSecretVar)
+	partner := Partner{BaseURL: baseURL, ParticipantID: participant, WebhookSecret: secret}
+
+	return Config{Env: env, Defenses: profile, DatabaseURL: databaseURL, Chaos: chaos, Partner: partner}, nil
 }
 
 func loadChaos(lookup LookupFunc) (Chaos, error) {

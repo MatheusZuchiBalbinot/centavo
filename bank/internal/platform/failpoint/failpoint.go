@@ -13,6 +13,12 @@ const (
 	TransferAfterDebitBeforeCredit Name = "transfer.after_debit_before_credit"
 	// APIAfterCommitBeforeResponse is FP02: the write is applied, the answer not sent.
 	APIAfterCommitBeforeResponse Name = "api.after_commit_before_response"
+	// RelayAfterPartnerCallBeforeSave is FP03: the partner took the PIX, the bank did not record it.
+	RelayAfterPartnerCallBeforeSave Name = "relay.after_partner_call_before_save"
+	// PixOutAfterSaveBeforePublish is FP04: the transfer is committed, the relay not told.
+	PixOutAfterSaveBeforePublish Name = "pixout.after_save_before_publish"
+	// WebhookAfterReceiveBeforeAck is FP05: the event is taken in, the partner not answered.
+	WebhookAfterReceiveBeforeAck Name = "webhook.after_receive_before_ack"
 )
 
 // Hit marks the passage through a named point. It returns an error only when

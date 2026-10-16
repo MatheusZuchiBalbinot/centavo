@@ -53,6 +53,7 @@ type UseCases struct {
 	GetStatement StatementGetter
 	Deposit      Depositor
 	Transfer     Transferrer
+	Pix          PixUseCases
 }
 
 // NewAPIHandler serves the client API (8080).
@@ -66,6 +67,9 @@ func NewAPIHandler(useCases UseCases, logger *slog.Logger) http.Handler {
 	mux.HandleFunc("POST "+depositsEndpoint, api.deposit)
 	mux.HandleFunc("POST "+transfersEndpoint, api.transfer)
 	mux.HandleFunc("POST /v1/operations/{key}/resolve", api.resolve)
+	mux.HandleFunc("POST "+pixOutEndpoint, api.pixOut)
+	mux.HandleFunc("GET /v1/external-transfers/{id}", api.getPixOut)
+	mux.HandleFunc("POST /webhooks/partner", api.webhook)
 
 	return withRequestContext(mux, logger)
 }

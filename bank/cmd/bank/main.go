@@ -22,6 +22,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"centavo/bank/internal/application"
+	"centavo/bank/internal/infrastructure/partnerclient"
 	"centavo/bank/internal/infrastructure/postgres"
 	"centavo/bank/internal/interfaces/httpapi"
 	"centavo/bank/internal/interfaces/workers"
@@ -142,7 +143,12 @@ func serveAPI(ctx context.Context, cfg config.Config, logger *slog.Logger) error
 		return err
 	}
 
-	useCases, err := newUseCases(pool, cfg.Defenses)
+	err = cfg.Partner.RequireWebhookSecret()
+	if err != nil {
+		return err
+	}
+
+	useCases, err := newUseCases(pool, cfg)
 	if err != nil {
 		return err
 	}
@@ -161,7 +167,8 @@ func serveAPI(ctx context.Context, cfg config.Config, logger *slog.Logger) error
 	return httpserver.Run(ctx, servers...)
 }
 
-func newUseCases(pool *pgxpool.Pool, profile defenses.Profile) (httpapi.UseCases, error) {
+func newUseCases(pool *pgxpool.Pool, cfg config.Config) (httpapi.UseCases, error) {
+	profile := cfg.Defenses
 	store := postgres.NewLedgerStore(pool)
 
 	moneyDependencies, err := newMoneyDependencies(pool, profile)
@@ -184,6 +191,13 @@ func newUseCases(pool *pgxpool.Pool, profile defenses.Profile) (httpapi.UseCases
 		GetStatement: application.NewGetStatement(store, store),
 		Deposit:      application.NewDeposit(moneyDependencies),
 		Transfer:     application.NewTransferInternal(moneyDependencies),
+		Pix: httpapi.PixUseCases{
+			Create:        application.NewCreatePixOut(moneyDependencies.Locker),
+			Publisher:     postgres.NewNotifyPublisher(pool),
+			Get:           application.NewGetExternalTransfer(store),
+			Webhook:       application.NewNaiveWebhook(moneyDependencies.UnitOfWork),
+			WebhookSecret: []byte(cfg.Partner.WebhookSecret),
+		},
 	}
 
 	return useCases, nil
@@ -256,9 +270,35 @@ func serveWorker(ctx context.Context, cfg config.Config, logger *slog.Logger) er
 		go workers.CleanKeys(ctx, postgres.NewLedgerStore(pool), logger)
 	}
 
+	err = startRelay(ctx, pool, cfg, logger)
+	if err != nil {
+		return err
+	}
+
 	logger.InfoContext(ctx, "serving", "admin_addr", adminAddr)
 
 	return httpserver.Run(ctx, servers...)
+}
+
+// startRelay is the naive relay of phase F6: LISTEN for new transfers and
+// send each one to the partner.
+func startRelay(ctx context.Context, pool *pgxpool.Pool, cfg config.Config, logger *slog.Logger) error {
+	err := cfg.Partner.RequireEndpoint()
+	if err != nil {
+		return err
+	}
+
+	moneyDependencies, err := newMoneyDependencies(pool, cfg.Defenses)
+	if err != nil {
+		return err
+	}
+
+	partner := partnerclient.New(cfg.Partner.BaseURL, cfg.Partner.ParticipantID)
+	relay := application.NewNaiveRelay(moneyDependencies.UnitOfWork, partner)
+
+	go postgres.Listen(ctx, pool, postgres.PixOutChannel, workers.RelayNotified(relay, logger), logger)
+
+	return nil
 }
 
 // withChaos arms the chaos controls and adds the chaos port; a production
