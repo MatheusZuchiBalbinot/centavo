@@ -1,0 +1,28 @@
+name: webhook-redelivery
+description: O parceiro entrega de novo o mesmo evento, com o mesmo id, e o banco morre antes do ack ou entre aplicar e marcar (FP05, FP06, FC06, FC07, FC24, PM-006). Sem duplicatas de id novo, que são do PM-007.
+duration: 15m
+workload:
+  profile: balanced
+  clients: 8
+  rate_per_second: 20
+  accounts: 32
+  exclusive_accounts: true
+  client_mix: {polite: 1.0}
+faults:
+  - id: duplicates
+    kind: partner
+    modes: {webhook_duplicate: 0.3}
+  - id: ack-kill
+    kind: failpoint
+    targets: [bank-api]
+    failpoint: webhook.after_receive_before_ack
+    action: kill
+    probability: 0.02
+    max_fires: 20
+  - id: mark-kill
+    kind: failpoint
+    targets: [bank-worker-1, bank-worker-2]
+    failpoint: inbox.after_apply_before_mark
+    action: kill
+    probability: 0.02
+    max_fires: 20

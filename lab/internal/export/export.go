@@ -194,12 +194,16 @@ func scanEntry(row pgx.CollectableRow) (snapshot.Entry, error) {
 	return e, err
 }
 
+// inFlightSQL also counts the partner events the bank took in and has not
+// applied yet: with the inbox (D5) a webhook is acknowledged before its
+// effect, and a snapshot taken in between would miss it.
 const inFlightSQL = `
-SELECT count(*) FROM external_transfers
-WHERE status IN ('created', 'sent') AND id IN (` + roundTransfersSQL + `)`
+SELECT (SELECT count(*) FROM external_transfers
+        WHERE status IN ('created', 'sent') AND id IN (` + roundTransfersSQL + `))
+     + (SELECT count(*) FROM inbox_events WHERE status = 'pending')`
 
-// InFlight counts the round's transfers not yet in a final status, for the
-// quiescence of the cure.
+// InFlight counts what still moves the round's sagas: transfers not yet in a
+// final status and events waiting in the inbox, for the quiescence of the cure.
 func InFlight(ctx context.Context, pool *pgxpool.Pool, round string) (int, error) {
 	var count int
 

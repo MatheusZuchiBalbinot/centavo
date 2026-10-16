@@ -19,3 +19,10 @@ faults:
     action: kill
     probability: 0.02
     max_fires: 20
+  - id: mark-kill
+    kind: failpoint
+    targets: [bank-worker-1, bank-worker-2]
+    failpoint: inbox.after_apply_before_mark
+    action: kill
+    probability: 0.02
+    max_fires: 20
