@@ -20,6 +20,7 @@ x-bank-build: &bank-build
 x-bank-env: &bank-env
   CENTAVO_ENV: chaoslab
   CENTAVO_DEFENSES: ${CENTAVO_DEFENSES:-robust}
+  CENTAVO_CHAOS_TOKEN: ${CENTAVO_CHAOS_TOKEN:?run ./entrypoint.sh to generate .env}
 
 x-bank-healthcheck: &bank-healthcheck
   test: ["CMD", "/app/bank", "healthcheck"]
@@ -64,6 +65,8 @@ services:
       EXEC: 1
       POST: 1
       EVENTS: 1
+      # The cure starts targets that are down; nothing else is allowed.
+      ALLOW_START: 1
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     restart: unless-stopped
@@ -89,7 +92,10 @@ services:
     environment:
       <<: *bank-env
       DATABASE_URL: postgres://bank_app:${BANK_APP_PASSWORD}@toxiproxy:15432/bank_robust?sslmode=disable
+      CENTAVO_INSTANCE: bank-api
       GOMEMLIMIT: 64MiB
+    volumes:
+      - lab-events:/lab/events
     depends_on:
       bank-migrate:
         condition: service_completed_successfully
@@ -105,7 +111,10 @@ services:
     environment:
       <<: *bank-env
       DATABASE_URL: postgres://bank_app:${BANK_APP_PASSWORD}@toxiproxy:15433/bank_robust?sslmode=disable
+      CENTAVO_INSTANCE: bank-worker-1
       GOMEMLIMIT: 56MiB
+    volumes:
+      - lab-events:/lab/events
     depends_on:
       bank-migrate:
         condition: service_completed_successfully
@@ -121,7 +130,10 @@ services:
     environment:
       <<: *bank-env
       DATABASE_URL: postgres://bank_app:${BANK_APP_PASSWORD}@toxiproxy:15434/bank_robust?sslmode=disable
+      CENTAVO_INSTANCE: bank-worker-2
       GOMEMLIMIT: 56MiB
+    volumes:
+      - lab-events:/lab/events
     depends_on:
       bank-migrate:
         condition: service_completed_successfully
@@ -163,8 +175,13 @@ services:
       # The auditor and the exporter read the ledger directly, read-only:
       # auditing is not a chaos target.
       AUDITOR_DATABASE_URL: postgres://bank_auditor:${BANK_AUDITOR_PASSWORD}@postgres:5432/bank_robust?sslmode=disable
+      CENTAVO_CHAOS_TOKEN: ${CENTAVO_CHAOS_TOKEN:?run ./entrypoint.sh to generate .env}
+      # The bot reaches Docker only through docker-proxy (lock 5).
+      DOCKER_HOST: tcp://docker-proxy:2375
+      CENTAVO_COMPOSE_PROJECT: ${COMPOSE_PROJECT_NAME:-centavo}
     volumes:
       - lab-data:/data
+      - lab-events:/lab/events
     ports:
       - "127.0.0.1:8090:8090"
     healthcheck:
@@ -184,3 +201,4 @@ networks:
 volumes:
   pgdata: {}
   lab-data: {}
+  lab-events: {}
