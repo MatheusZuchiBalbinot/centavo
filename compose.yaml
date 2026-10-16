@@ -1,0 +1,176 @@
+# Local lab: `./entrypoint.sh` (or `make up`) generates .env and starts everything.
+# Only the panel is published, and only on localhost; chaos and admin ports stay
+# on the internal network (docs/chaos-bot.md, section 16, lock 3).
+name: centavo
+
+x-chaos-target: &chaos-target
+  # The service runs as a child of tini, not as PID 1, so a SIGKILL sent to
+  # itself (chaos-kill) really kills it and the restart policy brings it back.
+  init: true
+  restart: unless-stopped
+  labels:
+    centavo.chaos.target: "true"
+
+x-bank-build: &bank-build
+  context: ./bank
+  args:
+    BUILD_TAGS: chaoslab
+    VERSION: ${CENTAVO_VERSION:-dev}
+
+x-bank-env: &bank-env
+  CENTAVO_ENV: chaoslab
+  CENTAVO_DEFENSES: ${CENTAVO_DEFENSES:-robust}
+
+x-bank-healthcheck: &bank-healthcheck
+  test: ["CMD", "/app/bank", "healthcheck"]
+  interval: 5s
+  timeout: 4s
+  retries: 12
+
+services:
+  postgres:
+    <<: *chaos-target
+    image: postgres:18.6
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run ./entrypoint.sh to generate .env}
+      BANK_MIGRATOR_PASSWORD: ${BANK_MIGRATOR_PASSWORD:?run ./entrypoint.sh to generate .env}
+      BANK_APP_PASSWORD: ${BANK_APP_PASSWORD:?run ./entrypoint.sh to generate .env}
+      BANK_AUDITOR_PASSWORD: ${BANK_AUDITOR_PASSWORD:?run ./entrypoint.sh to generate .env}
+    volumes:
+      # Since image 18 the volume lives at /var/lib/postgresql, not .../data.
+      - pgdata:/var/lib/postgresql
+      - ./deploy/compose/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./deploy/compose/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "--username", "postgres", "--dbname", "bank_robust"]
+      interval: 5s
+      timeout: 4s
+      retries: 12
+    mem_limit: 288m
+
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.12.0
+    command: ["-host=0.0.0.0", "-config=/etc/toxiproxy/toxiproxy.json"]
+    volumes:
+      - ./deploy/compose/toxiproxy.json:/etc/toxiproxy/toxiproxy.json:ro
+    restart: unless-stopped
+    mem_limit: 48m
+
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy:v0.4.2
+    environment:
+      CONTAINERS: 1
+      EXEC: 1
+      POST: 1
+      EVENTS: 1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
+    mem_limit: 32m
+
+  bank-migrate:
+    build: *bank-build
+    image: centavo-bank:local-chaoslab
+    command: ["migrate"]
+    environment:
+      <<: *bank-env
+      # Migrations bypass Toxiproxy: schema changes are not a chaos target.
+      DATABASE_URL: postgres://bank_migrator:${BANK_MIGRATOR_PASSWORD}@postgres:5432/bank_robust?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  bank-api:
+    <<: *chaos-target
+    image: centavo-bank:local-chaoslab
+    command: ["api"]
+    environment:
+      <<: *bank-env
+      DATABASE_URL: postgres://bank_app:${BANK_APP_PASSWORD}@toxiproxy:15432/bank_robust?sslmode=disable
+      GOMEMLIMIT: 64MiB
+    depends_on:
+      bank-migrate:
+        condition: service_completed_successfully
+      toxiproxy:
+        condition: service_started
+    healthcheck: *bank-healthcheck
+    mem_limit: 96m
+
+  bank-worker-1:
+    <<: *chaos-target
+    image: centavo-bank:local-chaoslab
+    command: ["worker"]
+    environment:
+      <<: *bank-env
+      DATABASE_URL: postgres://bank_app:${BANK_APP_PASSWORD}@toxiproxy:15433/bank_robust?sslmode=disable
+      GOMEMLIMIT: 56MiB
+    depends_on:
+      bank-migrate:
+        condition: service_completed_successfully
+      toxiproxy:
+        condition: service_started
+    healthcheck: *bank-healthcheck
+    mem_limit: 80m
+
+  bank-worker-2:
+    <<: *chaos-target
+    image: centavo-bank:local-chaoslab
+    command: ["worker"]
+    environment:
+      <<: *bank-env
+      DATABASE_URL: postgres://bank_app:${BANK_APP_PASSWORD}@toxiproxy:15434/bank_robust?sslmode=disable
+      GOMEMLIMIT: 56MiB
+    depends_on:
+      bank-migrate:
+        condition: service_completed_successfully
+      toxiproxy:
+        condition: service_started
+    healthcheck: *bank-healthcheck
+    mem_limit: 80m
+
+  partner:
+    <<: *chaos-target
+    build:
+      context: ./partner
+      args:
+        BUILD_TAGS: chaoslab
+        VERSION: ${CENTAVO_VERSION:-dev}
+    image: centavo-partner:local-chaoslab
+    command: ["serve"]
+    environment:
+      CENTAVO_ENV: chaoslab
+      GOMEMLIMIT: 56MiB
+    healthcheck:
+      test: ["CMD", "/app/partner", "healthcheck"]
+      interval: 5s
+      timeout: 4s
+      retries: 12
+    mem_limit: 80m
+
+  lab:
+    build:
+      context: ./lab
+      args:
+        VERSION: ${CENTAVO_VERSION:-dev}
+    image: centavo-lab:local
+    command: ["serve"]
+    ports:
+      - "127.0.0.1:8090:8090"
+    healthcheck:
+      test: ["CMD", "/app/lab", "healthcheck"]
+      interval: 5s
+      timeout: 4s
+      retries: 12
+    restart: unless-stopped
+    mem_limit: 160m
+
+networks:
+  default:
+    driver_opts:
+      # Fixed name, used by the FIS latency experiment (docs/infrastructure.md, section 8).
+      com.docker.network.bridge.name: br-centavo
+
+volumes:
+  pgdata: {}

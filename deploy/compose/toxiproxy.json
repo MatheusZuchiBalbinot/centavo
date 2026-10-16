@@ -1,0 +1,9 @@
+[
+  {"name": "client_api", "listen": "0.0.0.0:28080", "upstream": "bank-api:8080", "enabled": true},
+  {"name": "api_pg", "listen": "0.0.0.0:15432", "upstream": "postgres:5432", "enabled": true},
+  {"name": "worker1_pg", "listen": "0.0.0.0:15433", "upstream": "postgres:5432", "enabled": true},
+  {"name": "worker2_pg", "listen": "0.0.0.0:15434", "upstream": "postgres:5432", "enabled": true},
+  {"name": "worker1_partner", "listen": "0.0.0.0:18081", "upstream": "partner:8081", "enabled": true},
+  {"name": "worker2_partner", "listen": "0.0.0.0:18082", "upstream": "partner:8081", "enabled": true},
+  {"name": "partner_webhooks", "listen": "0.0.0.0:18080", "upstream": "bank-api:8080", "enabled": true}
+]
