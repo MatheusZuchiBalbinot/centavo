@@ -49,6 +49,8 @@ var known = []Name{
 	PixOutAfterSaveBeforePublish,
 	WebhookAfterReceiveBeforeAck,
 	InboxAfterApplyBeforeMark,
+	ReconAfterComputeBeforeApply,
+	ReconMidApply,
 	SweeperAfterStatusBeforeTransition,
 }
 

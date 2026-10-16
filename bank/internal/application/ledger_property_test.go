@@ -21,12 +21,13 @@ import (
 // work edits a copy and publishes it only when fn succeeds.
 type memoryLedger struct {
 	// The property moves money between customers only; PIX, the outbox, the
-	// inbox and the leases are covered by the integration tests, so their
-	// stores are left unimplemented here.
+	// inbox, the leases and the reconciliation are covered by the
+	// integration tests, so their stores are left unimplemented here.
 	application.PixStore
 	application.OutboxStore
 	application.InboxStore
 	application.LeaseStore
+	application.ReconciliationStore
 
 	positions    map[ledger.AccountID]ledger.Position
 	isCustomer   map[ledger.AccountID]bool

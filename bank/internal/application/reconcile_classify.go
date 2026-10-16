@@ -1,0 +1,158 @@
+package application
+
+import (
+	"centavo/bank/internal/domain/money"
+	"centavo/bank/internal/domain/transfer"
+)
+
+// StatementKind is a line of the partner's statement.
+type StatementKind string
+
+const (
+	StatementSettlement StatementKind = "settlement"
+	StatementReturn     StatementKind = "return"
+	StatementIncoming   StatementKind = "incoming"
+)
+
+// StatementEntry is one line of the partner's statement, numbered by seq.
+type StatementEntry struct {
+	Seq         int64
+	Kind        StatementKind
+	EndToEndID  string
+	AmountCents money.Cents
+	// AccountID is the destination of an incoming PIX.
+	AccountID string
+}
+
+// Divergence is how a statement entry compares with the ledger
+// (docs/domain.md, section 10).
+type Divergence string
+
+const (
+	DivergenceMatched           Divergence = "matched"
+	DivergenceMissingSettlement Divergence = "missing_settlement"
+	DivergenceMissingReturn     Divergence = "missing_return"
+	DivergenceMissingIncoming   Divergence = "missing_incoming"
+	DivergenceDuplicate         Divergence = "duplicate_at_partner"
+	DivergenceAmountMismatch    Divergence = "amount_mismatch"
+	DivergenceUnknownEntry      Divergence = "unknown_entry"
+)
+
+// Actions recorded with each item.
+const (
+	actionNone     = "none"
+	actionWalk     = "walk_to_partner_status"
+	actionCredit   = "credit_incoming"
+	actionSuspense = "suspense"
+	// actionWalkAndSuspense settles the amount the bank knows and books the
+	// rest of what the partner moved to suspense.
+	actionWalkAndSuspense = "walk_and_suspense"
+)
+
+// entryFacts are what the ledger says about one statement entry.
+type entryFacts struct {
+	transfer    ExternalTransfer
+	hasTransfer bool
+	// priorItems counts entries of the same kind and end_to_end_id already
+	// reconciled: a second settlement is the partner's double processing.
+	priorItems     int
+	isCredited     bool
+	isAccountKnown bool
+}
+
+// verdict is what the reconciler books for an entry.
+type verdict struct {
+	divergence Divergence
+	action     string
+	// walkTo is the partner status to walk the transfer to, if any.
+	walkTo transfer.PartnerStatus
+	// suspenseCents moves money from the partner reserve mirror to suspense:
+	// positive when the partner paid out more than the ledger knows (a
+	// receivable), negative when it paid in more (a payable).
+	suspenseCents money.Cents
+}
+
+// classify compares one statement entry with the ledger. It never touches a
+// customer's account without a known cause: what has no explanation goes to
+// suspense (BR15).
+func classify(entry StatementEntry, facts entryFacts) verdict {
+	switch entry.Kind {
+	case StatementSettlement:
+		return classifySettlement(entry, facts)
+	case StatementReturn:
+		return classifyReturn(entry, facts)
+	case StatementIncoming:
+		return classifyIncoming(entry, facts)
+	default:
+		return verdict{divergence: DivergenceUnknownEntry, action: actionNone}
+	}
+}
+
+func classifySettlement(entry StatementEntry, facts entryFacts) verdict {
+	paidOut := verdict{divergence: DivergenceUnknownEntry, action: actionSuspense, suspenseCents: entry.AmountCents}
+
+	if !facts.hasTransfer {
+		return paidOut
+	}
+
+	if facts.priorItems > 0 {
+		paidOut.divergence = DivergenceDuplicate
+
+		return paidOut
+	}
+
+	gap := entry.AmountCents - facts.transfer.Amount.Cents()
+	if gap != 0 {
+		return verdict{divergence: DivergenceAmountMismatch, action: actionWalkAndSuspense, walkTo: transfer.PartnerSettled, suspenseCents: gap}
+	}
+
+	switch facts.transfer.Status {
+	case transfer.StatusConfirmed, transfer.StatusReversed:
+		return verdict{divergence: DivergenceMatched, action: actionNone}
+	case transfer.StatusCreated, transfer.StatusSent:
+		return verdict{divergence: DivergenceMissingSettlement, action: actionWalk, walkTo: transfer.PartnerSettled}
+	default:
+		// The bank refunded a PIX the partner paid (FC21 in a naive relay):
+		// the money is owed back to the bank and waits in suspense.
+		paidOut.divergence = DivergenceMissingSettlement
+
+		return paidOut
+	}
+}
+
+func classifyReturn(entry StatementEntry, facts entryFacts) verdict {
+	paidIn := verdict{divergence: DivergenceUnknownEntry, action: actionSuspense, suspenseCents: -entry.AmountCents}
+
+	if !facts.hasTransfer {
+		return paidIn
+	}
+
+	if facts.priorItems > 0 {
+		paidIn.divergence = DivergenceDuplicate
+
+		return paidIn
+	}
+
+	switch facts.transfer.Status {
+	case transfer.StatusReversed:
+		return verdict{divergence: DivergenceMatched, action: actionNone}
+	case transfer.StatusCreated, transfer.StatusSent, transfer.StatusConfirmed:
+		return verdict{divergence: DivergenceMissingReturn, action: actionWalk, walkTo: transfer.PartnerReturned}
+	default:
+		paidIn.divergence = DivergenceMissingReturn
+
+		return paidIn
+	}
+}
+
+func classifyIncoming(entry StatementEntry, facts entryFacts) verdict {
+	if facts.isCredited {
+		return verdict{divergence: DivergenceMatched, action: actionNone}
+	}
+
+	if !facts.isAccountKnown {
+		return verdict{divergence: DivergenceUnknownEntry, action: actionSuspense, suspenseCents: -entry.AmountCents}
+	}
+
+	return verdict{divergence: DivergenceMissingIncoming, action: actionCredit}
+}

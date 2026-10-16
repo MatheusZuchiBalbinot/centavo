@@ -72,6 +72,18 @@ func (b *Breaker) Status(ctx context.Context, endToEndID string) (application.Au
 	return status, err
 }
 
+// Statement reads the partner's statement if the breaker allows it.
+func (b *Breaker) Statement(ctx context.Context, afterSeq int64, limit int) ([]application.StatementEntry, error) {
+	if !b.allow() {
+		return nil, ErrBreakerOpen
+	}
+
+	entries, err := b.client.Statement(ctx, afterSeq, limit)
+	b.record(err == nil)
+
+	return entries, err
+}
+
 func (b *Breaker) allow() bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()

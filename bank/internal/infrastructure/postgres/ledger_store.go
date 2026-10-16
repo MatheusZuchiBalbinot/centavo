@@ -165,8 +165,8 @@ func (s LedgerStore) IncrementBalance(ctx context.Context, id ledger.AccountID, 
 }
 
 const insertTransactionSQL = `
-INSERT INTO ledger_transactions (id, kind, operation_id, client_ref, correlation_id, external_transfer_id, incoming_transfer_id)
-VALUES ($1, $2, $3, nullif($4, ''), $5, $6, $7)
+INSERT INTO ledger_transactions (id, kind, operation_id, client_ref, correlation_id, external_transfer_id, incoming_transfer_id, reconciliation_item_id)
+VALUES ($1, $2, $3, nullif($4, ''), $5, $6, $7, $8)
 RETURNING created_at`
 
 // InsertTransaction appends a ledger transaction header.
@@ -179,7 +179,7 @@ func (s LedgerStore) InsertTransaction(ctx context.Context, transaction ledger.T
 		operationID = &id
 	}
 
-	row := s.db.QueryRow(ctx, insertTransactionSQL, uuid.UUID(transaction.ID), string(transaction.Kind), operationID, transaction.ClientRef, transaction.CorrelationID, transaction.ExternalTransferID, transaction.IncomingTransferID)
+	row := s.db.QueryRow(ctx, insertTransactionSQL, uuid.UUID(transaction.ID), string(transaction.Kind), operationID, transaction.ClientRef, transaction.CorrelationID, transaction.ExternalTransferID, transaction.IncomingTransferID, transaction.ReconciliationItemID)
 
 	err := row.Scan(&createdAt)
 	if err != nil {

@@ -21,6 +21,10 @@ const (
 	WebhookAfterReceiveBeforeAck Name = "webhook.after_receive_before_ack"
 	// InboxAfterApplyBeforeMark is FP06: the event is applied, not yet marked.
 	InboxAfterApplyBeforeMark Name = "inbox.after_apply_before_mark"
+	// ReconAfterComputeBeforeApply is FP07: the reconciler read the batch and booked nothing.
+	ReconAfterComputeBeforeApply Name = "recon.after_compute_before_apply"
+	// ReconMidApply is FP08: between two entries of a reconciliation batch.
+	ReconMidApply Name = "recon.mid_apply"
 	// SweeperAfterStatusBeforeTransition is FP11: the partner answered, the sweeper wrote nothing yet.
 	SweeperAfterStatusBeforeTransition Name = "sweeper.after_status_before_transition"
 )

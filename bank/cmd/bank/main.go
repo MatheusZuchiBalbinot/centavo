@@ -313,6 +313,7 @@ func serveWorker(ctx context.Context, cfg config.Config, logger *slog.Logger) er
 type partner interface {
 	application.PartnerSubmitter
 	application.PartnerStatusReader
+	application.PartnerStatementReader
 }
 
 // sagaDependencies are shared by the worker's PIX loops.
@@ -351,7 +352,20 @@ func startSaga(ctx context.Context, pool *pgxpool.Pool, cfg config.Config, logge
 		go application.NewSweeper(sweeperConfig).Run(ctx)
 	}
 
+	reconcilerConfig := application.ReconcilerConfig{UnitOfWork: saga.unitOfWork, Machine: saga.machine, Statement: saga.partner, Policy: newBatchPolicy(cfg.Defenses), Owner: saga.owner, Logger: logger}
+	go application.NewReconciler(reconcilerConfig).Run(ctx, application.ReconcileInterval)
+
 	return nil
+}
+
+// newBatchPolicy picks D10: a batch in one commit with the cursor, or an
+// entry at a time with the cursor saved last.
+func newBatchPolicy(profile defenses.Profile) application.BatchPolicy {
+	if profile.IsEnabled(defenses.Reconciliation) {
+		return application.AtomicBatches{}
+	}
+
+	return application.EntryByEntry{}
 }
 
 // newPartner picks D9's circuit breaker around the partner client.

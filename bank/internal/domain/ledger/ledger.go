@@ -37,6 +37,7 @@ var (
 	externalCashAccountID      = AccountID(uuid.MustParse("00000000-0000-7000-8000-000000000001"))
 	pixOutTransitAccountID     = AccountID(uuid.MustParse("00000000-0000-7000-8000-000000000002"))
 	partnerSettlementAccountID = AccountID(uuid.MustParse("00000000-0000-7000-8000-000000000003"))
+	suspenseAccountID          = AccountID(uuid.MustParse("00000000-0000-7000-8000-000000000004"))
 )
 
 // TransactionKind is the kind of a ledger transaction.
@@ -50,6 +51,9 @@ const (
 	TransactionKindPixOutRefund     TransactionKind = "pix_out_refund"
 	TransactionKindPixOutReturn     TransactionKind = "pix_out_return"
 	TransactionKindPixInCredit      TransactionKind = "pix_in_credit"
+	// TransactionKindAdjustment moves an explained divergence with the
+	// partner to suspense (docs/domain.md, section 10).
+	TransactionKindAdjustment TransactionKind = "reconciliation_adjustment"
 )
 
 // Seq is the position of an entry within its account: 1, 2, 3...
@@ -94,6 +98,8 @@ type Transaction struct {
 	ExternalTransferID *uuid.UUID
 	// IncomingTransferID is the PIX in the transaction credits.
 	IncomingTransferID *uuid.UUID
+	// ReconciliationItemID is the divergence an adjustment books.
+	ReconciliationItemID *int64
 }
 
 // Entry is one immutable line that changes the balance of an account.
@@ -152,6 +158,12 @@ func PixOutTransitAccountID() AccountID {
 // bank's reserve at the partner.
 func PartnerSettlementAccountID() AccountID {
 	return partnerSettlementAccountID
+}
+
+// SuspenseAccountID is sys_reconciliation_suspense: divergences with the
+// partner that are explained and not yet settled.
+func SuspenseAccountID() AccountID {
+	return suspenseAccountID
 }
 
 // ParseAccountID reads an account id from its canonical text form.

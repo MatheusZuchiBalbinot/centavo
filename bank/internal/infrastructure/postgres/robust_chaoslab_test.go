@@ -224,3 +224,87 @@ func TestInbox_CrashBetweenApplyAndMark_AppliesOnce(t *testing.T) {
 		t.Fatalf("%d settlements after a crash between apply and mark, want 1", settlements)
 	}
 }
+
+// armFP08 fails the reconciliation once, between two entries of a batch.
+func armFP08(t *testing.T) {
+	t.Helper()
+
+	failpoint.DisarmAll()
+	failpoint.ConfigureEvents(failpoint.EventsConfig{Dir: t.TempDir(), Service: "bank-worker", Instance: "test"})
+	t.Cleanup(failpoint.DisarmAll)
+
+	rule := failpoint.Rule{Action: failpoint.ActionError, Arg: "crash", Probability: 1, MaxFires: 1, SkipHits: 1, TTL: "1m"}
+
+	err := failpoint.Arm(failpoint.ReconMidApply, rule, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestReconciliation_CrashMidBatch_AppliesEachEntryOnce is FC09 and PM-011:
+// the reconciler died between two entries (FP08). With D10 the batch rolls
+// back as a whole and the rerun books each entry once; the naive variant
+// had committed the first entry and books it again.
+func TestReconciliation_CrashMidBatch_AppliesEachEntryOnce(t *testing.T) {
+	cases := []struct {
+		name     string
+		policy   application.BatchPolicy
+		schema   schema
+		wantOwed int64
+	}{
+		{name: "atomic batches", policy: application.AtomicBatches{}, schema: schema{hasAtomicLedger: true, hasBalanceLocking: true, hasIdempotency: true, hasInbox: true, hasReconciliation: true}, wantOwed: 1_000},
+		// FP08 fires after the second entry, so the rerun books both again:
+		// the first settlement now looks like a duplicate of itself, and the
+		// partner owes 1000 while suspense says 3000.
+		{name: "entry by entry", policy: application.EntryByEntry{}, schema: schema{hasAtomicLedger: true, hasBalanceLocking: true, hasIdempotency: true, hasInbox: true}, wantOwed: 3_000},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			useSchema(t, tc.schema)
+
+			p := newOutboxBank(t)
+			t.Cleanup(func() { renumberRebookedItems(t, p) })
+			statement := newStatement(t, p)
+			created := p.sentTransfer(t, 1_000)
+			other := p.sentTransfer(t, 300)
+			statement.add(application.StatementSettlement, created.EndToEndID, 1_000, "")
+			statement.add(application.StatementSettlement, created.EndToEndID, 1_000, "")
+			statement.add(application.StatementSettlement, other.EndToEndID, 300, "")
+
+			suspenseBefore := p.systemBalance(t, ledger.SuspenseAccountID())
+
+			armFP08(t)
+
+			err := p.reconciler(statement, tc.policy).RunOnce(t.Context())
+			if !errors.Is(err, failpoint.ErrSynthetic) {
+				t.Fatalf("the crash did not stop the batch: %v", err)
+			}
+
+			failpoint.DisarmAll()
+
+			err = p.reconciler(statement, tc.policy).RunOnce(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			owed := suspenseBefore - p.systemBalance(t, ledger.SuspenseAccountID())
+			if owed != tc.wantOwed {
+				t.Fatalf("suspense moved by %d, want %d", owed, tc.wantOwed)
+			}
+		})
+	}
+}
+
+// renumberRebookedItems moves the items the naive variant booked twice out
+// of the way of D10's unique partner_seq, so the robust schema comes back.
+func renumberRebookedItems(t *testing.T, p pixBank) {
+	t.Helper()
+
+	_, err := p.bank.pool.Exec(context.Background(), `
+UPDATE reconciliation_items SET partner_seq = -id
+WHERE id NOT IN (SELECT min(id) FROM reconciliation_items GROUP BY partner_seq)`)
+	if err != nil {
+		t.Error(err)
+	}
+}
