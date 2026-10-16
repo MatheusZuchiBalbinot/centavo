@@ -81,6 +81,8 @@ type StatementEntry struct {
 	EndToEndID    string    `json:"end_to_end_id"`
 	AmountCents   int64     `json:"amount_cents"`
 	CreatedAt     time.Time `json:"created_at"`
+	// DestinationAccountID is the account an incoming entry credits.
+	DestinationAccountID string `json:"destination_account_id,omitempty"`
 }
 
 // Incoming is a PIX the partner credited to a participant.
@@ -576,9 +578,19 @@ func enqueue(ctx context.Context, tx *sql.Tx, event Event, planner Planner) erro
 	return nil
 }
 
+// statementSQL joins incoming entries with the account they credit, which a
+// reconciler needs to credit a PIX in whose webhook never came.
+const statementSQL = `
+SELECT e.seq, e.participant_id, e.kind, e.end_to_end_id, e.amount_cents, e.created_at, coalesce(i.account_id, '')
+FROM statement_entries e
+LEFT JOIN incoming i ON e.kind = 'incoming' AND i.end_to_end_id = e.end_to_end_id
+WHERE e.participant_id = ? AND e.seq > ?
+ORDER BY e.seq
+LIMIT ?`
+
 // Statement returns the participant's entries after a sequence number.
 func (s *Store) Statement(ctx context.Context, participantID string, afterSeq int64, limit int) ([]StatementEntry, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT seq, participant_id, kind, end_to_end_id, amount_cents, created_at FROM statement_entries WHERE participant_id = ? AND seq > ? ORDER BY seq LIMIT ?`, participantID, afterSeq, limit)
+	rows, err := s.db.QueryContext(ctx, statementSQL, participantID, afterSeq, limit)
 	if err != nil {
 		return nil, fmt.Errorf("reading the statement: %w", err)
 	}
@@ -592,7 +604,7 @@ func (s *Store) Statement(ctx context.Context, participantID string, afterSeq in
 			created int64
 		)
 
-		err := rows.Scan(&entry.Seq, &entry.ParticipantID, &entry.Kind, &entry.EndToEndID, &entry.AmountCents, &created)
+		err := rows.Scan(&entry.Seq, &entry.ParticipantID, &entry.Kind, &entry.EndToEndID, &entry.AmountCents, &created, &entry.DestinationAccountID)
 		if err != nil {
 			return nil, err
 		}
@@ -659,6 +671,16 @@ func (s *Store) PendingDeliveries(ctx context.Context) (int, error) {
 	err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM deliveries WHERE status = 'pending'`).Scan(&count)
 
 	return count, err
+}
+
+// LastStatementSeq is the participant's newest statement entry, or zero:
+// the lab's quiescence waits until the bank reconciled up to it.
+func (s *Store) LastStatementSeq(ctx context.Context, participantID string) (int64, error) {
+	var seq int64
+
+	err := s.db.QueryRowContext(ctx, `SELECT coalesce(max(seq), 0) FROM statement_entries WHERE participant_id = ?`, participantID).Scan(&seq)
+
+	return seq, err
 }
 
 func (s *Store) inTx(ctx context.Context, fn func(tx *sql.Tx) error) error {

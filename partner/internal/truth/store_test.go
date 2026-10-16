@@ -141,6 +141,16 @@ func TestAddIncoming_CreditsOncePerEndToEndID(t *testing.T) {
 	if len(export.Incoming) != 1 || len(export.Statement) != 1 {
 		t.Fatalf("incoming %d, statement %d", len(export.Incoming), len(export.Statement))
 	}
+
+	statement, err := store.Statement(t.Context(), "centavo-robust", 0, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The reconciler credits a PIX in whose webhook never came from this.
+	if statement[0].DestinationAccountID != "acc-1" {
+		t.Fatalf("incoming entry without its account: %+v", statement[0])
+	}
 }
 
 func TestDeliveries_CanBeDroppedRescheduledAndAbandoned(t *testing.T) {

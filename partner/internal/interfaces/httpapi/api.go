@@ -299,6 +299,13 @@ func (a API) truthExport(w http.ResponseWriter, r *http.Request) {
 }
 
 // pending counts the webhooks still to be sent, for the lab's quiescence.
+type pendingResponse struct {
+	PendingDeliveries int   `json:"pending_deliveries"`
+	LastStatementSeq  int64 `json:"last_statement_seq"`
+}
+
+// pending is what the lab's quiescence waits on: webhooks still to deliver
+// and, for a participant, the statement entry its reconciliation must reach.
 func (a API) pending(w http.ResponseWriter, r *http.Request) {
 	count, err := a.store.PendingDeliveries(r.Context())
 	if err != nil {
@@ -307,7 +314,14 @@ func (a API) pending(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]int{"pending_deliveries": count})
+	lastSeq, err := a.store.LastStatementSeq(r.Context(), r.URL.Query().Get("participant_id"))
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal"})
+
+		return
+	}
+
+	writeJSON(w, http.StatusOK, pendingResponse{PendingDeliveries: count, LastStatementSeq: lastSeq})
 }
 
 // correlationOf is the caller's correlation id, or none when it is missing or
