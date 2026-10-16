@@ -1,0 +1,175 @@
+// Package defenses parses the defense profile that selects, at run time,
+// which defenses (D1 to D12) are active. See docs/architecture.md, section 8.
+package defenses
+
+import (
+	"errors"
+	"fmt"
+	"slices"
+	"strings"
+)
+
+// Defense is the flag name of one defense technique.
+type Defense string
+
+const (
+	AtomicLedger       Defense = "atomic_ledger"
+	BalanceLocking     Defense = "balance_locking"
+	Idempotency        Defense = "idempotency"
+	Outbox             Defense = "outbox"
+	Inbox              Defense = "inbox"
+	PartnerIdempotency Defense = "partner_idempotency"
+	StateMachine       Defense = "state_machine"
+	Recovery           Defense = "recovery"
+	ResilientClient    Defense = "resilient_client"
+	Reconciliation     Defense = "reconciliation"
+	Fencing            Defense = "fencing"
+	DurableDB          Defense = "durable_db"
+)
+
+const (
+	robustKeyword    = "robust"
+	naiveKeyword     = "naive"
+	profileSeparator = ","
+	disablePrefix    = "-"
+)
+
+var (
+	ErrEmptyProfile      = errors.New("defense profile is empty")
+	ErrUnknownBase       = errors.New("defense profile must start with robust or naive")
+	ErrNaiveWithModifier = errors.New("the naive profile takes no modifiers")
+	ErrMissingPrefix     = errors.New("defense modifiers must start with '-'")
+	ErrUnknownDefense    = errors.New("unknown defense")
+	ErrDuplicateDefense  = errors.New("defense disabled more than once")
+)
+
+// all lists the defenses in catalog order (D1 to D12); String relies on it
+// to print a canonical profile.
+var all = []Defense{
+	AtomicLedger,
+	BalanceLocking,
+	Idempotency,
+	Outbox,
+	Inbox,
+	PartnerIdempotency,
+	StateMachine,
+	Recovery,
+	ResilientClient,
+	Reconciliation,
+	Fencing,
+	DurableDB,
+}
+
+// Profile is an immutable set of disabled defenses.
+type Profile struct {
+	disabled []Defense
+}
+
+// All returns every defense in catalog order.
+func All() []Defense {
+	return slices.Clone(all)
+}
+
+// Robust returns the profile with every defense enabled.
+func Robust() Profile {
+	return Profile{}
+}
+
+// ParseProfile parses "robust", "naive" or "robust,-<defense>[,-<defense>...]".
+func ParseProfile(raw string) (Profile, error) {
+	tokens := strings.Split(raw, profileSeparator)
+	base := strings.TrimSpace(tokens[0])
+	modifiers := tokens[1:]
+
+	if base == "" {
+		return Profile{}, ErrEmptyProfile
+	}
+
+	if base == naiveKeyword {
+		return parseNaive(modifiers)
+	}
+
+	if base != robustKeyword {
+		return Profile{}, fmt.Errorf("%w: %q", ErrUnknownBase, base)
+	}
+
+	return parseRobustModifiers(modifiers)
+}
+
+// IsEnabled reports whether the defense is active in this profile.
+func (p Profile) IsEnabled(defense Defense) bool {
+	return !slices.Contains(p.disabled, defense)
+}
+
+// IsRobust reports whether every defense is enabled.
+func (p Profile) IsRobust() bool {
+	return len(p.disabled) == 0
+}
+
+// String returns the canonical form of the profile, which ParseProfile accepts.
+func (p Profile) String() string {
+	if p.IsRobust() {
+		return robustKeyword
+	}
+
+	isNaive := len(p.disabled) == len(all)
+	if isNaive {
+		return naiveKeyword
+	}
+
+	parts := []string{robustKeyword}
+	for _, defense := range p.disabled {
+		parts = append(parts, disablePrefix+string(defense))
+	}
+
+	return strings.Join(parts, profileSeparator)
+}
+
+func parseNaive(modifiers []string) (Profile, error) {
+	hasModifiers := len(modifiers) > 0
+	if hasModifiers {
+		return Profile{}, ErrNaiveWithModifier
+	}
+
+	return Profile{disabled: All()}, nil
+}
+
+func parseRobustModifiers(modifiers []string) (Profile, error) {
+	disabled := make([]Defense, 0, len(modifiers))
+
+	for _, modifier := range modifiers {
+		defense, err := parseModifier(modifier)
+		if err != nil {
+			return Profile{}, err
+		}
+
+		if slices.Contains(disabled, defense) {
+			return Profile{}, fmt.Errorf("%w: %q", ErrDuplicateDefense, defense)
+		}
+
+		disabled = append(disabled, defense)
+	}
+
+	slices.SortFunc(disabled, compareCatalogOrder)
+
+	return Profile{disabled: disabled}, nil
+}
+
+func parseModifier(modifier string) (Defense, error) {
+	trimmed := strings.TrimSpace(modifier)
+	name, hasPrefix := strings.CutPrefix(trimmed, disablePrefix)
+	if !hasPrefix {
+		return "", fmt.Errorf("%w: %q", ErrMissingPrefix, trimmed)
+	}
+
+	defense := Defense(name)
+	if !slices.Contains(all, defense) {
+		return "", fmt.Errorf("%w: %q", ErrUnknownDefense, name)
+	}
+
+	return defense, nil
+}
+
+func compareCatalogOrder(a, b Defense) int {
+	return slices.Index(all, a) - slices.Index(all, b)
+}

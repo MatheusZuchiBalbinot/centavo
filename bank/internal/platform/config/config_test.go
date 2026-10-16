@@ -1,0 +1,105 @@
+package config_test
+
+import (
+	"errors"
+	"testing"
+
+	"centavo/bank/internal/platform/config"
+	"centavo/bank/internal/platform/defenses"
+)
+
+const testDatabaseURL = "postgres://bank_app@localhost:5432/bank_robust"
+
+func TestLoad_ValidEnvironment(t *testing.T) {
+	vars := map[string]string{"CENTAVO_ENV": "chaoslab", "CENTAVO_DEFENSES": "robust,-outbox", "DATABASE_URL": testDatabaseURL}
+	lookup := lookupFrom(vars)
+
+	cfg, err := config.Load(lookup)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	isExpectedConfig := cfg.Env == config.EnvChaoslab && cfg.DatabaseURL == testDatabaseURL && !cfg.Defenses.IsEnabled(defenses.Outbox)
+	if !isExpectedConfig {
+		t.Fatalf("unexpected config: %+v", cfg)
+	}
+}
+
+func TestLoad_DefensesDefaultToRobust(t *testing.T) {
+	vars := map[string]string{"CENTAVO_ENV": "local", "DATABASE_URL": testDatabaseURL}
+	lookup := lookupFrom(vars)
+
+	cfg, err := config.Load(lookup)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !cfg.Defenses.IsRobust() {
+		t.Fatalf("defenses = %s, want robust", cfg.Defenses)
+	}
+}
+
+func TestLoad_InvalidEnvironment(t *testing.T) {
+	testCases := []struct {
+		name    string
+		vars    map[string]string
+		wantErr error
+	}{
+		{name: "missing env", vars: map[string]string{"DATABASE_URL": testDatabaseURL}, wantErr: config.ErrMissingVariable},
+		{name: "unknown env", vars: map[string]string{"CENTAVO_ENV": "staging", "DATABASE_URL": testDatabaseURL}, wantErr: config.ErrUnknownEnv},
+		{name: "missing database url", vars: map[string]string{"CENTAVO_ENV": "local"}, wantErr: config.ErrMissingVariable},
+		{name: "empty database url", vars: map[string]string{"CENTAVO_ENV": "local", "DATABASE_URL": ""}, wantErr: config.ErrMissingVariable},
+		{name: "invalid profile", vars: map[string]string{"CENTAVO_ENV": "local", "CENTAVO_DEFENSES": "robust,-nope", "DATABASE_URL": testDatabaseURL}, wantErr: defenses.ErrUnknownDefense},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			lookup := lookupFrom(testCase.vars)
+
+			_, err := config.Load(lookup)
+			if !errors.Is(err, testCase.wantErr) {
+				t.Fatalf("error = %v, want %v", err, testCase.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateBuild(t *testing.T) {
+	naive, err := defenses.ParseProfile("naive")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	testCases := []struct {
+		name         string
+		env          config.Env
+		profile      defenses.Profile
+		isChaosBuild bool
+		wantErr      error
+	}{
+		{name: "production build, robust, production", env: config.EnvProduction, profile: defenses.Robust()},
+		{name: "production build, robust, local", env: config.EnvLocal, profile: defenses.Robust()},
+		{name: "production build refuses naive", env: config.EnvLocal, profile: naive, wantErr: config.ErrProductionBuildProfile},
+		{name: "chaos build runs naive in chaoslab", env: config.EnvChaoslab, profile: naive, isChaosBuild: true},
+		{name: "chaos build refuses production", env: config.EnvProduction, profile: defenses.Robust(), isChaosBuild: true, wantErr: config.ErrChaosBuildInProduction},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			cfg := config.Config{Env: testCase.env, Defenses: testCase.profile, DatabaseURL: testDatabaseURL}
+
+			err := config.ValidateBuild(cfg, testCase.isChaosBuild)
+			if !errors.Is(err, testCase.wantErr) {
+				t.Fatalf("error = %v, want %v", err, testCase.wantErr)
+			}
+		})
+	}
+}
+
+func lookupFrom(vars map[string]string) config.LookupFunc {
+	return func(key string) (string, bool) {
+		value, isSet := vars[key]
+
+		return value, isSet
+	}
+}
