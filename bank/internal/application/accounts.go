@@ -36,6 +36,12 @@ func NewOpenAccount(customers CustomerCreator) OpenAccount {
 // Execute creates the account. The naive bank ignores the idempotency key,
 // so a retried request opens a second, empty account.
 func (o OpenAccount) Execute(ctx context.Context, rawHolderName string) (AccountView, error) {
+	return o.Apply(ctx, o.customers, rawHolderName)
+}
+
+// Apply opens the account with the given creator, which the writer binds to
+// the unit of work of the idempotency key.
+func (o OpenAccount) Apply(ctx context.Context, customers CustomerCreator, rawHolderName string) (AccountView, error) {
 	holderName, err := ledger.ParseHolderName(rawHolderName)
 	if err != nil {
 		return AccountView{}, err
@@ -48,7 +54,7 @@ func (o OpenAccount) Execute(ctx context.Context, rawHolderName string) (Account
 
 	account := ledger.Account{ID: id, Kind: ledger.AccountKindCustomer, HolderName: holderName}
 
-	createdAt, err := o.customers.CreateCustomer(ctx, account)
+	createdAt, err := customers.CreateCustomer(ctx, account)
 	if err != nil {
 		return AccountView{}, err
 	}

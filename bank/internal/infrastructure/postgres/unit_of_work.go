@@ -23,11 +23,14 @@ func NewUnitOfWork(pool *pgxpool.Pool) UnitOfWork {
 
 // Run commits when fn returns nil and rolls back otherwise. A process that
 // dies before the commit leaves nothing behind: PostgreSQL rolls back the
-// transaction of a dropped connection.
+// transaction of a dropped connection. Storage failures come back classified
+// as transient, ambiguous or unavailable.
 func (u UnitOfWork) Run(ctx context.Context, fn func(ctx context.Context, stores application.Stores) error) error {
 	options := pgx.TxOptions{IsoLevel: pgx.ReadCommitted}
 
-	return pgx.BeginTxFunc(ctx, u.pool, options, func(tx pgx.Tx) error {
+	err := pgx.BeginTxFunc(ctx, u.pool, options, func(tx pgx.Tx) error {
 		return fn(ctx, LedgerStore{db: tx})
 	})
+
+	return classify(err)
 }

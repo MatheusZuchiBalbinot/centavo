@@ -39,12 +39,17 @@ func NewDeposit(deps MoneyDependencies) Deposit {
 // increment, never locked up front: every deposit touches it, and taking it
 // last keeps it out of any lock cycle.
 func (d Deposit) Execute(ctx context.Context, input DepositInput) (DepositResult, error) {
+	operationID, err := ledger.NewOperationID()
+	if err != nil {
+		return DepositResult{}, err
+	}
+
 	var result DepositResult
 
-	err := d.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
+	err = d.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
 		var err error
 
-		result, err = d.deposit(ctx, stores, input)
+		result, err = d.Apply(ctx, stores, operationID, input)
 
 		return err
 	})
@@ -52,7 +57,9 @@ func (d Deposit) Execute(ctx context.Context, input DepositInput) (DepositResult
 	return result, err
 }
 
-func (d Deposit) deposit(ctx context.Context, stores Stores, input DepositInput) (DepositResult, error) {
+// Apply runs the deposit inside a unit of work that is already open; the
+// writer opens it so the idempotency key shares its commit.
+func (d Deposit) Apply(ctx context.Context, stores Stores, operationID ledger.OperationID, input DepositInput) (DepositResult, error) {
 	err := d.locker.Lock(ctx, stores, []ledger.AccountID{input.AccountID})
 	if err != nil {
 		return DepositResult{}, err
@@ -63,7 +70,7 @@ func (d Deposit) deposit(ctx context.Context, stores Stores, input DepositInput)
 		return DepositResult{}, err
 	}
 
-	transaction, err := newTransaction(ledger.TransactionKindDeposit, input.Write)
+	transaction, err := newTransaction(ledger.TransactionKindDeposit, input.Write, operationID)
 	if err != nil {
 		return DepositResult{}, err
 	}

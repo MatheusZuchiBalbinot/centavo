@@ -42,7 +42,7 @@ func NewTransferInternal(deps MoneyDependencies) TransferInternal {
 // and one of them is lost (FC41); without D1 a crash at FP01 leaves the debit
 // without its credit (FC01).
 func (t TransferInternal) Execute(ctx context.Context, input TransferInput) (TransferResult, error) {
-	err := ledger.CheckTransferAccounts(input.From, input.To)
+	operationID, err := ledger.NewOperationID()
 	if err != nil {
 		return TransferResult{}, err
 	}
@@ -52,7 +52,7 @@ func (t TransferInternal) Execute(ctx context.Context, input TransferInput) (Tra
 	err = t.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
 		var err error
 
-		result, err = t.transfer(ctx, stores, input)
+		result, err = t.Apply(ctx, stores, operationID, input)
 
 		return err
 	})
@@ -60,8 +60,14 @@ func (t TransferInternal) Execute(ctx context.Context, input TransferInput) (Tra
 	return result, err
 }
 
-func (t TransferInternal) transfer(ctx context.Context, stores Stores, input TransferInput) (TransferResult, error) {
-	err := t.locker.Lock(ctx, stores, []ledger.AccountID{input.From, input.To})
+// Apply runs the transfer inside a unit of work that is already open.
+func (t TransferInternal) Apply(ctx context.Context, stores Stores, operationID ledger.OperationID, input TransferInput) (TransferResult, error) {
+	err := ledger.CheckTransferAccounts(input.From, input.To)
+	if err != nil {
+		return TransferResult{}, err
+	}
+
+	err = t.locker.Lock(ctx, stores, []ledger.AccountID{input.From, input.To})
 	if err != nil {
 		return TransferResult{}, err
 	}
@@ -81,7 +87,7 @@ func (t TransferInternal) transfer(ctx context.Context, stores Stores, input Tra
 		return TransferResult{}, err
 	}
 
-	transaction, err := newTransaction(ledger.TransactionKindInternalTransfer, input.Write)
+	transaction, err := newTransaction(ledger.TransactionKindInternalTransfer, input.Write, operationID)
 	if err != nil {
 		return TransferResult{}, err
 	}

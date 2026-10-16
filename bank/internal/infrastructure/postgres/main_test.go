@@ -138,13 +138,14 @@ func migrate(ctx context.Context) error {
 
 // migrateDefenses puts the D1 and D2 constraints in (robust) or takes them out.
 func migrateDefenses(ctx context.Context, isRobust bool) error {
-	return migrateSchema(ctx, schema{hasAtomicLedger: isRobust, hasBalanceLocking: isRobust})
+	return migrateSchema(ctx, schema{hasAtomicLedger: isRobust, hasBalanceLocking: isRobust, hasIdempotency: isRobust})
 }
 
 // schema says which defense constraints the test database has.
 type schema struct {
 	hasAtomicLedger   bool
 	hasBalanceLocking bool
+	hasIdempotency    bool
 }
 
 func migrateSchema(ctx context.Context, wanted schema) error {
@@ -152,15 +153,15 @@ func migrateSchema(ctx context.Context, wanted schema) error {
 }
 
 func defenseMigrations(isEnabled bool) []postgres.DefenseMigrations {
-	return schemaMigrations(schema{hasAtomicLedger: isEnabled, hasBalanceLocking: isEnabled})
+	return schemaMigrations(schema{hasAtomicLedger: isEnabled, hasBalanceLocking: isEnabled, hasIdempotency: isEnabled})
 }
 
 func schemaMigrations(wanted schema) []postgres.DefenseMigrations {
-	enabled := map[string]bool{"atomic_ledger": wanted.hasAtomicLedger, "balance_locking": wanted.hasBalanceLocking}
+	enabled := map[string]bool{"atomic_ledger": wanted.hasAtomicLedger, "balance_locking": wanted.hasBalanceLocking, "idempotency": wanted.hasIdempotency}
 
 	var list []postgres.DefenseMigrations
 
-	for _, name := range []string{"atomic_ledger", "balance_locking"} {
+	for _, name := range []string{"atomic_ledger", "balance_locking", "idempotency"} {
 		files, _, err := migrations.Defense(name)
 		if err != nil {
 			panic(err)

@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -12,20 +11,7 @@ import (
 	"centavo/bank/internal/application"
 	"centavo/bank/internal/domain/idempotency"
 	"centavo/bank/internal/domain/ledger"
-	"centavo/bank/internal/domain/money"
-	"centavo/bank/internal/platform/failpoint"
 )
-
-const (
-	idempotencyHeader = "Idempotency-Key"
-	// maxBodyBytes is far above any valid request body of the API.
-	maxBodyBytes = 16 << 10
-)
-
-// AccountOpener opens customer accounts.
-type AccountOpener interface {
-	Execute(ctx context.Context, holderName string) (application.AccountView, error)
-}
 
 // AccountGetter reads one customer account.
 type AccountGetter interface {
@@ -37,18 +23,31 @@ type StatementGetter interface {
 	Execute(ctx context.Context, query application.StatementQuery) (application.StatementPage, error)
 }
 
-// Depositor runs direct deposits.
-type Depositor interface {
-	Execute(ctx context.Context, input application.DepositInput) (application.DepositResult, error)
+// AccountOpener opens customer accounts inside a unit of work.
+type AccountOpener interface {
+	Apply(ctx context.Context, customers application.CustomerCreator, holderName string) (application.AccountView, error)
 }
 
-// Transferrer runs internal transfers.
+// Depositor runs direct deposits inside a unit of work.
+type Depositor interface {
+	Apply(ctx context.Context, stores application.Stores, operationID ledger.OperationID, input application.DepositInput) (application.DepositResult, error)
+}
+
+// Transferrer runs internal transfers inside a unit of work.
 type Transferrer interface {
-	Execute(ctx context.Context, input application.TransferInput) (application.TransferResult, error)
+	Apply(ctx context.Context, stores application.Stores, operationID ledger.OperationID, input application.TransferInput) (application.TransferResult, error)
+}
+
+// WriteExecutor runs a client write exactly once per idempotency key (D3) or
+// every time (naive).
+type WriteExecutor interface {
+	Execute(ctx context.Context, write application.Write) (idempotency.StoredResponse, error)
 }
 
 // UseCases are the application entry points the API exposes.
 type UseCases struct {
+	Writer       WriteExecutor
+	Resolver     application.Resolver
 	OpenAccount  AccountOpener
 	GetAccount   AccountGetter
 	GetStatement StatementGetter
@@ -61,11 +60,12 @@ func NewAPIHandler(useCases UseCases, logger *slog.Logger) http.Handler {
 	api := apiHandlers{useCases: useCases, logger: logger}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /v1/accounts", api.openAccount)
+	mux.HandleFunc("POST "+accountsEndpoint, api.openAccount)
 	mux.HandleFunc("GET /v1/accounts/{id}", api.getAccount)
 	mux.HandleFunc("GET /v1/accounts/{id}/statement", api.getStatement)
-	mux.HandleFunc("POST /v1/deposits", api.deposit)
-	mux.HandleFunc("POST /v1/transfers", api.transfer)
+	mux.HandleFunc("POST "+depositsEndpoint, api.deposit)
+	mux.HandleFunc("POST "+transfersEndpoint, api.transfer)
+	mux.HandleFunc("POST /v1/operations/{key}/resolve", api.resolve)
 
 	return withRequestContext(mux, logger)
 }
@@ -75,43 +75,11 @@ type apiHandlers struct {
 	logger   *slog.Logger
 }
 
-type openAccountRequest struct {
-	HolderName string `json:"holder_name"`
-}
-
 type accountResponse struct {
 	AccountID    string    `json:"account_id"`
 	HolderName   string    `json:"holder_name"`
 	BalanceCents int64     `json:"balance_cents"`
 	CreatedAt    time.Time `json:"created_at"`
-}
-
-func (a apiHandlers) openAccount(w http.ResponseWriter, r *http.Request) {
-	// The naive bank requires the key (BR06) but does nothing with it.
-	_, err := writeContextOf(r)
-	if err != nil {
-		writeError(w, r, a.logger, err)
-
-		return
-	}
-
-	var request openAccountRequest
-
-	err = decodeBody(w, r, &request)
-	if err != nil {
-		writeError(w, r, a.logger, err)
-
-		return
-	}
-
-	view, err := a.useCases.OpenAccount.Execute(r.Context(), request.HolderName)
-	if err != nil {
-		writeError(w, r, a.logger, err)
-
-		return
-	}
-
-	a.respondWritten(w, r, newAccountResponse(view))
 }
 
 func (a apiHandlers) getAccount(w http.ResponseWriter, r *http.Request) {
@@ -165,156 +133,6 @@ func (a apiHandlers) getStatement(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, newStatementResponse(query.AccountID, page))
 }
 
-type depositRequest struct {
-	AccountID   string `json:"account_id"`
-	AmountCents int64  `json:"amount_cents"`
-}
-
-type depositResponse struct {
-	TransactionID string    `json:"transaction_id"`
-	AccountID     string    `json:"account_id"`
-	BalanceCents  int64     `json:"balance_cents"`
-	CreatedAt     time.Time `json:"created_at"`
-}
-
-func (a apiHandlers) deposit(w http.ResponseWriter, r *http.Request) {
-	input, err := depositInputOf(w, r)
-	if err != nil {
-		writeError(w, r, a.logger, err)
-
-		return
-	}
-
-	result, err := a.useCases.Deposit.Execute(r.Context(), input)
-	if err != nil {
-		writeError(w, r, a.logger, err)
-
-		return
-	}
-
-	response := depositResponse{
-		TransactionID: result.TransactionID.String(),
-		AccountID:     input.AccountID.String(),
-		BalanceCents:  int64(result.Balance.Cents()),
-		CreatedAt:     result.CreatedAt.UTC(),
-	}
-	a.respondWritten(w, r, response)
-}
-
-type transferRequest struct {
-	FromAccountID string `json:"from_account_id"`
-	ToAccountID   string `json:"to_account_id"`
-	AmountCents   int64  `json:"amount_cents"`
-}
-
-type transferResponse struct {
-	TransactionID    string    `json:"transaction_id"`
-	FromBalanceCents int64     `json:"from_balance_cents"`
-	CreatedAt        time.Time `json:"created_at"`
-}
-
-func (a apiHandlers) transfer(w http.ResponseWriter, r *http.Request) {
-	input, err := transferInputOf(w, r)
-	if err != nil {
-		writeError(w, r, a.logger, err)
-
-		return
-	}
-
-	result, err := a.useCases.Transfer.Execute(r.Context(), input)
-	if err != nil {
-		writeError(w, r, a.logger, err)
-
-		return
-	}
-
-	response := transferResponse{
-		TransactionID:    result.TransactionID.String(),
-		FromBalanceCents: int64(result.FromBalance.Cents()),
-		CreatedAt:        result.CreatedAt.UTC(),
-	}
-	a.respondWritten(w, r, response)
-}
-
-// respondWritten answers a write that is already applied. FP02 sits here:
-// dying now leaves the client without an answer for a committed write (FC02).
-func (a apiHandlers) respondWritten(w http.ResponseWriter, r *http.Request, body any) {
-	err := failpoint.Hit(r.Context(), failpoint.APIAfterCommitBeforeResponse)
-	if err != nil {
-		writeError(w, r, a.logger, err)
-
-		return
-	}
-
-	writeJSON(w, http.StatusCreated, body)
-}
-
-func depositInputOf(w http.ResponseWriter, r *http.Request) (application.DepositInput, error) {
-	write, err := writeContextOf(r)
-	if err != nil {
-		return application.DepositInput{}, err
-	}
-
-	var request depositRequest
-
-	err = decodeBody(w, r, &request)
-	if err != nil {
-		return application.DepositInput{}, err
-	}
-
-	accountID, err := ledger.ParseAccountID(request.AccountID)
-	if err != nil {
-		return application.DepositInput{}, err
-	}
-
-	amount, err := money.NewAmount(money.Cents(request.AmountCents))
-	if err != nil {
-		return application.DepositInput{}, err
-	}
-
-	return application.DepositInput{AccountID: accountID, Amount: amount, Write: write}, nil
-}
-
-func transferInputOf(w http.ResponseWriter, r *http.Request) (application.TransferInput, error) {
-	write, err := writeContextOf(r)
-	if err != nil {
-		return application.TransferInput{}, err
-	}
-
-	var request transferRequest
-
-	err = decodeBody(w, r, &request)
-	if err != nil {
-		return application.TransferInput{}, err
-	}
-
-	from, err := ledger.ParseAccountID(request.FromAccountID)
-	if err != nil {
-		return application.TransferInput{}, err
-	}
-
-	to, err := ledger.ParseAccountID(request.ToAccountID)
-	if err != nil {
-		return application.TransferInput{}, err
-	}
-
-	amount, err := money.NewAmount(money.Cents(request.AmountCents))
-	if err != nil {
-		return application.TransferInput{}, err
-	}
-
-	return application.TransferInput{From: from, To: to, Amount: amount, Write: write}, nil
-}
-
-func writeContextOf(r *http.Request) (application.WriteContext, error) {
-	key, err := idempotency.ParseKey(r.Header.Get(idempotencyHeader))
-	if err != nil {
-		return application.WriteContext{}, err
-	}
-
-	return application.WriteContext{Key: key, CorrelationID: correlationIDFrom(r.Context())}, nil
-}
-
 func statementQueryOf(r *http.Request) (application.StatementQuery, error) {
 	accountID, err := ledger.ParseAccountID(r.PathValue("id"))
 	if err != nil {
@@ -347,24 +165,6 @@ func intParam(raw string, fallback int) (int, error) {
 	}
 
 	return value, nil
-}
-
-// decodeBody reads one JSON object, refusing unknown fields and oversized bodies.
-func decodeBody(w http.ResponseWriter, r *http.Request, target any) error {
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodyBytes))
-	decoder.DisallowUnknownFields()
-
-	err := decoder.Decode(target)
-	if err != nil {
-		return fmt.Errorf("%w: body must be a JSON object with the documented fields", errValidation)
-	}
-
-	hasTrailingData := decoder.More()
-	if hasTrailingData {
-		return fmt.Errorf("%w: body must hold a single JSON object", errValidation)
-	}
-
-	return nil
 }
 
 func newAccountResponse(view application.AccountView) accountResponse {

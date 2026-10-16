@@ -71,6 +71,8 @@ type Stores interface {
 	PositionStore
 	PositionLocker
 	LedgerWriter
+	KeyStore
+	CustomerCreator
 }
 
 // UnitOfWork runs fn with stores whose writes commit together (D1) or one by
@@ -113,15 +115,11 @@ type WriteContext struct {
 	CorrelationID string
 }
 
-func newTransaction(kind ledger.TransactionKind, write WriteContext) (ledger.Transaction, error) {
+// newTransaction ties the ledger transaction to the operation; with D3 the
+// operation id comes from the idempotency key, without it every request is
+// a new operation and the key is only recorded as client_ref.
+func newTransaction(kind ledger.TransactionKind, write WriteContext, operationID ledger.OperationID) (ledger.Transaction, error) {
 	transactionID, err := ledger.NewTransactionID()
-	if err != nil {
-		return ledger.Transaction{}, err
-	}
-
-	// The naive bank executes every request as a new operation: the key is
-	// recorded, never checked.
-	operationID, err := ledger.NewOperationID()
 	if err != nil {
 		return ledger.Transaction{}, err
 	}

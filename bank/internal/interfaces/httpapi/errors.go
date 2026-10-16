@@ -24,6 +24,10 @@ const (
 	codeSameAccountTransfer    errorCode = "SAME_ACCOUNT_TRANSFER"
 	codeInsufficientFunds      errorCode = "INSUFFICIENT_FUNDS"
 	codeAmountAboveLimit       errorCode = "AMOUNT_ABOVE_LIMIT"
+	codeKeyMismatch            errorCode = "IDEMPOTENCY_KEY_MISMATCH"
+	codeOperationVoided        errorCode = "OPERATION_VOIDED"
+	codeRequestInProgress      errorCode = "REQUEST_IN_PROGRESS"
+	codeOutcomeUnknown         errorCode = "OUTCOME_UNKNOWN"
 	codeTemporarilyUnavailable errorCode = "TEMPORARILY_UNAVAILABLE"
 	codeInternal               errorCode = "INTERNAL"
 )
@@ -55,6 +59,19 @@ var errorMappings = []errorMapping{
 	{target: ledger.ErrSameAccount, status: http.StatusUnprocessableEntity, code: codeSameAccountTransfer},
 	{target: ledger.ErrInsufficientFunds, status: http.StatusUnprocessableEntity, code: codeInsufficientFunds},
 	{target: money.ErrAmountAboveLimit, status: http.StatusUnprocessableEntity, code: codeAmountAboveLimit},
+	{target: idempotency.ErrKeyMismatch, status: http.StatusUnprocessableEntity, code: codeKeyMismatch},
+	{target: idempotency.ErrOperationVoided, status: http.StatusConflict, code: codeOperationVoided},
+	{target: idempotency.ErrRequestInProgress, status: http.StatusConflict, code: codeRequestInProgress},
+	{target: application.ErrOutcomeUnknown, status: http.StatusServiceUnavailable, code: codeOutcomeUnknown},
+	{target: application.ErrTransient, status: http.StatusServiceUnavailable, code: codeTemporarilyUnavailable},
+	{target: application.ErrUnavailable, status: http.StatusServiceUnavailable, code: codeTemporarilyUnavailable},
+}
+
+// fixedMessages replace the error text of 5xx codes: their causes are
+// internal and never reach the client.
+var fixedMessages = map[errorCode]string{
+	codeOutcomeUnknown:         "the bank could not confirm whether the write was applied; resolve the operation or retry with the same key",
+	codeTemporarilyUnavailable: unavailableMessage,
 }
 
 type errorBody struct {
@@ -80,6 +97,13 @@ func writeError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, err
 
 		detail.Code = mapping.code
 		detail.Message = err.Error()
+
+		fixed, isFixed := fixedMessages[mapping.code]
+		if isFixed {
+			logger.WarnContext(ctx, "request outcome uncertain", "correlation_id", detail.CorrelationID, "code", mapping.code, "error", err)
+			detail.Message = fixed
+		}
+
 		writeJSON(w, mapping.status, errorBody{Error: detail})
 
 		return

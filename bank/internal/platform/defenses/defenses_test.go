@@ -113,13 +113,14 @@ func TestProfile_AnyDisabledSet_RoundTripsThroughCanonicalString(t *testing.T) {
 	})
 }
 
-func TestNotes_ExplainLockingWithoutTransactions(t *testing.T) {
+func TestNotes_ExplainDefensesThatNeedTransactions(t *testing.T) {
 	weakened, err := defenses.ParseProfile("robust,-atomic_ledger")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(weakened.Notes()) != 1 {
+	// Both balance_locking and idempotency depend on atomic_ledger.
+	if len(weakened.Notes()) != 2 {
 		t.Fatalf("notes for %s: %v", weakened, weakened.Notes())
 	}
 

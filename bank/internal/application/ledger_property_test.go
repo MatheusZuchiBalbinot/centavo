@@ -97,6 +97,24 @@ func (m *memoryLedger) InsertEntry(_ context.Context, entry ledger.Entry) error 
 	return nil
 }
 
+// The property exercises money movement; keys and account creation are
+// covered by the integration tests.
+func (m *memoryLedger) ClaimKey(context.Context, application.KeyClaim) (idempotency.Record, bool, error) {
+	return idempotency.Record{}, true, nil
+}
+
+func (m *memoryLedger) CompleteKey(context.Context, idempotency.Key, ledger.OperationID, idempotency.StoredResponse) error {
+	return nil
+}
+
+func (m *memoryLedger) VoidKey(context.Context, idempotency.Key) (idempotency.Record, bool, error) {
+	return idempotency.Record{}, true, nil
+}
+
+func (m *memoryLedger) CreateCustomer(context.Context, ledger.Account) (time.Time, error) {
+	return time.Unix(0, 0), nil
+}
+
 func (m *memoryLedger) openAccount() ledger.AccountID {
 	id, err := ledger.NewAccountID()
 	if err != nil {

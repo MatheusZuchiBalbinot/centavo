@@ -92,7 +92,7 @@ func TestInternalTransfer_CrashBetweenDebitAndCredit_LeavesNoPartialEntries(t *t
 	}{
 		{name: "robust: the crash rolls everything back", transfer: func(b bank) application.TransferInternal { return b.transfer }},
 		{name: "without atomic_ledger: the debit stays", transfer: func(b bank) application.TransferInternal {
-			useSchema(t, schema{hasAtomicLedger: false, hasBalanceLocking: true})
+			useSchema(t, schema{hasAtomicLedger: false, hasBalanceLocking: true, hasIdempotency: false})
 
 			return application.NewTransferInternal(naiveMoney(t, b, "robust,-atomic_ledger"))
 		}, wantPartialLeft: true},

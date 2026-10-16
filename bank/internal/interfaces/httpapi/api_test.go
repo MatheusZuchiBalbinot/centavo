@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"centavo/bank/internal/application"
+	"centavo/bank/internal/domain/idempotency"
 	"centavo/bank/internal/domain/ledger"
 	"centavo/bank/internal/domain/money"
 	"centavo/bank/internal/interfaces/httpapi"
@@ -28,7 +30,7 @@ type fakeTransfer struct {
 	err      error
 }
 
-func (f *fakeTransfer) Execute(_ context.Context, input application.TransferInput) (application.TransferResult, error) {
+func (f *fakeTransfer) Apply(_ context.Context, _ application.Stores, _ ledger.OperationID, input application.TransferInput) (application.TransferResult, error) {
 	f.received = input
 
 	return f.result, f.err
@@ -38,8 +40,37 @@ type fakeDeposit struct {
 	err error
 }
 
-func (f fakeDeposit) Execute(_ context.Context, input application.DepositInput) (application.DepositResult, error) {
+func (f fakeDeposit) Apply(_ context.Context, _ application.Stores, _ ledger.OperationID, input application.DepositInput) (application.DepositResult, error) {
 	return application.DepositResult{Balance: money.NewBalance(input.Amount.Cents())}, f.err
+}
+
+// fakeWriter runs the write once, as a naive writer without storage would;
+// the key semantics are covered by the integration tests.
+type fakeWriter struct {
+	lastWrite application.Write
+	err       error
+}
+
+func (f *fakeWriter) Execute(ctx context.Context, write application.Write) (idempotency.StoredResponse, error) {
+	f.lastWrite = write
+
+	if f.err != nil {
+		return idempotency.StoredResponse{}, f.err
+	}
+
+	return write.Apply(ctx, nil, ledger.OperationID{})
+}
+
+type fakeResolver struct{}
+
+func (fakeResolver) Resolve(_ context.Context, key idempotency.Key) (application.Resolution, error) {
+	if key == "r0001-p01-000404" {
+		return application.Resolution{Outcome: idempotency.OutcomeVoided}, nil
+	}
+
+	stored := idempotency.StoredResponse{Status: 201, Body: []byte(`{"transaction_id":"t"}`)}
+
+	return application.Resolution{Outcome: idempotency.OutcomeApplied, Response: &stored}, nil
 }
 
 type fakeStatement struct {
@@ -60,7 +91,7 @@ func (unusedAccounts) Execute(context.Context, ledger.AccountID) (application.Ac
 
 type fakeOpenAccount struct{}
 
-func (fakeOpenAccount) Execute(_ context.Context, holderName string) (application.AccountView, error) {
+func (fakeOpenAccount) Apply(_ context.Context, _ application.CustomerCreator, holderName string) (application.AccountView, error) {
 	name, err := ledger.ParseHolderName(holderName)
 
 	return application.AccountView{Account: ledger.Account{HolderName: name}}, err
@@ -70,12 +101,16 @@ type apiFixture struct {
 	handler   http.Handler
 	transfer  *fakeTransfer
 	statement *fakeStatement
+	writer    *fakeWriter
 }
 
 func newFixture(depositErr error) apiFixture {
 	transfer := &fakeTransfer{}
 	statement := &fakeStatement{}
+	writer := &fakeWriter{}
 	useCases := httpapi.UseCases{
+		Writer:       writer,
+		Resolver:     fakeResolver{},
 		OpenAccount:  fakeOpenAccount{},
 		GetAccount:   unusedAccounts{},
 		GetStatement: statement,
@@ -84,7 +119,7 @@ func newFixture(depositErr error) apiFixture {
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	return apiFixture{handler: httpapi.NewAPIHandler(useCases, logger), transfer: transfer, statement: statement}
+	return apiFixture{handler: httpapi.NewAPIHandler(useCases, logger), transfer: transfer, statement: statement, writer: writer}
 }
 
 type apiRequest struct {
@@ -279,5 +314,75 @@ func TestStatement_ParsesQueryParameters(t *testing.T) {
 				t.Fatalf("an empty page must be an empty list: %s", recorder.Body)
 			}
 		})
+	}
+}
+
+func TestWrites_MapIdempotencyOutcomes(t *testing.T) {
+	from, _ := newAccountIDs(t)
+	body := `{"account_id": "` + from + `", "amount_cents": 10}`
+	headers := map[string]string{"Idempotency-Key": validKey}
+
+	cases := []struct {
+		name       string
+		err        error
+		wantStatus int
+		wantCode   string
+	}{
+		{name: "reused key", err: idempotency.ErrKeyMismatch, wantStatus: 422, wantCode: "IDEMPOTENCY_KEY_MISMATCH"},
+		{name: "voided key", err: idempotency.ErrOperationVoided, wantStatus: 409, wantCode: "OPERATION_VOIDED"},
+		{name: "key in use", err: idempotency.ErrRequestInProgress, wantStatus: 409, wantCode: "REQUEST_IN_PROGRESS"},
+		{name: "ambiguous commit", err: fmt.Errorf("%w: unexpected EOF from 10.0.0.5", application.ErrOutcomeUnknown), wantStatus: 503, wantCode: "OUTCOME_UNKNOWN"},
+		{name: "retries exhausted", err: application.ErrTransient, wantStatus: 503, wantCode: "TEMPORARILY_UNAVAILABLE"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fixture := newFixture(nil)
+			fixture.writer.err = tc.err
+
+			recorder := fixture.do(t, apiRequest{method: http.MethodPost, path: "/v1/deposits", body: body, headers: headers})
+
+			envelope := decodeError(t, recorder)
+			if recorder.Code != tc.wantStatus || envelope.Error.Code != tc.wantCode {
+				t.Fatalf("got %d %s, want %d %s", recorder.Code, envelope.Error.Code, tc.wantStatus, tc.wantCode)
+			}
+
+			if strings.Contains(envelope.Error.Message, "10.0.0.5") {
+				t.Fatalf("the message leaks the cause: %q", envelope.Error.Message)
+			}
+		})
+	}
+}
+
+func TestWrites_BindTheKeyToTheEndpointAndRawBody(t *testing.T) {
+	fixture := newFixture(nil)
+	from, _ := newAccountIDs(t)
+	body := `{"account_id": "` + from + `", "amount_cents": 10}`
+
+	fixture.do(t, apiRequest{method: http.MethodPost, path: "/v1/deposits", body: body, headers: map[string]string{"Idempotency-Key": validKey}})
+
+	write := fixture.writer.lastWrite
+	isBound := string(write.Key) == validKey && write.Endpoint == "/v1/deposits" && write.RequestHash == idempotency.HashRequest("/v1/deposits", []byte(body))
+	if !isBound {
+		t.Fatalf("write: key %q endpoint %q", write.Key, write.Endpoint)
+	}
+}
+
+func TestResolve_AnswersAppliedOrVoided(t *testing.T) {
+	fixture := newFixture(nil)
+
+	applied := fixture.do(t, apiRequest{method: http.MethodPost, path: "/v1/operations/" + validKey + "/resolve"})
+	if applied.Code != http.StatusOK || !strings.Contains(applied.Body.String(), `"outcome":"applied"`) || !strings.Contains(applied.Body.String(), `"transaction_id":"t"`) {
+		t.Fatalf("applied: %d %s", applied.Code, applied.Body)
+	}
+
+	voided := fixture.do(t, apiRequest{method: http.MethodPost, path: "/v1/operations/r0001-p01-000404/resolve"})
+	if voided.Code != http.StatusOK || !strings.Contains(voided.Body.String(), `"outcome":"voided"`) {
+		t.Fatalf("voided: %d %s", voided.Code, voided.Body)
+	}
+
+	invalid := fixture.do(t, apiRequest{method: http.MethodPost, path: "/v1/operations/short/resolve"})
+	if invalid.Code != http.StatusBadRequest {
+		t.Fatalf("invalid key: %d", invalid.Code)
 	}
 }

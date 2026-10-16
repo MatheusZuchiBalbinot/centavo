@@ -24,6 +24,7 @@ import (
 	"centavo/bank/internal/application"
 	"centavo/bank/internal/infrastructure/postgres"
 	"centavo/bank/internal/interfaces/httpapi"
+	"centavo/bank/internal/interfaces/workers"
 	"centavo/bank/internal/platform/buildinfo"
 	"centavo/bank/internal/platform/chaos"
 	"centavo/bank/internal/platform/chaosbuild"
@@ -168,7 +169,16 @@ func newUseCases(pool *pgxpool.Pool, profile defenses.Profile) (httpapi.UseCases
 		return httpapi.UseCases{}, err
 	}
 
+	idempotencyStrategy, err := newIdempotency(pool, profile, moneyDependencies.UnitOfWork)
+	if err != nil {
+		return httpapi.UseCases{}, err
+	}
+
+	writerDependencies := application.WriterDependencies{UnitOfWork: moneyDependencies.UnitOfWork, Keys: idempotencyStrategy.Keys, Retries: idempotencyStrategy.Retries}
+
 	useCases := httpapi.UseCases{
+		Writer:       application.NewWriter(writerDependencies),
+		Resolver:     idempotencyStrategy.Resolver,
 		OpenAccount:  application.NewOpenAccount(store),
 		GetAccount:   application.NewGetAccount(store),
 		GetStatement: application.NewGetStatement(store, store),
@@ -177,6 +187,17 @@ func newUseCases(pool *pgxpool.Pool, profile defenses.Profile) (httpapi.UseCases
 	}
 
 	return useCases, nil
+}
+
+// newIdempotency picks D3. Its key shares the commit of the effect, so it
+// needs D1: without atomic_ledger the naive variant runs (Profile.Notes says so).
+func newIdempotency(pool *pgxpool.Pool, profile defenses.Profile, unitOfWork application.UnitOfWork) (application.IdempotencyStrategy, error) {
+	isRobust := profile.IsEnabled(defenses.Idempotency) && profile.IsEnabled(defenses.AtomicLedger)
+	if isRobust {
+		return application.RobustIdempotency(unitOfWork), nil
+	}
+
+	return defenses.Naive[application.IdempotencyStrategy](defenses.Idempotency, defenses.Dependencies{Pool: pool})
 }
 
 // newMoneyDependencies is the composition root of docs/architecture.md,
@@ -229,6 +250,10 @@ func serveWorker(ctx context.Context, cfg config.Config, logger *slog.Logger) er
 	servers, err := withChaos(roleWorker, cfg, adminServer)
 	if err != nil {
 		return err
+	}
+
+	if cfg.Defenses.IsEnabled(defenses.Idempotency) {
+		go workers.CleanKeys(ctx, postgres.NewLedgerStore(pool), logger)
 	}
 
 	logger.InfoContext(ctx, "serving", "admin_addr", adminAddr)

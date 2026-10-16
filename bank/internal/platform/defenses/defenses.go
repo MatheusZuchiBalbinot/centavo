@@ -184,5 +184,10 @@ func (p Profile) Notes() []string {
 		notes = append(notes, "balance_locking without atomic_ledger: each row lock ends with its own statement, so it serializes nothing")
 	}
 
+	isKeyWithoutTransaction := p.IsEnabled(Idempotency) && !p.IsEnabled(AtomicLedger)
+	if isKeyWithoutTransaction {
+		notes = append(notes, "idempotency without atomic_ledger: the key cannot share a commit with the effect, so the naive variant runs")
+	}
+
 	return notes
 }
