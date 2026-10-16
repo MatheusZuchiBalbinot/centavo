@@ -156,6 +156,12 @@ services:
         VERSION: ${CENTAVO_VERSION:-dev}
     image: centavo-lab:local
     command: ["serve"]
+    environment:
+      # The load generator reaches the bank through Toxiproxy, like any client.
+      BANK_API_URL: http://toxiproxy:28080
+      ARTIFACT_STORE: file:///data/rounds
+    volumes:
+      - lab-data:/data
     ports:
       - "127.0.0.1:8090:8090"
     healthcheck:
@@ -174,3 +180,4 @@ networks:
 
 volumes:
   pgdata: {}
+  lab-data: {}
