@@ -70,14 +70,19 @@ workload:
 		to      string
 		wantErr string
 	}{
-		{name: "unknown field", from: "duration: 1m", to: "duration: 1m\nfaults: []", wantErr: "faults"},
+		{name: "unknown field", from: "duration: 1m", to: "duration: 1m\nexpect: {}", wantErr: "expect"},
 		{name: "wrong name", from: "name: demo", to: "name: other", wantErr: "declares name"},
 		{name: "bad duration", from: "duration: 1m", to: "duration: soon", wantErr: "duration"},
 		{name: "unknown profile", from: "ledger-only", to: "balanced", wantErr: "not implemented"},
 		{name: "no clients", from: "clients: 2", to: "clients: 0", wantErr: "clients"},
 		{name: "no rate", from: "rate_per_second: 5", to: "rate_per_second: 0", wantErr: "rate_per_second"},
 		{name: "too few exclusive accounts", from: "accounts: 4", to: "accounts: 3", wantErr: "at least 4"},
-		{name: "unknown client profile", from: "polite: 1.0", to: "duplicator: 1.0", wantErr: "duplicator"},
+		{name: "unknown client profile", from: "polite: 1.0", to: "aggressive: 1.0", wantErr: "aggressive"},
+		{name: "failpoint on the partner", from: "duration: 1m", to: "duration: 1m\nfaults:\n  - {id: f, kind: failpoint, targets: [partner], failpoint: api.after_commit_before_response, action: kill, probability: 0.1}", wantErr: "not allowed"},
+		{name: "failpoint without probability", from: "duration: 1m", to: "duration: 1m\nfaults:\n  - {id: f, kind: failpoint, targets: [bank-api], failpoint: api.after_commit_before_response, action: kill}", wantErr: "probability"},
+		{name: "unknown fault kind", from: "duration: 1m", to: "duration: 1m\nfaults:\n  - {id: f, kind: clock, targets: [bank-api]}", wantErr: "not implemented"},
+		{name: "repeated fault id", from: "duration: 1m", to: "duration: 1m\nfaults:\n  - {id: f, kind: process, targets: [bank-api], schedule: {type: poisson, mean_interval: 5s}}\n  - {id: f, kind: process, targets: [partner], schedule: {type: poisson, mean_interval: 5s}}", wantErr: "unique id"},
+		{name: "too frequent kills", from: "duration: 1m", to: "duration: 1m\nfaults:\n  - {id: f, kind: process, targets: [bank-api], schedule: {type: poisson, mean_interval: 10ms}}", wantErr: "mean_interval"},
 		{name: "zero weight", from: "polite: 1.0", to: "polite: 0", wantErr: "positive weight"},
 	}
 

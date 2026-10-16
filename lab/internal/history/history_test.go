@@ -28,7 +28,7 @@ func TestWriter_ConcurrentAppendsKeepIndexAndTimeInFileOrder(t *testing.T) {
 	for process := 1; process <= processes; process++ {
 		wg.Go(func() {
 			for range perProcess {
-				_, err := writer.AppendDurable(history.Record{Process: process, Type: history.TypeInvoke, F: history.FunctionReadBalance, Op: "op"})
+				_, err := writer.AppendDurable(history.Record{Process: history.Client(process), Type: history.TypeInvoke, F: history.FunctionReadBalance, Op: "op"})
 				if err != nil {
 					t.Error(err)
 				}
@@ -69,7 +69,7 @@ func TestWriter_DurableAppendIsOnDiskWhenItReturns(t *testing.T) {
 	}
 	defer closeWriter(t, writer)
 
-	written, err := writer.AppendDurable(history.Record{Process: 1, Type: history.TypeInvoke, F: history.FunctionDeposit, Op: "r0001-p01-000001"})
+	written, err := writer.AppendDurable(history.Record{Process: history.Client(1), Type: history.TypeInvoke, F: history.FunctionDeposit, Op: "r0001-p01-000001"})
 	if err != nil {
 		t.Fatal(err)
 	}

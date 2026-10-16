@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	mathrand "math/rand/v2"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -57,6 +59,9 @@ type Config struct {
 	BankURL  string
 	History  *history.Writer
 	Logger   *slog.Logger
+	// BeforeLoad runs once the accounts exist and before the load starts;
+	// the nemesis arms its faults here, so preparation never sees chaos.
+	BeforeLoad func(ctx context.Context) error
 }
 
 // weightedFunction is one slice of an operation mix.
@@ -105,6 +110,13 @@ func runWith(ctx context.Context, config Config, policy retryPolicy) error {
 	err := forEachClient(ctx, clients, (*client).prepare)
 	if err != nil {
 		return err
+	}
+
+	if config.BeforeLoad != nil {
+		err = config.BeforeLoad(ctx)
+		if err != nil {
+			return err
+		}
 	}
 
 	loadCtx, stopLoad := context.WithTimeout(ctx, config.Duration)
@@ -178,6 +190,7 @@ type client struct {
 	index    int
 	process  int
 	seq      int
+	profile  scenarios.ClientProfile
 	ops      *mathrand.Rand
 	amounts  *mathrand.Rand
 	picks    *mathrand.Rand
@@ -194,6 +207,7 @@ func (r *run) newClient(index int) *client {
 		run:      r,
 		index:    index,
 		process:  index + 1,
+		profile:  pickProfile(stream("workload.profiles"), r.config.Workload.ClientMix),
 		ops:      stream("workload.ops"),
 		amounts:  stream("workload.amounts"),
 		picks:    stream("workload.accounts"),
@@ -275,7 +289,7 @@ func (c *client) load(ctx, loadCtx context.Context, tokens <-chan struct{}) erro
 			return err
 		}
 
-		_, err = c.execute(ctx, op)
+		err = c.perform(ctx, op)
 		if err != nil {
 			return err
 		}
@@ -319,9 +333,20 @@ func (c *client) workingAccounts() []accountID {
 	return owned
 }
 
-// execute records the invoke, retries like a polite client and records how
-// the operation ended. It only returns an error when the history itself fails.
-func (c *client) execute(ctx context.Context, op operation) (attemptResult, error) {
+// perform runs a load operation the way the client's profile behaves.
+func (c *client) perform(ctx context.Context, op operation) error {
+	if c.profile == scenarios.ClientDuplicator {
+		return c.executeTwice(ctx, op)
+	}
+
+	_, err := c.execute(ctx, op)
+
+	return err
+}
+
+// invoke assigns the operation id, durably records the invoke and returns
+// the request to send (docs/invariants-and-checker.md, section 4.3).
+func (c *client) invoke(op operation) (string, request, error) {
 	c.seq++
 	opID := fmt.Sprintf("%s-p%02d-%06d", c.run.config.Round, c.process, c.seq)
 
@@ -331,14 +356,22 @@ func (c *client) execute(ctx context.Context, op operation) (attemptResult, erro
 		req.key = opID
 	}
 
-	writer := c.run.config.History
-	invoke := history.Record{Process: c.process, Type: history.TypeInvoke, F: op.function, Op: opID, Value: op.invokeValue}
+	invoke := history.Record{Process: history.Client(c.process), Type: history.TypeInvoke, F: op.function, Op: opID, Value: op.invokeValue}
 
-	_, err := writer.AppendDurable(invoke)
+	_, err := c.run.config.History.AppendDurable(invoke)
+
+	return opID, req, err
+}
+
+// execute records the invoke, retries like a polite client and records how
+// the operation ended. It only returns an error when the history itself fails.
+func (c *client) execute(ctx context.Context, op operation) (attemptResult, error) {
+	opID, req, err := c.invoke(op)
 	if err != nil {
 		return attemptResult{}, err
 	}
 
+	writer := c.run.config.History
 	policy := c.run.policy
 
 	opCtx, cancel := context.WithTimeout(ctx, policy.deadline)
@@ -352,7 +385,7 @@ func (c *client) execute(ctx context.Context, op operation) (attemptResult, erro
 			return result, c.complete(op, opID, attempt, result)
 		}
 
-		_, err := writer.Append(history.Record{Process: c.process, Type: history.TypeAttempt, Op: opID, N: attempt, Outcome: mustMarshal(result.outcome)})
+		_, err := writer.Append(history.Record{Process: history.Client(c.process), Type: history.TypeAttempt, Op: opID, N: attempt, Outcome: mustMarshal(result.outcome)})
 		if err != nil {
 			return attemptResult{}, err
 		}
@@ -364,9 +397,89 @@ func (c *client) execute(ctx context.Context, op operation) (attemptResult, erro
 	}
 }
 
+// duplicateCopies is how many times a duplicator sends each operation.
+const duplicateCopies = 2
+
+// executeTwice is the duplicator client of docs/chaos-bot.md, section 11:
+// the same request, with the same key, twice in parallel. One success is a
+// success; two definitive failures are a failure; anything else is info.
+func (c *client) executeTwice(ctx context.Context, op operation) error {
+	opID, req, err := c.invoke(op)
+	if err != nil {
+		return err
+	}
+
+	opCtx, cancel := context.WithTimeout(ctx, c.run.policy.deadline)
+	defer cancel()
+
+	var (
+		wg      sync.WaitGroup
+		results [duplicateCopies]attemptResult
+	)
+
+	for i := range results {
+		wg.Go(func() {
+			results[i] = c.run.bank.attempt(opCtx, req, c.run.policy.attemptTimeout, op.parse)
+		})
+	}
+
+	wg.Wait()
+
+	for i, result := range results {
+		if result.verdict == verdictSucceeded {
+			continue
+		}
+
+		_, err := c.run.config.History.Append(history.Record{Process: history.Client(c.process), Type: history.TypeAttempt, Op: opID, N: i + 1, Outcome: mustMarshal(result.outcome)})
+		if err != nil {
+			return err
+		}
+	}
+
+	return c.complete(op, opID, duplicateCopies, combineCopies(results[:]))
+}
+
+func combineCopies(results []attemptResult) attemptResult {
+	for _, result := range results {
+		if result.verdict == verdictSucceeded {
+			return result
+		}
+	}
+
+	for _, result := range results {
+		if result.verdict != verdictFailed {
+			return result
+		}
+	}
+
+	return results[0]
+}
+
+// pickProfile draws the client's behavior from the scenario's weighted mix.
+func pickProfile(stream *mathrand.Rand, mix map[scenarios.ClientProfile]float64) scenarios.ClientProfile {
+	profiles := slices.Sorted(maps.Keys(mix))
+
+	var total float64
+	for _, profile := range profiles {
+		total += mix[profile]
+	}
+
+	roll := stream.Float64() * total
+
+	for _, profile := range profiles {
+		if roll < mix[profile] {
+			return profile
+		}
+
+		roll -= mix[profile]
+	}
+
+	return profiles[len(profiles)-1]
+}
+
 // complete writes the ok, fail or info record; an info retires the process.
 func (c *client) complete(op operation, opID string, attempts int, result attemptResult) error {
-	record := history.Record{Process: c.process, F: op.function, Op: opID, Attempts: attempts}
+	record := history.Record{Process: history.Client(c.process), F: op.function, Op: opID, Attempts: attempts}
 
 	switch result.verdict {
 	case verdictSucceeded:

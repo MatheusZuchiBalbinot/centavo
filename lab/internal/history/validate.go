@@ -39,7 +39,7 @@ func (r Report) IsWellFormed() bool {
 }
 
 type openOperation struct {
-	process  int
+	process  Process
 	function Function
 }
 
@@ -49,8 +49,8 @@ type validator struct {
 	lastIndex      int64
 	open           map[string]openOperation
 	closed         map[string]bool
-	busyProcesses  map[int]string
-	retiredProcess map[int]bool
+	busyProcesses  map[Process]string
+	retiredProcess map[Process]bool
 }
 
 // Validate reads a whole history and checks its well-formedness.
@@ -58,8 +58,8 @@ func Validate(reader io.Reader) (Report, error) {
 	v := validator{
 		open:           map[string]openOperation{},
 		closed:         map[string]bool{},
-		busyProcesses:  map[int]string{},
-		retiredProcess: map[int]bool{},
+		busyProcesses:  map[Process]string{},
+		retiredProcess: map[Process]bool{},
 	}
 
 	scanner := bufio.NewScanner(reader)
@@ -96,6 +96,12 @@ func (v *validator) check(line []byte) {
 
 	v.checkEnvelope(record)
 
+	if record.Process.IsNemesis() {
+		v.checkNemesis(record)
+
+		return
+	}
+
 	switch record.Type {
 	case TypeInvoke:
 		v.checkInvoke(record)
@@ -124,6 +130,15 @@ func (v *validator) checkEnvelope(record Record) {
 	}
 }
 
+// checkNemesis accepts the chaos bot's records: always info, always naming
+// what was done, never part of a client operation.
+func (v *validator) checkNemesis(record Record) {
+	isWellFormed := record.Type == TypeInfo && record.F != "" && record.Op == ""
+	if !isWellFormed {
+		v.violate(record.Index, "nemesis record must be an info with f and without op")
+	}
+}
+
 func (v *validator) checkInvoke(record Record) {
 	v.report.Invocations++
 
@@ -136,12 +151,12 @@ func (v *validator) checkInvoke(record Record) {
 	}
 
 	if v.retiredProcess[record.Process] {
-		v.violate(record.Index, "process %d invoked %s after it was retired by an info", record.Process, record.Op)
+		v.violate(record.Index, "process %s invoked %s after it was retired by an info", record.Process, record.Op)
 	}
 
 	busyWith, isBusy := v.busyProcesses[record.Process]
 	if isBusy {
-		v.violate(record.Index, "process %d invoked %s while %s is still open", record.Process, record.Op, busyWith)
+		v.violate(record.Index, "process %s invoked %s while %s is still open", record.Process, record.Op, busyWith)
 	}
 
 	hasFunction := record.F != "" && record.Op != ""
@@ -162,7 +177,7 @@ func (v *validator) checkAttempt(record Record) {
 	}
 
 	if operation.process != record.Process {
-		v.violate(record.Index, "attempt of %s from process %d, invoked by %d", record.Op, record.Process, operation.process)
+		v.violate(record.Index, "attempt of %s from process %s, invoked by %s", record.Op, record.Process, operation.process)
 	}
 }
 
@@ -175,7 +190,7 @@ func (v *validator) checkCompletion(record Record) {
 	}
 
 	if operation.process != record.Process {
-		v.violate(record.Index, "%s of %s from process %d, invoked by %d", record.Type, record.Op, record.Process, operation.process)
+		v.violate(record.Index, "%s of %s from process %s, invoked by %s", record.Type, record.Op, record.Process, operation.process)
 	}
 
 	if operation.function != record.F {

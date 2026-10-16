@@ -124,12 +124,14 @@ func TestRun_RetriesWithTheSameKeyAndRetiresTheProcessAfterInfo(t *testing.T) {
 		}
 
 		if record.Type == history.TypeInfo {
-			retiredProcess[record.Process] = true
+			retiredProcess[record.Process.ClientNumber()] = true
 		}
 
-		hasNewProcess := record.Process > workload.Clients
-		if hasNewProcess && !strings.Contains(record.Op, fmt.Sprintf("-p%02d-", record.Process)) {
-			t.Fatalf("op %s does not carry its process %d", record.Op, record.Process)
+		process := record.Process.ClientNumber()
+
+		hasNewProcess := process > workload.Clients
+		if hasNewProcess && !strings.Contains(record.Op, fmt.Sprintf("-p%02d-", process)) {
+			t.Fatalf("op %s does not carry its process %d", record.Op, process)
 		}
 	}
 
@@ -142,10 +144,46 @@ func TestRun_RetriesWithTheSameKeyAndRetiresTheProcessAfterInfo(t *testing.T) {
 	}
 }
 
+func TestRun_DuplicatorSendsEveryWriteTwiceWithTheSameKey(t *testing.T) {
+	bank := newFakeBank()
+	server := httptest.NewServer(bank)
+	defer server.Close()
+
+	workload := scenarios.Workload{Profile: scenarios.ProfileLedgerOnly, Clients: 2, RatePerSecond: 200, Accounts: 4, ExclusiveAccounts: true}
+	workload.ClientMix = map[scenarios.ClientProfile]float64{scenarios.ClientDuplicator: 1}
+	report, path := runRound(t, server.URL, workload, fastPolicy)
+
+	if !report.IsWellFormed() || len(report.Open) != 0 {
+		t.Fatalf("history: %+v", report)
+	}
+
+	var loadWrites int
+
+	for _, record := range readHistory(t, path) {
+		isLoadWrite := record.Type == history.TypeOK && record.Attempts == duplicateCopies
+		if !isLoadWrite {
+			continue
+		}
+
+		loadWrites++
+
+		isWrite := record.F == history.FunctionDeposit || record.F == history.FunctionTransfer
+		if isWrite && bank.attemptsFor(record.Op) != duplicateCopies {
+			t.Fatalf("write %s reached the bank %d times", record.Op, bank.attemptsFor(record.Op))
+		}
+	}
+
+	if loadWrites == 0 {
+		t.Fatal("no duplicated operation in the load")
+	}
+}
+
 func runRound(t *testing.T, bankURL string, workload scenarios.Workload, policy retryPolicy) (history.Report, string) {
 	t.Helper()
 
-	workload.ClientMix = map[scenarios.ClientProfile]float64{scenarios.ClientPolite: 1}
+	if workload.ClientMix == nil {
+		workload.ClientMix = map[scenarios.ClientProfile]float64{scenarios.ClientPolite: 1}
+	}
 	path := filepath.Join(t.TempDir(), "history.jsonl")
 
 	writer, err := history.Create(path, "r0001")

@@ -74,9 +74,9 @@ func (b *roundBuilder) upcomingTransaction() string {
 // operation records an invoke and its completion, returning the op id.
 func (b *roundBuilder) operation(function history.Function, args any, result history.Type, value any) string {
 	op := b.newOp()
-	b.record(history.Record{Process: 1, Type: history.TypeInvoke, F: function, Op: op, Value: mustJSON(b.t, args)})
+	b.record(history.Record{Process: history.Client(1), Type: history.TypeInvoke, F: function, Op: op, Value: mustJSON(b.t, args)})
 
-	completion := history.Record{Process: 1, Type: result, F: function, Op: op}
+	completion := history.Record{Process: history.Client(1), Type: result, F: function, Op: op}
 	if value != nil {
 		completion.Value = mustJSON(b.t, value)
 	}

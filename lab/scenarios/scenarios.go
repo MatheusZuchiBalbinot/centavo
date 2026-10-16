@@ -31,7 +31,37 @@ const ProfileLedgerOnly Profile = "ledger-only"
 // ClientProfile is how a client behaves around timeouts and retries.
 type ClientProfile string
 
-const ClientPolite ClientProfile = "polite"
+const (
+	ClientPolite ClientProfile = "polite"
+	// ClientDuplicator sends each operation twice, in parallel, with the same key.
+	ClientDuplicator ClientProfile = "duplicator"
+)
+
+// FaultKind is the fault family of docs/chaos-bot.md, section 4.
+type FaultKind string
+
+const (
+	FaultFailpoint FaultKind = "failpoint"
+	FaultProcess   FaultKind = "process"
+)
+
+// ScheduleType is how a scheduled fault spreads over the round.
+type ScheduleType string
+
+const SchedulePoisson ScheduleType = "poisson"
+
+// Targets the bot may hit; failpoints live only in the bank processes.
+var (
+	processTargets   = []string{"bank-api", "bank-worker-1", "bank-worker-2", "partner"}
+	failpointTargets = []string{"bank-api", "bank-worker-1", "bank-worker-2"}
+	failpointActions = []string{"kill", "delay", "error", "panic"}
+	failpointPattern = regexp.MustCompile(`^[a-z_]+\.[a-z_]+$`)
+)
+
+const (
+	defaultHealTimeout = 2 * time.Minute
+	minMeanInterval    = time.Second
+)
 
 const (
 	maxClients       = 64
@@ -55,7 +85,9 @@ type Scenario struct {
 	Name        string
 	Description string
 	Duration    time.Duration
+	HealTimeout time.Duration
 	Workload    Workload
+	Faults      []Fault
 	// SHA256 identifies the exact YAML a round ran, for round.json.
 	SHA256 string
 }
@@ -70,11 +102,50 @@ type Workload struct {
 	ClientMix         map[ClientProfile]float64
 }
 
+// Fault is one fault of a scenario. Failpoint faults use Failpoint, Action,
+// Arg, Probability and MaxFires; process faults use Schedule.
+type Fault struct {
+	ID          string
+	Kind        FaultKind
+	Targets     []string
+	Failpoint   string
+	Action      string
+	Arg         string
+	Probability float64
+	MaxFires    int
+	Schedule    Schedule
+}
+
+// Schedule spreads a fault over the round.
+type Schedule struct {
+	Type         ScheduleType
+	MeanInterval time.Duration
+}
+
 type rawScenario struct {
 	Name        string      `yaml:"name"`
 	Description string      `yaml:"description"`
 	Duration    string      `yaml:"duration"`
+	HealTimeout string      `yaml:"heal_timeout"`
 	Workload    rawWorkload `yaml:"workload"`
+	Faults      []rawFault  `yaml:"faults"`
+}
+
+type rawFault struct {
+	ID          string      `yaml:"id"`
+	Kind        FaultKind   `yaml:"kind"`
+	Targets     []string    `yaml:"targets"`
+	Failpoint   string      `yaml:"failpoint"`
+	Action      string      `yaml:"action"`
+	Arg         string      `yaml:"arg"`
+	Probability float64     `yaml:"probability"`
+	MaxFires    int         `yaml:"max_fires"`
+	Schedule    rawSchedule `yaml:"schedule"`
+}
+
+type rawSchedule struct {
+	Type         ScheduleType `yaml:"type"`
+	MeanInterval string       `yaml:"mean_interval"`
 }
 
 type rawWorkload struct {
@@ -149,12 +220,121 @@ func validate(name string, raw rawScenario) (Scenario, error) {
 		return Scenario{}, fmt.Errorf("duration must be positive, such as 5m (got %q)", raw.Duration)
 	}
 
+	healTimeout, err := optionalDuration(raw.HealTimeout, defaultHealTimeout)
+	if err != nil {
+		return Scenario{}, fmt.Errorf("heal_timeout: %w", err)
+	}
+
 	workload, err := validateWorkload(raw.Workload)
 	if err != nil {
 		return Scenario{}, err
 	}
 
-	return Scenario{Name: raw.Name, Description: raw.Description, Duration: duration, Workload: workload}, nil
+	faults, err := validateFaults(raw.Faults)
+	if err != nil {
+		return Scenario{}, err
+	}
+
+	return Scenario{Name: raw.Name, Description: raw.Description, Duration: duration, HealTimeout: healTimeout, Workload: workload, Faults: faults}, nil
+}
+
+func optionalDuration(raw string, fallback time.Duration) (time.Duration, error) {
+	if raw == "" {
+		return fallback, nil
+	}
+
+	duration, err := time.ParseDuration(raw)
+	if err != nil || duration <= 0 {
+		return 0, fmt.Errorf("must be a positive duration (got %q)", raw)
+	}
+
+	return duration, nil
+}
+
+func validateFaults(raw []rawFault) ([]Fault, error) {
+	faults := make([]Fault, 0, len(raw))
+	seen := map[string]bool{}
+
+	for _, r := range raw {
+		if r.ID == "" || seen[r.ID] {
+			return nil, fmt.Errorf("every fault needs a unique id (got %q)", r.ID)
+		}
+
+		seen[r.ID] = true
+
+		fault, err := validateFault(r)
+		if err != nil {
+			return nil, fmt.Errorf("fault %s: %w", r.ID, err)
+		}
+
+		faults = append(faults, fault)
+	}
+
+	return faults, nil
+}
+
+func validateFault(r rawFault) (Fault, error) {
+	fault := Fault{ID: r.ID, Kind: r.Kind, Targets: slices.Clone(r.Targets)}
+
+	switch r.Kind {
+	case FaultFailpoint:
+		return validateFailpointFault(fault, r)
+	case FaultProcess:
+		return validateProcessFault(fault, r)
+	default:
+		return Fault{}, fmt.Errorf("kind %q is not implemented (known: %s, %s)", r.Kind, FaultFailpoint, FaultProcess)
+	}
+}
+
+func validateFailpointFault(fault Fault, r rawFault) (Fault, error) {
+	err := validateTargets(r.Targets, failpointTargets)
+	if err != nil {
+		return Fault{}, err
+	}
+
+	isValid := failpointPattern.MatchString(r.Failpoint) && slices.Contains(failpointActions, r.Action) && r.Probability > 0 && r.Probability <= 1 && r.MaxFires >= 0
+	if !isValid {
+		return Fault{}, errors.New("a failpoint fault needs failpoint, an action (kill, delay, error, panic), probability in (0, 1] and max_fires >= 0")
+	}
+
+	fault.Failpoint, fault.Action, fault.Arg = r.Failpoint, r.Action, r.Arg
+	fault.Probability, fault.MaxFires = r.Probability, r.MaxFires
+
+	return fault, nil
+}
+
+func validateProcessFault(fault Fault, r rawFault) (Fault, error) {
+	err := validateTargets(r.Targets, processTargets)
+	if err != nil {
+		return Fault{}, err
+	}
+
+	if r.Schedule.Type != SchedulePoisson {
+		return Fault{}, fmt.Errorf("schedule type %q is not implemented (known: %s)", r.Schedule.Type, SchedulePoisson)
+	}
+
+	mean, err := time.ParseDuration(r.Schedule.MeanInterval)
+	if err != nil || mean < minMeanInterval {
+		return Fault{}, fmt.Errorf("mean_interval must be at least %s", minMeanInterval)
+	}
+
+	fault.Schedule = Schedule{Type: r.Schedule.Type, MeanInterval: mean}
+
+	return fault, nil
+}
+
+func validateTargets(targets, allowed []string) error {
+	if len(targets) == 0 {
+		return errors.New("targets cannot be empty")
+	}
+
+	for _, target := range targets {
+		if !slices.Contains(allowed, target) {
+			return fmt.Errorf("target %q is not allowed here (allowed: %s)", target, strings.Join(allowed, ", "))
+		}
+	}
+
+	return nil
 }
 
 func validateWorkload(raw rawWorkload) (Workload, error) {
@@ -204,8 +384,9 @@ func validateClientMix(mix map[ClientProfile]float64) error {
 	}
 
 	for _, profile := range slices.Sorted(maps.Keys(mix)) {
-		if profile != ClientPolite {
-			return fmt.Errorf("client profile %q is not implemented (known: %s)", profile, ClientPolite)
+		isKnown := profile == ClientPolite || profile == ClientDuplicator
+		if !isKnown {
+			return fmt.Errorf("client profile %q is not implemented (known: %s, %s)", profile, ClientPolite, ClientDuplicator)
 		}
 
 		if mix[profile] <= 0 {
