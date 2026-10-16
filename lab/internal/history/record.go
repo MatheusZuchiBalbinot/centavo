@@ -25,6 +25,8 @@ const (
 	FunctionTransfer      Function = "transfer"
 	FunctionReadBalance   Function = "read_balance"
 	FunctionReadStatement Function = "read_statement"
+	// FunctionResolve asks the bank how an indeterminate write ended.
+	FunctionResolve Function = "resolve"
 )
 
 // What the nemesis records: injections, the cure and fired failpoints.

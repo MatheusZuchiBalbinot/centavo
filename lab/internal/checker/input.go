@@ -63,6 +63,20 @@ type statementValue struct {
 	Entries []statementEntry `json:"entries"`
 }
 
+type resolveArgs struct {
+	Key string `json:"key"`
+}
+
+type resolveValue struct {
+	Outcome string `json:"outcome"`
+}
+
+// Outcomes resolve can give.
+const (
+	outcomeApplied = "applied"
+	outcomeVoided  = "voided"
+)
+
 type statementEntry struct {
 	AccountSeq        int64 `json:"account_seq"`
 	AmountCents       int64 `json:"amount_cents"`
@@ -81,10 +95,12 @@ type operations struct {
 	byID    map[string]*operation
 	ordered []*operation
 	lastT   int64
+	// resolutions are the answers resolve gave for each key, in order.
+	resolutions map[string][]string
 }
 
 func indexOperations(records []history.Record) operations {
-	index := operations{byID: map[string]*operation{}}
+	index := operations{byID: map[string]*operation{}, resolutions: map[string][]string{}}
 
 	for _, record := range records {
 		index.lastT = max(index.lastT, record.TimeNS)
@@ -108,7 +124,38 @@ func indexOperations(records []history.Record) operations {
 		}
 	}
 
+	index.indexResolutions()
+
 	return index
+}
+
+// indexResolutions collects what every successful resolve answered.
+func (ops operations) indexResolutions() {
+	for _, o := range ops.ordered {
+		isAnswered := o.function == history.FunctionResolve && o.result == history.TypeOK
+		if !isAnswered {
+			continue
+		}
+
+		var args resolveArgs
+		_ = json.Unmarshal(o.args, &args)
+
+		var value resolveValue
+		_ = json.Unmarshal(o.value, &value)
+
+		ops.resolutions[args.Key] = append(ops.resolutions[args.Key], value.Outcome)
+	}
+}
+
+// resolutionOf is the single answer resolve gave for a key, and whether
+// there is one at all; answers that disagree are a violation of their own.
+func (ops operations) resolutionOf(key string) (string, bool) {
+	answers := ops.resolutions[key]
+	if len(answers) == 0 {
+		return "", false
+	}
+
+	return answers[0], true
 }
 
 // timeOf places a ledger transaction in time through the operation that

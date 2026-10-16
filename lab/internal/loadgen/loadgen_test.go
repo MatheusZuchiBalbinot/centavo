@@ -178,6 +178,84 @@ func TestRun_DuplicatorSendsEveryWriteTwiceWithTheSameKey(t *testing.T) {
 	}
 }
 
+func TestRun_BuggyClientsAlternateKeysAndAggressiveOnesRetryAtOnce(t *testing.T) {
+	bank := newFakeBank()
+	bank.enforcesKeys = true
+	server := httptest.NewServer(bank)
+	defer server.Close()
+
+	workload := scenarios.Workload{Profile: scenarios.ProfileLedgerOnly, Clients: 2, RatePerSecond: 300, Accounts: 4, ExclusiveAccounts: true}
+	workload.ClientMix = map[scenarios.ClientProfile]float64{scenarios.ClientBuggy: 1}
+	report, path := runRound(t, server.URL, workload, fastPolicy)
+
+	if !report.IsWellFormed() || len(report.Open) != 0 {
+		t.Fatalf("history: %+v", report)
+	}
+
+	var reused, refused int
+
+	for _, record := range readHistory(t, path) {
+		if record.Type == history.TypeInvoke && strings.Contains(string(record.Value), "reused_key") {
+			reused++
+		}
+
+		if record.Type == history.TypeFail && strings.Contains(string(record.Error), "IDEMPOTENCY_KEY_MISMATCH") {
+			refused++
+		}
+	}
+
+	if reused == 0 || refused != reused {
+		t.Fatalf("buggy writes: %d reused a key, %d were refused; want every reuse refused", reused, refused)
+	}
+
+	if aggressivePolicy.maxRetries != 20 || aggressivePolicy.backoffCap != 0 {
+		t.Fatalf("aggressive policy: %+v", aggressivePolicy)
+	}
+}
+
+func TestResolve_RecordsOneResolvePerKeyInItsOwnProcesses(t *testing.T) {
+	bank := newFakeBank()
+	server := httptest.NewServer(bank)
+	defer server.Close()
+
+	path := filepath.Join(t.TempDir(), "history.jsonl")
+
+	writer, err := history.Create(path, "r0001")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	keys := []string{"r0001-p01-000001", "r0001-p02-000009"}
+	config := ResolveConfig{Round: "r0001", Seed: seed.Seed(7), ControlURL: server.URL, History: writer, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), Keys: keys, FirstProcess: 50}
+
+	err = Resolve(t.Context(), config)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = writer.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, key := range keys {
+		if bank.resolved[key] == 0 {
+			t.Fatalf("key %s was never resolved", key)
+		}
+	}
+
+	for _, record := range readHistory(t, path) {
+		isResolveRecord := record.F == history.FunctionResolve && record.Process.ClientNumber() >= 50
+		if !isResolveRecord {
+			t.Fatalf("record outside the resolve processes: %+v", record)
+		}
+
+		if record.Type == history.TypeInvoke && bank.attemptsFor(record.Op) != 0 {
+			t.Fatalf("resolve %s carried an Idempotency-Key", record.Op)
+		}
+	}
+}
+
 func runRound(t *testing.T, bankURL string, workload scenarios.Workload, policy retryPolicy) (history.Report, string) {
 	t.Helper()
 
@@ -201,7 +279,7 @@ func runRound(t *testing.T, bankURL string, workload scenarios.Workload, policy 
 		Logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 
-	err = runWith(t.Context(), config, policy)
+	_, err = runWith(t.Context(), config, policy)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,16 +358,20 @@ func readHistory(t *testing.T, path string) []history.Record {
 type fakeBank struct {
 	failFirstAttempt    bool
 	alwaysFailTransfers bool
+	// enforcesKeys refuses a key reused with another body, like D3.
+	enforcesKeys bool
 
 	mu           sync.Mutex
 	nextID       int
 	balances     map[string]int64
 	attempts     map[string]int
 	correlations map[string]bool
+	bodies       map[string]string
+	resolved     map[string]int
 }
 
 func newFakeBank() *fakeBank {
-	return &fakeBank{balances: map[string]int64{}, attempts: map[string]int{}, correlations: map[string]bool{}}
+	return &fakeBank{balances: map[string]int64{}, attempts: map[string]int{}, correlations: map[string]bool{}, bodies: map[string]string{}, resolved: map[string]int{}}
 }
 
 func (b *fakeBank) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -301,6 +383,28 @@ func (b *fakeBank) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	key := r.Header.Get("Idempotency-Key")
 	if key != "" {
 		b.attempts[key]++
+	}
+
+	if strings.HasSuffix(r.URL.Path, "/resolve") {
+		resolvedKey := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/v1/operations/"), "/resolve")
+		b.resolved[resolvedKey]++
+		writeFake(w, http.StatusOK, `{"key": "`+resolvedKey+`", "outcome": "voided"}`)
+
+		return
+	}
+
+	if b.enforcesKeys && key != "" {
+		body, _ := io.ReadAll(r.Body)
+		r.Body = io.NopCloser(strings.NewReader(string(body)))
+
+		previous, isKnown := b.bodies[key]
+		if isKnown && previous != string(body) {
+			writeFake(w, http.StatusUnprocessableEntity, `{"error": {"code": "IDEMPOTENCY_KEY_MISMATCH"}}`)
+
+			return
+		}
+
+		b.bodies[key] = string(body)
 	}
 
 	isFirstAttempt := key != "" && b.attempts[key] == 1

@@ -77,7 +77,7 @@ workload:
 		{name: "no clients", from: "clients: 2", to: "clients: 0", wantErr: "clients"},
 		{name: "no rate", from: "rate_per_second: 5", to: "rate_per_second: 0", wantErr: "rate_per_second"},
 		{name: "too few exclusive accounts", from: "accounts: 4", to: "accounts: 3", wantErr: "at least 4"},
-		{name: "unknown client profile", from: "polite: 1.0", to: "aggressive: 1.0", wantErr: "aggressive"},
+		{name: "unknown client profile", from: "polite: 1.0", to: "impatient: 1.0", wantErr: "impatient"},
 		{name: "failpoint on the partner", from: "duration: 1m", to: "duration: 1m\nfaults:\n  - {id: f, kind: failpoint, targets: [partner], failpoint: api.after_commit_before_response, action: kill, probability: 0.1}", wantErr: "not allowed"},
 		{name: "failpoint without probability", from: "duration: 1m", to: "duration: 1m\nfaults:\n  - {id: f, kind: failpoint, targets: [bank-api], failpoint: api.after_commit_before_response, action: kill}", wantErr: "probability"},
 		{name: "unknown fault kind", from: "duration: 1m", to: "duration: 1m\nfaults:\n  - {id: f, kind: clock, targets: [bank-api]}", wantErr: "not implemented"},

@@ -18,7 +18,7 @@ func lookupFrom(values map[string]string) config.LookupFunc {
 }
 
 func TestLoadRun(t *testing.T) {
-	valid := map[string]string{"BANK_API_URL": "http://toxiproxy:28080", "ARTIFACT_STORE": "file:///data/rounds/", "AUDITOR_DATABASE_URL": "postgres://bank_auditor:secret@postgres:5432/bank_robust", "CENTAVO_CHAOS_TOKEN": strings.Repeat("t", 64), "DOCKER_HOST": "tcp://docker-proxy:2375", "CENTAVO_COMPOSE_PROJECT": "centavo"}
+	valid := map[string]string{"BANK_API_URL": "http://toxiproxy:28080", "ARTIFACT_STORE": "file:///data/rounds/", "AUDITOR_DATABASE_URL": "postgres://bank_auditor:secret@postgres:5432/bank_robust", "CENTAVO_CHAOS_TOKEN": strings.Repeat("t", 64), "DOCKER_HOST": "tcp://docker-proxy:2375", "CENTAVO_COMPOSE_PROJECT": "centavo", "BANK_CONTROL_URL": "http://bank-api:8080"}
 
 	got, err := config.LoadRun(lookupFrom(valid))
 	if err != nil {

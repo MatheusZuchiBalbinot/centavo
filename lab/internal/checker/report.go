@@ -34,6 +34,7 @@ type Report struct {
 	Operations       OperationCounts   `json:"operations"`
 	Invariants       []InvariantResult `json:"invariants"`
 	ViolationCount   int               `json:"violation_count"`
+	Unresolved       []string          `json:"unresolved"`
 	ViolationsByRule map[Rule]int      `json:"violations_by_rule"`
 	ExampleByRule    map[Rule]string   `json:"example_by_rule"`
 	Violations       []Violation       `json:"violations"`
@@ -74,6 +75,7 @@ func newReport(meta roundMeta, result Result, events chaosEvents) Report {
 		Operations:       result.Operations,
 		Invariants:       result.Invariants,
 		ViolationCount:   len(result.Violations),
+		Unresolved:       append([]string{}, result.Unresolved...),
 		ViolationsByRule: byRule,
 		ExampleByRule:    examples,
 		Violations:       slices.Clone(reported),
@@ -223,6 +225,10 @@ func writeViolationSummary(b *strings.Builder, report Report) {
 func verdictTitle(report Report) string {
 	if report.Verdict == VerdictPass {
 		return "PASSOU"
+	}
+
+	if report.Verdict == VerdictInconclusive {
+		return fmt.Sprintf("INCONCLUSIVA (%d operações sem resolve)", len(report.Unresolved))
 	}
 
 	var failed []string

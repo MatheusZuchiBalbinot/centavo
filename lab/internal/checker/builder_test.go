@@ -131,6 +131,11 @@ func (b *roundBuilder) transfer(from, to string, amount int64) {
 	b.apply(op, snapshot.TransactionInternalTransfer, map[string]int64{from: -amount, to: amount})
 }
 
+// resolve records the cure's answer for an indeterminate operation.
+func (b *roundBuilder) resolve(op, outcome string) {
+	b.operation(history.FunctionResolve, resolveArgs{Key: op}, history.TypeOK, map[string]string{"key": op, "outcome": outcome})
+}
+
 // snapshot returns the export, with materialized balances that match the entries.
 func (b *roundBuilder) snapshot() snapshot.Snapshot {
 	s := b.snap

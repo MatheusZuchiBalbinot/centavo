@@ -35,7 +35,13 @@ const (
 	ClientPolite ClientProfile = "polite"
 	// ClientDuplicator sends each operation twice, in parallel, with the same key.
 	ClientDuplicator ClientProfile = "duplicator"
+	// ClientAggressive retries at once, up to 20 times, with the same key.
+	ClientAggressive ClientProfile = "aggressive"
+	// ClientBuggy reuses the previous operation's key with another body.
+	ClientBuggy ClientProfile = "buggy"
 )
+
+var clientProfiles = []ClientProfile{ClientPolite, ClientDuplicator, ClientAggressive, ClientBuggy}
 
 // FaultKind is the fault family of docs/chaos-bot.md, section 4.
 type FaultKind string
@@ -384,9 +390,8 @@ func validateClientMix(mix map[ClientProfile]float64) error {
 	}
 
 	for _, profile := range slices.Sorted(maps.Keys(mix)) {
-		isKnown := profile == ClientPolite || profile == ClientDuplicator
-		if !isKnown {
-			return fmt.Errorf("client profile %q is not implemented (known: %s, %s)", profile, ClientPolite, ClientDuplicator)
+		if !slices.Contains(clientProfiles, profile) {
+			return fmt.Errorf("client profile %q is not implemented (known: polite, duplicator, aggressive, buggy)", profile)
 		}
 
 		if mix[profile] <= 0 {

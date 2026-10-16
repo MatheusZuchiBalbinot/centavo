@@ -65,9 +65,16 @@ func generateRound(t *rapid.T) *roundBuilder {
 			b.operation(history.FunctionReadBalance, readBalanceArgs{AccountID: from}, history.TypeOK, readBalanceValue{BalanceCents: balance})
 		case 3:
 			op := b.operation(history.FunctionDeposit, depositArgs{AccountID: from, AmountCents: amount}, history.TypeInfo, nil)
-			if rapid.Bool().Draw(t, "info applied") {
+
+			isApplied := rapid.Bool().Draw(t, "info applied")
+			if isApplied {
 				b.apply(op, snapshot.TransactionDeposit, map[string]int64{from: amount, externalCash: -amount})
+				b.resolve(op, outcomeApplied)
+
+				continue
 			}
+
+			b.resolve(op, outcomeVoided)
 		}
 	}
 

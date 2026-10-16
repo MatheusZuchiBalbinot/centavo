@@ -62,21 +62,23 @@ const (
 
 // Exit codes; lab check uses the checker's own (docs/invariants-and-checker.md, section 7).
 const (
-	exitOK           = 0
-	exitError        = 1
-	exitUsage        = 2
-	exitRoundFailed  = 1
-	exitCheckerError = 3
+	exitOK                = 0
+	exitError             = 1
+	exitUsage             = 2
+	exitRoundFailed       = 1
+	exitRoundInconclusive = 2
+	exitCheckerError      = 3
 )
 
 const usage = "usage: lab serve | run --scenario <name> [--seed <seed>] [--duration <d>] | check --round <dir> | healthcheck"
 
 var (
-	errUnhealthy      = errors.New("health endpoint did not answer 200")
-	errUsage          = errors.New(usage)
-	errRoundIsDirty   = errors.New("the round history is malformed or has open operations")
-	errRoundFailed    = errors.New("the round broke invariants; see report.md")
-	errCheckerCrashed = errors.New("the checker could not finish")
+	errUnhealthy         = errors.New("health endpoint did not answer 200")
+	errUsage             = errors.New(usage)
+	errRoundIsDirty      = errors.New("the round history is malformed or has open operations")
+	errRoundFailed       = errors.New("the round broke invariants; see report.md")
+	errRoundInconclusive = errors.New("the round is inconclusive: some outcomes stayed unknown; see report.md")
+	errCheckerCrashed    = errors.New("the checker could not finish")
 )
 
 func main() {
@@ -111,6 +113,8 @@ func exitCodeOf(command string, err error) int {
 		return exitUsage
 	case errors.Is(err, errRoundFailed):
 		return exitRoundFailed
+	case errors.Is(err, errRoundInconclusive):
+		return exitRoundInconclusive
 	case command == commandCheck, errors.Is(err, errCheckerCrashed):
 		return exitCheckerError
 	default:
@@ -244,11 +248,18 @@ func runRound(ctx context.Context, args []string) error {
 		return errRoundIsDirty
 	}
 
-	if result.Verdict != checker.VerdictPass {
+	return verdictError(result.Verdict)
+}
+
+func verdictError(verdict checker.Verdict) error {
+	switch verdict {
+	case checker.VerdictPass:
+		return nil
+	case checker.VerdictInconclusive:
+		return errRoundInconclusive
+	default:
 		return errRoundFailed
 	}
-
-	return nil
 }
 
 // checkInSubprocess runs `lab check` in its own process with its own memory
@@ -273,6 +284,8 @@ func checkInSubprocess(ctx context.Context, roundDir string) (checker.Verdict, e
 		return checker.VerdictPass, nil
 	case errors.As(err, &exitErr) && exitErr.ExitCode() == exitRoundFailed:
 		return checker.VerdictFail, nil
+	case errors.As(err, &exitErr) && exitErr.ExitCode() == exitRoundInconclusive:
+		return checker.VerdictInconclusive, nil
 	default:
 		return "", fmt.Errorf("%w: %w", errCheckerCrashed, err)
 	}
@@ -293,13 +306,9 @@ func runCheck(args []string) error {
 		return err
 	}
 
-	fmt.Printf("verdict: %s (%d violations); report in %s\n", result.Verdict, len(result.Violations), *roundDir)
+	fmt.Printf("verdict: %s (%d violations, %d unresolved); report in %s\n", result.Verdict, len(result.Violations), len(result.Unresolved), *roundDir)
 
-	if result.Verdict != checker.VerdictPass {
-		return errRoundFailed
-	}
-
-	return nil
+	return verdictError(result.Verdict)
 }
 
 func roundOptions(flags runFlags, runConfig config.Run) (round.Options, error) {
@@ -321,6 +330,7 @@ func roundOptions(flags runFlags, runConfig config.Run) (round.Options, error) {
 		Scenario:   scenario,
 		Seed:       roundSeed,
 		BankURL:    runConfig.BankURL,
+		ControlURL: runConfig.ControlURL,
 		RoundsDir:  runConfig.RoundsDir,
 		LabVersion: buildinfo.Version(),
 		Logger:     newLogger(),

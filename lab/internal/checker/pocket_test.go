@@ -85,12 +85,68 @@ func TestPocket_IndeterminateAppliedTwice(t *testing.T) {
 	alice := b.createAccount()
 	op := b.operation(history.FunctionDeposit, depositArgs{AccountID: alice, AmountCents: 500}, history.TypeInfo, nil)
 	b.apply(op, snapshot.TransactionDeposit, map[string]int64{alice: 500, externalCash: -500})
+	b.resolve(op, outcomeApplied)
 
 	assertPasses(t, b.evaluate())
 
 	b.apply(op, snapshot.TransactionDeposit, map[string]int64{alice: 500, externalCash: -500})
 
 	assertBreaks(t, b.evaluate(), RuleI3AtMostOnce)
+}
+
+func TestPocket_ResolveMustMatchTheLedger(t *testing.T) {
+	b := newRoundBuilder(t)
+	alice := b.createAccount()
+	voidedButApplied := b.operation(history.FunctionDeposit, depositArgs{AccountID: alice, AmountCents: 500}, history.TypeInfo, nil)
+	b.apply(voidedButApplied, snapshot.TransactionDeposit, map[string]int64{alice: 500, externalCash: -500})
+	b.resolve(voidedButApplied, outcomeVoided)
+
+	assertBreaks(t, b.evaluate(), RuleI3Convergence)
+}
+
+func TestPocket_ResolveMustNotChangeItsMind(t *testing.T) {
+	b := newRoundBuilder(t)
+	alice := b.createAccount()
+	op := b.operation(history.FunctionDeposit, depositArgs{AccountID: alice, AmountCents: 500}, history.TypeInfo, nil)
+	b.resolve(op, outcomeVoided)
+	b.resolve(op, outcomeApplied)
+
+	assertBreaks(t, b.evaluate(), RuleI3Stability)
+}
+
+func TestPocket_UnresolvedMakesTheRoundInconclusive(t *testing.T) {
+	b := newRoundBuilder(t)
+	alice := b.createAccount()
+	b.operation(history.FunctionDeposit, depositArgs{AccountID: alice, AmountCents: 500}, history.TypeInfo, nil)
+
+	result := b.evaluate()
+	if result.Verdict != VerdictInconclusive || len(result.Unresolved) != 1 {
+		t.Fatalf("verdict %s, unresolved %v", result.Verdict, result.Unresolved)
+	}
+
+	b.resolve(b.records[len(b.records)-1].Op, outcomeVoided)
+
+	assertPasses(t, b.evaluate())
+}
+
+func TestPocket_ResolvedDepositsCloseTheDepositTermExactly(t *testing.T) {
+	b := newRoundBuilder(t)
+	alice := b.createAccount()
+	op := b.operation(history.FunctionDeposit, depositArgs{AccountID: alice, AmountCents: 500}, history.TypeInfo, nil)
+	b.resolve(op, outcomeVoided)
+
+	// Resolve voided the deposit, yet the ledger applied it: the deposit term
+	// and convergence both catch it.
+	s := b.snapshot()
+	s.Transactions = append(s.Transactions, snapshot.Transaction{ID: "tx-x", Kind: snapshot.TransactionDeposit, ClientRef: op})
+	s.Entries = append(s.Entries,
+		snapshot.Entry{ID: 900, TransactionID: "tx-x", AccountID: alice, AmountCents: 500, AccountSeq: 1, BalanceAfterCents: 500},
+		snapshot.Entry{ID: 901, TransactionID: "tx-x", AccountID: externalCash, AmountCents: -500, AccountSeq: 1, BalanceAfterCents: -500},
+	)
+	s.Balances = setBalance(s.Balances, alice, 500, 1)
+	s.Balances = setBalance(s.Balances, externalCash, -500, 1)
+
+	assertBreaks(t, Evaluate(b.records, s), RuleI1cDeposits, RuleI3Convergence)
 }
 
 func TestPocket_FailThatWasApplied(t *testing.T) {

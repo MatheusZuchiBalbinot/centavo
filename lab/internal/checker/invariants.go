@@ -36,6 +36,8 @@ const (
 	RuleI2Phantom           Rule = "I2.phantom"
 	RuleI2MissingAccount    Rule = "I2.missing_account"
 	RuleI3AtMostOnce        Rule = "I3.at_most_once"
+	RuleI3Convergence       Rule = "I3.convergence"
+	RuleI3Stability         Rule = "I3.stability"
 	RuleI4EntryBalance      Rule = "I4.entry_balance"
 	RuleI4RealBalance       Rule = "I4.real_balance"
 	RuleI4Materialized      Rule = "I4.materialized_balance"
@@ -59,6 +61,9 @@ type evaluation struct {
 	ops        operations
 	ledger     ledger
 	violations []Violation
+	// unresolved are indeterminate writes resolve never answered; they make
+	// a round inconclusive, never failed (docs/invariants-and-checker.md, section 8).
+	unresolved []string
 }
 
 func (e *evaluation) add(v Violation) {
@@ -257,11 +262,12 @@ func (e *evaluation) checkDepositTerm() {
 		var args depositArgs
 		_ = json.Unmarshal(o.args, &args)
 
-		switch {
-		case o.result == history.TypeOK:
+		switch e.depositStanding(o) {
+		case standingApplied:
 			confirmed += args.AmountCents
-		case o.result == history.TypeInfo || o.isOpen():
+		case standingUnknown:
 			uncertain += args.AmountCents
+		case standingNotApplied:
 		}
 	}
 
@@ -312,9 +318,71 @@ func (e *evaluation) checkWrite(o *operation) {
 		e.checkOKWrite(o, applications)
 	case o.result == history.TypeFail && len(applications) > 0:
 		e.add(e.opViolation(o, InvariantI2, RuleI2FailApplied, fmt.Sprintf("%s terminou em fail, mas foi aplicada %d vez(es)", o.function, len(applications))))
-	case (o.result == history.TypeInfo || o.isOpen()) && len(applications) > 1:
-		e.add(e.opViolation(o, InvariantI3, RuleI3AtMostOnce, fmt.Sprintf("%s indeterminada foi aplicada %d vezes", o.function, len(applications))))
+	case o.result == history.TypeInfo || o.isOpen():
+		e.checkIndeterminate(o, len(applications))
 	}
+}
+
+// checkIndeterminate is I3: at most one application, and resolve must agree
+// with the ledger and with itself.
+func (e *evaluation) checkIndeterminate(o *operation, applied int) {
+	if applied > 1 {
+		e.add(e.opViolation(o, InvariantI3, RuleI3AtMostOnce, fmt.Sprintf("%s indeterminada foi aplicada %d vezes", o.function, applied)))
+
+		return
+	}
+
+	answers := e.ops.resolutions[o.op]
+	if len(answers) == 0 {
+		e.unresolved = append(e.unresolved, o.op)
+
+		return
+	}
+
+	isStable := !slices.ContainsFunc(answers, func(answer string) bool { return answer != answers[0] })
+	if !isStable {
+		e.add(e.opViolation(o, InvariantI3, RuleI3Stability, fmt.Sprintf("resolve deu respostas diferentes para a mesma chave: %v", answers)))
+
+		return
+	}
+
+	isConvergent := (answers[0] == outcomeApplied) == (applied == 1)
+	if !isConvergent {
+		e.add(e.opViolation(o, InvariantI3, RuleI3Convergence, fmt.Sprintf("resolve respondeu %s, mas o ledger tem %d aplicação(ões)", answers[0], applied)))
+	}
+}
+
+// standing is what the round knows about whether a write applied.
+type standing int
+
+const (
+	standingNotApplied standing = iota
+	standingApplied
+	standingUnknown
+)
+
+// depositStanding settles an operation with its result and, for an info,
+// with resolve's answer.
+func (e *evaluation) depositStanding(o *operation) standing {
+	if o.result == history.TypeOK {
+		return standingApplied
+	}
+
+	isIndeterminate := o.result == history.TypeInfo || o.isOpen()
+	if !isIndeterminate {
+		return standingNotApplied
+	}
+
+	answer, isResolved := e.ops.resolutionOf(o.op)
+	if !isResolved {
+		return standingUnknown
+	}
+
+	if answer == outcomeApplied {
+		return standingApplied
+	}
+
+	return standingNotApplied
 }
 
 func (e *evaluation) checkOKWrite(o *operation, applications []snapshot.Transaction) {

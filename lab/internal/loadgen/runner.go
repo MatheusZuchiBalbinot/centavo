@@ -1,6 +1,7 @@
 package loadgen
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -35,6 +36,21 @@ var politePolicy = retryPolicy{
 	backoffBase:    100 * time.Millisecond,
 	backoffCap:     5 * time.Second,
 	deadline:       30 * time.Second,
+}
+
+// aggressivePolicy retries at once, up to 20 times, with the same key
+// (docs/chaos-bot.md, section 11).
+var aggressivePolicy = retryPolicy{
+	attemptTimeout: 2 * time.Second,
+	maxRetries:     20,
+	deadline:       30 * time.Second,
+}
+
+// Result is what the load leaves for the cure: the writes whose outcome is
+// unknown, to resolve, and the next free process number.
+type Result struct {
+	Indeterminate []string
+	NextProcess   int
 }
 
 // Amounts the workload draws, in cents.
@@ -85,15 +101,18 @@ type run struct {
 	bank        bankClient
 	nextProcess atomic.Int64
 	accounts    []accountID
+
+	mu            sync.Mutex
+	indeterminate []string
 }
 
 // Run prepares the accounts, then runs the workload for the configured
 // duration. Operations in flight when the time is up finish normally.
-func Run(ctx context.Context, config Config) error {
+func Run(ctx context.Context, config Config) (Result, error) {
 	return runWith(ctx, config, politePolicy)
 }
 
-func runWith(ctx context.Context, config Config, policy retryPolicy) error {
+func runWith(ctx context.Context, config Config, policy retryPolicy) (Result, error) {
 	r := &run{
 		config:   config,
 		policy:   policy,
@@ -109,13 +128,13 @@ func runWith(ctx context.Context, config Config, policy retryPolicy) error {
 
 	err := forEachClient(ctx, clients, (*client).prepare)
 	if err != nil {
-		return err
+		return r.result(), err
 	}
 
 	if config.BeforeLoad != nil {
 		err = config.BeforeLoad(ctx)
 		if err != nil {
-			return err
+			return r.result(), err
 		}
 	}
 
@@ -129,7 +148,24 @@ func runWith(ctx context.Context, config Config, policy retryPolicy) error {
 		return c.load(ctx, loadCtx, tokens)
 	}
 
-	return forEachClient(ctx, clients, runLoad)
+	err = forEachClient(ctx, clients, runLoad)
+
+	return r.result(), err
+}
+
+func (r *run) result() Result {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	return Result{Indeterminate: slices.Clone(r.indeterminate), NextProcess: int(r.nextProcess.Load()) + 1}
+}
+
+// noteIndeterminate keeps a write whose outcome the client does not know.
+func (r *run) noteIndeterminate(opID string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.indeterminate = append(r.indeterminate, opID)
 }
 
 // forEachClient runs step on every client concurrently and returns the first
@@ -186,16 +222,19 @@ func emitTokens(ctx context.Context, ratePerSecond float64, tokens chan<- struct
 // client is one logical client: a goroutine that runs one operation at a time.
 // Its process number changes when an operation ends as info.
 type client struct {
-	run      *run
-	index    int
-	process  int
-	seq      int
-	profile  scenarios.ClientProfile
-	ops      *mathrand.Rand
-	amounts  *mathrand.Rand
-	picks    *mathrand.Rand
-	jitter   *mathrand.Rand
-	accounts []int
+	run     *run
+	index   int
+	process int
+	seq     int
+	profile scenarios.ClientProfile
+	policy  retryPolicy
+	// lastWrite is the key a buggy client reuses with another body.
+	lastWrite string
+	ops       *mathrand.Rand
+	amounts   *mathrand.Rand
+	picks     *mathrand.Rand
+	jitter    *mathrand.Rand
+	accounts  []int
 }
 
 func (r *run) newClient(index int) *client {
@@ -203,17 +242,29 @@ func (r *run) newClient(index int) *client {
 		return r.config.Seed.Stream(fmt.Sprintf("%s/%d", name, index))
 	}
 
+	profile := pickProfile(stream("workload.profiles"), r.config.Workload.ClientMix)
+
 	return &client{
 		run:      r,
 		index:    index,
 		process:  index + 1,
-		profile:  pickProfile(stream("workload.profiles"), r.config.Workload.ClientMix),
+		profile:  profile,
+		policy:   r.policyOf(profile),
 		ops:      stream("workload.ops"),
 		amounts:  stream("workload.amounts"),
 		picks:    stream("workload.accounts"),
 		jitter:   stream("workload.clients"),
 		accounts: r.ownedAccounts(index),
 	}
+}
+
+// policyOf is how a profile retries; the polite policy can be replaced in tests.
+func (r *run) policyOf(profile scenarios.ClientProfile) retryPolicy {
+	if profile == scenarios.ClientAggressive {
+		return aggressivePolicy
+	}
+
+	return r.policy
 }
 
 // ownedAccounts deals accounts round-robin: client i prepares accounts i,
@@ -339,6 +390,16 @@ func (c *client) perform(ctx context.Context, op operation) error {
 		return c.executeTwice(ctx, op)
 	}
 
+	isBuggyReuse := c.profile == scenarios.ClientBuggy && op.isWrite() && c.lastWrite != ""
+	if isBuggyReuse {
+		reused, err := op.reusingKey(c.lastWrite)
+		if err != nil {
+			return err
+		}
+
+		op = reused
+	}
+
 	_, err := c.execute(ctx, op)
 
 	return err
@@ -352,8 +413,17 @@ func (c *client) invoke(op operation) (string, request, error) {
 
 	req := op.request
 	req.correlationID = opID
+
 	if op.isWrite() {
-		req.key = opID
+		req.key = cmp.Or(op.reusedKey, opID)
+		c.lastWrite = ""
+	}
+
+	// Only a write that owns its key can lend it: a buggy client alternates
+	// between its own key and the previous one.
+	isOwnKey := op.isWrite() && op.reusedKey == ""
+	if isOwnKey {
+		c.lastWrite = opID
 	}
 
 	invoke := history.Record{Process: history.Client(c.process), Type: history.TypeInvoke, F: op.function, Op: opID, Value: op.invokeValue}
@@ -372,7 +442,7 @@ func (c *client) execute(ctx context.Context, op operation) (attemptResult, erro
 	}
 
 	writer := c.run.config.History
-	policy := c.run.policy
+	policy := c.policy
 
 	opCtx, cancel := context.WithTimeout(ctx, policy.deadline)
 	defer cancel()
@@ -409,7 +479,7 @@ func (c *client) executeTwice(ctx context.Context, op operation) error {
 		return err
 	}
 
-	opCtx, cancel := context.WithTimeout(ctx, c.run.policy.deadline)
+	opCtx, cancel := context.WithTimeout(ctx, c.policy.deadline)
 	defer cancel()
 
 	var (
@@ -419,7 +489,7 @@ func (c *client) executeTwice(ctx context.Context, op operation) error {
 
 	for i := range results {
 		wg.Go(func() {
-			results[i] = c.run.bank.attempt(opCtx, req, c.run.policy.attemptTimeout, op.parse)
+			results[i] = c.run.bank.attempt(opCtx, req, c.policy.attemptTimeout, op.parse)
 		})
 	}
 
@@ -503,9 +573,18 @@ func (c *client) complete(op operation, opID string, attempts int, result attemp
 	}
 
 	isIndeterminate := record.Type == history.TypeInfo
-	if isIndeterminate {
-		c.retire()
+	if !isIndeterminate {
+		return nil
 	}
+
+	// A buggy write never owned its key: resolving the key would resolve
+	// the operation that did.
+	isResolvable := op.isWrite() && op.reusedKey == ""
+	if isResolvable {
+		c.run.noteIndeterminate(opID)
+	}
+
+	c.retire()
 
 	return nil
 }

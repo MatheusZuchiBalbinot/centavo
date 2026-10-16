@@ -10,6 +10,7 @@ import (
 
 const (
 	bankURLVariable       = "BANK_API_URL"
+	controlURLVariable    = "BANK_CONTROL_URL"
 	artifactStoreVariable = "ARTIFACT_STORE"
 	auditorURLVariable    = "AUDITOR_DATABASE_URL"
 	chaosTokenVariable    = "CENTAVO_CHAOS_TOKEN" //nolint:gosec // G101: the name of a variable, not a secret.
@@ -44,6 +45,8 @@ type Run struct {
 	Serve
 	// BankURL is the bank's client API, through the client_api proxy.
 	BankURL string
+	// ControlURL is the same API without Toxiproxy, for the cure's calls.
+	ControlURL string
 	// ChaosToken authenticates the lab on the chaos ports (lock 4).
 	ChaosToken string
 	// DockerHost is docker-proxy, the only way to the Docker API (lock 5).
@@ -94,6 +97,16 @@ func LoadRun(lookup LookupFunc) (Run, error) {
 		return Run{}, err
 	}
 
+	controlURL, err := require(lookup, controlURLVariable)
+	if err != nil {
+		return Run{}, err
+	}
+
+	err = validateBankURL(controlURL)
+	if err != nil {
+		return Run{}, err
+	}
+
 	chaosToken, err := require(lookup, chaosTokenVariable)
 	if err != nil {
 		return Run{}, err
@@ -113,7 +126,7 @@ func LoadRun(lookup LookupFunc) (Run, error) {
 		return Run{}, err
 	}
 
-	return Run{Serve: serve, BankURL: bankURL, ChaosToken: chaosToken, DockerHost: dockerHost, Project: project}, nil
+	return Run{Serve: serve, BankURL: bankURL, ControlURL: controlURL, ChaosToken: chaosToken, DockerHost: dockerHost, Project: project}, nil
 }
 
 // validateAuditorURL never echoes the URL back: it carries a password.

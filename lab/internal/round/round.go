@@ -40,9 +40,11 @@ var ErrNoRoundID = errors.New("could not allocate a round id")
 
 // Options configure one round.
 type Options struct {
-	Scenario   scenarios.Scenario
-	Seed       seed.Seed
-	BankURL    string
+	Scenario scenarios.Scenario
+	Seed     seed.Seed
+	BankURL  string
+	// ControlURL is the bank's API without Toxiproxy, for resolve.
+	ControlURL string
 	RoundsDir  string
 	LabVersion string
 	Logger     *slog.Logger
@@ -141,10 +143,14 @@ func Run(ctx context.Context, options Options) (Result, error) {
 		return Result{ID: id, Dir: dir}, errors.Join(err, writer.Close())
 	}
 
-	loadErr := runLoad(ctx, options, id, writer, bot)
+	load, loadErr := runLoad(ctx, options, id, writer, bot)
 
 	// The cure runs even after a failed load: nothing stays broken (lock 6).
 	healErr := bot.Heal(ctx)
+	if healErr == nil {
+		resolveConfig := loadgen.ResolveConfig{Round: id, Seed: options.Seed, ControlURL: options.ControlURL, History: writer, Logger: options.Logger, Keys: load.Indeterminate, FirstProcess: load.NextProcess}
+		healErr = loadgen.Resolve(ctx, resolveConfig)
+	}
 	closeErr := writer.Close()
 	eventsErr := writeEvents(dir, bot.Events())
 	runErr := errors.Join(loadErr, healErr, closeErr, eventsErr)
@@ -174,7 +180,7 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	return result, errors.Join(runErr, err)
 }
 
-func runLoad(ctx context.Context, options Options, id string, writer *history.Writer, bot *nemesis.Nemesis) error {
+func runLoad(ctx context.Context, options Options, id string, writer *history.Writer, bot *nemesis.Nemesis) (loadgen.Result, error) {
 	loadConfig := loadgen.Config{
 		Round:      id,
 		Seed:       options.Seed,

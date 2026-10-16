@@ -1,0 +1,20 @@
+name: retry-storm
+description: Clientes agressivos, duplicadores e bugados ao mesmo tempo (FC40, FC42, PM-003).
+duration: 10m
+heal_timeout: 2m
+workload:
+  profile: ledger-only
+  clients: 12
+  rate_per_second: 40
+  accounts: 24
+  exclusive_accounts: true
+  client_mix: {aggressive: 0.4, duplicator: 0.3, buggy: 0.3}
+faults:
+  # Lost answers are what make retries dangerous: kill after the commit.
+  - id: commit-response-kill
+    kind: failpoint
+    targets: [bank-api]
+    failpoint: api.after_commit_before_response
+    action: kill
+    probability: 0.03
+    max_fires: 20

@@ -171,6 +171,8 @@ services:
     environment:
       # The load generator reaches the bank through Toxiproxy, like any client.
       BANK_API_URL: http://toxiproxy:28080
+      # Control calls of the cure (resolve) skip Toxiproxy: they run after it.
+      BANK_CONTROL_URL: http://bank-api:8080
       ARTIFACT_STORE: file:///data/rounds
       # The auditor and the exporter read the ledger directly, read-only:
       # auditing is not a chaos target.

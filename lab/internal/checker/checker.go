@@ -34,6 +34,8 @@ type Verdict string
 const (
 	VerdictPass Verdict = "pass"
 	VerdictFail Verdict = "fail"
+	// VerdictInconclusive means no violation but some outcome stayed unknown.
+	VerdictInconclusive Verdict = "inconclusive"
 )
 
 // Status is the outcome of one invariant.
@@ -69,6 +71,8 @@ type Result struct {
 	Invariants []InvariantResult
 	// Violations are ordered by time; the first one is the earliest.
 	Violations []Violation
+	// Unresolved are indeterminate writes that resolve never answered.
+	Unresolved []string
 	ops        operations
 	ledger     ledger
 }
@@ -81,7 +85,7 @@ var invariantsOfThisVersion = []struct {
 }{
 	{id: InvariantI1, isChecked: true, note: "I1a e I1b completas; de I1c, só o termo D, por rodada"},
 	{id: InvariantI2, isChecked: true},
-	{id: InvariantI3, isChecked: true, note: "parcial: só \"no máximo uma vez\"; a convergência chega com o resolve (F5)"},
+	{id: InvariantI3, isChecked: true, note: "no máximo uma vez, convergência pelo resolve e estabilidade numa amostra"},
 	{id: InvariantI4, isChecked: true},
 	{id: "I5", note: "chega com o PIX de saída (F6)"},
 	{id: "I6", note: "chega com o parceiro (F6)"},
@@ -101,15 +105,23 @@ func Evaluate(records []history.Record, s snapshot.Snapshot) Result {
 
 	slices.SortStableFunc(e.violations, byTime)
 
-	result := Result{Violations: e.violations, Operations: countOperations(e.ops), ops: e.ops, ledger: e.ledger}
+	result := Result{Violations: e.violations, Unresolved: e.unresolved, Operations: countOperations(e.ops), ops: e.ops, ledger: e.ledger}
 	result.Invariants = invariantResults(e.violations)
-	result.Verdict = VerdictPass
-
-	if len(e.violations) > 0 {
-		result.Verdict = VerdictFail
-	}
+	result.Verdict = verdictOf(e.violations, e.unresolved)
 
 	return result
+}
+
+func verdictOf(violations []Violation, unresolved []string) Verdict {
+	if len(violations) > 0 {
+		return VerdictFail
+	}
+
+	if len(unresolved) > 0 {
+		return VerdictInconclusive
+	}
+
+	return VerdictPass
 }
 
 // Check reads a round directory, evaluates it and writes report.json and

@@ -23,6 +23,11 @@ type operation struct {
 	request     request
 	invokeValue json.RawMessage
 	parse       parseFunc
+	// reusedKey is the key of an earlier operation that a buggy client sends
+	// with this operation's body; the bank must refuse it.
+	reusedKey string
+	// hasNoKey marks control calls such as resolve, which carry no key.
+	hasNoKey bool
 }
 
 // accountID is the bank's account id, as the lab sees it: opaque text.
@@ -120,7 +125,32 @@ func newOperation(function history.Function, req request, args any, parse parseF
 
 // isWrite tells which operations carry an Idempotency-Key.
 func (o operation) isWrite() bool {
-	return o.request.method == http.MethodPost
+	return o.request.method == http.MethodPost && !o.hasNoKey
+}
+
+// reusingKey returns the operation sent under another operation's key; the
+// history records which key it reused.
+func (o operation) reusingKey(key string) (operation, error) {
+	var value map[string]json.RawMessage
+
+	err := json.Unmarshal(o.invokeValue, &value)
+	if err != nil {
+		return operation{}, err
+	}
+
+	value["reused_key"], err = json.Marshal(key)
+	if err != nil {
+		return operation{}, err
+	}
+
+	o.invokeValue, err = json.Marshal(value)
+	if err != nil {
+		return operation{}, err
+	}
+
+	o.reusedKey = key
+
+	return o, nil
 }
 
 type createAccountResult struct {
