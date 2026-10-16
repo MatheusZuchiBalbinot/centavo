@@ -1,0 +1,124 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GOLANGCI_LINT_VERSION: v2.15.0
+
+jobs:
+  go:
+    name: go (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [bank, partner, lab]
+    defaults:
+      run:
+        working-directory: ${{ matrix.module }}
+    env:
+      # Each module must build on its own, exactly as the Docker images do.
+      GOWORK: "off"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: ${{ matrix.module }}/go.mod
+          cache-dependency-path: ${{ matrix.module }}/go.mod
+
+      - name: go.mod is tidy
+        run: go mod tidy -diff
+
+      - name: vet
+        run: go vet ./... && go vet -tags chaoslab ./...
+
+      - name: test
+        run: go test -race ./... && go test -race -tags chaoslab ./...
+
+      - name: lint (production build)
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
+          working-directory: ${{ matrix.module }}
+
+      - name: lint (chaoslab build)
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
+          working-directory: ${{ matrix.module }}
+          args: --build-tags chaoslab
+
+  safety:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: bank/go.mod
+          cache: false
+
+      - name: lab does not import bank or partner
+        run: ./scripts/check-lab-isolation.sh
+
+      - name: production binaries have no chaos code
+        run: ./scripts/check-production-binary.sh
+
+  images:
+    name: image (${{ matrix.module }} ${{ matrix.variant }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {module: bank, variant: production, tags: ""}
+          - {module: bank, variant: chaoslab, tags: chaoslab}
+          - {module: partner, variant: production, tags: ""}
+          - {module: partner, variant: chaoslab, tags: chaoslab}
+          - {module: lab, variant: production, tags: ""}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: build for amd64 and arm64
+        env:
+          MODULE: ${{ matrix.module }}
+          BUILD_TAGS: ${{ matrix.tags }}
+        run: docker buildx build --platform linux/amd64,linux/arm64 --build-arg "BUILD_TAGS=$BUILD_TAGS" "$MODULE"
+
+  compose:
+    runs-on: ubuntu-latest
+    needs: [go, safety]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: start the lab and wait until every service is healthy
+        run: ./entrypoint.sh
+
+      - name: show service state
+        if: always()
+        run: docker compose ps --all && docker compose logs --no-color
+
+      - name: tear down
+        if: always()
+        run: docker compose down --volumes
