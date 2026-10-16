@@ -160,6 +160,9 @@ services:
       # The load generator reaches the bank through Toxiproxy, like any client.
       BANK_API_URL: http://toxiproxy:28080
       ARTIFACT_STORE: file:///data/rounds
+      # The auditor and the exporter read the ledger directly, read-only:
+      # auditing is not a chaos target.
+      AUDITOR_DATABASE_URL: postgres://bank_auditor:${BANK_AUDITOR_PASSWORD}@postgres:5432/bank_robust?sslmode=disable
     volumes:
       - lab-data:/data
     ports:
