@@ -87,7 +87,7 @@ func (b *roundBuilder) operation(function history.Function, args any, result his
 }
 
 // apply writes a correct ledger transaction: entries in sequence, chained.
-func (b *roundBuilder) apply(clientRef, kind string, amounts map[string]int64) {
+func (b *roundBuilder) apply(clientRef, kind string, amounts map[string]int64) string {
 	id := b.upcomingTransaction()
 	b.nextTx++
 	b.snap.Transactions = append(b.snap.Transactions, snapshot.Transaction{ID: id, Kind: kind, ClientRef: clientRef, CorrelationID: clientRef})
@@ -95,6 +95,8 @@ func (b *roundBuilder) apply(clientRef, kind string, amounts map[string]int64) {
 	for _, account := range slices.Sorted(maps.Keys(amounts)) {
 		b.post(id, account, amounts[account])
 	}
+
+	return id
 }
 
 func (b *roundBuilder) post(transactionID, account string, amount int64) {

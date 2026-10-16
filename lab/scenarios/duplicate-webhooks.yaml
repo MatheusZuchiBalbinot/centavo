@@ -1,0 +1,21 @@
+name: duplicate-webhooks
+description: Webhooks repetidos com o mesmo id e com id novo, e a API morrendo antes de responder ao parceiro (FC06, FC24, FC25, PM-006, PM-007).
+duration: 15m
+workload:
+  profile: balanced
+  clients: 8
+  rate_per_second: 20
+  accounts: 32
+  exclusive_accounts: true
+  client_mix: {polite: 1.0}
+faults:
+  - id: duplicates
+    kind: partner
+    modes: {webhook_duplicate: 0.3, webhook_duplicate_new_id: 0.1}
+  - id: ack-kill
+    kind: failpoint
+    targets: [bank-api]
+    failpoint: webhook.after_receive_before_ack
+    action: kill
+    probability: 0.02
+    max_fires: 20

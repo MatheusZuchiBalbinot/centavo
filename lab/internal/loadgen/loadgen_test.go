@@ -228,7 +228,7 @@ func TestResolve_RecordsOneResolvePerKeyInItsOwnProcesses(t *testing.T) {
 	keys := []string{"r0001-p01-000001", "r0001-p02-000009"}
 	config := ResolveConfig{Round: "r0001", Seed: seed.Seed(7), ControlURL: server.URL, History: writer, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), Keys: keys, FirstProcess: 50}
 
-	err = Resolve(t.Context(), config)
+	_, err = Resolve(t.Context(), config)
 	if err != nil {
 		t.Fatal(err)
 	}

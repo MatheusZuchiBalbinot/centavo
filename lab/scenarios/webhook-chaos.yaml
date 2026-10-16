@@ -1,0 +1,14 @@
+name: webhook-chaos
+description: Webhooks atrasados e fora de ordem, com devoluções depois da liquidação (FC23, FC26, PM-007).
+duration: 15m
+workload:
+  profile: payments-heavy
+  clients: 8
+  rate_per_second: 20
+  accounts: 32
+  exclusive_accounts: true
+  client_mix: {polite: 1.0}
+faults:
+  - id: reordering
+    kind: partner
+    modes: {webhook_delay_max: 5s, webhook_reorder_window: 5s, return_after_settle: 0.2}

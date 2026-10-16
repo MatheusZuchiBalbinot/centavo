@@ -1,0 +1,18 @@
+name: kill-relay-after-partner-call
+description: O relay morre logo depois de o parceiro aceitar o PIX e antes de gravar a resposta (FP03, FC05, PM-005).
+duration: 15m
+workload:
+  profile: payments-heavy
+  clients: 8
+  rate_per_second: 20
+  accounts: 32
+  exclusive_accounts: true
+  client_mix: {polite: 1.0}
+faults:
+  - id: relay-kill
+    kind: failpoint
+    targets: [bank-worker-1, bank-worker-2]
+    failpoint: relay.after_partner_call_before_save
+    action: kill
+    probability: 0.05
+    max_fires: 60

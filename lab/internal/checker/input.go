@@ -49,6 +49,18 @@ type createAccountValue struct {
 
 type writeValue struct {
 	TransactionID string `json:"transaction_id"`
+	TransferID    string `json:"transfer_id"`
+}
+
+type pixOutArgs struct {
+	AccountID   string `json:"account_id"`
+	AmountCents int64  `json:"amount_cents"`
+}
+
+type pixInArgs struct {
+	AccountID   string `json:"account_id"`
+	AmountCents int64  `json:"amount_cents"`
+	EndToEndID  string `json:"end_to_end_id"`
 }
 
 type readBalanceArgs struct {
@@ -88,6 +100,19 @@ type statementEntry struct {
 var transactionKindOf = map[history.Function]string{
 	history.FunctionDeposit:  snapshot.TransactionDeposit,
 	history.FunctionTransfer: snapshot.TransactionInternalTransfer,
+	history.FunctionPixOut:   snapshot.TransactionPixOutReserve,
+}
+
+// isClientKind tells the transactions a client operation causes from those
+// the partner's events cause (settlements, refunds, returns, PIX in).
+func isClientKind(kind string) bool {
+	for _, clientKind := range transactionKindOf {
+		if clientKind == kind {
+			return true
+		}
+	}
+
+	return false
 }
 
 // operations indexes the history by operation id, in invoke order.
@@ -181,6 +206,17 @@ type ledger struct {
 	entriesByAccount  map[string][]snapshot.Entry
 	externalCashID    string
 	hasExternalCashID bool
+	systemIDs         map[string]string
+	transfers         []snapshot.ExternalTransfer
+	transitions       map[string][]snapshot.Transition
+	byTransfer        map[string][]snapshot.Transaction
+	byIncoming        map[string][]snapshot.Transaction
+	incomingByE2E     map[string][]snapshot.Incoming
+}
+
+// systemID is the id of a system account by its code.
+func (l ledger) systemID(code string) string {
+	return l.systemIDs[code]
 }
 
 func indexLedger(s snapshot.Snapshot) ledger {
@@ -191,11 +227,29 @@ func indexLedger(s snapshot.Snapshot) ledger {
 		byClientRef:      map[string][]snapshot.Transaction{},
 		entriesByTx:      map[string][]snapshot.Entry{},
 		entriesByAccount: map[string][]snapshot.Entry{},
+		systemIDs:        map[string]string{},
+		transfers:        s.Transfers,
+		transitions:      map[string][]snapshot.Transition{},
+		byTransfer:       map[string][]snapshot.Transaction{},
+		byIncoming:       map[string][]snapshot.Transaction{},
+		incomingByE2E:    map[string][]snapshot.Incoming{},
+	}
+
+	for _, transition := range s.Transitions {
+		l.transitions[transition.TransferID] = append(l.transitions[transition.TransferID], transition)
+	}
+
+	for _, incoming := range s.Incoming {
+		l.incomingByE2E[incoming.EndToEndID] = append(l.incomingByE2E[incoming.EndToEndID], incoming)
 	}
 
 	for _, account := range s.Accounts {
 		l.accounts[account.ID] = account
 		l.accountIDs = append(l.accountIDs, account.ID)
+
+		if account.Kind == snapshot.KindSystem {
+			l.systemIDs[account.SystemCode] = account.ID
+		}
 
 		isExternalCash := account.Kind == snapshot.KindSystem && account.SystemCode == snapshot.ExternalCashCode
 		if isExternalCash {
@@ -212,6 +266,14 @@ func indexLedger(s snapshot.Snapshot) ledger {
 		l.transactions[transaction.ID] = transaction
 		l.transactionIDs = append(l.transactionIDs, transaction.ID)
 		l.byClientRef[transaction.ClientRef] = append(l.byClientRef[transaction.ClientRef], transaction)
+
+		if transaction.ExternalTransferID != "" {
+			l.byTransfer[transaction.ExternalTransferID] = append(l.byTransfer[transaction.ExternalTransferID], transaction)
+		}
+
+		if transaction.IncomingTransferID != "" {
+			l.byIncoming[transaction.IncomingTransferID] = append(l.byIncoming[transaction.IncomingTransferID], transaction)
+		}
 	}
 
 	// Entry ids grow in insertion order, which is the order the bank wrote them.

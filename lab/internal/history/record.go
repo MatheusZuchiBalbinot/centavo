@@ -27,12 +27,18 @@ const (
 	FunctionReadStatement Function = "read_statement"
 	// FunctionResolve asks the bank how an indeterminate write ended.
 	FunctionResolve Function = "resolve"
+	FunctionPixOut  Function = "pix_out"
+	// FunctionPixIn asks the partner to send a PIX to an account of the bank.
+	FunctionPixIn Function = "pix_in"
+	// FunctionReadPixOut reads a PIX out's final state during the cure.
+	FunctionReadPixOut Function = "read_pix_out"
 )
 
 // What the nemesis records: injections, the cure and fired failpoints.
 const (
 	FunctionKill           Function = "kill"
 	FunctionArmFailpoint   Function = "arm_failpoint"
+	FunctionArmPartner     Function = "arm_partner_modes"
 	FunctionFailpointFired Function = "failpoint_fired"
 	FunctionHealStart      Function = "heal_start"
 	FunctionHealComplete   Function = "heal_complete"

@@ -1,0 +1,14 @@
+name: partner-timeout-but-processed
+description: O parceiro processa o PIX e responde tarde demais ou com 500 (FC21, PM-005, PM-008).
+duration: 15m
+workload:
+  profile: payments-heavy
+  clients: 8
+  rate_per_second: 20
+  accounts: 32
+  exclusive_accounts: true
+  client_mix: {polite: 1.0}
+faults:
+  - id: late-answers
+    kind: partner
+    modes: {timeout_after_process: 0.1, error_after_process: 0.05}

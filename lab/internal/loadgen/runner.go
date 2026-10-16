@@ -3,6 +3,8 @@ package loadgen
 import (
 	"cmp"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -56,7 +58,7 @@ type Result struct {
 // Amounts the workload draws, in cents.
 const (
 	initialFundingCents = 100_000
-	minDepositCents     = 100
+	minDepositCents     = 500
 	maxDepositCents     = 50_000
 	minTransferCents    = 100
 	maxTransferCents    = 20_000
@@ -75,6 +77,10 @@ type Config struct {
 	BankURL  string
 	History  *history.Writer
 	Logger   *slog.Logger
+	// PartnerURL is the partner's admin port, where the lab asks for PIX in.
+	PartnerURL string
+	// ParticipantID is the bank at the partner.
+	ParticipantID string
 	// BeforeLoad runs once the accounts exist and before the load starts;
 	// the nemesis arms its faults here, so preparation never sees chaos.
 	BeforeLoad func(ctx context.Context) error
@@ -86,19 +92,44 @@ type weightedFunction struct {
 	weight   int
 }
 
-// ledgerOnlyMix is the ledger-only profile of docs/chaos-bot.md, section 11.
-var ledgerOnlyMix = []weightedFunction{
-	{function: history.FunctionTransfer, weight: 50},
-	{function: history.FunctionDeposit, weight: 30},
-	{function: history.FunctionReadBalance, weight: 15},
-	{function: history.FunctionReadStatement, weight: 5},
+// mixes are the workload profiles of docs/chaos-bot.md, section 11.
+var mixes = map[scenarios.Profile][]weightedFunction{
+	scenarios.ProfileLedgerOnly: {
+		{function: history.FunctionTransfer, weight: 50},
+		{function: history.FunctionDeposit, weight: 30},
+		{function: history.FunctionReadBalance, weight: 15},
+		{function: history.FunctionReadStatement, weight: 5},
+	},
+	scenarios.ProfileBalanced: {
+		{function: history.FunctionTransfer, weight: 40},
+		{function: history.FunctionDeposit, weight: 20},
+		{function: history.FunctionPixOut, weight: 15},
+		{function: history.FunctionPixIn, weight: 10},
+		{function: history.FunctionReadBalance, weight: 10},
+		{function: history.FunctionReadStatement, weight: 5},
+	},
+	scenarios.ProfilePaymentsHeavy: {
+		{function: history.FunctionPixOut, weight: 50},
+		{function: history.FunctionPixIn, weight: 20},
+		{function: history.FunctionTransfer, weight: 20},
+		{function: history.FunctionReadBalance, weight: 7},
+		{function: history.FunctionReadStatement, weight: 3},
+	},
 }
+
+// Shares of the PIX out that go to a key the partner does not know, so the
+// rejected path runs every round.
+const (
+	invalidKeyPercent = 5
+	destinationKeys   = 10_000
+)
 
 // run is the state the clients of one round share.
 type run struct {
 	config      Config
 	policy      retryPolicy
 	bank        bankClient
+	partner     bankClient
 	nextProcess atomic.Int64
 	accounts    []accountID
 
@@ -117,6 +148,7 @@ func runWith(ctx context.Context, config Config, policy retryPolicy) (Result, er
 		config:   config,
 		policy:   policy,
 		bank:     newBankClient(config.BankURL, config.Workload.Clients),
+		partner:  newBankClient(config.PartnerURL, config.Workload.Clients),
 		accounts: make([]accountID, config.Workload.Accounts),
 	}
 	r.nextProcess.Store(int64(config.Workload.Clients))
@@ -258,6 +290,15 @@ func (r *run) newClient(index int) *client {
 	}
 }
 
+// targetOf is who serves the operation: the partner for a PIX in, the bank otherwise.
+func (r *run) targetOf(op operation) bankClient {
+	if op.isToPartner {
+		return r.partner
+	}
+
+	return r.bank
+}
+
 // policyOf is how a profile retries; the polite policy can be replaced in tests.
 func (r *run) policyOf(profile scenarios.ClientProfile) retryPolicy {
 	if profile == scenarios.ClientAggressive {
@@ -348,10 +389,19 @@ func (c *client) load(ctx, loadCtx context.Context, tokens <-chan struct{}) erro
 }
 
 func (c *client) nextOperation() (operation, error) {
-	function := pickFunction(c.ops, ledgerOnlyMix)
+	function := pickFunction(c.ops, mixes[c.run.config.Workload.Profile])
 	accounts := c.workingAccounts()
 
 	switch function {
+	case history.FunctionPixOut:
+		amount := drawCents(c.amounts, minTransferCents, maxTransferCents)
+
+		return pixOutOperation(pixOutArgs{AccountID: pickOne(c.picks, accounts), AmountCents: amount, DestinationKey: drawDestinationKey(c.picks)})
+	case history.FunctionPixIn:
+		amount := drawCents(c.amounts, minDepositCents, maxDepositCents)
+		args := pixInArgs{AccountID: pickOne(c.picks, accounts), AmountCents: amount, EndToEndID: incomingEndToEndID(c.run.config.Round, c.process, c.seq+1)}
+
+		return pixInOperation(args, c.run.config.ParticipantID)
 	case history.FunctionTransfer:
 		from, to := pickPair(c.picks, accounts)
 		amount := drawCents(c.amounts, minTransferCents, maxTransferCents)
@@ -448,7 +498,7 @@ func (c *client) execute(ctx context.Context, op operation) (attemptResult, erro
 	defer cancel()
 
 	for attempt := 1; ; attempt++ {
-		result := c.run.bank.attempt(opCtx, req, policy.attemptTimeout, op.parse)
+		result := c.run.targetOf(op).attempt(opCtx, req, policy.attemptTimeout, op.parse)
 
 		shouldRetry := result.verdict == verdictRetry && attempt <= policy.maxRetries
 		if !shouldRetry {
@@ -489,7 +539,7 @@ func (c *client) executeTwice(ctx context.Context, op operation) error {
 
 	for i := range results {
 		wg.Go(func() {
-			results[i] = c.run.bank.attempt(opCtx, req, c.policy.attemptTimeout, op.parse)
+			results[i] = c.run.targetOf(op).attempt(opCtx, req, c.policy.attemptTimeout, op.parse)
 		})
 	}
 
@@ -644,6 +694,23 @@ func pickPair(stream *mathrand.Rand, accounts []accountID) (accountID, accountID
 
 func drawCents(stream *mathrand.Rand, low, high int64) int64 {
 	return low + stream.Int64N(high-low+1)
+}
+
+func drawDestinationKey(stream *mathrand.Rand) string {
+	isInvalid := stream.IntN(percent) < invalidKeyPercent
+	if isInvalid {
+		return fmt.Sprintf("invalid-%04d", stream.IntN(destinationKeys))
+	}
+
+	return fmt.Sprintf("dest-%04d", stream.IntN(destinationKeys))
+}
+
+// incomingEndToEndID is the id the lab gives a PIX in: E plus 32 hex digits
+// derived from the operation, so the checker can find it again.
+func incomingEndToEndID(round string, process, seq int) string {
+	digest := sha256.Sum256(fmt.Appendf(nil, "%s-p%02d-%06d", round, process, seq))
+
+	return "E" + hex.EncodeToString(digest[:16])
 }
 
 // mustMarshal encodes the lab's own record types, which always encode.

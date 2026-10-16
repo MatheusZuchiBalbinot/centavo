@@ -8,7 +8,9 @@ import (
 	"bufio"
 	"cmp"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -23,6 +25,7 @@ const Version = "1"
 const (
 	historyFile  = "history.jsonl"
 	eventsFile   = "events.jsonl"
+	truthFile    = "truth.json"
 	manifestFile = "round.json"
 	// maxLineBytes matches the history writer's largest record.
 	maxLineBytes = 1 << 20
@@ -83,18 +86,24 @@ var invariantsOfThisVersion = []struct {
 	isChecked bool
 	note      string
 }{
-	{id: InvariantI1, isChecked: true, note: "I1a e I1b completas; de I1c, só o termo D, por rodada"},
+	{id: InvariantI1, isChecked: true, note: "I1a e I1b completas; I1c com os termos D, R e S, por rodada"},
 	{id: InvariantI2, isChecked: true},
 	{id: InvariantI3, isChecked: true, note: "no máximo uma vez, convergência pelo resolve e estabilidade numa amostra"},
 	{id: InvariantI4, isChecked: true},
-	{id: "I5", note: "chega com o PIX de saída (F6)"},
-	{id: "I6", note: "chega com o parceiro (F6)"},
-	{id: "I7", note: "chega com a máquina de estados (F6)"},
+	{id: InvariantI5, isChecked: true, note: "transferências terminais e trânsito zero depois da quiescência"},
+	{id: InvariantI6, isChecked: true, note: "comparação direta com a verdade do parceiro; a conciliação chega na F9"},
+	{id: InvariantI7, isChecked: true},
 	{id: "I8", note: "chega com as faixas de imutabilidade"},
 }
 
-// Evaluate checks a history against a ledger snapshot.
+// Evaluate checks a history against a ledger snapshot, without the partner.
 func Evaluate(records []history.Record, s snapshot.Snapshot) Result {
+	return EvaluateWithTruth(records, s, nil)
+}
+
+// EvaluateWithTruth also compares the ledger with the partner's truth (I6,
+// the R and S terms of I1c, the authoritative part of I7).
+func EvaluateWithTruth(records []history.Record, s snapshot.Snapshot, truth *PartnerTruth) Result {
 	e := evaluation{ops: indexOperations(records), ledger: indexLedger(s)}
 
 	e.checkZeroSum()
@@ -102,6 +111,7 @@ func Evaluate(records []history.Record, s snapshot.Snapshot) Result {
 	e.checkDepositTerm()
 	e.checkOperations()
 	e.checkPhantoms()
+	e.checkPix(truth)
 
 	slices.SortStableFunc(e.violations, byTime)
 
@@ -137,7 +147,12 @@ func Check(roundDir string) (Result, error) {
 		return Result{}, err
 	}
 
-	result := Evaluate(records, s)
+	truth, err := readTruth(roundDir)
+	if err != nil {
+		return Result{}, err
+	}
+
+	result := EvaluateWithTruth(records, s, truth)
 	meta := readRoundMeta(roundDir, s.Meta.Round)
 	events := readEvents(roundDir)
 
@@ -238,6 +253,28 @@ func readHistory(roundDir string) ([]history.Record, error) {
 	}
 
 	return records, nil
+}
+
+// readTruth loads truth.json, the partner's record for the round; a round
+// that never touched the partner has none.
+func readTruth(roundDir string) (*PartnerTruth, error) {
+	content, err := os.ReadFile(filepath.Join(roundDir, truthFile)) //nolint:gosec // G304: the round directory comes from the operator.
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("reading truth.json: %w", err)
+	}
+
+	var truth PartnerTruth
+
+	err = json.Unmarshal(content, &truth)
+	if err != nil {
+		return nil, fmt.Errorf("truth.json is not the partner's truth: %w", err)
+	}
+
+	return &truth, nil
 }
 
 // chaosEvents are the failpoint events of the round, by correlation id. They

@@ -31,6 +31,7 @@ import (
 	"centavo/lab/internal/dashboard"
 	"centavo/lab/internal/docker"
 	"centavo/lab/internal/export"
+	"centavo/lab/internal/partner"
 	"centavo/lab/internal/platform/buildinfo"
 	"centavo/lab/internal/platform/config"
 	"centavo/lab/internal/platform/httpserver"
@@ -236,6 +237,7 @@ func runRound(ctx context.Context, args []string) error {
 	}
 
 	options.Chaos = round.ChaosOptions{Docker: dockerClient, Token: runConfig.ChaosToken, EventsDir: eventsDir}
+	options.Saga = sagaOptions(pool, runConfig)
 
 	result, err := round.Run(ctx, options)
 	printSummary(result)
@@ -259,6 +261,25 @@ func verdictError(verdict checker.Verdict) error {
 		return errRoundInconclusive
 	default:
 		return errRoundFailed
+	}
+}
+
+// sagaOptions let the cure watch the round's PIX: in flight in the ledger,
+// pending at the partner, and the partner's truth at the end.
+func sagaOptions(pool *pgxpool.Pool, runConfig config.Run) round.SagaOptions {
+	partnerClient := partner.New(runConfig.PartnerURL, runConfig.ParticipantID)
+
+	return round.SagaOptions{
+		InFlight: func(ctx context.Context, roundID string) (int, error) {
+			return export.InFlight(ctx, pool, roundID)
+		},
+		TransferIDs: func(ctx context.Context, roundID string) ([]string, error) {
+			return export.TransferIDs(ctx, pool, roundID)
+		},
+		PendingWebhooks: partnerClient.PendingWebhooks,
+		Truth:           partnerClient.Truth,
+		PartnerURL:      runConfig.PartnerURL,
+		ParticipantID:   runConfig.ParticipantID,
 	}
 }
 

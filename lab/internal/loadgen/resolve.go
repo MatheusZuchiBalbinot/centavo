@@ -40,8 +40,9 @@ type resolveResult struct {
 }
 
 // Resolve asks the bank for the outcome of every indeterminate write, as
-// operations of their own processes, after heal_complete.
-func Resolve(ctx context.Context, config ResolveConfig) error {
+// operations of their own processes, after heal_complete. It returns the
+// next free process number.
+func Resolve(ctx context.Context, config ResolveConfig) (int, error) {
 	r := &run{
 		config: Config{Round: config.Round, History: config.History, Logger: config.Logger},
 		policy: politePolicy,
@@ -60,12 +61,12 @@ func Resolve(ctx context.Context, config ResolveConfig) error {
 	for _, key := range config.Keys {
 		op, err := resolveOperation(key)
 		if err != nil {
-			return err
+			return 0, err
 		}
 
 		_, err = resolver.execute(ctx, op)
 		if err != nil {
-			return err
+			return 0, err
 		}
 
 		isSampled := sample.Float64() < stabilitySample
@@ -74,6 +75,33 @@ func Resolve(ctx context.Context, config ResolveConfig) error {
 		}
 
 		_, err = resolver.execute(ctx, op)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	return int(r.nextProcess.Load()) + 1, nil
+}
+
+// ReadPixOuts records the final state of every PIX out of the round, after
+// the quiescence (read_pix_out of docs/invariants-and-checker.md, section 3).
+func ReadPixOuts(ctx context.Context, config ResolveConfig, transferIDs []string) error {
+	r := &run{
+		config: Config{Round: config.Round, History: config.History, Logger: config.Logger},
+		policy: politePolicy,
+		bank:   newBankClient(config.ControlURL, 1),
+	}
+	r.nextProcess.Store(int64(config.FirstProcess))
+
+	reader := &client{run: r, process: config.FirstProcess, policy: politePolicy, jitter: config.Seed.Stream("cure.reads")}
+
+	for _, id := range transferIDs {
+		op, err := readPixOutOperation(id)
+		if err != nil {
+			return err
+		}
+
+		_, err = reader.execute(ctx, op)
 		if err != nil {
 			return err
 		}

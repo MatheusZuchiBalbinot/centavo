@@ -1,0 +1,14 @@
+name: webhook-blackhole
+description: O parceiro processa tudo e nenhum webhook chega ao banco (FC17, FC27, PM-009).
+duration: 20m
+workload:
+  profile: balanced
+  clients: 8
+  rate_per_second: 20
+  accounts: 32
+  exclusive_accounts: true
+  client_mix: {polite: 1.0}
+faults:
+  - id: blackhole
+    kind: partner
+    modes: {webhook_drop: 1.0}

@@ -29,6 +29,7 @@ import (
 const (
 	historyFile  = "history.jsonl"
 	eventsFile   = "events.jsonl"
+	truthFile    = "truth.json"
 	manifestFile = "round.json"
 	// maxAllocationTries bounds the race between two labs creating rounds.
 	maxAllocationTries = 10
@@ -54,7 +55,23 @@ type Options struct {
 	Check func(ctx context.Context, roundDir string) (checker.Verdict, error)
 	// Chaos is how the nemesis reaches the targets.
 	Chaos ChaosOptions
+	// Saga is how the cure watches the PIX of the round settle.
+	Saga SagaOptions
 }
+
+// SagaOptions read the state of the round's PIX for the cure.
+type SagaOptions struct {
+	InFlight        func(ctx context.Context, round string) (int, error)
+	TransferIDs     func(ctx context.Context, round string) ([]string, error)
+	PendingWebhooks func(ctx context.Context) (int, error)
+	Truth           func(ctx context.Context) ([]byte, error)
+	// PartnerURL and ParticipantID are where the load asks for PIX in.
+	PartnerURL    string
+	ParticipantID string
+}
+
+// quiescencePoll is how often the cure looks at the sagas in flight.
+const quiescencePoll = time.Second
 
 // ChaosOptions are the nemesis's means of action.
 type ChaosOptions struct {
@@ -135,6 +152,9 @@ func Run(ctx context.Context, options Options) (Result, error) {
 		ChaosToken: options.Chaos.Token,
 		EventsDir:  options.Chaos.EventsDir,
 		Logger:     options.Logger,
+
+		PartnerAdminURL: options.Saga.PartnerURL,
+		ParticipantID:   options.Saga.ParticipantID,
 	})
 
 	// A target that fails the preflight is never touched, not even to cure it.
@@ -148,8 +168,7 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	// The cure runs even after a failed load: nothing stays broken (lock 6).
 	healErr := bot.Heal(ctx)
 	if healErr == nil {
-		resolveConfig := loadgen.ResolveConfig{Round: id, Seed: options.Seed, ControlURL: options.ControlURL, History: writer, Logger: options.Logger, Keys: load.Indeterminate, FirstProcess: load.NextProcess}
-		healErr = loadgen.Resolve(ctx, resolveConfig)
+		healErr = cure(ctx, options, cureState{round: id, writer: writer, load: load})
 	}
 	closeErr := writer.Close()
 	eventsErr := writeEvents(dir, bot.Events())
@@ -180,16 +199,88 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	return result, errors.Join(runErr, err)
 }
 
+type cureState struct {
+	round  string
+	writer *history.Writer
+	load   loadgen.Result
+}
+
+// cure is the end of the round after heal_complete (docs/chaos-bot.md,
+// section 3): resolve every indeterminate write, wait for the sagas to
+// settle until t_h + Δ, then read every PIX out once.
+func cure(ctx context.Context, options Options, state cureState) error {
+	resolveConfig := loadgen.ResolveConfig{Round: state.round, Seed: options.Seed, ControlURL: options.ControlURL, History: state.writer, Logger: options.Logger, Keys: state.load.Indeterminate, FirstProcess: state.load.NextProcess}
+
+	next, err := loadgen.Resolve(ctx, resolveConfig)
+	if err != nil {
+		return err
+	}
+
+	if options.Saga.InFlight == nil {
+		return nil
+	}
+
+	err = waitQuiescence(ctx, options, state.round)
+	if err != nil {
+		return err
+	}
+
+	ids, err := options.Saga.TransferIDs(ctx, state.round)
+	if err != nil {
+		return err
+	}
+
+	resolveConfig.FirstProcess = next
+
+	return loadgen.ReadPixOuts(ctx, resolveConfig, ids)
+}
+
+// waitQuiescence waits until no PIX of the round is in flight and the
+// partner has no webhook left, or the liveness deadline passes; then I5
+// judges what is still open.
+func waitQuiescence(ctx context.Context, options Options, round string) error {
+	deadline := time.Now().Add(options.Scenario.LivenessDeadline)
+
+	for time.Now().Before(deadline) {
+		inFlight, err := options.Saga.InFlight(ctx, round)
+		if err != nil {
+			return err
+		}
+
+		pending, err := options.Saga.PendingWebhooks(ctx)
+		if err != nil {
+			options.Logger.WarnContext(ctx, "reading the partner's pending webhooks", "error", err)
+		}
+
+		isQuiet := inFlight == 0 && pending == 0 && err == nil
+		if isQuiet {
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(quiescencePoll):
+		}
+	}
+
+	options.Logger.WarnContext(ctx, "liveness deadline passed with sagas in flight", "round", round)
+
+	return nil
+}
+
 func runLoad(ctx context.Context, options Options, id string, writer *history.Writer, bot *nemesis.Nemesis) (loadgen.Result, error) {
 	loadConfig := loadgen.Config{
-		Round:      id,
-		Seed:       options.Seed,
-		Workload:   options.Scenario.Workload,
-		Duration:   options.Scenario.Duration,
-		BankURL:    options.BankURL,
-		History:    writer,
-		Logger:     options.Logger,
-		BeforeLoad: bot.Start,
+		Round:         id,
+		Seed:          options.Seed,
+		Workload:      options.Scenario.Workload,
+		Duration:      options.Scenario.Duration,
+		BankURL:       options.BankURL,
+		History:       writer,
+		Logger:        options.Logger,
+		BeforeLoad:    bot.Start,
+		PartnerURL:    options.Saga.PartnerURL,
+		ParticipantID: options.Saga.ParticipantID,
 	}
 
 	return loadgen.Run(ctx, loadConfig)
@@ -231,6 +322,18 @@ func exportAndCheck(ctx context.Context, options Options, result Result) (checke
 	}
 
 	options.Logger.InfoContext(ctx, "ledger exported", "round", result.ID, "transactions", len(s.Transactions), "entries", len(s.Entries))
+
+	if options.Saga.Truth != nil {
+		truth, err := options.Saga.Truth(ctx)
+		if err != nil {
+			return "", err
+		}
+
+		err = os.WriteFile(filepath.Join(result.Dir, truthFile), truth, 0o600)
+		if err != nil {
+			return "", fmt.Errorf("writing truth.json: %w", err)
+		}
+	}
 
 	return options.Check(ctx, result.Dir)
 }

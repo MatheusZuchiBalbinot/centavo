@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -26,7 +27,13 @@ var files embed.FS
 // Profile is the operation mix of a workload (docs/chaos-bot.md, section 11).
 type Profile string
 
-const ProfileLedgerOnly Profile = "ledger-only"
+const (
+	ProfileLedgerOnly    Profile = "ledger-only"
+	ProfileBalanced      Profile = "balanced"
+	ProfilePaymentsHeavy Profile = "payments-heavy"
+)
+
+var workloadProfiles = []Profile{ProfileLedgerOnly, ProfileBalanced, ProfilePaymentsHeavy}
 
 // ClientProfile is how a client behaves around timeouts and retries.
 type ClientProfile string
@@ -49,7 +56,17 @@ type FaultKind string
 const (
 	FaultFailpoint FaultKind = "failpoint"
 	FaultProcess   FaultKind = "process"
+	// FaultPartner makes the partner lie (docs/chaos-bot.md, section 9).
+	FaultPartner FaultKind = "partner"
 )
+
+// partnerModeFields are the lies a scenario may ask for; the lab adds the
+// participant, the seed and the TTL itself.
+var partnerModeFields = []string{
+	"timeout_after_process", "error_after_process", "double_process", "return_after_settle", "reject_rate",
+	"settle_delay", "webhook_duplicate", "webhook_duplicate_new_id", "webhook_delay_max",
+	"webhook_reorder_window", "webhook_drop", "outage",
+}
 
 // ScheduleType is how a scheduled fault spreads over the round.
 type ScheduleType string
@@ -66,7 +83,9 @@ var (
 
 const (
 	defaultHealTimeout = 2 * time.Minute
-	minMeanInterval    = time.Second
+	// defaultLivenessDeadline is Δ of docs/invariants-and-checker.md, section 6.
+	defaultLivenessDeadline = 120 * time.Second
+	minMeanInterval         = time.Second
 )
 
 const (
@@ -92,8 +111,10 @@ type Scenario struct {
 	Description string
 	Duration    time.Duration
 	HealTimeout time.Duration
-	Workload    Workload
-	Faults      []Fault
+	// LivenessDeadline is Δ: how long after the cure the sagas have to end (I5).
+	LivenessDeadline time.Duration
+	Workload         Workload
+	Faults           []Fault
 	// SHA256 identifies the exact YAML a round ran, for round.json.
 	SHA256 string
 }
@@ -120,6 +141,8 @@ type Fault struct {
 	Probability float64
 	MaxFires    int
 	Schedule    Schedule
+	// Modes are the partner's lies, as JSON for PUT /chaos/modes.
+	Modes json.RawMessage
 }
 
 // Schedule spreads a fault over the round.
@@ -133,20 +156,22 @@ type rawScenario struct {
 	Description string      `yaml:"description"`
 	Duration    string      `yaml:"duration"`
 	HealTimeout string      `yaml:"heal_timeout"`
+	Liveness    string      `yaml:"liveness_deadline"`
 	Workload    rawWorkload `yaml:"workload"`
 	Faults      []rawFault  `yaml:"faults"`
 }
 
 type rawFault struct {
-	ID          string      `yaml:"id"`
-	Kind        FaultKind   `yaml:"kind"`
-	Targets     []string    `yaml:"targets"`
-	Failpoint   string      `yaml:"failpoint"`
-	Action      string      `yaml:"action"`
-	Arg         string      `yaml:"arg"`
-	Probability float64     `yaml:"probability"`
-	MaxFires    int         `yaml:"max_fires"`
-	Schedule    rawSchedule `yaml:"schedule"`
+	ID          string         `yaml:"id"`
+	Kind        FaultKind      `yaml:"kind"`
+	Targets     []string       `yaml:"targets"`
+	Failpoint   string         `yaml:"failpoint"`
+	Action      string         `yaml:"action"`
+	Arg         string         `yaml:"arg"`
+	Probability float64        `yaml:"probability"`
+	MaxFires    int            `yaml:"max_fires"`
+	Schedule    rawSchedule    `yaml:"schedule"`
+	Modes       map[string]any `yaml:"modes"`
 }
 
 type rawSchedule struct {
@@ -231,6 +256,11 @@ func validate(name string, raw rawScenario) (Scenario, error) {
 		return Scenario{}, fmt.Errorf("heal_timeout: %w", err)
 	}
 
+	liveness, err := optionalDuration(raw.Liveness, defaultLivenessDeadline)
+	if err != nil {
+		return Scenario{}, fmt.Errorf("liveness_deadline: %w", err)
+	}
+
 	workload, err := validateWorkload(raw.Workload)
 	if err != nil {
 		return Scenario{}, err
@@ -241,7 +271,9 @@ func validate(name string, raw rawScenario) (Scenario, error) {
 		return Scenario{}, err
 	}
 
-	return Scenario{Name: raw.Name, Description: raw.Description, Duration: duration, HealTimeout: healTimeout, Workload: workload, Faults: faults}, nil
+	scenario := Scenario{Name: raw.Name, Description: raw.Description, Duration: duration, HealTimeout: healTimeout, LivenessDeadline: liveness, Workload: workload, Faults: faults}
+
+	return scenario, nil
 }
 
 func optionalDuration(raw string, fallback time.Duration) (time.Duration, error) {
@@ -287,9 +319,34 @@ func validateFault(r rawFault) (Fault, error) {
 		return validateFailpointFault(fault, r)
 	case FaultProcess:
 		return validateProcessFault(fault, r)
+	case FaultPartner:
+		return validatePartnerFault(fault, r)
 	default:
-		return Fault{}, fmt.Errorf("kind %q is not implemented (known: %s, %s)", r.Kind, FaultFailpoint, FaultProcess)
+		return Fault{}, fmt.Errorf("kind %q is not implemented (known: %s, %s, %s)", r.Kind, FaultFailpoint, FaultProcess, FaultPartner)
 	}
+}
+
+// validatePartnerFault checks the names of the lies; the partner itself
+// validates their values when the lab arms them.
+func validatePartnerFault(fault Fault, r rawFault) (Fault, error) {
+	if len(r.Modes) == 0 {
+		return Fault{}, errors.New("a partner fault needs modes")
+	}
+
+	for _, name := range slices.Sorted(maps.Keys(r.Modes)) {
+		if !slices.Contains(partnerModeFields, name) {
+			return Fault{}, fmt.Errorf("partner mode %q is not one of %s", name, strings.Join(partnerModeFields, ", "))
+		}
+	}
+
+	modes, err := json.Marshal(r.Modes)
+	if err != nil {
+		return Fault{}, fmt.Errorf("partner modes: %w", err)
+	}
+
+	fault.Modes = modes
+
+	return fault, nil
 }
 
 func validateFailpointFault(fault Fault, r rawFault) (Fault, error) {
@@ -344,8 +401,8 @@ func validateTargets(targets, allowed []string) error {
 }
 
 func validateWorkload(raw rawWorkload) (Workload, error) {
-	if raw.Profile != ProfileLedgerOnly {
-		return Workload{}, fmt.Errorf("workload profile %q is not implemented (known: %s)", raw.Profile, ProfileLedgerOnly)
+	if !slices.Contains(workloadProfiles, raw.Profile) {
+		return Workload{}, fmt.Errorf("workload profile %q is not implemented (known: ledger-only, balanced, payments-heavy)", raw.Profile)
 	}
 
 	hasValidClients := raw.Clients >= 1 && raw.Clients <= maxClients

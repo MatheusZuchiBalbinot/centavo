@@ -1,0 +1,22 @@
+name: lost-publish
+description: A API morre entre gravar o PIX e avisar o relay, e os workers morrem e voltam (FP04, FC04, PM-004).
+duration: 15m
+workload:
+  profile: payments-heavy
+  clients: 8
+  rate_per_second: 20
+  accounts: 32
+  exclusive_accounts: true
+  client_mix: {polite: 1.0}
+faults:
+  - id: publish-kill
+    kind: failpoint
+    targets: [bank-api]
+    failpoint: pixout.after_save_before_publish
+    action: kill
+    probability: 0.1
+    max_fires: 20
+  - id: worker-kills
+    kind: process
+    targets: [bank-worker-1, bank-worker-2]
+    schedule: {type: poisson, mean_interval: 30s}

@@ -298,8 +298,10 @@ func (e *evaluation) checkDepositTerm() {
 func (e *evaluation) checkOperations() {
 	for _, o := range e.ops.ordered {
 		switch o.function {
-		case history.FunctionDeposit, history.FunctionTransfer:
+		case history.FunctionDeposit, history.FunctionTransfer, history.FunctionPixOut:
 			e.checkWrite(o)
+		case history.FunctionPixIn:
+			e.checkPixIn(o)
 		case history.FunctionCreateAccount:
 			e.checkCreatedAccount(o)
 		case history.FunctionReadBalance:
@@ -403,8 +405,13 @@ func (e *evaluation) checkOKWrite(o *operation, applications []snapshot.Transact
 	var returned writeValue
 	_ = json.Unmarshal(o.value, &returned)
 
-	if returned.TransactionID != applied.ID {
-		e.add(e.opViolation(o, InvariantI2, RuleI2Mismatch, fmt.Sprintf("o cliente recebeu transaction_id %s, mas a aplicação é %s", returned.TransactionID, applied.ID)))
+	returnedID, appliedID := returned.TransactionID, applied.ID
+	if o.function == history.FunctionPixOut {
+		returnedID, appliedID = returned.TransferID, applied.ExternalTransferID
+	}
+
+	if returnedID != appliedID {
+		e.add(e.opViolation(o, InvariantI2, RuleI2Mismatch, fmt.Sprintf("o cliente recebeu o id %s, mas a aplicação é %s", returnedID, appliedID)))
 
 		return
 	}
@@ -428,6 +435,13 @@ func (e *evaluation) expectedEntries(o *operation) map[string]int64 {
 		return map[string]int64{args.AccountID: args.AmountCents, e.ledger.externalCashID: -args.AmountCents}
 	}
 
+	if o.function == history.FunctionPixOut {
+		var args pixOutArgs
+		_ = json.Unmarshal(o.args, &args)
+
+		return map[string]int64{args.AccountID: -args.AmountCents, e.ledger.systemID(snapshot.PixOutTransitCode): args.AmountCents}
+	}
+
 	var args transferArgs
 	_ = json.Unmarshal(o.args, &args)
 
@@ -439,6 +453,9 @@ func (e *evaluation) expectedEntries(o *operation) map[string]int64 {
 func (e *evaluation) checkPhantoms() {
 	for _, id := range e.ledger.transactionIDs {
 		transaction := e.ledger.transactions[id]
+		if !isClientKind(transaction.Kind) {
+			continue
+		}
 
 		o, isKnown := e.ops.byID[transaction.ClientRef]
 		isAttributed := isKnown && transactionKindOf[o.function] == transaction.Kind

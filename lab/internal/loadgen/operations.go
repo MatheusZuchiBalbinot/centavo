@@ -28,6 +28,8 @@ type operation struct {
 	reusedKey string
 	// hasNoKey marks control calls such as resolve, which carry no key.
 	hasNoKey bool
+	// isToPartner sends the request to the partner instead of the bank.
+	isToPartner bool
 }
 
 // accountID is the bank's account id, as the lab sees it: opaque text.
@@ -56,6 +58,29 @@ type transferBody struct {
 
 type readBalanceArgs struct {
 	AccountID accountID `json:"account_id"`
+}
+
+type pixOutArgs struct {
+	AccountID      accountID `json:"account_id"`
+	AmountCents    int64     `json:"amount_cents"`
+	DestinationKey string    `json:"destination_key"`
+}
+
+type pixInArgs struct {
+	AccountID   accountID `json:"account_id"`
+	AmountCents int64     `json:"amount_cents"`
+	EndToEndID  string    `json:"end_to_end_id"`
+}
+
+type pixInBody struct {
+	ParticipantID string    `json:"participant_id"`
+	EndToEndID    string    `json:"end_to_end_id"`
+	AccountID     accountID `json:"account_id"`
+	AmountCents   int64     `json:"amount_cents"`
+}
+
+type readPixOutArgs struct {
+	TransferID string `json:"transfer_id"`
 }
 
 type readStatementArgs struct {
@@ -95,6 +120,40 @@ func transferOperation(args transferArgs) (operation, error) {
 	writeRequest := request{method: http.MethodPost, path: "/v1/transfers", body: body}
 
 	return newOperation(history.FunctionTransfer, writeRequest, args, parseTransfer)
+}
+
+func pixOutOperation(args pixOutArgs) (operation, error) {
+	body, err := json.Marshal(args)
+	if err != nil {
+		return operation{}, err
+	}
+
+	writeRequest := request{method: http.MethodPost, path: "/v1/external-transfers", body: body}
+
+	return newOperation(history.FunctionPixOut, writeRequest, args, parsePixOut)
+}
+
+// pixInOperation asks the partner to send a PIX in; it goes to the partner,
+// not to the bank, and carries no idempotency key: the end_to_end_id is it.
+func pixInOperation(args pixInArgs, participantID string) (operation, error) {
+	body, err := json.Marshal(pixInBody{ParticipantID: participantID, EndToEndID: args.EndToEndID, AccountID: args.AccountID, AmountCents: args.AmountCents})
+	if err != nil {
+		return operation{}, err
+	}
+
+	partnerRequest := request{method: http.MethodPost, path: "/internal/incoming", body: body}
+
+	op, err := newOperation(history.FunctionPixIn, partnerRequest, args, parsePixIn)
+	op.hasNoKey = true
+	op.isToPartner = true
+
+	return op, err
+}
+
+func readPixOutOperation(transferID string) (operation, error) {
+	readRequest := request{method: http.MethodGet, path: "/v1/external-transfers/" + url.PathEscape(transferID)}
+
+	return newOperation(history.FunctionReadPixOut, readRequest, readPixOutArgs{TransferID: transferID}, parseReadPixOut)
 }
 
 func readBalanceOperation(args readBalanceArgs) (operation, error) {
@@ -227,6 +286,62 @@ func parseReadBalance(body []byte, status int) (json.RawMessage, error) {
 	}
 
 	return json.Marshal(readBalanceResult{BalanceCents: *response.BalanceCents, HTTPStatus: status})
+}
+
+type pixOutResult struct {
+	TransferID string `json:"transfer_id"`
+	EndToEndID string `json:"end_to_end_id"`
+	Status     string `json:"status"`
+	HTTPStatus int    `json:"http_status"`
+}
+
+func parsePixOut(body []byte, status int) (json.RawMessage, error) {
+	var response pixOutResult
+
+	err := json.Unmarshal(body, &response)
+	if err != nil || response.TransferID == "" || response.Status == "" {
+		return nil, errMissingField
+	}
+
+	response.HTTPStatus = status
+
+	return json.Marshal(response)
+}
+
+type pixInResult struct {
+	IsAccepted bool `json:"accepted"`
+	IsNew      bool `json:"new"`
+	HTTPStatus int  `json:"http_status"`
+}
+
+func parsePixIn(body []byte, status int) (json.RawMessage, error) {
+	var response pixInResult
+
+	err := json.Unmarshal(body, &response)
+	if err != nil || !response.IsAccepted {
+		return nil, errMissingField
+	}
+
+	response.HTTPStatus = status
+
+	return json.Marshal(response)
+}
+
+// parseReadPixOut keeps the transfer as the bank sent it, transitions included.
+func parseReadPixOut(body []byte, status int) (json.RawMessage, error) {
+	var response map[string]json.RawMessage
+
+	err := json.Unmarshal(body, &response)
+	if err != nil || len(response["status"]) == 0 || len(response["transitions"]) == 0 {
+		return nil, errMissingField
+	}
+
+	response["http_status"], err = json.Marshal(status)
+	if err != nil {
+		return nil, err
+	}
+
+	return json.Marshal(response)
 }
 
 // readStatementResult keeps the page as the bank sent it: the checker

@@ -73,7 +73,7 @@ workload:
 		{name: "unknown field", from: "duration: 1m", to: "duration: 1m\nexpect: {}", wantErr: "expect"},
 		{name: "wrong name", from: "name: demo", to: "name: other", wantErr: "declares name"},
 		{name: "bad duration", from: "duration: 1m", to: "duration: soon", wantErr: "duration"},
-		{name: "unknown profile", from: "ledger-only", to: "balanced", wantErr: "not implemented"},
+		{name: "unknown profile", from: "ledger-only", to: "hotspot", wantErr: "not implemented"},
 		{name: "no clients", from: "clients: 2", to: "clients: 0", wantErr: "clients"},
 		{name: "no rate", from: "rate_per_second: 5", to: "rate_per_second: 0", wantErr: "rate_per_second"},
 		{name: "too few exclusive accounts", from: "accounts: 4", to: "accounts: 3", wantErr: "at least 4"},

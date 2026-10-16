@@ -62,6 +62,9 @@ type Config struct {
 	ChaosToken string
 	EventsDir  string
 	Logger     *slog.Logger
+	// PartnerAdminURL is the partner's admin port, where its lies are set.
+	PartnerAdminURL string
+	ParticipantID   string
 }
 
 // Nemesis runs the faults of one round.
@@ -101,6 +104,7 @@ func (n *Nemesis) Preflight(ctx context.Context) error {
 	}
 
 	n.clearFailpoints(ctx)
+	n.clearPartner(ctx)
 
 	return nil
 }
@@ -115,6 +119,13 @@ func (n *Nemesis) Start(ctx context.Context) error {
 	}
 
 	n.wg.Go(func() { n.failpoints.run(ctx) })
+
+	err = n.armPartner(ctx)
+	if err != nil {
+		return err
+	}
+
+	n.wg.Go(func() { n.renewPartner(ctx) })
 
 	for _, fault := range n.config.Scenario.Faults {
 		if fault.Kind == scenarios.FaultProcess {
@@ -141,6 +152,7 @@ func (n *Nemesis) Heal(ctx context.Context) error {
 	}
 
 	n.clearFailpoints(ctx)
+	n.clearPartner(ctx)
 
 	err = n.waitHealthy(ctx, n.config.Scenario.HealTimeout)
 	if err != nil {

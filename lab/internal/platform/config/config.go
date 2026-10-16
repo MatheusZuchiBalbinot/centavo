@@ -16,6 +16,8 @@ const (
 	chaosTokenVariable    = "CENTAVO_CHAOS_TOKEN" //nolint:gosec // G101: the name of a variable, not a secret.
 	dockerHostVariable    = "DOCKER_HOST"
 	projectVariable       = "CENTAVO_COMPOSE_PROJECT"
+	partnerURLVariable    = "PARTNER_ADMIN_URL"
+	participantVariable   = "PARTNER_PARTICIPANT_ID"
 	fileScheme            = "file"
 	minChaosTokenLength   = 32
 )
@@ -53,6 +55,10 @@ type Run struct {
 	DockerHost string
 	// Project is the Compose project whose chaos targets the bot may touch.
 	Project string
+	// PartnerURL is the partner's admin port: PIX in, truth and lies.
+	PartnerURL string
+	// ParticipantID is the bank at the partner.
+	ParticipantID string
 }
 
 // LoadServe reads the configuration of `lab serve`.
@@ -126,7 +132,24 @@ func LoadRun(lookup LookupFunc) (Run, error) {
 		return Run{}, err
 	}
 
-	return Run{Serve: serve, BankURL: bankURL, ControlURL: controlURL, ChaosToken: chaosToken, DockerHost: dockerHost, Project: project}, nil
+	partnerURL, err := require(lookup, partnerURLVariable)
+	if err != nil {
+		return Run{}, err
+	}
+
+	err = validateBankURL(partnerURL)
+	if err != nil {
+		return Run{}, err
+	}
+
+	participant, err := require(lookup, participantVariable)
+	if err != nil {
+		return Run{}, err
+	}
+
+	run := Run{Serve: serve, BankURL: bankURL, ControlURL: controlURL, ChaosToken: chaosToken, DockerHost: dockerHost, Project: project, PartnerURL: partnerURL, ParticipantID: participant}
+
+	return run, nil
 }
 
 // validateAuditorURL never echoes the URL back: it carries a password.
