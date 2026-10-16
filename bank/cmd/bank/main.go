@@ -297,8 +297,16 @@ func startRelay(ctx context.Context, pool *pgxpool.Pool, cfg config.Config, logg
 	relay := application.NewNaiveRelay(moneyDependencies.UnitOfWork, partner)
 
 	go postgres.Listen(ctx, pool, postgres.PixOutChannel, workers.RelayNotified(relay, logger), logger)
+	go relayPendingOnBoot(ctx, relay, logger)
 
 	return nil
+}
+
+func relayPendingOnBoot(ctx context.Context, relay application.NaiveRelay, logger *slog.Logger) {
+	err := relay.RelayPending(ctx)
+	if err != nil {
+		logger.WarnContext(ctx, "relaying pending transfers at startup", "error", err)
+	}
 }
 
 // withChaos arms the chaos controls and adds the chaos port; a production

@@ -95,6 +95,8 @@ type PixStore interface {
 	// returns what it was and the new sequence number.
 	OverwriteStatus(ctx context.Context, change StatusChange) (transfer.Status, int, error)
 	InsertIncoming(ctx context.Context, incoming IncomingRecord) error
+	// ListCreated returns transfers still in created, oldest first.
+	ListCreated(ctx context.Context, limit int) ([]transfer.ID, error)
 }
 
 // PixOutInput asks to send money out through the partner.
@@ -278,6 +280,37 @@ func (r NaiveRelay) Relay(ctx context.Context, id transfer.ID) error {
 	answer := r.partner.Submit(ctx, submission)
 
 	return r.record(ctx, external, answer)
+}
+
+// pendingOnBoot bounds the boot scan of the naive relay.
+const pendingOnBoot = 500
+
+// RelayPending is the naive recovery: when a worker starts, it sends again
+// every transfer still in created, with no lease. A transfer the dead worker
+// had already handed to the partner goes out a second time, under a new
+// end_to_end_id (FC05, PM-005).
+func (r NaiveRelay) RelayPending(ctx context.Context) error {
+	var pending []transfer.ID
+
+	err := r.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
+		var err error
+
+		pending, err = stores.ListCreated(ctx, pendingOnBoot)
+
+		return err
+	})
+	if err != nil {
+		return err
+	}
+
+	for _, id := range pending {
+		err := r.Relay(ctx, id)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (r NaiveRelay) claim(ctx context.Context, id transfer.ID, seen, next string) (bool, error) {

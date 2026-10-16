@@ -237,3 +237,24 @@ func (s LedgerStore) Notify(ctx context.Context, channel, payload string) error 
 
 	return nil
 }
+
+const listCreatedSQL = `
+SELECT id FROM external_transfers
+WHERE status = 'created'
+ORDER BY updated_at
+LIMIT $1`
+
+// ListCreated returns transfers still waiting for the partner.
+func (s LedgerStore) ListCreated(ctx context.Context, limit int) ([]transfer.ID, error) {
+	rows, err := s.db.Query(ctx, listCreatedSQL, limit)
+	if err != nil {
+		return nil, fmt.Errorf("listing created transfers: %w", err)
+	}
+
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (transfer.ID, error) {
+		var id uuid.UUID
+		err := row.Scan(&id)
+
+		return transfer.ID(id), err
+	})
+}
