@@ -1,0 +1,28 @@
+name: kill-during-reconciliation
+description: Os workers morrem com o lote da conciliação lido e antes de aplicar (FP07) e no meio do lote (FP08), com liquidações em dobro e webhooks perdidos para a conciliação ter o que corrigir (FC08, FC09, PM-011).
+duration: 15m
+workload:
+  profile: payments-heavy
+  clients: 8
+  rate_per_second: 20
+  accounts: 32
+  exclusive_accounts: true
+  client_mix: {polite: 1.0}
+faults:
+  - id: divergences
+    kind: partner
+    modes: {double_process: 0.05, webhook_drop: 0.2}
+  - id: compute-kill
+    kind: failpoint
+    targets: [bank-worker-1, bank-worker-2]
+    failpoint: recon.after_compute_before_apply
+    action: kill
+    probability: 0.3
+    max_fires: 5
+  - id: mid-batch-kill
+    kind: failpoint
+    targets: [bank-worker-1, bank-worker-2]
+    failpoint: recon.mid_apply
+    action: kill
+    probability: 0.003
+    max_fires: 10

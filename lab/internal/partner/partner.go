@@ -35,23 +35,35 @@ func (c Client) Truth(ctx context.Context) ([]byte, error) {
 	return c.get(ctx, "/internal/truth?participant_id="+url.QueryEscape(c.participantID))
 }
 
-// PendingWebhooks counts the deliveries the partner has not finished.
-func (c Client) PendingWebhooks(ctx context.Context) (int, error) {
-	body, err := c.get(ctx, "/internal/pending")
+// Pending is what the partner has not finished for the participant.
+type Pending struct {
+	Webhooks int `json:"pending_deliveries"`
+	// LastStatementSeq is the newest entry of the participant's statement.
+	LastStatementSeq int64 `json:"last_statement_seq"`
+}
+
+// Pending reads the partner's unfinished work.
+func (c Client) Pending(ctx context.Context) (Pending, error) {
+	body, err := c.get(ctx, "/internal/pending?participant_id="+url.QueryEscape(c.participantID))
 	if err != nil {
-		return 0, err
+		return Pending{}, err
 	}
 
-	var pending struct {
-		Count int `json:"pending_deliveries"`
-	}
+	var pending Pending
 
 	err = json.Unmarshal(body, &pending)
 	if err != nil {
-		return 0, fmt.Errorf("reading pending webhooks: %w", err)
+		return Pending{}, fmt.Errorf("reading the partner's pending work: %w", err)
 	}
 
-	return pending.Count, nil
+	return pending, nil
+}
+
+// PendingWebhooks counts the deliveries the partner has not finished.
+func (c Client) PendingWebhooks(ctx context.Context) (int, error) {
+	pending, err := c.Pending(ctx)
+
+	return pending.Webhooks, err
 }
 
 func (c Client) get(ctx context.Context, path string) ([]byte, error) {

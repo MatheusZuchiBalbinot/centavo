@@ -40,8 +40,13 @@ ORDER BY b.account_id`
 	roundTransfersSQL = `
 SELECT id FROM external_transfers WHERE left(client_ref, length($1::text) + 1) = $1::text || '-'`
 
+	// roundEndToEndsSQL are the end_to_end_ids of the round's PIX out, as the
+	// bank derives them: a naive retry's E<id>-<attempt> starts the same way.
+	roundEndToEndsSQL = `SELECT 'E' || replace(id::text, '-', '') FROM external_transfers WHERE id IN (` + roundTransfersSQL + `)`
+
 	// A round's ledger transactions carry its client_refs, or belong to its
-	// PIX out (settlement, refund, return) or to a PIX in of its accounts.
+	// PIX out (settlement, refund, return), to a PIX in of its accounts, or
+	// to a reconciliation item about one of them.
 	transactionsSQL = `
 SELECT id::text, kind::text, coalesce(client_ref, ''), correlation_id,
        coalesce(external_transfer_id::text, ''), coalesce(incoming_transfer_id::text, '')
@@ -49,6 +54,10 @@ FROM ledger_transactions
 WHERE left(client_ref, length($1::text) + 1) = $1::text || '-'
    OR external_transfer_id IN (` + roundTransfersSQL + `)
    OR incoming_transfer_id IN (SELECT id FROM incoming_transfers WHERE account_id = ANY($2::uuid[]))
+   OR reconciliation_item_id IN (
+        SELECT id FROM reconciliation_items
+        WHERE left(end_to_end_id, 33) IN (` + roundEndToEndsSQL + `)
+           OR end_to_end_id IN (SELECT end_to_end_id FROM incoming_transfers WHERE account_id = ANY($2::uuid[])))
 ORDER BY id`
 
 	entriesSQL = `
@@ -225,4 +234,17 @@ func TransferIDs(ctx context.Context, pool *pgxpool.Pool, round string) ([]strin
 	}
 
 	return pgx.CollectRows(rows, pgx.RowTo[string])
+}
+
+// ReconciledUpTo is the bank's reconciliation cursor: the last statement
+// entry it booked.
+func ReconciledUpTo(ctx context.Context, pool *pgxpool.Pool) (int64, error) {
+	var seq int64
+
+	err := pool.QueryRow(ctx, `SELECT last_partner_seq FROM reconciliation_cursor`).Scan(&seq)
+	if err != nil {
+		return 0, fmt.Errorf("reading the reconciliation cursor: %w", err)
+	}
+
+	return seq, nil
 }

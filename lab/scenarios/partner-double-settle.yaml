@@ -1,0 +1,14 @@
+name: partner-double-settle
+description: O parceiro liquida alguns PIX duas vezes; só a conciliação vê a segunda saída da reserva (FC22, PM-010).
+duration: 15m
+workload:
+  profile: payments-heavy
+  clients: 8
+  rate_per_second: 20
+  accounts: 32
+  exclusive_accounts: true
+  client_mix: {polite: 1.0}
+faults:
+  - id: double-settle
+    kind: partner
+    modes: {double_process: 0.1}

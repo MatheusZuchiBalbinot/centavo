@@ -379,8 +379,9 @@ func (e *evaluation) checkReserveTerms(index truthIndex) {
 	settlementID := e.ledger.systemID(snapshot.PartnerSettlementCode)
 	suspenseID := e.ledger.systemID(snapshot.SuspenseCode)
 
-	// The truth's reserve already counts double settlements; until the
-	// reconciliation books them (F9), they show up here as a gap.
+	// The truth's reserve counts double settlements too: the reconciliation
+	// mirrors them with an adjustment against suspense, which the S term
+	// checks below.
 	mirrored := -e.roundSum(settlementID)
 	if mirrored != index.reserveCents {
 		e.add(Violation{Invariant: InvariantI1, Rule: RuleI1cPartnerReserve, TimeNS: e.ops.lastT, AccountID: settlementID, Message: fmt.Sprintf("termo R: sys_partner_settlement espelha %d centavos da rodada, a verdade do parceiro diz %d", mirrored, index.reserveCents)})

@@ -64,7 +64,10 @@ type SagaOptions struct {
 	InFlight        func(ctx context.Context, round string) (int, error)
 	TransferIDs     func(ctx context.Context, round string) ([]string, error)
 	PendingWebhooks func(ctx context.Context) (int, error)
-	Truth           func(ctx context.Context) ([]byte, error)
+	// Unreconciled counts the partner's statement entries the bank has not
+	// booked yet: I1c holds only after the final reconciliation.
+	Unreconciled func(ctx context.Context) (int64, error)
+	Truth        func(ctx context.Context) ([]byte, error)
 	// PartnerURL and ParticipantID are where the load asks for PIX in.
 	PartnerURL    string
 	ParticipantID string
@@ -252,7 +255,12 @@ func waitQuiescence(ctx context.Context, options Options, round string) error {
 			options.Logger.WarnContext(ctx, "reading the partner's pending webhooks", "error", err)
 		}
 
-		isQuiet := inFlight == 0 && pending == 0 && err == nil
+		unreconciled, errReconciled := options.Saga.Unreconciled(ctx)
+		if errReconciled != nil {
+			options.Logger.WarnContext(ctx, "reading how far the bank reconciled", "error", errReconciled)
+		}
+
+		isQuiet := inFlight == 0 && pending == 0 && unreconciled == 0 && err == nil && errReconciled == nil
 		if isQuiet {
 			return nil
 		}

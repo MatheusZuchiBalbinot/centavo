@@ -277,10 +277,28 @@ func sagaOptions(pool *pgxpool.Pool, runConfig config.Run) round.SagaOptions {
 			return export.TransferIDs(ctx, pool, roundID)
 		},
 		PendingWebhooks: partnerClient.PendingWebhooks,
-		Truth:           partnerClient.Truth,
-		PartnerURL:      runConfig.PartnerURL,
-		ParticipantID:   runConfig.ParticipantID,
+		Unreconciled: func(ctx context.Context) (int64, error) {
+			return unreconciled(ctx, pool, partnerClient)
+		},
+		Truth:         partnerClient.Truth,
+		PartnerURL:    runConfig.PartnerURL,
+		ParticipantID: runConfig.ParticipantID,
 	}
+}
+
+// unreconciled is how many statement entries the bank still has to book.
+func unreconciled(ctx context.Context, pool *pgxpool.Pool, partnerClient partner.Client) (int64, error) {
+	pending, err := partnerClient.Pending(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	cursor, err := export.ReconciledUpTo(ctx, pool)
+	if err != nil {
+		return 0, err
+	}
+
+	return max(pending.LastStatementSeq-cursor, 0), nil
 }
 
 // checkInSubprocess runs `lab check` in its own process with its own memory
