@@ -3,6 +3,7 @@ package postgres_test
 import (
 	"context"
 	"net/http"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -48,11 +49,11 @@ func newEventID() string {
 	return "evt_" + uuid.NewString()
 }
 
-// TestStateMachine_DuplicateWithNewID_SettlesOnce is PM-007 (FC25): the
+// TestTransfer_DuplicateEffectWithNewEventID_IsNoop is PM-007 (FC25): the
 // partner sent "settled" twice under two event ids, which the inbox cannot
 // tell apart. The second does not fit a confirmed transfer, so the
 // processor asks the partner, finds it settled, and posts nothing more.
-func TestStateMachine_DuplicateWithNewID_SettlesOnce(t *testing.T) {
+func TestTransfer_DuplicateEffectWithNewEventID_IsNoop(t *testing.T) {
 	p := newOutboxBank(t)
 	intake, processor := newInbox(p, statusAnswer(transfer.PartnerSettled))
 	drainInbox(t, processor)
@@ -144,9 +145,9 @@ func (p pixBank) releaseSweeperLease(t *testing.T) {
 	}
 }
 
-// TestSweeper_SettlesATransferWhoseWebhookNeverCame is PM-009: the partner
+// TestSweeper_LostWebhook_TransferConvergesByPolling is PM-009: the partner
 // settled and its webhooks were lost. The sweeper asks and confirms.
-func TestSweeper_SettlesATransferWhoseWebhookNeverCame(t *testing.T) {
+func TestSweeper_LostWebhook_TransferConvergesByPolling(t *testing.T) {
 	p := newOutboxBank(t)
 	p.releaseSweeperLease(t)
 	created := p.sentTransfer(t, 3_300)
@@ -207,10 +208,10 @@ func TestSweeper_OnlyTheLeaseHolderSweeps(t *testing.T) {
 	}
 }
 
-// TestRelay_TimeoutNeverFails is PM-008 (FC21): with D9 a doubtful answer
+// TestRelay_PartnerTimeout_NeverFailsTransfer is PM-008 (FC21): with D9 a doubtful answer
 // reschedules the message and refunds nothing; the next send, under the
 // same end_to_end_id, gets the partner's answer.
-func TestRelay_TimeoutNeverFails(t *testing.T) {
+func TestRelay_PartnerTimeout_NeverFailsTransfer(t *testing.T) {
 	p := newOutboxBank(t)
 	p.drainOutbox(t)
 	account := p.bank.newCustomer(t)
@@ -248,5 +249,51 @@ func TestRelay_TimeoutNeverFails(t *testing.T) {
 
 	if p.status(t, created.TransferID).Transfer.Status != transfer.StatusSent {
 		t.Fatal("the resend after the doubt did not record the partner's answer")
+	}
+}
+
+// pausingPartner answers with a status and, before the sweeper can use it,
+// lets the webhook move the transfer on: a sweeper frozen at FP11.
+type pausingPartner struct {
+	answer   transfer.PartnerStatus
+	meantime func()
+}
+
+func (p pausingPartner) Status(context.Context, string) (application.AuthoritativeStatus, error) {
+	p.meantime()
+
+	return application.AuthoritativeStatus{Status: p.answer}, nil
+}
+
+// TestSweeper_StaleStatusAfterPause_DoesNotRegressState is FC11: the
+// sweeper read "processing", paused, and the settlement came in meanwhile.
+// The walk starts from the status under the lock, so the stale answer
+// writes nothing.
+func TestSweeper_StaleStatusAfterPause_DoesNotRegressState(t *testing.T) {
+	p := newOutboxBank(t)
+	p.releaseSweeperLease(t)
+	created := p.sentTransfer(t, 1_200)
+
+	settleMeanwhile := func() {
+		settle := application.TransitionCommand{TransferID: created.TransferID, From: transfer.StatusSent, To: transfer.StatusConfirmed, Cause: "webhook"}
+
+		err := p.unitOfWork.Run(t.Context(), func(ctx context.Context, stores application.Stores) error {
+			return application.GuardedTransitions{}.Move(ctx, stores, settle)
+		})
+		if err != nil {
+			t.Error(err)
+		}
+	}
+
+	stale := pausingPartner{answer: transfer.PartnerProcessing, meantime: sync.OnceFunc(settleMeanwhile)}
+
+	err := p.sweeper(stale, "worker-a").RunOnce(t.Context(), sweptNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	view := p.status(t, created.TransferID)
+	if view.Transfer.Status != transfer.StatusConfirmed || p.settlements(t, created.TransferID, "pix_out_settle") != 1 {
+		t.Fatalf("status %s after a stale sweep", view.Transfer.Status)
 	}
 }

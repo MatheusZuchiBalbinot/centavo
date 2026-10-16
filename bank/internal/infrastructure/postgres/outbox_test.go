@@ -127,9 +127,9 @@ func (p pixBank) drainOutbox(t *testing.T) {
 	}
 }
 
-// TestOutbox_DeliversATransferNobodyAnnounced is PM-004: the API died after
+// TestPixOut_CrashAfterSave_IsStillSubmitted is PM-004: the API died after
 // the commit (FP04), so nothing was published, and the transfer still goes.
-func TestOutbox_DeliversATransferNobodyAnnounced(t *testing.T) {
+func TestPixOut_CrashAfterSave_IsStillSubmitted(t *testing.T) {
 	p := newOutboxBank(t)
 	p.drainOutbox(t)
 	account := p.bank.newCustomer(t)
@@ -189,11 +189,11 @@ func TestOutbox_StaleTokenCannotFinish(t *testing.T) {
 	}
 }
 
-// TestOutbox_RetryAfterACrashReusesTheEndToEndID is PM-005: the relay died
+// TestRelay_RedeliveryAfterCrash_ReusesEndToEndID is PM-005: the relay died
 // after the partner took the PIX (FP03). With D6 the next relay sends the
 // same end_to_end_id, which the partner answers without paying again; the
 // naive id per attempt is a second PIX.
-func TestOutbox_RetryAfterACrashReusesTheEndToEndID(t *testing.T) {
+func TestRelay_RedeliveryAfterCrash_ReusesEndToEndID(t *testing.T) {
 	cases := []struct {
 		name       string
 		policy     application.EndToEndPolicy
