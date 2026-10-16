@@ -104,7 +104,11 @@ func Evaluate(records []history.Record, s snapshot.Snapshot) Result {
 // EvaluateWithTruth also compares the ledger with the partner's truth (I6,
 // the R and S terms of I1c, the authoritative part of I7).
 func EvaluateWithTruth(records []history.Record, s snapshot.Snapshot, truth *PartnerTruth) Result {
-	e := evaluation{ops: indexOperations(records), ledger: indexLedger(s)}
+	return evaluate(indexOperations(records), s, truth)
+}
+
+func evaluate(ops operations, s snapshot.Snapshot, truth *PartnerTruth) Result {
+	e := evaluation{ops: ops, ledger: indexLedger(s)}
 
 	e.checkZeroSum()
 	e.checkAccounts()
@@ -137,7 +141,7 @@ func verdictOf(violations []Violation, unresolved []string) Verdict {
 // Check reads a round directory, evaluates it and writes report.json and
 // report.md next to the history.
 func Check(roundDir string) (Result, error) {
-	records, err := readHistory(roundDir)
+	ops, err := readHistory(roundDir)
 	if err != nil {
 		return Result{}, err
 	}
@@ -152,11 +156,16 @@ func Check(roundDir string) (Result, error) {
 		return Result{}, err
 	}
 
-	result := EvaluateWithTruth(records, s, truth)
 	meta := readRoundMeta(roundDir, s.Meta.Round)
+	result := evaluate(ops, s, truth)
 	events := readEvents(roundDir)
 
-	err = writeReports(roundDir, newReport(meta, result, events))
+	histories, err := readHistoriesOf(roundDir, storiedOperations(result))
+	if err != nil {
+		return Result{}, err
+	}
+
+	err = writeReports(roundDir, newReport(meta, result, events, histories))
 	if err != nil {
 		return Result{}, err
 	}
@@ -224,35 +233,67 @@ func invariantResults(violations []Violation) []InvariantResult {
 	return results
 }
 
-func readHistory(roundDir string) ([]history.Record, error) {
+// readHistory streams the history into the operations index.
+func readHistory(roundDir string) (operations, error) {
+	ops := newOperations()
+
+	err := scanHistory(roundDir, ops.add)
+	if err != nil {
+		return operations{}, err
+	}
+
+	ops.indexResolutions()
+
+	return ops, nil
+}
+
+// readHistoriesOf reads the history again for the records of a few
+// operations, the ones the report shows.
+func readHistoriesOf(roundDir string, wanted map[string]bool) (operationHistories, error) {
+	histories := operationHistories{}
+	if len(wanted) == 0 {
+		return histories, nil
+	}
+
+	err := scanHistory(roundDir, func(record history.Record) {
+		if wanted[record.Op] {
+			histories[record.Op] = append(histories[record.Op], record)
+		}
+	})
+
+	return histories, err
+}
+
+func scanHistory(roundDir string, take func(history.Record)) error {
 	file, err := os.Open(filepath.Join(roundDir, historyFile)) //nolint:gosec // G304: the round directory comes from the operator.
 	if err != nil {
-		return nil, fmt.Errorf("opening history: %w", err)
+		return fmt.Errorf("opening history: %w", err)
 	}
 	defer file.Close()
 
-	var records []history.Record
-
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 0, 64<<10), maxLineBytes)
+	line := 0
 
 	for scanner.Scan() {
+		line++
+
 		var record history.Record
 
 		err := json.Unmarshal(scanner.Bytes(), &record)
 		if err != nil {
-			return nil, fmt.Errorf("history record %d is not JSON: %w", len(records)+1, err)
+			return fmt.Errorf("history record %d is not JSON: %w", line, err)
 		}
 
-		records = append(records, record)
+		take(record)
 	}
 
 	err = scanner.Err()
 	if err != nil {
-		return nil, fmt.Errorf("reading history: %w", err)
+		return fmt.Errorf("reading history: %w", err)
 	}
 
-	return records, nil
+	return nil
 }
 
 // readTruth loads truth.json, the partner's record for the round; a round

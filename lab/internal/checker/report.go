@@ -50,7 +50,11 @@ type FailurePath struct {
 	Ledger    []string          `json:"ledger"`
 }
 
-func newReport(meta roundMeta, result Result, events chaosEvents) Report {
+// operationHistories are the history records of the operations a report
+// tells the story of.
+type operationHistories map[string][]history.Record
+
+func newReport(meta roundMeta, result Result, events chaosEvents, histories operationHistories) Report {
 	byRule := map[Rule]int{}
 	examples := map[Rule]string{}
 
@@ -81,8 +85,9 @@ func newReport(meta roundMeta, result Result, events chaosEvents) Report {
 		Violations:       slices.Clone(reported),
 	}
 
-	for _, v := range result.Violations[:min(len(result.Violations), maxFailurePaths)] {
+	for _, v := range storiedViolations(result) {
 		path := failurePathOf(result, v)
+		path.History = append([]history.Record{}, histories[v.Op]...)
 		path.Events = append([]json.RawMessage{}, events[v.Op]...)
 		report.FailurePaths = append(report.FailurePaths, path)
 	}
@@ -92,11 +97,6 @@ func newReport(meta roundMeta, result Result, events chaosEvents) Report {
 
 func failurePathOf(result Result, v Violation) FailurePath {
 	path := FailurePath{Violation: v, Ledger: []string{}}
-
-	o, isKnown := result.ops.byID[v.Op]
-	if isKnown {
-		path.History = o.records
-	}
 
 	transactionIDs := []string{}
 	for _, transaction := range result.ledger.byClientRef[v.Op] {
@@ -125,6 +125,24 @@ func failurePathOf(result Result, v Violation) FailurePath {
 	path.Ledger = path.Ledger[:min(len(path.Ledger), maxPathLines)]
 
 	return path
+}
+
+// storiedViolations are the violations whose failure path the report shows.
+func storiedViolations(result Result) []Violation {
+	return result.Violations[:min(len(result.Violations), maxFailurePaths)]
+}
+
+// storiedOperations are the operations behind them.
+func storiedOperations(result Result) map[string]bool {
+	ops := map[string]bool{}
+
+	for _, v := range storiedViolations(result) {
+		if v.Op != "" {
+			ops[v.Op] = true
+		}
+	}
+
+	return ops
 }
 
 func writeReports(roundDir string, report Report) error {

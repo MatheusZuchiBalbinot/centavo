@@ -206,7 +206,9 @@ services:
       timeout: 4s
       retries: 12
     restart: unless-stopped
-    mem_limit: 160m
+    # 160 MiB for the lab plus 256 MiB for the checker, which runs as its
+    # subprocess between rounds, in this same cgroup (docs/architecture.md, section 11).
+    mem_limit: 416m
 
 networks:
   default:

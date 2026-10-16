@@ -21,7 +21,6 @@ type operation struct {
 	args     json.RawMessage
 	result   history.Type
 	value    json.RawMessage
-	records  []history.Record
 }
 
 // isOpen reports an operation without a completion: the lab stopped before it
@@ -124,34 +123,41 @@ type operations struct {
 	resolutions map[string][]string
 }
 
+func newOperations() operations {
+	return operations{byID: map[string]*operation{}, resolutions: map[string][]string{}}
+}
+
 func indexOperations(records []history.Record) operations {
-	index := operations{byID: map[string]*operation{}, resolutions: map[string][]string{}}
+	index := newOperations()
 
 	for _, record := range records {
-		index.lastT = max(index.lastT, record.TimeNS)
-
-		if record.Type == history.TypeInvoke {
-			o := &operation{op: record.Op, function: record.F, invokeT: record.TimeNS, args: record.Value}
-			index.byID[record.Op] = o
-			index.ordered = append(index.ordered, o)
-		}
-
-		o, isKnown := index.byID[record.Op]
-		if !isKnown {
-			continue
-		}
-
-		o.records = append(o.records, record)
-
-		if record.IsCompletion() {
-			o.result = record.Type
-			o.value = record.Value
-		}
+		index.add(record)
 	}
 
 	index.indexResolutions()
 
 	return index
+}
+
+// add takes the next history record. Only what the invariants read is
+// kept: a long round's records would not fit in the checker's memory, so the
+// report reads the few it shows again from the file.
+func (ops *operations) add(record history.Record) {
+	ops.lastT = max(ops.lastT, record.TimeNS)
+
+	if record.Type == history.TypeInvoke {
+		o := &operation{op: record.Op, function: record.F, invokeT: record.TimeNS, args: record.Value}
+		ops.byID[record.Op] = o
+		ops.ordered = append(ops.ordered, o)
+	}
+
+	o, isKnown := ops.byID[record.Op]
+	isKnownCompletion := isKnown && record.IsCompletion()
+
+	if isKnownCompletion {
+		o.result = record.Type
+		o.value = record.Value
+	}
 }
 
 // indexResolutions collects what every successful resolve answered.
@@ -221,18 +227,16 @@ func (l ledger) systemID(code string) string {
 
 func indexLedger(s snapshot.Snapshot) ledger {
 	l := ledger{
-		accounts:         map[string]snapshot.Account{},
-		balances:         map[string]snapshot.Balance{},
-		transactions:     map[string]snapshot.Transaction{},
-		byClientRef:      map[string][]snapshot.Transaction{},
-		entriesByTx:      map[string][]snapshot.Entry{},
-		entriesByAccount: map[string][]snapshot.Entry{},
-		systemIDs:        map[string]string{},
-		transfers:        s.Transfers,
-		transitions:      map[string][]snapshot.Transition{},
-		byTransfer:       map[string][]snapshot.Transaction{},
-		byIncoming:       map[string][]snapshot.Transaction{},
-		incomingByE2E:    map[string][]snapshot.Incoming{},
+		accounts:      map[string]snapshot.Account{},
+		balances:      map[string]snapshot.Balance{},
+		transactions:  map[string]snapshot.Transaction{},
+		byClientRef:   map[string][]snapshot.Transaction{},
+		systemIDs:     map[string]string{},
+		transfers:     s.Transfers,
+		transitions:   map[string][]snapshot.Transition{},
+		byTransfer:    map[string][]snapshot.Transaction{},
+		byIncoming:    map[string][]snapshot.Transaction{},
+		incomingByE2E: map[string][]snapshot.Incoming{},
 	}
 
 	for _, transition := range s.Transitions {
@@ -276,16 +280,42 @@ func indexLedger(s snapshot.Snapshot) ledger {
 		}
 	}
 
-	// Entry ids grow in insertion order, which is the order the bank wrote them.
-	entries := slices.Clone(s.Entries)
-	slices.SortFunc(entries, func(a, b snapshot.Entry) int { return cmp.Compare(a.ID, b.ID) })
-
-	for _, entry := range entries {
-		l.entriesByTx[entry.TransactionID] = append(l.entriesByTx[entry.TransactionID], entry)
-		l.entriesByAccount[entry.AccountID] = append(l.entriesByAccount[entry.AccountID], entry)
-	}
+	l.entriesByTx = groupEntries(s.Entries, transactionOfEntry)
+	l.entriesByAccount = groupEntries(s.Entries, accountOfEntry)
 
 	return l
+}
+
+func transactionOfEntry(entry snapshot.Entry) string { return entry.TransactionID }
+
+func accountOfEntry(entry snapshot.Entry) string { return entry.AccountID }
+
+// groupEntries sorts one copy of the entries by key and then by id, and
+// indexes its runs: each group is a window of that copy, so a long round
+// pays for the entries once per index, not once per group. Entry ids grow
+// in insertion order, which is the order the bank wrote them.
+func groupEntries(entries []snapshot.Entry, keyOf func(snapshot.Entry) string) map[string][]snapshot.Entry {
+	sorted := slices.Clone(entries)
+	slices.SortFunc(sorted, func(a, b snapshot.Entry) int {
+		return cmp.Or(cmp.Compare(keyOf(a), keyOf(b)), cmp.Compare(a.ID, b.ID))
+	})
+
+	groups := map[string][]snapshot.Entry{}
+	start := 0
+
+	for i := 1; i <= len(sorted); i++ {
+		isRunOver := i == len(sorted) || keyOf(sorted[i]) != keyOf(sorted[start])
+		if !isRunOver {
+			continue
+		}
+
+		// The full slice expression caps the window, so an append to a group
+		// can never write over the next one.
+		groups[keyOf(sorted[start])] = sorted[start:i:i]
+		start = i
+	}
+
+	return groups
 }
 
 // applications are the transactions of the operation's own kind (A(o)).
