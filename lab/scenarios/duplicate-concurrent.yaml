@@ -1,0 +1,10 @@
+name: duplicate-concurrent
+description: Cada escrita sai duas vezes ao mesmo tempo com a mesma chave de idempotência (FC40, PM-003).
+duration: 10m
+workload:
+  profile: ledger-only
+  clients: 8
+  rate_per_second: 30
+  accounts: 16
+  exclusive_accounts: true
+  client_mix: {duplicator: 1.0}

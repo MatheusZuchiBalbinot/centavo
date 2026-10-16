@@ -1,0 +1,20 @@
+name: kill-between-debit-credit
+description: Mata a API entre o lançamento de débito e o de crédito de transferências internas (FP01, FC01, PM-002).
+duration: 10m
+heal_timeout: 2m
+workload:
+  profile: ledger-only
+  clients: 8
+  rate_per_second: 30
+  accounts: 16
+  # Exclusive accounts keep lost updates (FC41) out of this report.
+  exclusive_accounts: true
+  client_mix: {polite: 1.0}
+faults:
+  - id: debit-credit-kill
+    kind: failpoint
+    targets: [bank-api]
+    failpoint: transfer.after_debit_before_credit
+    action: kill
+    probability: 0.1
+    max_fires: 30

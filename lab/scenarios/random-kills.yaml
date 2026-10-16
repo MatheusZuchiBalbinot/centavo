@@ -1,0 +1,16 @@
+name: random-kills
+description: Mortes aleatórias de todos os alvos, em média a cada 15 s, para achar janelas que ninguém previu.
+duration: 30m
+heal_timeout: 2m
+workload:
+  profile: ledger-only
+  clients: 8
+  rate_per_second: 30
+  accounts: 16
+  exclusive_accounts: true
+  client_mix: {polite: 1.0}
+faults:
+  - id: random-kills
+    kind: process
+    targets: [bank-api, bank-worker-1, bank-worker-2, partner]
+    schedule: {type: poisson, mean_interval: 15s}

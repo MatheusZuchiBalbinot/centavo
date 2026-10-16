@@ -1,0 +1,19 @@
+name: kill-after-commit
+description: Mata a API depois de aplicar a escrita e antes de responder; o cliente polido repete com a mesma chave (FP02, FC02, PM-003).
+duration: 10m
+heal_timeout: 2m
+workload:
+  profile: ledger-only
+  clients: 8
+  rate_per_second: 30
+  accounts: 16
+  exclusive_accounts: true
+  client_mix: {polite: 1.0}
+faults:
+  - id: commit-response-kill
+    kind: failpoint
+    targets: [bank-api]
+    failpoint: api.after_commit_before_response
+    action: kill
+    probability: 0.05
+    max_fires: 30
