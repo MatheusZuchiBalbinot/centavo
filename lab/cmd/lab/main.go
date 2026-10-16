@@ -29,6 +29,7 @@ import (
 	"centavo/lab/internal/audit"
 	"centavo/lab/internal/checker"
 	"centavo/lab/internal/dashboard"
+	"centavo/lab/internal/docker"
 	"centavo/lab/internal/export"
 	"centavo/lab/internal/platform/buildinfo"
 	"centavo/lab/internal/platform/config"
@@ -53,6 +54,8 @@ const (
 	// Pool sizes of docs/architecture.md, section 11.1.
 	auditorConnections = 2
 	exportConnections  = 2
+	// eventsDir is the shared volume where services record fired failpoints.
+	eventsDir = "/lab/events"
 	// checkerMemoryLimit is the soft limit of the checker subprocess.
 	checkerMemoryLimit = "GOMEMLIMIT=256MiB"
 )
@@ -222,6 +225,13 @@ func runRound(ctx context.Context, args []string) error {
 		return export.Take(ctx, pool, request)
 	}
 	options.Check = checkInSubprocess
+
+	dockerClient, err := docker.New(runConfig.DockerHost, runConfig.Project)
+	if err != nil {
+		return err
+	}
+
+	options.Chaos = round.ChaosOptions{Docker: dockerClient, Token: runConfig.ChaosToken, EventsDir: eventsDir}
 
 	result, err := round.Run(ctx, options)
 	printSummary(result)

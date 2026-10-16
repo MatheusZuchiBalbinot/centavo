@@ -16,9 +16,11 @@ import (
 	"time"
 
 	"centavo/lab/internal/checker"
+	"centavo/lab/internal/docker"
 	"centavo/lab/internal/export"
 	"centavo/lab/internal/history"
 	"centavo/lab/internal/loadgen"
+	"centavo/lab/internal/nemesis"
 	"centavo/lab/internal/seed"
 	"centavo/lab/internal/snapshot"
 	"centavo/lab/scenarios"
@@ -26,6 +28,7 @@ import (
 
 const (
 	historyFile  = "history.jsonl"
+	eventsFile   = "events.jsonl"
 	manifestFile = "round.json"
 	// maxAllocationTries bounds the race between two labs creating rounds.
 	maxAllocationTries = 10
@@ -47,6 +50,15 @@ type Options struct {
 	Export func(ctx context.Context, request export.Request) (snapshot.Snapshot, error)
 	// Check runs the checker on the archived round and returns its verdict.
 	Check func(ctx context.Context, roundDir string) (checker.Verdict, error)
+	// Chaos is how the nemesis reaches the targets.
+	Chaos ChaosOptions
+}
+
+// ChaosOptions are the nemesis's means of action.
+type ChaosOptions struct {
+	Docker    docker.Client
+	Token     string
+	EventsDir string
 }
 
 // Result is where a round was archived, what its history looks like and
@@ -112,19 +124,30 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	startedAt := time.Now().UTC()
 	options.Logger.InfoContext(ctx, "round started", "round", id, "scenario", options.Scenario.Name, "seed", options.Seed.String(), "dir", dir)
 
-	loadConfig := loadgen.Config{
-		Round:    id,
-		Seed:     options.Seed,
-		Workload: options.Scenario.Workload,
-		Duration: options.Scenario.Duration,
-		BankURL:  options.BankURL,
-		History:  writer,
-		Logger:   options.Logger,
+	bot := nemesis.New(nemesis.Config{
+		Round:      id,
+		Seed:       options.Seed,
+		Scenario:   options.Scenario,
+		History:    writer,
+		Docker:     options.Chaos.Docker,
+		ChaosToken: options.Chaos.Token,
+		EventsDir:  options.Chaos.EventsDir,
+		Logger:     options.Logger,
+	})
+
+	// A target that fails the preflight is never touched, not even to cure it.
+	err = bot.Preflight(ctx)
+	if err != nil {
+		return Result{ID: id, Dir: dir}, errors.Join(err, writer.Close())
 	}
 
-	loadErr := loadgen.Run(ctx, loadConfig)
+	loadErr := runLoad(ctx, options, id, writer, bot)
+
+	// The cure runs even after a failed load: nothing stays broken (lock 6).
+	healErr := bot.Heal(ctx)
 	closeErr := writer.Close()
-	runErr := errors.Join(loadErr, closeErr)
+	eventsErr := writeEvents(dir, bot.Events())
+	runErr := errors.Join(loadErr, healErr, closeErr, eventsErr)
 
 	report, err := validateHistory(dir)
 	if err != nil {
@@ -149,6 +172,39 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	err = writeManifest(dir, newManifest(options, result, startedAt, runErr))
 
 	return result, errors.Join(runErr, err)
+}
+
+func runLoad(ctx context.Context, options Options, id string, writer *history.Writer, bot *nemesis.Nemesis) error {
+	loadConfig := loadgen.Config{
+		Round:      id,
+		Seed:       options.Seed,
+		Workload:   options.Scenario.Workload,
+		Duration:   options.Scenario.Duration,
+		BankURL:    options.BankURL,
+		History:    writer,
+		Logger:     options.Logger,
+		BeforeLoad: bot.Start,
+	}
+
+	return loadgen.Run(ctx, loadConfig)
+}
+
+// writeEvents keeps the failpoint events of the round next to its history;
+// the checker uses them only to tell the story of a violation.
+func writeEvents(dir string, events []json.RawMessage) error {
+	var content []byte
+
+	for _, event := range events {
+		content = append(content, event...)
+		content = append(content, '\n')
+	}
+
+	err := os.WriteFile(filepath.Join(dir, eventsFile), content, 0o600)
+	if err != nil {
+		return fmt.Errorf("writing events.jsonl: %w", err)
+	}
+
+	return nil
 }
 
 // exportAndCheck takes the ledger snapshot of the round and runs the checker on it.

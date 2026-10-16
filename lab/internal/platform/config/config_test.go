@@ -3,6 +3,7 @@ package config_test
 import (
 	"errors"
 	"maps"
+	"strings"
 	"testing"
 
 	"centavo/lab/internal/platform/config"
@@ -17,7 +18,7 @@ func lookupFrom(values map[string]string) config.LookupFunc {
 }
 
 func TestLoadRun(t *testing.T) {
-	valid := map[string]string{"BANK_API_URL": "http://toxiproxy:28080", "ARTIFACT_STORE": "file:///data/rounds/", "AUDITOR_DATABASE_URL": "postgres://bank_auditor:secret@postgres:5432/bank_robust"}
+	valid := map[string]string{"BANK_API_URL": "http://toxiproxy:28080", "ARTIFACT_STORE": "file:///data/rounds/", "AUDITOR_DATABASE_URL": "postgres://bank_auditor:secret@postgres:5432/bank_robust", "CENTAVO_CHAOS_TOKEN": strings.Repeat("t", 64), "DOCKER_HOST": "tcp://docker-proxy:2375", "CENTAVO_COMPOSE_PROJECT": "centavo"}
 
 	got, err := config.LoadRun(lookupFrom(valid))
 	if err != nil {
@@ -41,6 +42,8 @@ func TestLoadRun(t *testing.T) {
 		{name: "relative file store", key: "ARTIFACT_STORE", value: "file://data/rounds", want: config.ErrUnsupportedStore},
 		{name: "missing store", key: "ARTIFACT_STORE", value: "", want: config.ErrMissingVariable},
 		{name: "missing auditor", key: "AUDITOR_DATABASE_URL", value: "", want: config.ErrMissingVariable},
+		{name: "weak chaos token", key: "CENTAVO_CHAOS_TOKEN", value: "short", want: config.ErrWeakChaosToken},
+		{name: "missing docker host", key: "DOCKER_HOST", value: "", want: config.ErrMissingVariable},
 		{name: "auditor is not postgres", key: "AUDITOR_DATABASE_URL", value: "mysql://auditor@db/bank", want: config.ErrInvalidAuditor},
 	}
 

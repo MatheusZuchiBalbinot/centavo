@@ -22,6 +22,7 @@ const Version = "1"
 
 const (
 	historyFile  = "history.jsonl"
+	eventsFile   = "events.jsonl"
 	manifestFile = "round.json"
 	// maxLineBytes matches the history writer's largest record.
 	maxLineBytes = 1 << 20
@@ -126,8 +127,9 @@ func Check(roundDir string) (Result, error) {
 
 	result := Evaluate(records, s)
 	meta := readRoundMeta(roundDir, s.Meta.Round)
+	events := readEvents(roundDir)
 
-	err = writeReports(roundDir, newReport(meta, result))
+	err = writeReports(roundDir, newReport(meta, result, events))
 	if err != nil {
 		return Result{}, err
 	}
@@ -224,6 +226,41 @@ func readHistory(roundDir string) ([]history.Record, error) {
 	}
 
 	return records, nil
+}
+
+// chaosEvents are the failpoint events of the round, by correlation id. They
+// never decide an invariant; they only tell the story (section 2).
+type chaosEvents map[string][]json.RawMessage
+
+// readEvents loads events.jsonl when it exists; a round without chaos has none.
+func readEvents(roundDir string) chaosEvents {
+	events := chaosEvents{}
+
+	file, err := os.Open(filepath.Join(roundDir, eventsFile)) //nolint:gosec // G304: the round directory comes from the operator.
+	if err != nil {
+		return events
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 0, 64<<10), maxLineBytes)
+
+	for scanner.Scan() {
+		var event struct {
+			CorrelationID string `json:"correlation_id"`
+		}
+
+		line := slices.Clone(scanner.Bytes())
+
+		err := json.Unmarshal(line, &event)
+		if err != nil || event.CorrelationID == "" {
+			continue
+		}
+
+		events[event.CorrelationID] = append(events[event.CorrelationID], line)
+	}
+
+	return events
 }
 
 // roundMeta is the part of round.json the report shows; round.json is

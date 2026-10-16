@@ -12,7 +12,11 @@ const (
 	bankURLVariable       = "BANK_API_URL"
 	artifactStoreVariable = "ARTIFACT_STORE"
 	auditorURLVariable    = "AUDITOR_DATABASE_URL"
+	chaosTokenVariable    = "CENTAVO_CHAOS_TOKEN" //nolint:gosec // G101: the name of a variable, not a secret.
+	dockerHostVariable    = "DOCKER_HOST"
+	projectVariable       = "CENTAVO_COMPOSE_PROJECT"
 	fileScheme            = "file"
+	minChaosTokenLength   = 32
 )
 
 var (
@@ -20,6 +24,7 @@ var (
 	ErrInvalidBankURL   = errors.New("BANK_API_URL must be an absolute http or https URL")
 	ErrUnsupportedStore = errors.New("ARTIFACT_STORE must be a file:// URL with an absolute path")
 	ErrInvalidAuditor   = errors.New("AUDITOR_DATABASE_URL must be a postgres:// URL")
+	ErrWeakChaosToken   = errors.New("CENTAVO_CHAOS_TOKEN must have at least 32 characters")
 )
 
 // LookupFunc reads one environment variable; os.LookupEnv satisfies it.
@@ -39,6 +44,12 @@ type Run struct {
 	Serve
 	// BankURL is the bank's client API, through the client_api proxy.
 	BankURL string
+	// ChaosToken authenticates the lab on the chaos ports (lock 4).
+	ChaosToken string
+	// DockerHost is docker-proxy, the only way to the Docker API (lock 5).
+	DockerHost string
+	// Project is the Compose project whose chaos targets the bot may touch.
+	Project string
 }
 
 // LoadServe reads the configuration of `lab serve`.
@@ -83,7 +94,26 @@ func LoadRun(lookup LookupFunc) (Run, error) {
 		return Run{}, err
 	}
 
-	return Run{Serve: serve, BankURL: bankURL}, nil
+	chaosToken, err := require(lookup, chaosTokenVariable)
+	if err != nil {
+		return Run{}, err
+	}
+
+	if len(chaosToken) < minChaosTokenLength {
+		return Run{}, ErrWeakChaosToken
+	}
+
+	dockerHost, err := require(lookup, dockerHostVariable)
+	if err != nil {
+		return Run{}, err
+	}
+
+	project, err := require(lookup, projectVariable)
+	if err != nil {
+		return Run{}, err
+	}
+
+	return Run{Serve: serve, BankURL: bankURL, ChaosToken: chaosToken, DockerHost: dockerHost, Project: project}, nil
 }
 
 // validateAuditorURL never echoes the URL back: it carries a password.

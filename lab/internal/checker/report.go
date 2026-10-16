@@ -43,12 +43,13 @@ type Report struct {
 // FailurePath tells the story of one violation: the operation's history and
 // the ledger rows it touched.
 type FailurePath struct {
-	Violation Violation        `json:"violation"`
-	History   []history.Record `json:"history"`
-	Ledger    []string         `json:"ledger"`
+	Violation Violation         `json:"violation"`
+	History   []history.Record  `json:"history"`
+	Events    []json.RawMessage `json:"events"`
+	Ledger    []string          `json:"ledger"`
 }
 
-func newReport(meta roundMeta, result Result) Report {
+func newReport(meta roundMeta, result Result, events chaosEvents) Report {
 	byRule := map[Rule]int{}
 	examples := map[Rule]string{}
 
@@ -79,7 +80,9 @@ func newReport(meta roundMeta, result Result) Report {
 	}
 
 	for _, v := range result.Violations[:min(len(result.Violations), maxFailurePaths)] {
-		report.FailurePaths = append(report.FailurePaths, failurePathOf(result, v))
+		path := failurePathOf(result, v)
+		path.Events = append([]json.RawMessage{}, events[v.Op]...)
+		report.FailurePaths = append(report.FailurePaths, path)
 	}
 
 	return report
@@ -185,6 +188,14 @@ func writeFirstViolation(b *strings.Builder, report Report) {
 
 		for _, record := range path.History {
 			fmt.Fprintf(b, "| %s | %s | %s |\n", formatTime(record.TimeNS), record.Type, recordDetail(record))
+		}
+	}
+
+	if len(path.Events) > 0 {
+		b.WriteString("\n### Falhas injetadas nesta operação\n\n")
+
+		for _, event := range path.Events {
+			fmt.Fprintf(b, "- `%s`\n", event)
 		}
 	}
 
