@@ -20,3 +20,13 @@ faults:
     kind: clock
     targets: [bank-api]
     offset: -10m
+  # A reconciler holds its batch for 20 s, under the 30 s lease, so the worker that runs ahead
+  # takes the lease while the batch is still unbooked: two reconcilers book
+  # the same entries unless the lease follows the database clock (FC35).
+  - id: slow-batch
+    kind: failpoint
+    targets: [bank-worker-1, bank-worker-2]
+    failpoint: recon.after_compute_before_apply
+    action: delay
+    arg: 20s
+    probability: 0.5
