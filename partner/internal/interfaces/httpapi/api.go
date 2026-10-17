@@ -28,6 +28,12 @@ const (
 	maxStatementLimit     = 1_000
 )
 
+// correlationPattern is the bank's format for correlation ids; anything else
+// is dropped instead of echoed on the webhooks.
+var correlationPattern = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,128}$`)
+
+const correlationHeader = "X-Correlation-Id"
+
 // endToEndPattern accepts the bank's ids, E plus hex and an optional attempt.
 var endToEndPattern = regexp.MustCompile(`^E[0-9a-fA-F-]{8,80}$`)
 
@@ -106,7 +112,10 @@ func (a API) submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := a.store.Submit(r.Context(), newTransfer(request, decider, now))
+	transfer := newTransfer(request, decider, now)
+	transfer.CorrelationID = correlationOf(r)
+
+	result, err := a.store.Submit(r.Context(), transfer)
 	if err != nil {
 		a.logger.ErrorContext(r.Context(), "recording a transfer", "error", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal"})
@@ -257,7 +266,7 @@ func (a API) incoming(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now().UTC()
-	incoming := truth.Incoming{EndToEndID: request.EndToEndID, ParticipantID: request.ParticipantID, AccountID: request.AccountID, AmountCents: request.AmountCents, CreatedAt: now}
+	incoming := truth.Incoming{EndToEndID: request.EndToEndID, ParticipantID: request.ParticipantID, AccountID: request.AccountID, AmountCents: request.AmountCents, CreatedAt: now, CorrelationID: correlationOf(r)}
 	decider := a.modes.For(request.ParticipantID, now)
 
 	isNew, err := a.store.AddIncoming(r.Context(), truth.IncomingCommand{Incoming: incoming, EventID: engine.NewEventID(), Planner: decider.Plan})
@@ -299,6 +308,17 @@ func (a API) pending(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]int{"pending_deliveries": count})
+}
+
+// correlationOf is the caller's correlation id, or none when it is missing or
+// malformed.
+func correlationOf(r *http.Request) string {
+	received := r.Header.Get(correlationHeader)
+	if !correlationPattern.MatchString(received) {
+		return ""
+	}
+
+	return received
 }
 
 func (a API) validate(request submitRequest) error {

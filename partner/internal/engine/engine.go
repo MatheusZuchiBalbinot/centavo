@@ -21,14 +21,15 @@ import (
 )
 
 const (
-	tickInterval     = 100 * time.Millisecond
-	batchSize        = 100
-	deliveryTimeout  = 2 * time.Second
-	maxAttempts      = 8
-	firstRetryDelay  = 2 * time.Second
-	signatureHeader  = "X-Partner-Signature"
-	declinedReason   = "partner_declined"
-	maxResponseBytes = 64 << 10
+	tickInterval      = 100 * time.Millisecond
+	batchSize         = 100
+	deliveryTimeout   = 2 * time.Second
+	maxAttempts       = 8
+	firstRetryDelay   = 2 * time.Second
+	signatureHeader   = "X-Partner-Signature"
+	correlationHeader = "X-Correlation-Id"
+	declinedReason    = "partner_declined"
+	maxResponseBytes  = 64 << 10
 )
 
 // Participant is a bank the partner serves.
@@ -181,6 +182,12 @@ func (e *Engine) send(ctx context.Context, delivery truth.Delivery, now time.Tim
 
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set(signatureHeader, Sign(e.secret, now, delivery.Payload))
+
+	// The webhook carries the PIX's correlation id back, so the bank's logs
+	// and failpoints follow the PIX into its webhooks.
+	if delivery.CorrelationID != "" {
+		request.Header.Set(correlationHeader, delivery.CorrelationID)
+	}
 
 	response, err := e.http.Do(request)
 	if err != nil {

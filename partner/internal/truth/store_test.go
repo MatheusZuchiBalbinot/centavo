@@ -2,6 +2,7 @@ package truth_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"path/filepath"
 	"testing"
@@ -181,5 +182,45 @@ func TestDeliveries_CanBeDroppedRescheduledAndAbandoned(t *testing.T) {
 	pending, err := store.PendingDeliveries(t.Context())
 	if err != nil || pending != 1 {
 		t.Fatalf("pending: %d, %v", pending, err)
+	}
+}
+
+// TestOpen_AddsTheColumnsOfANewerSchema guards the partner's volume across
+// upgrades: a truth created before a column existed gets it on open.
+func TestOpen_AddsTheColumnsOfANewerSchema(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "truth.db")
+
+	old, err := sql.Open("sqlite", "file:"+path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = old.ExecContext(t.Context(), `CREATE TABLE transfers (end_to_end_id TEXT PRIMARY KEY, participant_id TEXT NOT NULL, amount_cents INTEGER NOT NULL, destination_key TEXT NOT NULL, status TEXT NOT NULL, reject_reason TEXT NOT NULL DEFAULT '', is_double INTEGER NOT NULL DEFAULT 0, webhook_seq INTEGER NOT NULL DEFAULT 0, settle_at INTEGER NOT NULL, return_at INTEGER, created_at INTEGER NOT NULL)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = old.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	store, err := truth.Open(t.Context(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() { _ = store.Close() })
+
+	transfer := truth.Transfer{EndToEndID: "E-old", ParticipantID: "centavo-robust", AmountCents: 100, DestinationKey: "dest-0001", Status: truth.StatusProcessing, SettleAt: epoch, CreatedAt: epoch, CorrelationID: "r0001-p01-000001"}
+
+	_, err = store.Submit(t.Context(), transfer)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stored, err := store.Get(t.Context(), "E-old")
+	if err != nil || stored.CorrelationID != transfer.CorrelationID {
+		t.Fatalf("stored %+v, %v", stored, err)
 	}
 }

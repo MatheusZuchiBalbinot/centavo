@@ -209,3 +209,44 @@ func hasValidSignature(header string, body, secret []byte) bool {
 
 	return hmac.Equal([]byte(hex.EncodeToString(mac.Sum(nil))), []byte(signature))
 }
+
+// TestEngine_EchoesTheCorrelationIDOnWebhooks guards the lab's failpoints on
+// the bank's webhook path: they match the PIX's correlation id, which only
+// reaches the bank if the partner sends it back.
+func TestEngine_EchoesTheCorrelationIDOnWebhooks(t *testing.T) {
+	p := newPartner(t)
+	secret := []byte(strings.Repeat("s", 32))
+	echoed := make(chan string, 2)
+
+	bank := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		echoed <- r.Header.Get("X-Correlation-Id")
+	}))
+	defer bank.Close()
+
+	worker := engine.New(engine.Config{Store: p.store, Modes: p.registry, Participants: []engine.Participant{{ID: participant, WebhookURL: bank.URL}}, Secret: secret, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	go worker.Run(t.Context())
+
+	submit := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/transfers", strings.NewReader(transferBody("E0192f1c5a1b2c3d9", "dest-0001")))
+	submit.Header.Set("X-Correlation-Id", "r0001-p01-000001")
+	p.api.ServeHTTP(httptest.NewRecorder(), submit)
+
+	incomingBody := `{"participant_id": "` + participant + `", "end_to_end_id": "E0192f1c5a1b2c3da", "account_id": "acc-1", "amount_cents": 900}`
+	incoming := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/internal/incoming", strings.NewReader(incomingBody))
+	incoming.Header.Set("X-Correlation-Id", "r0001-p02-000001")
+	p.admin.ServeHTTP(httptest.NewRecorder(), incoming)
+
+	got := map[string]bool{}
+
+	for range 2 {
+		select {
+		case correlationID := <-echoed:
+			got[correlationID] = true
+		case <-time.After(5 * time.Second):
+			t.Fatalf("webhooks echoed %v before the deadline", got)
+		}
+	}
+
+	if !got["r0001-p01-000001"] || !got["r0001-p02-000001"] {
+		t.Fatalf("echoed correlation ids: %v", got)
+	}
+}
