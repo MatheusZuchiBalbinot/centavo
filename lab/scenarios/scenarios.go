@@ -63,6 +63,24 @@ const (
 	FaultPartner FaultKind = "partner"
 	// FaultClock skews a process's wall clock (docs/chaos-bot.md, section 6).
 	FaultClock FaultKind = "clock"
+	// FaultNetwork puts toxics on Toxiproxy's links (docs/chaos-bot.md, section 8).
+	FaultNetwork FaultKind = "network"
+)
+
+// Toxic types the bot puts on a link, with the three partitions of
+// docs/chaos-bot.md, section 8: reject (the proxy is down), blackhole
+// (nothing moves either way) and one_way (requests arrive, answers do not).
+const (
+	ToxicReject    = "reject"
+	ToxicBlackhole = "blackhole"
+	ToxicOneWay    = "one_way"
+)
+
+var (
+	toxicTypes = []string{"latency", "timeout", "reset_peer", "limit_data", "slicer", "bandwidth", "slow_close", ToxicReject, ToxicBlackhole, ToxicOneWay}
+	// networkLinks are Toxiproxy's proxies (docs/architecture.md, section 4.1).
+	networkLinks = []string{"client_api", "api_pg", "worker1_pg", "worker2_pg", "worker1_partner", "worker2_partner", "partner_webhooks"}
+	toxicStreams = []string{"upstream", "downstream"}
 )
 
 // partnerModeFields are the lies a scenario may ask for; the lab adds the
@@ -150,6 +168,26 @@ type Fault struct {
 	Modes json.RawMessage
 	// Offset is a clock fault's skew, ahead when positive.
 	Offset time.Duration
+	// Proxies, Toxic and Window describe a network fault: which links, what
+	// happens on them and, with a schedule, how long each episode lasts.
+	Proxies []string
+	Toxic   Toxic
+	Window  Window
+}
+
+// Toxic is what a network fault does to a link.
+type Toxic struct {
+	Type   string
+	Stream string
+	// Toxicity is the share of connections hit.
+	Toxicity   float64
+	Attributes map[string]int64
+}
+
+// Window bounds an episode of a scheduled network fault.
+type Window struct {
+	Min time.Duration
+	Max time.Duration
 }
 
 // Schedule spreads a fault over the round.
@@ -180,6 +218,14 @@ type rawFault struct {
 	Schedule    rawSchedule    `yaml:"schedule"`
 	Modes       map[string]any `yaml:"modes"`
 	Offset      string         `yaml:"offset"`
+	Proxies     []string       `yaml:"proxies"`
+	Toxic       map[string]any `yaml:"toxic"`
+	Duration    rawWindow      `yaml:"duration"`
+}
+
+type rawWindow struct {
+	Min string `yaml:"min"`
+	Max string `yaml:"max"`
 }
 
 type rawSchedule struct {
@@ -331,8 +377,10 @@ func validateFault(r rawFault) (Fault, error) {
 		return validatePartnerFault(fault, r)
 	case FaultClock:
 		return validateClockFault(fault, r)
+	case FaultNetwork:
+		return validateNetworkFault(fault, r)
 	default:
-		return Fault{}, fmt.Errorf("kind %q is not implemented (known: %s, %s, %s, %s)", r.Kind, FaultFailpoint, FaultProcess, FaultPartner, FaultClock)
+		return Fault{}, fmt.Errorf("kind %q is not implemented (known: %s, %s, %s, %s, %s)", r.Kind, FaultFailpoint, FaultProcess, FaultPartner, FaultClock, FaultNetwork)
 	}
 }
 

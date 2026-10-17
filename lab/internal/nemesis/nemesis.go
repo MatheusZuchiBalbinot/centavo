@@ -79,11 +79,13 @@ type Nemesis struct {
 	freezes sync.WaitGroup
 
 	failpoints *failpointController
+	// toxiproxyURL is Toxiproxy's API; tests point it at a fake.
+	toxiproxyURL string
 }
 
 // New builds the nemesis of a round.
 func New(config Config) *Nemesis {
-	n := &Nemesis{config: config, http: &http.Client{Timeout: requestTimeout}, started: time.Now().UTC()}
+	n := &Nemesis{config: config, http: &http.Client{Timeout: requestTimeout}, started: time.Now().UTC(), toxiproxyURL: toxiproxyURL}
 	n.failpoints = newFailpointController(n)
 
 	return n
@@ -108,6 +110,7 @@ func (n *Nemesis) Preflight(ctx context.Context) error {
 	n.clearFailpoints(ctx)
 	n.clearPartner(ctx)
 	n.clearClocks(ctx)
+	n.resetNetwork(ctx)
 
 	return nil
 }
@@ -134,6 +137,8 @@ func (n *Nemesis) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	n.startNetwork(ctx)
 
 	for _, fault := range n.config.Scenario.Faults {
 		if fault.Kind == scenarios.FaultProcess {
@@ -163,6 +168,7 @@ func (n *Nemesis) Heal(ctx context.Context) error {
 	n.clearFailpoints(ctx)
 	n.clearPartner(ctx)
 	n.clearClocks(ctx)
+	n.resetNetwork(ctx)
 
 	err = n.waitHealthy(ctx, n.config.Scenario.HealTimeout)
 	if err != nil {

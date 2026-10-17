@@ -43,6 +43,8 @@ const (
 	FunctionHealStart      Function = "heal_start"
 	// FunctionFreeze pauses a whole container for a freeze failpoint.
 	FunctionFreeze Function = "freeze"
+	// FunctionNetwork starts or ends a network fault.
+	FunctionNetwork Function = "network"
 	// FunctionSkewClock moves a process's wall clock.
 	FunctionSkewClock    Function = "skew_clock"
 	FunctionHealComplete Function = "heal_complete"

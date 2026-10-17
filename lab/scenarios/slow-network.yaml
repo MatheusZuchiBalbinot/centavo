@@ -1,0 +1,29 @@
+name: slow-network
+description: Latência, variação e banda reduzida em todos os links; timeouts disparam no meio de transações e as janelas de corrida ficam largas (FC18, FC19).
+duration: 20m
+workload:
+  profile: balanced
+  clients: 8
+  rate_per_second: 20
+  accounts: 16
+  exclusive_accounts: false
+  client_mix: {polite: 0.8, aggressive: 0.2}
+faults:
+  - id: slow-db
+    kind: network
+    proxies: [api_pg, worker1_pg, worker2_pg]
+    toxic: {type: latency, latency: 150, jitter: 100, toxicity: 0.5}
+  - id: slow-partner
+    kind: network
+    proxies: [worker1_partner, worker2_partner, partner_webhooks]
+    toxic: {type: latency, latency: 800, jitter: 600, toxicity: 0.5}
+  - id: slow-clients
+    kind: network
+    proxies: [client_api]
+    toxic: {type: latency, latency: 300, jitter: 300, toxicity: 0.3}
+  - id: narrow-partner
+    kind: network
+    proxies: [worker1_partner]
+    toxic: {type: bandwidth, rate: 8}
+    schedule: {type: poisson, mean_interval: 60s}
+    duration: {min: 10s, max: 30s}

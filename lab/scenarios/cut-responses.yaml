@@ -1,0 +1,29 @@
+name: cut-responses
+description: Respostas cortadas no meio e conexões resetadas entre a API e o banco e entre o cliente e a API; o COMMIT pode ter acontecido sem que ninguém saiba (FC03, FC20, PM-003, PM-014).
+duration: 15m
+workload:
+  profile: balanced
+  clients: 8
+  rate_per_second: 20
+  accounts: 32
+  exclusive_accounts: true
+  client_mix: {polite: 0.7, aggressive: 0.3}
+faults:
+  - id: reset-db
+    kind: network
+    proxies: [api_pg]
+    toxic: {type: reset_peer, timeout: 50, toxicity: 0.05}
+    schedule: {type: poisson, mean_interval: 45s}
+    duration: {min: 5s, max: 20s}
+  - id: cut-db-answers
+    kind: network
+    proxies: [api_pg]
+    toxic: {type: limit_data, bytes: 2048, toxicity: 0.05}
+    schedule: {type: poisson, mean_interval: 60s}
+    duration: {min: 5s, max: 20s}
+  - id: cut-client-answers
+    kind: network
+    proxies: [client_api]
+    toxic: {type: limit_data, bytes: 200, toxicity: 0.1}
+    schedule: {type: poisson, mean_interval: 60s}
+    duration: {min: 5s, max: 20s}

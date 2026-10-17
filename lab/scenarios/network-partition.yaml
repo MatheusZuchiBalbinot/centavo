@@ -1,0 +1,35 @@
+name: network-partition
+description: Partições curtas em todos os links, dos três tipos (recusa, buraco negro e só de ida), uma de cada vez (FC14, FC15, FC16, PM-008, PM-012, PM-014).
+duration: 20m
+workload:
+  profile: balanced
+  clients: 8
+  rate_per_second: 20
+  accounts: 32
+  exclusive_accounts: true
+  client_mix: {polite: 1.0}
+faults:
+  - id: reject-db
+    kind: network
+    proxies: [api_pg, worker1_pg]
+    toxic: {type: reject}
+    schedule: {type: poisson, mean_interval: 120s}
+    duration: {min: 3s, max: 15s}
+  - id: blackhole-partner
+    kind: network
+    proxies: [worker1_partner, worker2_partner]
+    toxic: {type: blackhole}
+    schedule: {type: poisson, mean_interval: 90s}
+    duration: {min: 5s, max: 40s}
+  - id: one-way-webhooks
+    kind: network
+    proxies: [partner_webhooks]
+    toxic: {type: one_way}
+    schedule: {type: poisson, mean_interval: 90s}
+    duration: {min: 5s, max: 30s}
+  - id: one-way-worker-db
+    kind: network
+    proxies: [worker2_pg]
+    toxic: {type: one_way}
+    schedule: {type: poisson, mean_interval: 150s}
+    duration: {min: 3s, max: 10s}
