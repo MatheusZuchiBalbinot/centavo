@@ -48,8 +48,12 @@ type failpointEvent struct {
 	Instance      string `json:"instance"`
 	Failpoint     string `json:"failpoint"`
 	Action        string `json:"action"`
+	Arg           string `json:"arg,omitempty"`
 	CorrelationID string `json:"correlation_id"`
 }
+
+// actionFreeze is the failpoint action the lab completes with docker pause.
+const actionFreeze = "freeze"
 
 type armedFault struct {
 	fault scenarios.Fault
@@ -243,6 +247,10 @@ func (c *failpointController) handleEvent(line []byte) {
 	err = c.n.record(history.FunctionFailpointFired, event)
 	if err != nil {
 		c.n.config.Logger.Error("recording a fired failpoint", "error", err)
+	}
+
+	if event.Action == actionFreeze {
+		c.n.freeze(event)
 	}
 }
 

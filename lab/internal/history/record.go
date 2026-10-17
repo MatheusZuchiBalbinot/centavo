@@ -41,7 +41,11 @@ const (
 	FunctionArmPartner     Function = "arm_partner_modes"
 	FunctionFailpointFired Function = "failpoint_fired"
 	FunctionHealStart      Function = "heal_start"
-	FunctionHealComplete   Function = "heal_complete"
+	// FunctionFreeze pauses a whole container for a freeze failpoint.
+	FunctionFreeze Function = "freeze"
+	// FunctionSkewClock moves a process's wall clock.
+	FunctionSkewClock    Function = "skew_clock"
+	FunctionHealComplete Function = "heal_complete"
 )
 
 // Record is one line of history.jsonl. The writer fills Index, Round, TimeNS

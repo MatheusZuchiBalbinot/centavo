@@ -75,6 +75,8 @@ type Nemesis struct {
 
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
+	// freezes are the container pauses in progress; the cure waits for them.
+	freezes sync.WaitGroup
 
 	failpoints *failpointController
 }
@@ -105,6 +107,7 @@ func (n *Nemesis) Preflight(ctx context.Context) error {
 
 	n.clearFailpoints(ctx)
 	n.clearPartner(ctx)
+	n.clearClocks(ctx)
 
 	return nil
 }
@@ -127,6 +130,11 @@ func (n *Nemesis) Start(ctx context.Context) error {
 
 	n.wg.Go(func() { n.renewPartner(ctx) })
 
+	err = n.skewClocks(ctx)
+	if err != nil {
+		return err
+	}
+
 	for _, fault := range n.config.Scenario.Faults {
 		if fault.Kind == scenarios.FaultProcess {
 			n.wg.Go(func() { n.killRandomly(ctx, fault) })
@@ -145,6 +153,7 @@ func (n *Nemesis) Heal(ctx context.Context) error {
 	}
 
 	n.wg.Wait()
+	n.freezes.Wait()
 
 	err := n.record(history.FunctionHealStart, nil)
 	if err != nil {
@@ -153,6 +162,7 @@ func (n *Nemesis) Heal(ctx context.Context) error {
 
 	n.clearFailpoints(ctx)
 	n.clearPartner(ctx)
+	n.clearClocks(ctx)
 
 	err = n.waitHealthy(ctx, n.config.Scenario.HealTimeout)
 	if err != nil {

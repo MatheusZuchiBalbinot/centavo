@@ -193,6 +193,21 @@ func (c Client) Start(ctx context.Context, id string) error {
 	return c.call(ctx, http.MethodPost, "/containers/"+url.PathEscape(id)+"/start", nil, nil)
 }
 
+// Pause freezes a running target, every goroutine of it included; pausing
+// one already paused is a no-op.
+func (c Client) Pause(ctx context.Context, id string) error {
+	container, err := c.Inspect(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	if container.IsPaused {
+		return nil
+	}
+
+	return c.call(ctx, http.MethodPost, "/containers/"+url.PathEscape(id)+"/pause", nil, nil)
+}
+
 // Unpause resumes a paused target; resuming one that is not paused is a no-op.
 func (c Client) Unpause(ctx context.Context, id string) error {
 	container, err := c.Inspect(ctx, id)

@@ -1,0 +1,22 @@
+name: clock-skew
+description: Um worker com o relógio dois minutos adiantado e a API dez minutos atrasada; leases, assinaturas e ordenação não podem depender do relógio de parede (FC35, FC37, FC38, FC39, PM-013).
+duration: 15m
+workload:
+  profile: payments-heavy
+  clients: 8
+  rate_per_second: 20
+  accounts: 32
+  exclusive_accounts: true
+  client_mix: {polite: 1.0}
+faults:
+  - id: divergences
+    kind: partner
+    modes: {double_process: 0.05, webhook_drop: 0.2}
+  - id: worker-ahead
+    kind: clock
+    targets: [bank-worker-2]
+    offset: +120s
+  - id: api-behind
+    kind: clock
+    targets: [bank-api]
+    offset: -10m

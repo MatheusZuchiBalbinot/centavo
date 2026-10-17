@@ -1,0 +1,22 @@
+name: zombie-reconciler
+description: O conciliador congela com o lote lido além do TTL do lease, outro worker assume, e o zumbi acorda querendo gravar (FP07, FP10, FC36, PM-012).
+duration: 15m
+workload:
+  profile: payments-heavy
+  clients: 8
+  rate_per_second: 20
+  accounts: 32
+  exclusive_accounts: true
+  client_mix: {polite: 1.0}
+faults:
+  - id: divergences
+    kind: partner
+    modes: {double_process: 0.05, webhook_drop: 0.2}
+  - id: zombie
+    kind: failpoint
+    targets: [bank-worker-1, bank-worker-2]
+    failpoint: lease.after_check_before_write
+    action: freeze
+    arg: 45s
+    probability: 0.5
+    max_fires: 6

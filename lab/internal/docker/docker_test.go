@@ -20,6 +20,7 @@ type fakeEngine struct {
 	execs    []string
 	started  []string
 	unpaused []string
+	pauses   []string
 }
 
 func newFakeEngine() *fakeEngine {
@@ -68,6 +69,10 @@ func (f *fakeEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case len(parts) == 3 && parts[2] == "start":
 		f.started = append(f.started, parts[1])
 		w.WriteHeader(http.StatusNotModified)
+	case len(parts) == 3 && parts[2] == "pause":
+		f.pauses = append(f.pauses, parts[1])
+		f.paused[parts[1]] = true
+		w.WriteHeader(http.StatusNoContent)
 	case len(parts) == 3 && parts[2] == "unpause":
 		f.unpaused = append(f.unpaused, parts[1])
 		f.paused[parts[1]] = false
@@ -139,6 +144,30 @@ func TestActions_RunOnlyOnTargetsOfTheProject(t *testing.T) {
 	isExpected := len(engine.execs) == 1 && engine.execs[0] == "api:/app/bank chaos-kill" && len(engine.unpaused) == 1 && len(engine.started) == 1
 	if !isExpected {
 		t.Fatalf("execs %v, unpaused %v, started %v", engine.execs, engine.unpaused, engine.started)
+	}
+}
+
+// TestPause_FreezesARunningTargetOnce: a freeze pauses the container, and a
+// second pause of a paused one asks the engine for nothing.
+func TestPause_FreezesARunningTargetOnce(t *testing.T) {
+	engine := newFakeEngine()
+	engine.paused["api"] = false
+	client := newClient(t, engine)
+
+	for range 2 {
+		err := client.Pause(t.Context(), "api")
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	err := client.Pause(t.Context(), "lab")
+	if !errors.Is(err, docker.ErrNotATarget) {
+		t.Fatalf("pause of a container that is not a target: got %v", err)
+	}
+
+	if len(engine.pauses) != 1 {
+		t.Fatalf("pauses %v, want one", engine.pauses)
 	}
 }
 

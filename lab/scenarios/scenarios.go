@@ -61,6 +61,8 @@ const (
 	FaultProcess   FaultKind = "process"
 	// FaultPartner makes the partner lie (docs/chaos-bot.md, section 9).
 	FaultPartner FaultKind = "partner"
+	// FaultClock skews a process's wall clock (docs/chaos-bot.md, section 6).
+	FaultClock FaultKind = "clock"
 )
 
 // partnerModeFields are the lies a scenario may ask for; the lab adds the
@@ -80,7 +82,7 @@ const SchedulePoisson ScheduleType = "poisson"
 var (
 	processTargets   = []string{"bank-api", "bank-worker-1", "bank-worker-2", "partner"}
 	failpointTargets = []string{"bank-api", "bank-worker-1", "bank-worker-2"}
-	failpointActions = []string{"kill", "delay", "error", "panic"}
+	failpointActions = []string{"kill", "delay", "error", "panic", "freeze"}
 	failpointPattern = regexp.MustCompile(`^[a-z_]+\.[a-z_]+$`)
 )
 
@@ -146,6 +148,8 @@ type Fault struct {
 	Schedule    Schedule
 	// Modes are the partner's lies, as JSON for PUT /chaos/modes.
 	Modes json.RawMessage
+	// Offset is a clock fault's skew, ahead when positive.
+	Offset time.Duration
 }
 
 // Schedule spreads a fault over the round.
@@ -175,6 +179,7 @@ type rawFault struct {
 	MaxFires    int            `yaml:"max_fires"`
 	Schedule    rawSchedule    `yaml:"schedule"`
 	Modes       map[string]any `yaml:"modes"`
+	Offset      string         `yaml:"offset"`
 }
 
 type rawSchedule struct {
@@ -324,8 +329,10 @@ func validateFault(r rawFault) (Fault, error) {
 		return validateProcessFault(fault, r)
 	case FaultPartner:
 		return validatePartnerFault(fault, r)
+	case FaultClock:
+		return validateClockFault(fault, r)
 	default:
-		return Fault{}, fmt.Errorf("kind %q is not implemented (known: %s, %s, %s)", r.Kind, FaultFailpoint, FaultProcess, FaultPartner)
+		return Fault{}, fmt.Errorf("kind %q is not implemented (known: %s, %s, %s, %s)", r.Kind, FaultFailpoint, FaultProcess, FaultPartner, FaultClock)
 	}
 }
 
@@ -360,11 +367,32 @@ func validateFailpointFault(fault Fault, r rawFault) (Fault, error) {
 
 	isValid := failpointPattern.MatchString(r.Failpoint) && slices.Contains(failpointActions, r.Action) && r.Probability > 0 && r.Probability <= 1 && r.MaxFires >= 0
 	if !isValid {
-		return Fault{}, errors.New("a failpoint fault needs failpoint, an action (kill, delay, error, panic), probability in (0, 1] and max_fires >= 0")
+		return Fault{}, errors.New("a failpoint fault needs failpoint, an action (kill, delay, error, panic, freeze), probability in (0, 1] and max_fires >= 0")
 	}
 
 	fault.Failpoint, fault.Action, fault.Arg = r.Failpoint, r.Action, r.Arg
 	fault.Probability, fault.MaxFires = r.Probability, r.MaxFires
+
+	return fault, nil
+}
+
+// maxClockSkew bounds a clock fault, as the bank does.
+const maxClockSkew = 48 * time.Hour
+
+func validateClockFault(fault Fault, r rawFault) (Fault, error) {
+	err := validateTargets(r.Targets, failpointTargets)
+	if err != nil {
+		return Fault{}, err
+	}
+
+	offset, err := time.ParseDuration(r.Offset)
+
+	isValid := err == nil && offset != 0 && offset >= -maxClockSkew && offset <= maxClockSkew
+	if !isValid {
+		return Fault{}, fmt.Errorf("a clock fault needs a non-zero offset within %s, such as +120s", maxClockSkew)
+	}
+
+	fault.Offset = offset
 
 	return fault, nil
 }

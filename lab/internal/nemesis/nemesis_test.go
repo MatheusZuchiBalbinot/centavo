@@ -1,12 +1,14 @@
 package nemesis
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"centavo/lab/internal/history"
 	"centavo/lab/internal/seed"
@@ -128,5 +130,41 @@ func appendTo(t *testing.T, path, content string) {
 	_, err = file.WriteString(content)
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestClockFaults_AreRecordedAndCleared: the skew is in the history before
+// it is set, and the faults of the scenario are the ones pushed.
+func TestClockFaults_AreRecordedAndCleared(t *testing.T) {
+	n, historyPath := newTestNemesis(t, t.TempDir())
+	skew := scenarios.Fault{ID: "ahead", Kind: scenarios.FaultClock, Targets: []string{"bank-worker-2"}, Offset: 2 * time.Minute}
+	n.config.Scenario.Faults = append(n.config.Scenario.Faults, skew)
+
+	if faults := n.clockFaults(); len(faults) != 1 || faults[0].ID != "ahead" {
+		t.Fatalf("clock faults: %+v", faults)
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	err := n.skewClocks(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	n.wg.Wait()
+
+	err = n.config.History.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	content, err := os.ReadFile(historyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(string(content), `"f":"skew_clock"`) || !strings.Contains(string(content), `"offset":"2m0s"`) {
+		t.Fatalf("history without the skew: %s", content)
 	}
 }
