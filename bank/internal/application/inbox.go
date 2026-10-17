@@ -54,6 +54,9 @@ type InboxStore interface {
 	// InsertInbox records the event; false means it was already there.
 	InsertInbox(ctx context.Context, event PartnerEvent, correlationID string) (bool, error)
 	ClaimInbox(ctx context.Context) (InboxEvent, bool, error)
+	// ReclaimInbox locks an event again in a later transaction, if it is
+	// still pending and no other processor holds it.
+	ReclaimInbox(ctx context.Context, id int64) (bool, error)
 	FinishInbox(ctx context.Context, id int64, status InboxStatus, outcome string) error
 	DeferInbox(ctx context.Context, id int64, delay time.Duration, reason string) error
 }
@@ -226,6 +229,15 @@ func (p InboxProcessor) resync(ctx context.Context, claimed InboxEvent) error {
 	}
 
 	return p.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
+		// The failed apply rolled back and freed the event, so another
+		// processor may have it now. Taking the event before the transfer
+		// keeps the order every apply uses; one that holds the event and
+		// waits on this transfer would otherwise wait on us in a circle.
+		isOurs, err := stores.ReclaimInbox(ctx, claimed.ID)
+		if err != nil || !isOurs {
+			return err
+		}
+
 		external, err := stores.FindExternalTransferByEndToEnd(ctx, claimed.Event.EndToEndID)
 		if err != nil {
 			return err
