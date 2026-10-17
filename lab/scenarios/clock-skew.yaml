@@ -1,5 +1,5 @@
 name: clock-skew
-description: Um worker com o relógio dois minutos adiantado e a API dez minutos atrasada; leases, assinaturas e ordenação não podem depender do relógio de parede (FC35, FC37, FC38, FC39, PM-013).
+description: Um worker com o relógio 20 s adiantado e a API dez minutos atrasada; leases, assinaturas e ordenação não podem depender do relógio de parede (FC35, FC37, FC38, FC39, PM-013).
 duration: 15m
 workload:
   profile: payments-heavy
@@ -12,17 +12,21 @@ faults:
   - id: divergences
     kind: partner
     modes: {double_process: 0.05, webhook_drop: 0.2}
+  # Under the 30 s gap between the lease TTL and the 60 s reconciler tick, so
+  # the worker behind still gets the lease between runs and the one ahead
+  # takes it from under it; two minutes would leave it to the one ahead forever.
   - id: worker-ahead
     kind: clock
     targets: [bank-worker-2]
-    offset: +120s
+    offset: +20s
   - id: api-behind
     kind: clock
     targets: [bank-api]
     offset: -10m
-  # A reconciler holds its batch for 20 s, under the 30 s lease, so the worker that runs ahead
-  # takes the lease while the batch is still unbooked: two reconcilers book
-  # the same entries unless the lease follows the database clock (FC35).
+  # A reconciler holds its batch for 20 s, under the 30 s lease, so the
+  # worker that runs ahead takes the lease while the batch is still unbooked:
+  # two reconcilers book the same entries unless the lease follows the
+  # database clock (FC35).
   - id: slow-batch
     kind: failpoint
     targets: [bank-worker-1, bank-worker-2]
