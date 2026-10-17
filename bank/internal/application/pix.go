@@ -102,6 +102,12 @@ type PixStore interface {
 	// only if the sequence number is still the one read under the lock.
 	AdvanceStatus(ctx context.Context, change StatusChange, seenSeq int) error
 	InsertIncoming(ctx context.Context, incoming IncomingRecord) error
+	// LockEndToEnd holds one PIX for the rest of the transaction, by its
+	// end_to_end_id, before any of its rows exists: an incoming PIX has none
+	// until it is credited.
+	LockEndToEnd(ctx context.Context, endToEndID string) error
+	// LockTransfersOf locks the transfers of these end_to_end_ids, in id order.
+	LockTransfersOf(ctx context.Context, endToEndIDs []string) error
 	// ListCreated returns transfers still in created, oldest first.
 	ListCreated(ctx context.Context, limit int) ([]transfer.ID, error)
 }
