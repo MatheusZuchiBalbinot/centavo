@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime/debug"
 	"strconv"
 	"time"
 
@@ -328,22 +329,10 @@ func writeEvents(dir string, events []json.RawMessage) error {
 
 // exportAndCheck takes the ledger snapshot of the round and runs the checker on it.
 func exportAndCheck(ctx context.Context, options Options, result Result) (checker.Verdict, error) {
-	accounts, err := createdAccounts(result.Dir)
+	state, err := exportSnapshot(ctx, options, result)
 	if err != nil {
 		return "", err
 	}
-
-	s, err := options.Export(ctx, export.Request{Round: result.ID, AccountIDs: accounts})
-	if err != nil {
-		return "", err
-	}
-
-	err = snapshot.Write(result.Dir, s)
-	if err != nil {
-		return "", err
-	}
-
-	options.Logger.InfoContext(ctx, "ledger exported", "round", result.ID, "transactions", len(s.Transactions), "entries", len(s.Entries))
 
 	if options.Saga.Truth != nil {
 		truth, err := options.Saga.Truth(ctx)
@@ -364,13 +353,19 @@ func exportAndCheck(ctx context.Context, options Options, result Result) (checke
 		return "", err
 	}
 
+	// The snapshot is on disk now. The checker runs in this same cgroup and
+	// loads it again, so the memory of this copy goes back to the system
+	// first instead of waiting for the scavenger (docs/architecture.md,
+	// section 11).
+	debug.FreeOSMemory()
+
 	verdict, err := options.Check(ctx, result.Dir)
 	if err != nil {
 		return "", err
 	}
 
 	// The next round checks I8 against this ledger, whatever this verdict.
-	return verdict, snapshot.WriteState(statePath, snapshot.StateOf(s))
+	return verdict, snapshot.WriteState(statePath, state)
 }
 
 // handOverState copies the ledger state the last round left into this
@@ -382,6 +377,29 @@ func handOverState(statePath, roundCopy string) error {
 	}
 
 	return snapshot.WriteState(roundCopy, state)
+}
+
+// exportSnapshot writes the ledger snapshot of the round to its directory
+// and keeps only its I8 state, which is small, for after the checker.
+func exportSnapshot(ctx context.Context, options Options, result Result) (snapshot.LedgerState, error) {
+	accounts, err := createdAccounts(result.Dir)
+	if err != nil {
+		return snapshot.LedgerState{}, err
+	}
+
+	s, err := options.Export(ctx, export.Request{Round: result.ID, AccountIDs: accounts})
+	if err != nil {
+		return snapshot.LedgerState{}, err
+	}
+
+	err = snapshot.Write(result.Dir, s)
+	if err != nil {
+		return snapshot.LedgerState{}, err
+	}
+
+	options.Logger.InfoContext(ctx, "ledger exported", "round", result.ID, "transactions", len(s.Transactions), "entries", len(s.Entries))
+
+	return snapshot.StateOf(s), nil
 }
 
 // createdAccounts lists the accounts the history says the round opened: the
