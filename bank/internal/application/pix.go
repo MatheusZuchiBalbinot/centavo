@@ -142,7 +142,9 @@ func NewCreatePixOut(locker Locker, publication Publication) CreatePixOut {
 // Apply runs inside the writer's unit of work: lock, check funds, move the
 // amount to sys_pix_out_transit and record the transfer and its first state.
 func (c CreatePixOut) Apply(ctx context.Context, stores Stores, operationID ledger.OperationID, input PixOutInput) (PixOutResult, error) {
-	err := c.locker.Lock(ctx, stores, []ledger.AccountID{input.AccountID})
+	// Transit is locked with the customer, in id order, so the reserve takes
+	// it first, like a refund that moves transit then the customer.
+	err := c.locker.Lock(ctx, stores, []ledger.AccountID{input.AccountID, ledger.PixOutTransitAccountID()})
 	if err != nil {
 		return PixOutResult{}, err
 	}
