@@ -348,14 +348,24 @@ func startSaga(ctx context.Context, pool *pgxpool.Pool, cfg config.Config, logge
 	}
 
 	if cfg.Defenses.IsEnabled(defenses.Recovery) {
-		sweeperConfig := application.SweeperConfig{UnitOfWork: saga.unitOfWork, Machine: saga.machine, Partner: saga.partner, Owner: saga.owner, Logger: logger}
+		sweeperConfig := application.SweeperConfig{UnitOfWork: saga.unitOfWork, Lease: newLeasePolicy(cfg.Defenses), Machine: saga.machine, Partner: saga.partner, Owner: saga.owner, Logger: logger}
 		go application.NewSweeper(sweeperConfig).Run(ctx)
 	}
 
-	reconcilerConfig := application.ReconcilerConfig{UnitOfWork: saga.unitOfWork, Machine: saga.machine, Statement: saga.partner, Policy: newBatchPolicy(cfg.Defenses), Owner: saga.owner, Logger: logger}
+	reconcilerConfig := application.ReconcilerConfig{UnitOfWork: saga.unitOfWork, Lease: newLeasePolicy(cfg.Defenses), Machine: saga.machine, Statement: saga.partner, Policy: newBatchPolicy(cfg.Defenses), Owner: saga.owner, Logger: logger}
 	go application.NewReconciler(reconcilerConfig).Run(ctx, application.ReconcileInterval)
 
 	return nil
+}
+
+// newLeasePolicy picks D11: leases by the database's clock with a token
+// checked at write time, or by the worker's own clock and word.
+func newLeasePolicy(profile defenses.Profile) application.LeasePolicy {
+	if profile.IsEnabled(defenses.Fencing) {
+		return application.FencedLeases{}
+	}
+
+	return application.LocalClockLeases{}
 }
 
 // newBatchPolicy picks D10: a batch in one commit with the cursor, or an

@@ -130,7 +130,7 @@ func TestStateMachine_ContradictionIsAConflict(t *testing.T) {
 }
 
 func (p pixBank) sweeper(partner application.PartnerStatusReader, owner string) application.Sweeper {
-	config := application.SweeperConfig{UnitOfWork: p.unitOfWork, Machine: application.GuardedTransitions{}, Partner: partner, Owner: owner, Logger: discardLogger()}
+	config := application.SweeperConfig{UnitOfWork: p.unitOfWork, Lease: application.FencedLeases{}, Machine: application.GuardedTransitions{}, Partner: partner, Owner: owner, Logger: discardLogger()}
 
 	return application.NewSweeper(config)
 }

@@ -66,7 +66,7 @@ func newStatement(t *testing.T, p pixBank) *fakeStatement {
 }
 
 func (p pixBank) reconciler(statement application.PartnerStatementReader, policy application.BatchPolicy) application.Reconciler {
-	config := application.ReconcilerConfig{UnitOfWork: p.unitOfWork, Machine: application.GuardedTransitions{}, Statement: statement, Policy: policy, Owner: "worker-a", Logger: discardLogger()}
+	config := application.ReconcilerConfig{UnitOfWork: p.unitOfWork, Lease: application.FencedLeases{}, Machine: application.GuardedTransitions{}, Statement: statement, Policy: policy, Owner: "worker-a", Logger: discardLogger()}
 
 	return application.NewReconciler(config)
 }

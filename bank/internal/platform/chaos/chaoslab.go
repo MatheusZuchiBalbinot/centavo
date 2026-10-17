@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"centavo/bank/internal/platform/chaosbuild"
+	"centavo/bank/internal/platform/clock"
 	"centavo/bank/internal/platform/failpoint"
 	"centavo/bank/internal/platform/httpserver"
 )
@@ -30,6 +31,7 @@ const (
 var (
 	errNoMainProcess = errors.New("no main process found in /proc")
 	errBadRule       = errors.New("rule body must be one JSON rule")
+	errBadSkew       = errors.New(`clock body must be {"offset": "+120s", "ttl": "10m"}`)
 )
 
 // Setup records fired failpoints in the shared volume and arms the rules of
@@ -46,6 +48,8 @@ func Server(config Config) *http.Server {
 	mux.HandleFunc("PUT /chaos/failpoints/{name}", armFailpoint)
 	mux.HandleFunc("GET /chaos/failpoints", listFailpoints)
 	mux.HandleFunc("DELETE /chaos/failpoints", clearFailpoints)
+	mux.HandleFunc("PUT /chaos/clock", setClock)
+	mux.HandleFunc("DELETE /chaos/clock", clearClock)
 
 	return httpserver.New(Addr, requireToken(config.Token, mux))
 }
@@ -101,6 +105,49 @@ func listFailpoints(w http.ResponseWriter, _ *http.Request) {
 
 func clearFailpoints(w http.ResponseWriter, _ *http.Request) {
 	failpoint.DisarmAll()
+	writeJSON(w, map[string]bool{"cleared": true})
+}
+
+type skewRequest struct {
+	Offset string `json:"offset"`
+	TTL    string `json:"ttl"`
+}
+
+// setClock skews this process's wall clock (docs/chaos-bot.md, section 6).
+func setClock(w http.ResponseWriter, r *http.Request) {
+	var request skewRequest
+
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxRuleBytes))
+	decoder.DisallowUnknownFields()
+
+	err := decoder.Decode(&request)
+	if err != nil {
+		http.Error(w, errBadSkew.Error(), http.StatusBadRequest)
+
+		return
+	}
+
+	offset, errOffset := time.ParseDuration(request.Offset)
+	ttl, errTTL := time.ParseDuration(request.TTL)
+
+	if errOffset != nil || errTTL != nil {
+		http.Error(w, errBadSkew.Error(), http.StatusBadRequest)
+
+		return
+	}
+
+	err = clock.SetSkew(offset, ttl, time.Now())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+
+		return
+	}
+
+	writeJSON(w, map[string]string{"offset": offset.String()})
+}
+
+func clearClock(w http.ResponseWriter, _ *http.Request) {
+	clock.ClearSkew()
 	writeJSON(w, map[string]bool{"cleared": true})
 }
 

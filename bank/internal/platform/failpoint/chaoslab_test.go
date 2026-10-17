@@ -165,7 +165,8 @@ func TestArm_RejectsInvalidRules(t *testing.T) {
 		{name: "ttl above an hour", fp: TransferAfterDebitBeforeCredit, rule: Rule{Action: ActionKill, Probability: 1, TTL: "2h"}},
 		{name: "probability above one", fp: TransferAfterDebitBeforeCredit, rule: Rule{Action: ActionKill, Probability: 1.5, TTL: "1m"}},
 		{name: "delay without duration", fp: TransferAfterDebitBeforeCredit, rule: Rule{Action: ActionDelay, Probability: 1, TTL: "1m"}},
-		{name: "freeze before F10", fp: TransferAfterDebitBeforeCredit, rule: Rule{Action: "freeze", Arg: "10s", Probability: 1, TTL: "1m"}},
+		{name: "freeze without duration", fp: TransferAfterDebitBeforeCredit, rule: Rule{Action: ActionFreeze, Probability: 1, TTL: "1m"}},
+		{name: "freeze longer than two minutes", fp: TransferAfterDebitBeforeCredit, rule: Rule{Action: ActionFreeze, Arg: "3m", Probability: 1, TTL: "1m"}},
 	}
 
 	for _, tc := range cases {

@@ -83,6 +83,7 @@ type BatchPolicy interface {
 // the ledger.
 type Reconciler struct {
 	unitOfWork UnitOfWork
+	lease      LeasePolicy
 	machine    StateMachine
 	statement  PartnerStatementReader
 	policy     BatchPolicy
@@ -93,6 +94,7 @@ type Reconciler struct {
 // ReconcilerConfig wires a reconciler.
 type ReconcilerConfig struct {
 	UnitOfWork UnitOfWork
+	Lease      LeasePolicy
 	Machine    StateMachine
 	Statement  PartnerStatementReader
 	Policy     BatchPolicy
@@ -102,7 +104,7 @@ type ReconcilerConfig struct {
 
 // NewReconciler builds the reconciler.
 func NewReconciler(config ReconcilerConfig) Reconciler {
-	return Reconciler{unitOfWork: config.UnitOfWork, machine: config.Machine, statement: config.Statement, policy: config.Policy, owner: config.Owner, logger: config.Logger}
+	return Reconciler{unitOfWork: config.UnitOfWork, lease: config.Lease, machine: config.Machine, statement: config.Statement, policy: config.Policy, owner: config.Owner, logger: config.Logger}
 }
 
 // Run reconciles until ctx ends.
@@ -139,6 +141,13 @@ func (r Reconciler) RunOnce(ctx context.Context) error {
 			return err
 		}
 
+		// FP10: the lease was checked when the batch was read; a worker
+		// paused here past the TTL comes back as a zombie.
+		err = failpoint.Hit(ctx, failpoint.LeaseAfterCheckBeforeWrite)
+		if err != nil {
+			return err
+		}
+
 		err = r.policy.Book(ctx, r, batch)
 		if err != nil {
 			return err
@@ -157,7 +166,7 @@ func (r Reconciler) nextBatch(ctx context.Context) (statementBatch, bool, error)
 	err := r.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
 		var err error
 
-		batch.token, isHeld, err = stores.AcquireLease(ctx, LeaseReconciler, r.owner, ReconcilerLeaseTTL)
+		batch.token, isHeld, err = r.lease.Acquire(ctx, stores, LeaseReconciler, r.owner, ReconcilerLeaseTTL)
 		if err != nil || !isHeld {
 			return err
 		}
@@ -336,7 +345,7 @@ type AtomicBatches struct{}
 // Book books the whole batch or nothing.
 func (AtomicBatches) Book(ctx context.Context, r Reconciler, batch statementBatch) error {
 	return r.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
-		isHeld, err := stores.HoldsLease(ctx, LeaseReconciler, r.owner, batch.token)
+		isHeld, err := r.lease.Holds(ctx, stores, LeaseReconciler, r.owner, batch.token)
 		if err != nil {
 			return err
 		}
@@ -363,7 +372,7 @@ func (AtomicBatches) Book(ctx context.Context, r Reconciler, batch statementBatc
 			}
 		}
 
-		isAdvanced, err := stores.AdvanceCursor(ctx, batch.from, batch.to)
+		isAdvanced, err := r.lease.MoveCursor(ctx, stores, batch.from, batch.to)
 		if err != nil {
 			return err
 		}

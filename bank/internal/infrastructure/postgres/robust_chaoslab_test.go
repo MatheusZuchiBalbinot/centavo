@@ -15,6 +15,7 @@ import (
 	"centavo/bank/internal/domain/ledger"
 	"centavo/bank/internal/domain/transfer"
 	"centavo/bank/internal/infrastructure/postgres"
+	"centavo/bank/internal/platform/clock"
 	"centavo/bank/internal/platform/correlation"
 	"centavo/bank/internal/platform/defenses"
 	"centavo/bank/internal/platform/failpoint"
@@ -252,7 +253,7 @@ func TestReconciliation_CrashMidBatch_AppliesEachEntryOnce(t *testing.T) {
 		schema   schema
 		wantOwed int64
 	}{
-		{name: "atomic batches", policy: application.AtomicBatches{}, schema: schema{hasAtomicLedger: true, hasBalanceLocking: true, hasIdempotency: true, hasInbox: true, hasReconciliation: true}, wantOwed: 1_000},
+		{name: "atomic batches", policy: application.AtomicBatches{}, schema: schema{hasAtomicLedger: true, hasBalanceLocking: true, hasIdempotency: true, hasInbox: true, hasFencing: true}, wantOwed: 1_000},
 		// FP08 fires after the second entry, so the rerun books both again:
 		// the first settlement now looks like a duplicate of itself, and the
 		// partner owes 1000 while suspense says 3000.
@@ -306,5 +307,136 @@ UPDATE reconciliation_items SET partner_seq = -id
 WHERE id NOT IN (SELECT min(id) FROM reconciliation_items GROUP BY partner_seq)`)
 	if err != nil {
 		t.Error(err)
+	}
+}
+
+// pausingStatement hands out the statement and, before the reconciler that
+// asked can book it, lets its lease expire and another worker take over: a
+// reconciler frozen past the TTL (FP07 or FP10 with freeze).
+type pausingStatement struct {
+	statement *fakeStatement
+	meantime  func()
+}
+
+func (p pausingStatement) Statement(ctx context.Context, afterSeq int64, limit int) ([]application.StatementEntry, error) {
+	entries, err := p.statement.Statement(ctx, afterSeq, limit)
+	p.meantime()
+
+	return entries, err
+}
+
+func (p pixBank) reconcilerWith(statement application.PartnerStatementReader, lease application.LeasePolicy, owner string) application.Reconciler {
+	config := application.ReconcilerConfig{UnitOfWork: p.unitOfWork, Lease: lease, Machine: application.GuardedTransitions{}, Statement: statement, Policy: application.AtomicBatches{}, Owner: owner, Logger: discardLogger()}
+
+	return application.NewReconciler(config)
+}
+
+// TestFencing_ZombieReconcilerWriteIsRejected is FC36 and PM-012: the
+// reconciler read a batch with a double settlement, paused past its lease,
+// and another worker booked the batch. With D11 the zombie's transaction
+// sees a stale token and aborts; the naive lease trusts its old check and
+// books the double settlement a second time.
+func TestFencing_ZombieReconcilerWriteIsRejected(t *testing.T) {
+	cases := []struct {
+		name     string
+		lease    application.LeasePolicy
+		schema   schema
+		wantOwed int64
+	}{
+		{name: "fenced", lease: application.FencedLeases{}, schema: schema{hasAtomicLedger: true, hasBalanceLocking: true, hasIdempotency: true, hasInbox: true, hasFencing: true}, wantOwed: 800},
+		// The zombie books the whole batch again, after the successor: both
+		// settlements now look like duplicates, and suspense holds 2400 for
+		// the 800 the partner owes.
+		{name: "local clock", lease: application.LocalClockLeases{}, schema: schema{hasAtomicLedger: true, hasBalanceLocking: true, hasIdempotency: true, hasInbox: true}, wantOwed: 2_400},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			useSchema(t, tc.schema)
+
+			p := newOutboxBank(t)
+			t.Cleanup(func() { renumberRebookedItems(t, p) })
+			statement := newStatement(t, p)
+			created := p.sentTransfer(t, 800)
+			statement.add(application.StatementSettlement, created.EndToEndID, 800, "")
+			statement.add(application.StatementSettlement, created.EndToEndID, 800, "")
+
+			suspenseBefore := p.systemBalance(t, ledger.SuspenseAccountID())
+
+			successorTakesOver := func() {
+				_, err := p.bank.pool.Exec(t.Context(), `UPDATE worker_leases SET expires_at = now() - interval '1 second' WHERE resource = 'reconciler'`)
+				if err != nil {
+					t.Error(err)
+				}
+
+				err = p.reconcilerWith(statement, tc.lease, "worker-b").RunOnce(t.Context())
+				if err != nil {
+					t.Error(err)
+				}
+			}
+
+			zombie := pausingStatement{statement: statement, meantime: sync.OnceFunc(successorTakesOver)}
+
+			// The fenced zombie fails its write; the naive one succeeds.
+			_ = p.reconcilerWith(zombie, tc.lease, "worker-a").RunOnce(t.Context())
+
+			owed := suspenseBefore - p.systemBalance(t, ledger.SuspenseAccountID())
+			if owed != tc.wantOwed {
+				t.Fatalf("suspense moved by %d, want %d", owed, tc.wantOwed)
+			}
+		})
+	}
+}
+
+// TestLease_ExpiryUsesDatabaseClock is FC35 and PM-013: a worker whose clock
+// runs two minutes ahead thinks a live lease expired. With D11 expiry is
+// the database's now(), and the skew changes nothing.
+func TestLease_ExpiryUsesDatabaseClock(t *testing.T) {
+	cases := []struct {
+		name       string
+		lease      application.LeasePolicy
+		wantStolen bool
+	}{
+		{name: "fenced", lease: application.FencedLeases{}, wantStolen: false},
+		{name: "local clock", lease: application.LocalClockLeases{}, wantStolen: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := newOutboxBank(t)
+			p.releaseSweeperLease(t)
+			t.Cleanup(clock.ClearSkew)
+
+			acquire := func(owner string) bool {
+				var isHeld bool
+
+				err := p.unitOfWork.Run(t.Context(), func(ctx context.Context, stores application.Stores) error {
+					var err error
+
+					_, isHeld, err = tc.lease.Acquire(ctx, stores, application.LeaseSweeper, owner, application.SweeperLeaseTTL)
+
+					return err
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				return isHeld
+			}
+
+			if !acquire("worker-1") {
+				t.Fatal("the first worker could not take a free lease")
+			}
+
+			err := clock.SetSkew(2*time.Minute, time.Minute, time.Now())
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			isStolen := acquire("worker-2")
+			if isStolen != tc.wantStolen {
+				t.Fatalf("a worker two minutes ahead took the live lease: %v, want %v", isStolen, tc.wantStolen)
+			}
+		})
 	}
 }

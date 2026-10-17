@@ -40,6 +40,33 @@ func (s LedgerStore) AcquireLease(ctx context.Context, resource, holder string, 
 	return token, true, nil
 }
 
+// acquireLeaseAtSQL is the naive acquisition: the same rule, but every time
+// in it is the caller's wall clock instead of the database's.
+const acquireLeaseAtSQL = `
+UPDATE worker_leases
+SET token = CASE WHEN holder = $2 AND expires_at > $3 THEN token ELSE token + 1 END,
+    holder = $2,
+    expires_at = $3::timestamptz + $4::bigint * interval '1 millisecond'
+WHERE resource = $1
+  AND (holder IS NULL OR expires_at <= $3 OR holder = $2)
+RETURNING token`
+
+// AcquireLeaseAt takes or renews the lease by the caller's clock.
+func (s LedgerStore) AcquireLeaseAt(ctx context.Context, resource, holder string, now time.Time, ttl time.Duration) (int64, bool, error) {
+	var token int64
+
+	err := s.db.QueryRow(ctx, acquireLeaseAtSQL, resource, holder, now, ttl.Milliseconds()).Scan(&token)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, false, nil
+	}
+
+	if err != nil {
+		return 0, false, fmt.Errorf("acquiring lease %s: %w", resource, err)
+	}
+
+	return token, true, nil
+}
+
 // holdsLeaseSQL takes FOR SHARE on a lease still ours: no one can acquire
 // it while the transaction that checked it is open.
 const holdsLeaseSQL = `

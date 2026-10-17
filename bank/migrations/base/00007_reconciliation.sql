@@ -1,7 +1,7 @@
 -- Reconciliation with the partner's statement (docs/domain.md, sections 10
 -- and 13.10). The uniqueness that keeps an entry from being reconciled twice
--- (partner_seq, one pending item per missing transfer) belongs to defense
--- D10 and lives in its migration; the naive reconciler runs without it.
+-- (partner_seq, one pending item per missing transfer) is the second line of
+-- defense D11 and lives in its migration.
 
 -- +goose Up
 CREATE TYPE divergence_kind AS ENUM (

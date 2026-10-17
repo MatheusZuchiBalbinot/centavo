@@ -25,6 +25,8 @@ const (
 	ReconAfterComputeBeforeApply Name = "recon.after_compute_before_apply"
 	// ReconMidApply is FP08: between two entries of a reconciliation batch.
 	ReconMidApply Name = "recon.mid_apply"
+	// LeaseAfterCheckBeforeWrite is FP10: the lease was checked in memory, the protected write not begun.
+	LeaseAfterCheckBeforeWrite Name = "lease.after_check_before_write"
 	// SweeperAfterStatusBeforeTransition is FP11: the partner answered, the sweeper wrote nothing yet.
 	SweeperAfterStatusBeforeTransition Name = "sweeper.after_status_before_transition"
 )

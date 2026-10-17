@@ -30,6 +30,9 @@ const (
 	ActionDelay Action = "delay"
 	ActionError Action = "error"
 	ActionPanic Action = "panic"
+	// ActionFreeze blocks this path and asks the lab to pause the whole
+	// container for the same time (docs/chaos-bot.md, section 5.2).
+	ActionFreeze Action = "freeze"
 )
 
 const (
@@ -38,7 +41,9 @@ const (
 	// envRuleTTL is the life of a rule armed by CENTAVO_FAILPOINTS.
 	envRuleTTL = time.Hour
 	maxDelay   = 30 * time.Second
-	specSep    = ","
+	// maxFreeze lets a pause outlast the 30 s leases with room to spare.
+	maxFreeze = 2 * time.Minute
+	specSep   = ","
 )
 
 // known lists the failpoints compiled into the bank; arming any other name fails.
@@ -51,6 +56,7 @@ var known = []Name{
 	InboxAfterApplyBeforeMark,
 	ReconAfterComputeBeforeApply,
 	ReconMidApply,
+	LeaseAfterCheckBeforeWrite,
 	SweeperAfterStatusBeforeTransition,
 }
 
@@ -277,7 +283,7 @@ func execute(ctx context.Context, f firing) error {
 		// The service is not PID 1 (init: true), so SIGKILL to itself works.
 		_ = syscall.Kill(os.Getpid(), syscall.SIGKILL)
 		select {}
-	case ActionDelay:
+	case ActionDelay, ActionFreeze:
 		timer := time.NewTimer(f.delay)
 		defer timer.Stop()
 
@@ -392,8 +398,15 @@ func validateAction(rule Rule) (time.Duration, error) {
 		}
 
 		return 0, nil
+	case ActionFreeze:
+		freeze, err := time.ParseDuration(rule.Arg)
+		if err != nil || freeze <= 0 || freeze > maxFreeze {
+			return 0, fmt.Errorf("%w: freeze needs a duration up to %s", ErrInvalidRule, maxFreeze)
+		}
+
+		return freeze, nil
 	default:
-		return 0, fmt.Errorf("%w: unknown action %q (freeze arrives with phase F10)", ErrInvalidRule, rule.Action)
+		return 0, fmt.Errorf("%w: unknown action %q", ErrInvalidRule, rule.Action)
 	}
 }
 

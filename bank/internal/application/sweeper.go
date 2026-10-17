@@ -39,6 +39,9 @@ type LeaseStore interface {
 	// AcquireLease takes or renews the lease; the token grows when the lease
 	// changes hands. false means another holder has it.
 	AcquireLease(ctx context.Context, resource, holder string, ttl time.Duration) (int64, bool, error)
+	// AcquireLeaseAt is the naive acquisition: expiry computed from the
+	// caller's own clock.
+	AcquireLeaseAt(ctx context.Context, resource, holder string, now time.Time, ttl time.Duration) (int64, bool, error)
 	// HoldsLease checks the lease and keeps it from moving until the
 	// transaction ends, so the check and the writes after it are atomic.
 	HoldsLease(ctx context.Context, resource, holder string, token int64) (bool, error)
@@ -51,6 +54,7 @@ type LeaseStore interface {
 // fails a transfer on its own: only the partner's refusal does that.
 type Sweeper struct {
 	unitOfWork UnitOfWork
+	lease      LeasePolicy
 	machine    StateMachine
 	partner    PartnerStatusReader
 	owner      string
@@ -60,6 +64,7 @@ type Sweeper struct {
 // SweeperConfig wires a sweeper.
 type SweeperConfig struct {
 	UnitOfWork UnitOfWork
+	Lease      LeasePolicy
 	Machine    StateMachine
 	Partner    PartnerStatusReader
 	Owner      string
@@ -68,7 +73,7 @@ type SweeperConfig struct {
 
 // NewSweeper builds the sweeper.
 func NewSweeper(config SweeperConfig) Sweeper {
-	return Sweeper{unitOfWork: config.UnitOfWork, machine: config.Machine, partner: config.Partner, owner: config.Owner, logger: config.Logger}
+	return Sweeper{unitOfWork: config.UnitOfWork, lease: config.Lease, machine: config.Machine, partner: config.Partner, owner: config.Owner, logger: config.Logger}
 }
 
 // Run sweeps until ctx ends.
@@ -102,7 +107,7 @@ func (s Sweeper) RunOnce(ctx context.Context, olderThan time.Duration) error {
 	err := s.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
 		var err error
 
-		token, isHeld, err = stores.AcquireLease(ctx, LeaseSweeper, s.owner, SweeperLeaseTTL)
+		token, isHeld, err = s.lease.Acquire(ctx, stores, LeaseSweeper, s.owner, SweeperLeaseTTL)
 		if err != nil || !isHeld {
 			return err
 		}
@@ -146,8 +151,13 @@ func (s Sweeper) sweep(ctx context.Context, candidate StuckTransfer, token int64
 		return err
 	}
 
+	err = failpoint.Hit(ctx, failpoint.LeaseAfterCheckBeforeWrite)
+	if err != nil {
+		return err
+	}
+
 	err = s.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
-		isHeld, err := stores.HoldsLease(ctx, LeaseSweeper, s.owner, token)
+		isHeld, err := s.lease.Holds(ctx, stores, LeaseSweeper, s.owner, token)
 		if err != nil {
 			return err
 		}

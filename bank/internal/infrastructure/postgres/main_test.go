@@ -138,7 +138,7 @@ func migrate(ctx context.Context) error {
 
 // migrateDefenses puts the D1 and D2 constraints in (robust) or takes them out.
 func migrateDefenses(ctx context.Context, isRobust bool) error {
-	return migrateSchema(ctx, schema{hasAtomicLedger: isRobust, hasBalanceLocking: isRobust, hasIdempotency: isRobust, hasInbox: isRobust, hasReconciliation: isRobust})
+	return migrateSchema(ctx, schema{hasAtomicLedger: isRobust, hasBalanceLocking: isRobust, hasIdempotency: isRobust, hasInbox: isRobust, hasFencing: isRobust})
 }
 
 // schema says which defense constraints the test database has.
@@ -147,7 +147,7 @@ type schema struct {
 	hasBalanceLocking bool
 	hasIdempotency    bool
 	hasInbox          bool
-	hasReconciliation bool
+	hasFencing        bool
 }
 
 func migrateSchema(ctx context.Context, wanted schema) error {
@@ -155,15 +155,15 @@ func migrateSchema(ctx context.Context, wanted schema) error {
 }
 
 func defenseMigrations(isEnabled bool) []postgres.DefenseMigrations {
-	return schemaMigrations(schema{hasAtomicLedger: isEnabled, hasBalanceLocking: isEnabled, hasIdempotency: isEnabled, hasInbox: isEnabled, hasReconciliation: isEnabled})
+	return schemaMigrations(schema{hasAtomicLedger: isEnabled, hasBalanceLocking: isEnabled, hasIdempotency: isEnabled, hasInbox: isEnabled, hasFencing: isEnabled})
 }
 
 func schemaMigrations(wanted schema) []postgres.DefenseMigrations {
-	enabled := map[string]bool{"atomic_ledger": wanted.hasAtomicLedger, "balance_locking": wanted.hasBalanceLocking, "idempotency": wanted.hasIdempotency, "inbox": wanted.hasInbox, "reconciliation": wanted.hasReconciliation}
+	enabled := map[string]bool{"atomic_ledger": wanted.hasAtomicLedger, "balance_locking": wanted.hasBalanceLocking, "idempotency": wanted.hasIdempotency, "inbox": wanted.hasInbox, "fencing": wanted.hasFencing}
 
 	var list []postgres.DefenseMigrations
 
-	for _, name := range []string{"atomic_ledger", "balance_locking", "idempotency", "inbox", "reconciliation"} {
+	for _, name := range []string{"atomic_ledger", "balance_locking", "idempotency", "inbox", "fencing"} {
 		files, _, err := migrations.Defense(name)
 		if err != nil {
 			panic(err)

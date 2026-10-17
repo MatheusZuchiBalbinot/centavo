@@ -18,6 +18,7 @@ import (
 	"centavo/bank/internal/domain/ledger"
 	"centavo/bank/internal/domain/money"
 	"centavo/bank/internal/domain/transfer"
+	"centavo/bank/internal/platform/clock"
 	"centavo/bank/internal/platform/failpoint"
 )
 
@@ -219,7 +220,7 @@ func (a apiHandlers) webhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isSigned := verifySignature(r.Header.Get(signatureHeader), body, a.useCases.Pix.WebhookSecret, time.Now())
+	isSigned := verifySignature(r.Header.Get(signatureHeader), body, a.useCases.Pix.WebhookSecret, clock.Now())
 	if !isSigned {
 		writeJSON(w, http.StatusUnauthorized, errorBody{Error: errorDetail{Code: codeValidationFailed, Message: errBadSignature.Error(), CorrelationID: correlationIDFrom(r.Context())}})
 
