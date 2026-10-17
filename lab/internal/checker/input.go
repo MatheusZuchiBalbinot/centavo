@@ -21,6 +21,14 @@ type operation struct {
 	args     json.RawMessage
 	result   history.Type
 	value    json.RawMessage
+	// key is the Idempotency-Key the operation sent: its own id, or the key
+	// of an earlier operation that a buggy client reused (FC43).
+	key string
+}
+
+// reusedKeyArgs reads the key a buggy client reused, if it reused one.
+type reusedKeyArgs struct {
+	ReusedKey string `json:"reused_key"`
 }
 
 // isOpen reports an operation without a completion: the lab stopped before it
@@ -86,6 +94,9 @@ type resolveValue struct {
 const (
 	outcomeApplied = "applied"
 	outcomeVoided  = "voided"
+	// outcomeSuperseded: another request took the key, so this one never
+	// applied; like voided, it counts as not applied.
+	outcomeSuperseded = "superseded"
 )
 
 type statementEntry struct {
@@ -146,7 +157,10 @@ func (ops *operations) add(record history.Record) {
 	ops.lastT = max(ops.lastT, record.TimeNS)
 
 	if record.Type == history.TypeInvoke {
-		o := &operation{op: record.Op, function: record.F, invokeT: record.TimeNS, args: record.Value}
+		var reused reusedKeyArgs
+		_ = json.Unmarshal(record.Value, &reused)
+
+		o := &operation{op: record.Op, function: record.F, invokeT: record.TimeNS, args: record.Value, key: cmp.Or(reused.ReusedKey, record.Op)}
 		ops.byID[record.Op] = o
 		ops.ordered = append(ops.ordered, o)
 	}
@@ -320,19 +334,35 @@ func groupEntries(sorted []snapshot.Entry, keyOf func(snapshot.Entry) string) ma
 	return groups
 }
 
-// applications are the transactions of the operation's own kind (A(o)).
-func (l ledger) applications(o *operation) []snapshot.Transaction {
+// applications are the transactions of the operation's own kind (A(o)): the
+// ones under the key it sent that it owns.
+func (e *evaluation) applications(o *operation) []snapshot.Transaction {
 	kind := transactionKindOf[o.function]
 
 	var matching []snapshot.Transaction
 
-	for _, transaction := range l.byClientRef[o.op] {
-		if transaction.Kind == kind {
+	for _, transaction := range e.ledger.byClientRef[o.key] {
+		isOwn := transaction.Kind == kind && e.ownerOf(transaction) == o.op
+		if isOwn {
 			matching = append(matching, transaction)
 		}
 	}
 
 	return matching
+}
+
+// ownerOf is the operation a client transaction applied. Its client_ref is
+// the key, which names the operation that owns it, unless a buggy client
+// took an idle key for another request: the bank then records that request's
+// correlation id, which is its operation id (FC43).
+func (e *evaluation) ownerOf(transaction snapshot.Transaction) string {
+	sender, isKnown := e.ops.byID[transaction.CorrelationID]
+	isSentWithThisKey := isKnown && sender.key == transaction.ClientRef
+	if isSentWithThisKey {
+		return sender.op
+	}
+
+	return transaction.ClientRef
 }
 
 func (l ledger) isCustomer(accountID string) bool {

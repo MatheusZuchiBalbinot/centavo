@@ -51,8 +51,16 @@ var aggressivePolicy = retryPolicy{
 // Result is what the load leaves for the cure: the writes whose outcome is
 // unknown, to resolve, and the next free process number.
 type Result struct {
-	Indeterminate []string
+	Indeterminate []IndeterminateWrite
 	NextProcess   int
+}
+
+// IndeterminateWrite is a write whose outcome the client does not know, with
+// the request it sent: resolve must name the request, not only its key.
+type IndeterminateWrite struct {
+	Key  string
+	Path string
+	Body json.RawMessage
 }
 
 // Amounts the workload draws, in cents.
@@ -141,7 +149,7 @@ type run struct {
 	accounts    []accountID
 
 	mu            sync.Mutex
-	indeterminate []string
+	indeterminate []IndeterminateWrite
 }
 
 // Run prepares the accounts, then runs the workload for the configured
@@ -200,11 +208,11 @@ func (r *run) result() Result {
 }
 
 // noteIndeterminate keeps a write whose outcome the client does not know.
-func (r *run) noteIndeterminate(opID string) {
+func (r *run) noteIndeterminate(write IndeterminateWrite) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.indeterminate = append(r.indeterminate, opID)
+	r.indeterminate = append(r.indeterminate, write)
 }
 
 // forEachClient runs step on every client concurrently and returns the first
@@ -638,7 +646,7 @@ func (c *client) complete(op operation, opID string, attempts int, result attemp
 	// the operation that did.
 	isResolvable := op.isWrite() && op.reusedKey == ""
 	if isResolvable {
-		c.run.noteIndeterminate(opID)
+		c.run.noteIndeterminate(IndeterminateWrite{Key: opID, Path: op.request.path, Body: op.request.body})
 	}
 
 	c.retire()

@@ -24,12 +24,18 @@ type ResolveConfig struct {
 	ControlURL   string
 	History      *history.Writer
 	Logger       *slog.Logger
-	Keys         []string
+	Writes       []IndeterminateWrite
 	FirstProcess int
 }
 
 type resolveArgs struct {
 	Key string `json:"key"`
+}
+
+// resolveBody is the request being resolved, as it was sent.
+type resolveBody struct {
+	Endpoint string          `json:"endpoint"`
+	Body     json.RawMessage `json:"body"`
 }
 
 type resolveResult struct {
@@ -58,8 +64,8 @@ func Resolve(ctx context.Context, config ResolveConfig) (int, error) {
 	}
 	sample := config.Seed.Stream("cure.sample")
 
-	for _, key := range config.Keys {
-		op, err := resolveOperation(key)
+	for _, write := range config.Writes {
+		op, err := resolveOperation(write)
 		if err != nil {
 			return 0, err
 		}
@@ -110,10 +116,15 @@ func ReadPixOuts(ctx context.Context, config ResolveConfig, transferIDs []string
 	return nil
 }
 
-func resolveOperation(key string) (operation, error) {
-	resolveRequest := request{method: http.MethodPost, path: "/v1/operations/" + url.PathEscape(key) + "/resolve"}
+func resolveOperation(write IndeterminateWrite) (operation, error) {
+	body, err := json.Marshal(resolveBody{Endpoint: write.Path, Body: write.Body})
+	if err != nil {
+		return operation{}, err
+	}
 
-	op, err := newOperation(history.FunctionResolve, resolveRequest, resolveArgs{Key: key}, parseResolve)
+	resolveRequest := request{method: http.MethodPost, path: "/v1/operations/" + url.PathEscape(write.Key) + "/resolve", body: body}
+
+	op, err := newOperation(history.FunctionResolve, resolveRequest, resolveArgs{Key: write.Key}, parseResolve)
 	op.hasNoKey = true
 
 	return op, err
@@ -128,7 +139,8 @@ func parseResolve(body []byte, status int) (json.RawMessage, error) {
 
 	err := json.Unmarshal(body, &response)
 
-	isKnownOutcome := response.Outcome == "applied" || response.Outcome == "voided"
+	// superseded: another request took the key, so this one never applied.
+	isKnownOutcome := response.Outcome == "applied" || response.Outcome == "voided" || response.Outcome == "superseded"
 	if err != nil || response.Key == "" || !isKnownOutcome {
 		return nil, errMissingField
 	}
