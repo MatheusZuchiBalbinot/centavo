@@ -596,6 +596,10 @@ func (s *Store) Statement(ctx context.Context, participantID string, afterSeq in
 	}
 	defer rows.Close()
 
+	return scanStatement(rows)
+}
+
+func scanStatement(rows *sql.Rows) ([]StatementEntry, error) {
 	var entries []StatementEntry
 
 	for rows.Next() {

@@ -288,7 +288,14 @@ func (a API) truthExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	export, err := a.store.Truth(r.Context(), participant)
+	since, err := sinceOf(r)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "since must be RFC 3339"})
+
+		return
+	}
+
+	export, err := a.store.Truth(r.Context(), participant, since)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal"})
 
@@ -296,6 +303,17 @@ func (a API) truthExport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, export)
+}
+
+// sinceOf reads the optional since of a truth export; without it the export
+// starts at the beginning.
+func sinceOf(r *http.Request) (time.Time, error) {
+	since := r.URL.Query().Get("since")
+	if since == "" {
+		return time.Time{}, nil
+	}
+
+	return time.Parse(time.RFC3339Nano, since)
 }
 
 // pending counts the webhooks still to be sent, for the lab's quiescence.

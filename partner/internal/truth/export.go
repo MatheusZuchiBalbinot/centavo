@@ -39,25 +39,26 @@ type Export struct {
 	PendingDeliveries int `json:"pending_deliveries"`
 }
 
-// Truth exports everything about one participant.
-func (s *Store) Truth(ctx context.Context, participantID string) (Export, error) {
+// Truth exports everything about one participant created at or after since:
+// a round only needs its own part, and the volume keeps every round's.
+func (s *Store) Truth(ctx context.Context, participantID string, since time.Time) (Export, error) {
 	export := Export{ParticipantID: participantID, Transfers: []TransferView{}, Statement: []StatementEntry{}, Incoming: []IncomingView{}}
 
-	transfers, err := s.transferViews(ctx, participantID)
+	transfers, err := s.transferViews(ctx, participantID, since)
 	if err != nil {
 		return Export{}, err
 	}
 
 	export.Transfers = transfers
 
-	statement, err := s.Statement(ctx, participantID, 0, maxExportEntries)
+	statement, err := s.statementSince(ctx, participantID, since)
 	if err != nil {
 		return Export{}, err
 	}
 
 	export.Statement = append(export.Statement, statement...)
 
-	export.Incoming, err = s.incoming(ctx, participantID)
+	export.Incoming, err = s.incoming(ctx, participantID, since)
 	if err != nil {
 		return Export{}, err
 	}
@@ -67,8 +68,8 @@ func (s *Store) Truth(ctx context.Context, participantID string) (Export, error)
 	return export, err
 }
 
-func (s *Store) transferViews(ctx context.Context, participantID string) ([]TransferView, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT end_to_end_id, participant_id, amount_cents, destination_key, status, reject_reason, is_double, created_at FROM transfers WHERE participant_id = ? ORDER BY created_at, end_to_end_id`, participantID)
+func (s *Store) transferViews(ctx context.Context, participantID string, since time.Time) ([]TransferView, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT end_to_end_id, participant_id, amount_cents, destination_key, status, reject_reason, is_double, created_at FROM transfers WHERE participant_id = ? AND created_at >= ? ORDER BY created_at, end_to_end_id`, participantID, since.UnixNano())
 	if err != nil {
 		return nil, fmt.Errorf("exporting transfers: %w", err)
 	}
@@ -94,11 +95,26 @@ func (s *Store) transferViews(ctx context.Context, participantID string) ([]Tran
 	return views, rows.Err()
 }
 
-// maxExportEntries bounds one export; a 72-hour run stays far below it.
-const maxExportEntries = 10_000_000
+// statementSinceSQL is statementSQL bounded by time instead of by sequence.
+const statementSinceSQL = `
+SELECT e.seq, e.participant_id, e.kind, e.end_to_end_id, e.amount_cents, e.created_at, coalesce(i.account_id, '')
+FROM statement_entries e
+LEFT JOIN incoming i ON e.kind = 'incoming' AND i.end_to_end_id = e.end_to_end_id
+WHERE e.participant_id = ? AND e.created_at >= ?
+ORDER BY e.seq`
 
-func (s *Store) incoming(ctx context.Context, participantID string) ([]IncomingView, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT end_to_end_id, participant_id, account_id, amount_cents, created_at FROM incoming WHERE participant_id = ? ORDER BY created_at, end_to_end_id`, participantID)
+func (s *Store) statementSince(ctx context.Context, participantID string, since time.Time) ([]StatementEntry, error) {
+	rows, err := s.db.QueryContext(ctx, statementSinceSQL, participantID, since.UnixNano())
+	if err != nil {
+		return nil, fmt.Errorf("exporting the statement: %w", err)
+	}
+	defer rows.Close()
+
+	return scanStatement(rows)
+}
+
+func (s *Store) incoming(ctx context.Context, participantID string, since time.Time) ([]IncomingView, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT end_to_end_id, participant_id, account_id, amount_cents, created_at FROM incoming WHERE participant_id = ? AND created_at >= ? ORDER BY created_at, end_to_end_id`, participantID, since.UnixNano())
 	if err != nil {
 		return nil, fmt.Errorf("exporting incoming: %w", err)
 	}

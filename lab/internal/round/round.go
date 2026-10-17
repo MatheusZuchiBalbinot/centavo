@@ -34,6 +34,9 @@ const (
 	manifestFile = "round.json"
 	// maxAllocationTries bounds the race between two labs creating rounds.
 	maxAllocationTries = 10
+	// truthMargin starts the partner's export a little before the round, in
+	// case the partner's clock runs behind the lab's.
+	truthMargin = time.Minute
 )
 
 var roundDirPattern = regexp.MustCompile(`^r(\d{4,})$`)
@@ -68,7 +71,8 @@ type SagaOptions struct {
 	// Unreconciled counts the partner's statement entries the bank has not
 	// booked yet: I1c holds only after the final reconciliation.
 	Unreconciled func(ctx context.Context) (int64, error)
-	Truth        func(ctx context.Context) ([]byte, error)
+	// Truth reads the partner's truth from a time on.
+	Truth func(ctx context.Context, since time.Time) ([]byte, error)
 	// PartnerURL and ParticipantID are where the load asks for PIX in.
 	PartnerURL    string
 	ParticipantID string
@@ -87,10 +91,11 @@ type ChaosOptions struct {
 // Result is where a round was archived, what its history looks like and
 // what the checker concluded.
 type Result struct {
-	ID      string
-	Dir     string
-	History history.Report
-	Verdict checker.Verdict
+	ID        string
+	Dir       string
+	StartedAt time.Time
+	History   history.Report
+	Verdict   checker.Verdict
 }
 
 // IsClean reports whether the history is well formed and every operation ended.
@@ -183,7 +188,7 @@ func Run(ctx context.Context, options Options) (Result, error) {
 		return Result{}, errors.Join(runErr, err)
 	}
 
-	result := Result{ID: id, Dir: dir, History: report}
+	result := Result{ID: id, Dir: dir, StartedAt: startedAt, History: report}
 
 	// The checker reads round.json for the report header, so it is written
 	// before the check and again with the verdict.
@@ -321,7 +326,7 @@ func exportAndCheck(ctx context.Context, options Options, result Result) (checke
 	}
 
 	if options.Saga.Truth != nil {
-		truth, err := options.Saga.Truth(ctx)
+		truth, err := options.Saga.Truth(ctx, result.StartedAt.Add(-truthMargin))
 		if err != nil {
 			return "", err
 		}
