@@ -22,6 +22,9 @@ type StatementEntry struct {
 	AmountCents money.Cents
 	// AccountID is the destination of an incoming PIX.
 	AccountID string
+	// CorrelationID is the one the PIX came with, its client_ref for a PIX
+	// out: the reconciler's failpoints match it, like any other step of the PIX.
+	CorrelationID string
 }
 
 // Divergence is how a statement entry compares with the ledger

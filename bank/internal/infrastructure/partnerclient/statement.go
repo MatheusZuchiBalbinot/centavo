@@ -26,6 +26,7 @@ type statementLine struct {
 	EndToEndID           string `json:"end_to_end_id"`
 	AmountCents          int64  `json:"amount_cents"`
 	DestinationAccountID string `json:"destination_account_id"`
+	CorrelationID        string `json:"correlation_id"`
 }
 
 // Statement reads the participant's statement after a sequence number.
@@ -59,7 +60,7 @@ func (c Client) Statement(ctx context.Context, afterSeq int64, limit int) ([]app
 	entries := make([]application.StatementEntry, 0, len(page.Entries))
 
 	for _, line := range page.Entries {
-		entry := application.StatementEntry{Seq: line.Seq, Kind: application.StatementKind(line.Kind), EndToEndID: line.EndToEndID, AmountCents: money.Cents(line.AmountCents), AccountID: line.DestinationAccountID}
+		entry := application.StatementEntry{Seq: line.Seq, Kind: application.StatementKind(line.Kind), EndToEndID: line.EndToEndID, AmountCents: money.Cents(line.AmountCents), AccountID: line.DestinationAccountID, CorrelationID: line.CorrelationID}
 		entries = append(entries, entry)
 	}
 

@@ -268,3 +268,42 @@ func TestTruth_ExportsOnlyWhatCameAfterSince(t *testing.T) {
 		t.Fatalf("export since %s: %+v", later, export)
 	}
 }
+
+// TestStatement_CarriesTheCorrelationOfEachPix guards the lab's failpoints in
+// the bank's reconciler: they match the PIX's correlation id, and the
+// statement is all the reconciler reads.
+func TestStatement_CarriesTheCorrelationOfEachPix(t *testing.T) {
+	store := openStore(t)
+	transfer := truth.Transfer{EndToEndID: "E-out", ParticipantID: "centavo-robust", AmountCents: 4_500, DestinationKey: "dest-0001", Status: truth.StatusProcessing, SettleAt: epoch, CreatedAt: epoch, CorrelationID: "r0001-p01-000001"}
+
+	_, err := store.Submit(t.Context(), transfer)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = store.Settle(t.Context(), truth.SettleCommand{EndToEndID: "E-out", Now: epoch, EventID: "evt-out", Planner: honest})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	incoming := truth.Incoming{EndToEndID: "E-in", ParticipantID: "centavo-robust", AccountID: "acc-1", AmountCents: 900, CreatedAt: epoch, CorrelationID: "r0001-p02-000001"}
+
+	_, err = store.AddIncoming(t.Context(), truth.IncomingCommand{Incoming: incoming, EventID: "evt-in", Planner: honest})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	entries, err := store.Statement(t.Context(), "centavo-robust", 0, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	correlations := map[string]string{}
+	for _, entry := range entries {
+		correlations[entry.EndToEndID] = entry.CorrelationID
+	}
+
+	if correlations["E-out"] != "r0001-p01-000001" || correlations["E-in"] != "r0001-p02-000001" {
+		t.Fatalf("statement correlations: %v", correlations)
+	}
+}
