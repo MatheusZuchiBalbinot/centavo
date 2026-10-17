@@ -313,7 +313,7 @@ func (e *evaluation) checkOperations() {
 }
 
 func (e *evaluation) checkWrite(o *operation) {
-	applications := e.ledger.applications(o)
+	applications := e.applications(o)
 
 	switch {
 	case o.result == history.TypeOK:
@@ -457,7 +457,7 @@ func (e *evaluation) checkPhantoms() {
 			continue
 		}
 
-		o, isKnown := e.ops.byID[transaction.ClientRef]
+		o, isKnown := e.ops.byID[e.ownerOf(transaction)]
 		isAttributed := isKnown && transactionKindOf[o.function] == transaction.Kind
 		if isAttributed {
 			continue

@@ -88,9 +88,15 @@ func (b *roundBuilder) operation(function history.Function, args any, result his
 
 // apply writes a correct ledger transaction: entries in sequence, chained.
 func (b *roundBuilder) apply(clientRef, kind string, amounts map[string]int64) string {
+	return b.applyFor(clientRef, clientRef, kind, amounts)
+}
+
+// applyFor is apply for a request sent under another operation's key: the
+// bank keeps the key as client_ref and the sender's id as correlation_id.
+func (b *roundBuilder) applyFor(clientRef, correlationID, kind string, amounts map[string]int64) string {
 	id := b.upcomingTransaction()
 	b.nextTx++
-	b.snap.Transactions = append(b.snap.Transactions, snapshot.Transaction{ID: id, Kind: kind, ClientRef: clientRef, CorrelationID: clientRef})
+	b.snap.Transactions = append(b.snap.Transactions, snapshot.Transaction{ID: id, Kind: kind, ClientRef: clientRef, CorrelationID: correlationID})
 
 	for _, account := range slices.Sorted(maps.Keys(amounts)) {
 		b.post(id, account, amounts[account])

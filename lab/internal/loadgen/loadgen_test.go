@@ -226,7 +226,8 @@ func TestResolve_RecordsOneResolvePerKeyInItsOwnProcesses(t *testing.T) {
 	}
 
 	keys := []string{"r0001-p01-000001", "r0001-p02-000009"}
-	config := ResolveConfig{Round: "r0001", Seed: seed.Seed(7), ControlURL: server.URL, History: writer, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), Keys: keys, FirstProcess: 50}
+	writes := []IndeterminateWrite{{Key: keys[0], Path: "/v1/deposits", Body: json.RawMessage(`{"account_id":"a","amount_cents":100}`)}, {Key: keys[1], Path: "/v1/transfers", Body: json.RawMessage(`{"from_account_id":"a","to_account_id":"b","amount_cents":5}`)}}
+	config := ResolveConfig{Round: "r0001", Seed: seed.Seed(7), ControlURL: server.URL, History: writer, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), Writes: writes, FirstProcess: 50}
 
 	_, err = Resolve(t.Context(), config)
 	if err != nil {
@@ -238,9 +239,16 @@ func TestResolve_RecordsOneResolvePerKeyInItsOwnProcesses(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, key := range keys {
-		if bank.resolved[key] == 0 {
-			t.Fatalf("key %s was never resolved", key)
+	for _, write := range writes {
+		if bank.resolved[write.Key] == 0 {
+			t.Fatalf("key %s was never resolved", write.Key)
+		}
+
+		// The bank tells this request from another one with the same key by
+		// the bytes it sent, so resolve must carry them unchanged.
+		want := `{"endpoint":"` + write.Path + `","body":` + string(write.Body) + `}`
+		if got := bank.bodies["resolve "+write.Key]; got != want {
+			t.Fatalf("resolve body for %s: %s, want %s", write.Key, got, want)
 		}
 	}
 
@@ -388,6 +396,9 @@ func (b *fakeBank) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if strings.HasSuffix(r.URL.Path, "/resolve") {
 		resolvedKey := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/v1/operations/"), "/resolve")
 		b.resolved[resolvedKey]++
+
+		body, _ := io.ReadAll(r.Body)
+		b.bodies["resolve "+resolvedKey] = string(body)
 		writeFake(w, http.StatusOK, `{"key": "`+resolvedKey+`", "outcome": "voided"}`)
 
 		return

@@ -104,6 +104,36 @@ func TestPocket_ResolveMustMatchTheLedger(t *testing.T) {
 	assertBreaks(t, b.evaluate(), RuleI3Convergence)
 }
 
+// TestPocket_ReusedIdleKeyBelongsToItsSender is retry-storm's buggy client:
+// it reused the key of a write that never applied, so its own deposit took
+// the key. The deposit is the reuser's, and the first write never applied.
+func TestPocket_ReusedIdleKeyBelongsToItsSender(t *testing.T) {
+	b := newRoundBuilder(t)
+	alice := b.createAccount()
+	owner := b.operation(history.FunctionDeposit, depositArgs{AccountID: alice, AmountCents: 500}, history.TypeInfo, nil)
+	reuserArgs := map[string]any{"account_id": alice, "amount_cents": 300, "reused_key": owner}
+	reuser := b.operation(history.FunctionDeposit, reuserArgs, history.TypeOK, writeValue{TransactionID: b.upcomingTransaction()})
+	b.applyFor(owner, reuser, snapshot.TransactionDeposit, map[string]int64{alice: 300, externalCash: -300})
+	b.resolve(owner, outcomeSuperseded)
+
+	assertPasses(t, b.evaluate())
+}
+
+// TestPocket_ResolveOfASupersededKeyMustNotSayApplied is the bank answering
+// the first write with the reuser's response, as it did before resolve
+// compared the request.
+func TestPocket_ResolveOfASupersededKeyMustNotSayApplied(t *testing.T) {
+	b := newRoundBuilder(t)
+	alice := b.createAccount()
+	owner := b.operation(history.FunctionDeposit, depositArgs{AccountID: alice, AmountCents: 500}, history.TypeInfo, nil)
+	reuserArgs := map[string]any{"account_id": alice, "amount_cents": 300, "reused_key": owner}
+	reuser := b.operation(history.FunctionDeposit, reuserArgs, history.TypeOK, writeValue{TransactionID: b.upcomingTransaction()})
+	b.applyFor(owner, reuser, snapshot.TransactionDeposit, map[string]int64{alice: 300, externalCash: -300})
+	b.resolve(owner, outcomeApplied)
+
+	assertBreaks(t, b.evaluate(), RuleI3Convergence)
+}
+
 func TestPocket_ResolveMustNotChangeItsMind(t *testing.T) {
 	b := newRoundBuilder(t)
 	alice := b.createAccount()
