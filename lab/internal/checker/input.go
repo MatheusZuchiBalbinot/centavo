@@ -355,6 +355,31 @@ func (e *evaluation) applications(o *operation) []snapshot.Transaction {
 	return matching
 }
 
+// isReplayOfTheKey reports a buggy write that reused a key with the same
+// request: the bank answered with the stored response of the write that owns
+// the key, so both operations are the one application (FC43, equal body).
+func (e *evaluation) isReplayOfTheKey(o *operation) bool {
+	isReusedOK := o.key != o.op && o.result == history.TypeOK
+	if !isReusedOK {
+		return false
+	}
+
+	var value writeValue
+	_ = json.Unmarshal(o.value, &value)
+
+	kind := transactionKindOf[o.function]
+
+	for _, transaction := range e.ledger.byClientRef[o.key] {
+		isTheStoredAnswer := transaction.ID == value.TransactionID || (value.TransferID != "" && transaction.ExternalTransferID == value.TransferID)
+		isReplay := transaction.Kind == kind && e.ownerOf(transaction) != o.op && isTheStoredAnswer
+		if isReplay {
+			return true
+		}
+	}
+
+	return false
+}
+
 // ownerOf is the operation a client transaction applied. Its client_ref is
 // the key, which names the operation that owns it, unless a buggy client
 // took an idle key for another request: the bank then records that request's

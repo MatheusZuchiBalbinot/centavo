@@ -138,6 +138,20 @@ func TestPocket_IndeterminateReuseIsResolvedForItself(t *testing.T) {
 	assertPasses(t, b.evaluate())
 }
 
+// TestPocket_ReusedKeyWithTheSameRequestIsAReplay: the buggy client sent the
+// same body under the reused key, so the bank answered with the stored
+// response. The two operations are one deposit, counted once.
+func TestPocket_ReusedKeyWithTheSameRequestIsAReplay(t *testing.T) {
+	b := newRoundBuilder(t)
+	alice := b.createAccount()
+	owner := b.deposit(alice, 500)
+	stored := b.snap.Transactions[len(b.snap.Transactions)-1].ID
+	replayArgs := map[string]any{"account_id": alice, "amount_cents": 500, "reused_key": owner}
+	b.operation(history.FunctionDeposit, replayArgs, history.TypeOK, writeValue{TransactionID: stored})
+
+	assertPasses(t, b.evaluate())
+}
+
 // TestPocket_ResolveOfASupersededKeyMustNotSayApplied is the bank answering
 // the first write with the reuser's response, as it did before resolve
 // compared the request.
