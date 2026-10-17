@@ -30,9 +30,12 @@ func New(baseURL, participantID string) Client {
 	return Client{baseURL: baseURL, participantID: participantID, http: &http.Client{Timeout: callTimeout}}
 }
 
-// Truth returns GET /internal/truth as the partner sent it, for truth.json.
-func (c Client) Truth(ctx context.Context) ([]byte, error) {
-	return c.get(ctx, "/internal/truth?participant_id="+url.QueryEscape(c.participantID))
+// Truth returns GET /internal/truth as the partner sent it, for truth.json,
+// from since on.
+func (c Client) Truth(ctx context.Context, since time.Time) ([]byte, error) {
+	query := url.Values{"participant_id": {c.participantID}, "since": {since.UTC().Format(time.RFC3339Nano)}}
+
+	return c.get(ctx, "/internal/truth?"+query.Encode())
 }
 
 // Pending is what the partner has not finished for the participant.

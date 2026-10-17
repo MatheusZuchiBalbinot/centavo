@@ -66,7 +66,7 @@ func TestSettle_WritesTheStatementOnceOrTwiceWhenTheBugHits(t *testing.T) {
 		}
 	}
 
-	export, err := store.Truth(t.Context(), "centavo-robust")
+	export, err := store.Truth(t.Context(), "centavo-robust", time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +133,7 @@ func TestAddIncoming_CreditsOncePerEndToEndID(t *testing.T) {
 		}
 	}
 
-	export, err := store.Truth(t.Context(), "centavo-robust")
+	export, err := store.Truth(t.Context(), "centavo-robust", time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,5 +232,39 @@ func TestOpen_AddsTheColumnsOfANewerSchema(t *testing.T) {
 	stored, err := store.Get(t.Context(), "E-old")
 	if err != nil || stored.CorrelationID != transfer.CorrelationID {
 		t.Fatalf("stored %+v, %v", stored, err)
+	}
+}
+
+// TestTruth_ExportsOnlyWhatCameAfterSince guards the partner's memory: a
+// round exports its own part of a truth that keeps every round.
+func TestTruth_ExportsOnlyWhatCameAfterSince(t *testing.T) {
+	store := openStore(t)
+	submit(t, store, "E-before", false)
+
+	later := epoch.Add(time.Hour)
+	transfer := truth.Transfer{EndToEndID: "E-after", ParticipantID: "centavo-robust", AmountCents: 4_500, DestinationKey: "dest-0001", Status: truth.StatusProcessing, SettleAt: later, CreatedAt: later}
+
+	_, err := store.Submit(t.Context(), transfer)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	settledAt := map[string]time.Time{"E-before": epoch, "E-after": later}
+
+	for e2e, now := range settledAt {
+		err := store.Settle(t.Context(), truth.SettleCommand{EndToEndID: e2e, Now: now, EventID: "evt-" + e2e, Planner: honest})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	export, err := store.Truth(t.Context(), "centavo-robust", later)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	isOnlyTheLaterOne := len(export.Transfers) == 1 && export.Transfers[0].EndToEndID == "E-after" && len(export.Statement) == 1 && export.Statement[0].EndToEndID == "E-after"
+	if !isOnlyTheLaterOne {
+		t.Fatalf("export since %s: %+v", later, export)
 	}
 }
