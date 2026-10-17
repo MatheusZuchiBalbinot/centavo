@@ -3,6 +3,7 @@ package postgres_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -141,4 +142,77 @@ func TestReconciliation_MissingIncoming_CreditsOnce(t *testing.T) {
 	p.reconcile(t, statement)
 
 	assertChainedAndNeverNegative(t, p.bank, account, 640)
+}
+
+// TestReconciliation_BatchTakesItsTransfersBeforeAnyBalance reproduces the
+// deadlock the chaos rounds hit about once a minute: a writer holds a
+// transfer of the batch and then needs the transit balance. A reconciler that
+// booked an earlier entry first holds that balance while it waits on the
+// transfer; one that takes the batch's transfers first waits holding none.
+func TestReconciliation_BatchTakesItsTransfersBeforeAnyBalance(t *testing.T) {
+	p := newOutboxBank(t)
+	statement := newStatement(t, p)
+	first := p.sentTransfer(t, 1_000)
+	second := p.sentTransfer(t, 300)
+	statement.add(application.StatementSettlement, first.EndToEndID, 1_000, "")
+	statement.add(application.StatementSettlement, second.EndToEndID, 300, "")
+
+	writer, err := p.bank.pool.Begin(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer writer.Rollback(context.Background()) //nolint:errcheck // a no-op after the commit below
+
+	_, err = writer.Exec(t.Context(), `SELECT id FROM external_transfers WHERE id = $1 FOR UPDATE`, uuid.UUID(second.TransferID))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reconciled := make(chan error, 1)
+
+	go func() {
+		reconciled <- p.reconciler(statement, application.AtomicBatches{}).RunOnce(context.Background())
+	}()
+
+	waitForALockWait(t, p)
+
+	_, err = writer.Exec(t.Context(), `UPDATE account_balances SET updated_at = now() WHERE account_id = $1`, uuid.UUID(ledger.PixOutTransitAccountID()))
+	if err != nil {
+		t.Fatalf("the other writer could not take the transit balance: %v", err)
+	}
+
+	err = writer.Commit(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = <-reconciled
+	if err != nil {
+		t.Fatalf("the reconciler failed: %v", err)
+	}
+}
+
+// waitForALockWait returns once some session waits on a lock: the reconciler
+// reached the transfer the test holds.
+func waitForALockWait(t *testing.T, p pixBank) {
+	t.Helper()
+
+	deadline := time.Now().Add(5 * time.Second)
+
+	for time.Now().Before(deadline) {
+		var waiting int
+
+		err := p.bank.pool.QueryRow(t.Context(), `SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND datname = current_database()`).Scan(&waiting)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if waiting > 0 {
+			return
+		}
+
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	t.Fatal("the reconciler never waited on the held transfer")
 }

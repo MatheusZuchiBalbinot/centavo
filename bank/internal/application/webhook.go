@@ -111,6 +111,12 @@ func creditIncoming(ctx context.Context, stores Stores, event PartnerEvent) erro
 		return err
 	}
 
+	// The PIX before any balance, the order the reconciler takes it in too.
+	err = stores.LockEndToEnd(ctx, event.EndToEndID)
+	if err != nil {
+		return err
+	}
+
 	amount, err := money.NewAmount(event.AmountCents)
 	if err != nil {
 		return err

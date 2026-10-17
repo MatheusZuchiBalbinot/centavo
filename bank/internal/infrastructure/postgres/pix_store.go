@@ -258,3 +258,33 @@ func (s LedgerStore) ListCreated(ctx context.Context, limit int) ([]transfer.ID,
 		return transfer.ID(id), err
 	})
 }
+
+// lockEndToEndSQL is a transaction-scoped advisory lock keyed by the PIX:
+// the reconciler and the inbox both credit incoming PIX, and the lock gives
+// them one order to meet in.
+const lockEndToEndSQL = `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`
+
+// LockEndToEnd holds one PIX until the transaction ends.
+func (s LedgerStore) LockEndToEnd(ctx context.Context, endToEndID string) error {
+	_, err := s.db.Exec(ctx, lockEndToEndSQL, endToEndID)
+	if err != nil {
+		return fmt.Errorf("locking a PIX: %w", err)
+	}
+
+	return nil
+}
+
+const lockTransfersOfSQL = `SELECT id FROM external_transfers WHERE end_to_end_id = ANY($1) ORDER BY id FOR UPDATE`
+
+// LockTransfersOf locks a batch of transfers in id order, which every other
+// writer that takes more than one of them follows too.
+func (s LedgerStore) LockTransfersOf(ctx context.Context, endToEndIDs []string) error {
+	rows, err := s.db.Query(ctx, lockTransfersOfSQL, endToEndIDs)
+	if err != nil {
+		return fmt.Errorf("locking transfers: %w", err)
+	}
+
+	rows.Close()
+
+	return rows.Err()
+}

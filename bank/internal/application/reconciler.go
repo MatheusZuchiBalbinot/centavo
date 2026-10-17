@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	"centavo/bank/internal/domain/ledger"
@@ -331,6 +332,29 @@ func incomingFacts(ctx context.Context, stores Stores, entry StatementEntry, fac
 	return facts, nil
 }
 
+// lockBatch takes every PIX of the batch, then its transfers, before the
+// first balance. The batch holds hot system balances from its first entry to
+// its commit; taking a transfer after them would wait on a writer that holds
+// the transfer and waits on those balances, a deadlock every few runs.
+func lockBatch(ctx context.Context, stores Stores, batch statementBatch) error {
+	endToEndIDs := make([]string, 0, len(batch.entries))
+	for _, entry := range batch.entries {
+		endToEndIDs = append(endToEndIDs, entry.EndToEndID)
+	}
+
+	slices.Sort(endToEndIDs)
+	endToEndIDs = slices.Compact(endToEndIDs)
+
+	for _, endToEndID := range endToEndIDs {
+		err := stores.LockEndToEnd(ctx, endToEndID)
+		if err != nil {
+			return err
+		}
+	}
+
+	return stores.LockTransfersOf(ctx, endToEndIDs)
+}
+
 // entryFailpointContext carries the entry's PIX correlation id to a
 // failpoint: the lab arms them for the round's correlation ids, and the
 // reconciler has no request of its own to take one from.
@@ -375,6 +399,11 @@ func (AtomicBatches) Book(ctx context.Context, r Reconciler, batch statementBatc
 
 		if !isHeld {
 			return errReconcilerLeaseLost
+		}
+
+		err = lockBatch(ctx, stores, batch)
+		if err != nil {
+			return err
 		}
 
 		runID, err := stores.StartRun(ctx, batch.from, batch.to, batch.token)
