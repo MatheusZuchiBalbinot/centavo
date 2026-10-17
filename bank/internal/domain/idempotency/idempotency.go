@@ -52,6 +52,9 @@ type Outcome string
 const (
 	OutcomeApplied Outcome = "applied"
 	OutcomeVoided  Outcome = "voided"
+	// OutcomeSuperseded is a key another request took: the one asking was
+	// never applied, and never will be, since the key is no longer free.
+	OutcomeSuperseded Outcome = "superseded"
 )
 
 var (

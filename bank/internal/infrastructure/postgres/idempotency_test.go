@@ -161,7 +161,7 @@ func TestResolve_VoidsUnknownKeysForGood(t *testing.T) {
 	account := w.bank.newCustomer(t)
 	unknown, applied := newKey(), newKey()
 
-	resolution, err := w.resolver.Resolve(t.Context(), unknown)
+	resolution, err := w.resolver.Resolve(t.Context(), resolveOf(w.depositWrite(t, unknown, account, 100)))
 	if err != nil || resolution.Outcome != idempotency.OutcomeVoided {
 		t.Fatalf("unknown key: %+v, %v", resolution, err)
 	}
@@ -175,22 +175,52 @@ func TestResolve_VoidsUnknownKeysForGood(t *testing.T) {
 		t.Fatalf("the voided key applied %d times", got)
 	}
 
-	first, err := w.writer.Execute(t.Context(), w.depositWrite(t, applied, account, 100))
+	appliedWrite := w.depositWrite(t, applied, account, 100)
+
+	first, err := w.writer.Execute(t.Context(), appliedWrite)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	resolution, err = w.resolver.Resolve(t.Context(), applied)
+	resolution, err = w.resolver.Resolve(t.Context(), resolveOf(appliedWrite))
 
 	isApplied := err == nil && resolution.Outcome == idempotency.OutcomeApplied && resolution.Response != nil && bytes.Equal(resolution.Response.Body, first.Body)
 	if !isApplied {
 		t.Fatalf("applied key: %+v, %v", resolution, err)
 	}
 
-	again, err := w.resolver.Resolve(t.Context(), unknown)
+	again, err := w.resolver.Resolve(t.Context(), resolveOf(w.depositWrite(t, unknown, account, 100)))
 	if err != nil || again.Outcome != idempotency.OutcomeVoided {
 		t.Fatalf("a second resolve changed its mind: %+v, %v", again, err)
 	}
+}
+
+// TestResolve_KeyTakenByAnotherRequest_IsSuperseded guards FC43 under
+// resolve: a buggy client reused an idle key with another body, which
+// applied. Resolving the first request must not answer "applied" for it.
+func TestResolve_KeyTakenByAnotherRequest_IsSuperseded(t *testing.T) {
+	w := newWrites(t)
+	account := w.bank.newCustomer(t)
+	key := newKey()
+	original := w.depositWrite(t, key, account, 100)
+
+	_, err := w.writer.Execute(t.Context(), w.depositWrite(t, key, account, 250))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resolution, err := w.resolver.Resolve(t.Context(), resolveOf(original))
+	if err != nil || resolution.Outcome != idempotency.OutcomeSuperseded || resolution.Response != nil {
+		t.Fatalf("the original request: %+v, %v", resolution, err)
+	}
+
+	if got := w.bank.transactionsWithClientRef(t, key); got != 1 {
+		t.Fatalf("the key applied %d times", got)
+	}
+}
+
+func resolveOf(write application.Write) application.ResolveRequest {
+	return application.ResolveRequest{Key: write.Key, Endpoint: write.Endpoint, RequestHash: write.RequestHash}
 }
 
 func TestIdempotencyKeys_NeverCommitPending(t *testing.T) {
@@ -234,7 +264,7 @@ func TestDeleteExpiredKeys_RemovesOnlyExpiredOnes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	resolution, err := w.resolver.Resolve(t.Context(), fresh)
+	resolution, err := w.resolver.Resolve(t.Context(), resolveOf(w.depositWrite(t, fresh, account, 10)))
 	if err != nil || resolution.Outcome != idempotency.OutcomeApplied {
 		t.Fatalf("the fresh key was deleted: %+v, %v", resolution, err)
 	}
@@ -270,14 +300,16 @@ func TestReplay_WritesBeforeAnswering(t *testing.T) {
 	account := w.bank.newCustomer(t)
 	key := newKey()
 
-	_, err := w.writer.Execute(t.Context(), w.depositWrite(t, key, account, 300))
+	deposit := w.depositWrite(t, key, account, 300)
+
+	_, err := w.writer.Execute(t.Context(), deposit)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	stored := w.keyVersion(t, key)
 
-	_, err = w.writer.Execute(t.Context(), w.depositWrite(t, key, account, 300))
+	_, err = w.writer.Execute(t.Context(), deposit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,7 +319,7 @@ func TestReplay_WritesBeforeAnswering(t *testing.T) {
 		t.Fatal("the replay answered without writing")
 	}
 
-	_, err = w.resolver.Resolve(t.Context(), key)
+	_, err = w.resolver.Resolve(t.Context(), resolveOf(deposit))
 	if err != nil {
 		t.Fatal(err)
 	}
