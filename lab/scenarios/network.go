@@ -38,28 +38,70 @@ func validateNetworkFault(fault Fault, r rawFault) (Fault, error) {
 	return scheduledNetworkFault(fault, r)
 }
 
+// validateDatabaseFault reads an action on a poisson schedule; a freeze
+// also needs how long each pause lasts.
+func validateDatabaseFault(fault Fault, r rawFault) (Fault, error) {
+	if !slices.Contains(databaseActions, r.Action) {
+		return Fault{}, fmt.Errorf("database action %q is not one of %s", r.Action, strings.Join(databaseActions, ", "))
+	}
+
+	schedule, err := poissonOf(r.Schedule)
+	if err != nil {
+		return Fault{}, err
+	}
+
+	fault.Action = r.Action
+	fault.Schedule = schedule
+
+	if r.Action != DatabaseFreeze {
+		return fault, nil
+	}
+
+	fault.Window, err = windowOf(r.Duration)
+
+	return fault, err
+}
+
 func scheduledNetworkFault(fault Fault, r rawFault) (Fault, error) {
-	if r.Schedule.Type != SchedulePoisson {
-		return Fault{}, fmt.Errorf("schedule type %q is not implemented (known: %s)", r.Schedule.Type, SchedulePoisson)
+	schedule, err := poissonOf(r.Schedule)
+	if err != nil {
+		return Fault{}, err
 	}
 
-	mean, err := time.ParseDuration(r.Schedule.MeanInterval)
-	if err != nil || mean <= 0 {
-		return Fault{}, errors.New("a scheduled network fault needs a positive mean_interval")
+	window, err := windowOf(r.Duration)
+	if err != nil {
+		return Fault{}, err
 	}
 
-	shortest, errMin := time.ParseDuration(r.Duration.Min)
-	longest, errMax := time.ParseDuration(r.Duration.Max)
-
-	isValidWindow := errMin == nil && errMax == nil && shortest > 0 && longest >= shortest
-	if !isValidWindow {
-		return Fault{}, errors.New("a scheduled network fault needs duration {min, max} with 0 < min <= max")
-	}
-
-	fault.Schedule = Schedule{Type: r.Schedule.Type, MeanInterval: mean}
-	fault.Window = Window{Min: shortest, Max: longest}
+	fault.Schedule = schedule
+	fault.Window = window
 
 	return fault, nil
+}
+
+func poissonOf(raw rawSchedule) (Schedule, error) {
+	if raw.Type != SchedulePoisson {
+		return Schedule{}, fmt.Errorf("schedule type %q is not implemented (known: %s)", raw.Type, SchedulePoisson)
+	}
+
+	mean, err := time.ParseDuration(raw.MeanInterval)
+	if err != nil || mean <= 0 {
+		return Schedule{}, errors.New("a scheduled fault needs a positive mean_interval")
+	}
+
+	return Schedule{Type: raw.Type, MeanInterval: mean}, nil
+}
+
+func windowOf(raw rawWindow) (Window, error) {
+	shortest, errMin := time.ParseDuration(raw.Min)
+	longest, errMax := time.ParseDuration(raw.Max)
+
+	isValid := errMin == nil && errMax == nil && shortest > 0 && longest >= shortest
+	if !isValid {
+		return Window{}, errors.New("an episode needs duration {min, max} with 0 < min <= max")
+	}
+
+	return Window{Min: shortest, Max: longest}, nil
 }
 
 // toxicOf reads {type, stream, toxicity, ...attributes}.

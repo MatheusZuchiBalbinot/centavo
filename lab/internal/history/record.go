@@ -43,6 +43,8 @@ const (
 	FunctionHealStart      Function = "heal_start"
 	// FunctionFreeze pauses a whole container for a freeze failpoint.
 	FunctionFreeze Function = "freeze"
+	// FunctionDatabase kills or freezes PostgreSQL.
+	FunctionDatabase Function = "database"
 	// FunctionNetwork starts or ends a network fault.
 	FunctionNetwork Function = "network"
 	// FunctionSkewClock moves a process's wall clock.

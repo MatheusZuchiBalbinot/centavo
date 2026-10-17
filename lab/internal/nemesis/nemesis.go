@@ -139,6 +139,7 @@ func (n *Nemesis) Start(ctx context.Context) error {
 	}
 
 	n.startNetwork(ctx)
+	n.startDatabase(ctx)
 
 	for _, fault := range n.config.Scenario.Faults {
 		if fault.Kind == scenarios.FaultProcess {
@@ -169,6 +170,7 @@ func (n *Nemesis) Heal(ctx context.Context) error {
 	n.clearPartner(ctx)
 	n.clearClocks(ctx)
 	n.resetNetwork(ctx)
+	n.healDatabase(ctx)
 
 	err = n.waitHealthy(ctx, n.config.Scenario.HealTimeout)
 	if err != nil {

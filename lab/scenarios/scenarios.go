@@ -65,7 +65,18 @@ const (
 	FaultClock FaultKind = "clock"
 	// FaultNetwork puts toxics on Toxiproxy's links (docs/chaos-bot.md, section 8).
 	FaultNetwork FaultKind = "network"
+	// FaultDatabase kills or freezes PostgreSQL (docs/chaos-bot.md, section 10).
+	FaultDatabase FaultKind = "database"
 )
+
+// Database actions (docs/chaos-bot.md, section 10).
+const (
+	DatabaseKillPostmaster = "kill_postmaster"
+	DatabaseKillBackend    = "kill_backend"
+	DatabaseFreeze         = "freeze"
+)
+
+var databaseActions = []string{DatabaseKillPostmaster, DatabaseKillBackend, DatabaseFreeze}
 
 // Toxic types the bot puts on a link, with the three partitions of
 // docs/chaos-bot.md, section 8: reject (the proxy is down), blackhole
@@ -379,8 +390,10 @@ func validateFault(r rawFault) (Fault, error) {
 		return validateClockFault(fault, r)
 	case FaultNetwork:
 		return validateNetworkFault(fault, r)
+	case FaultDatabase:
+		return validateDatabaseFault(fault, r)
 	default:
-		return Fault{}, fmt.Errorf("kind %q is not implemented (known: %s, %s, %s, %s, %s)", r.Kind, FaultFailpoint, FaultProcess, FaultPartner, FaultClock, FaultNetwork)
+		return Fault{}, fmt.Errorf("kind %q is not implemented (known: %s, %s, %s, %s, %s, %s)", r.Kind, FaultFailpoint, FaultProcess, FaultPartner, FaultClock, FaultNetwork, FaultDatabase)
 	}
 }
 
