@@ -20,3 +20,14 @@ faults:
     arg: 45s
     probability: 0.5
     max_fires: 6
+  # FP10 is shared with the sweeper, which runs far more often and is held
+  # back by the state machine anyway; FP07 is the reconciler's alone, at the
+  # same point of the batch, so every round gets reconciler zombies.
+  - id: zombie-reconciler
+    kind: failpoint
+    targets: [bank-worker-1, bank-worker-2]
+    failpoint: recon.after_compute_before_apply
+    action: freeze
+    arg: 45s
+    probability: 0.5
+    max_fires: 4
