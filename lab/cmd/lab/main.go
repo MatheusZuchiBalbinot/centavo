@@ -11,7 +11,9 @@
 package main
 
 import (
+	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -21,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -35,6 +38,7 @@ import (
 	"centavo/lab/internal/platform/buildinfo"
 	"centavo/lab/internal/platform/config"
 	"centavo/lab/internal/platform/httpserver"
+	"centavo/lab/internal/replay"
 	"centavo/lab/internal/round"
 	"centavo/lab/internal/seed"
 	"centavo/lab/internal/snapshot"
@@ -42,10 +46,11 @@ import (
 )
 
 const (
-	commandServe       = "serve"
-	commandRun         = "run"
-	commandCheck       = "check"
-	commandHealthcheck = "healthcheck"
+	commandServe        = "serve"
+	commandRun          = "run"
+	commandCheck        = "check"
+	commandExportReplay = "export-replay"
+	commandHealthcheck  = "healthcheck"
 )
 
 const (
@@ -71,7 +76,7 @@ const (
 	exitCheckerError      = 3
 )
 
-const usage = "usage: lab serve | run --scenario <name> [--seed <seed>] [--duration <d>] | check --round <dir> | healthcheck"
+const usage = "usage: lab serve | run --scenario <name> [--seed <seed>] [--duration <d>] | check --round <dir> | export-replay --round <dir> [--out <file>] | healthcheck"
 
 var (
 	errUnhealthy         = errors.New("health endpoint did not answer 200")
@@ -131,6 +136,8 @@ func runCommand(ctx context.Context, command string, args []string) error {
 		return runRound(ctx, args)
 	case commandCheck:
 		return runCheck(args)
+	case commandExportReplay:
+		return exportReplay(args)
 	case commandHealthcheck:
 		return probeHealth(ctx)
 	default:
@@ -348,6 +355,41 @@ func runCheck(args []string) error {
 	fmt.Printf("verdict: %s (%d violations, %d unresolved); report in %s\n", result.Verdict, len(result.Violations), len(result.Unresolved), *roundDir)
 
 	return verdictError(result.Verdict)
+}
+
+// exportReplay writes the replay of an archived round, the file the replay
+// page plays (docs/architecture.md, section 13).
+func exportReplay(args []string) error {
+	flags := flag.NewFlagSet(commandExportReplay, flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	roundDir := flags.String("round", "", "round directory")
+	out := flags.String("out", "", "where to write the replay (default: replay.json in the round)")
+
+	err := flags.Parse(args)
+	if err != nil || *roundDir == "" || flags.NArg() != 0 {
+		return errUsage
+	}
+
+	built, err := replay.FromRound(*roundDir)
+	if err != nil {
+		return err
+	}
+
+	content, err := json.Marshal(built)
+	if err != nil {
+		return err
+	}
+
+	path := cmp.Or(*out, filepath.Join(*roundDir, replay.File))
+
+	err = os.WriteFile(path, content, 0o600)
+	if err != nil {
+		return fmt.Errorf("writing the replay: %w", err)
+	}
+
+	fmt.Printf("replay of %s in %s\n", built.Round, path)
+
+	return nil
 }
 
 func roundOptions(flags runFlags, runConfig config.Run) (round.Options, error) {

@@ -4,28 +4,80 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Centavo: laboratório de caos</title>
-  <link rel="stylesheet" href="/app.css">
-  <script src="/app.js" defer></script>
+  <link rel="stylesheet" href="app.css">
+  <script src="app.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Pular para o conteúdo</a>
   <header class="banner">
-    <p>Ambiente de laboratório: as falhas aqui são injetadas de propósito.</p>
+    <p><strong>Laboratório de caos.</strong> Todas as falhas desta página são injetadas de propósito, num banco que não move dinheiro de verdade.</p>
+    <p class="strip" id="strip" aria-live="polite">Aguardando a primeira rodada.</p>
   </header>
-  <main id="main" tabindex="-1">
-    <h1>Invariantes do Centavo</h1>
 
-    <section aria-labelledby="live-title">
-      <h2 id="live-title">Ao vivo</h2>
-      <p class="meta" id="live-at">Aguardando a primeira leitura do auditor.</p>
-      <ul class="checks" id="live-checks" aria-live="polite"></ul>
+  <main id="main" tabindex="-1">
+    <h1 id="title">Centavo: o banco que apanha de propósito</h1>
+
+    <section class="headline" aria-labelledby="headline-title">
+      <h2 id="headline-title" class="visually-hidden">Resumo de todas as rodadas</h2>
+      <dl>
+        <div><dt>sob caos</dt><dd id="chaos-time">0 min</dd></div>
+        <div><dt>processos derrubados</dt><dd id="kills">0</dd></div>
+        <div><dt>rodadas com violação</dt><dd id="failed-rounds" data-state="ok">0</dd></div>
+      </dl>
     </section>
 
-    <section aria-labelledby="round-title">
-      <h2 id="round-title">Última rodada</h2>
-      <div id="round" aria-live="polite">
-        <p class="meta">Nenhuma rodada verificada ainda. Rode <code>lab run --scenario smoke</code>.</p>
-      </div>
+    <div class="columns" id="columns">
+      <section class="column" id="column-main" aria-labelledby="column-main-title">
+        <h2 id="column-main-title">Rodada atual</h2>
+
+        <div class="player" id="player" hidden>
+          <button type="button" id="play" aria-pressed="false">Pausar</button>
+          <label for="speed">Velocidade</label>
+          <select id="speed">
+            <option value="1">1x</option>
+            <option value="10" selected>10x</option>
+            <option value="30">30x</option>
+            <option value="60">60x</option>
+          </select>
+          <span id="clock" aria-live="off">0:00</span>
+        </div>
+
+        <div class="grid">
+          <section aria-labelledby="timeline-title">
+            <h3 id="timeline-title">Linha do tempo do caos</h3>
+            <ol class="timeline" id="timeline"></ol>
+          </section>
+
+          <section aria-labelledby="charts-title">
+            <h3 id="charts-title">O que os clientes viram</h3>
+            <figure>
+              <figcaption>Operações por segundo: ok, fail e info</figcaption>
+              <div class="chart" id="throughput"></div>
+            </figure>
+            <figure>
+              <figcaption>Latência vista pelo cliente, p50 e p99 (ms)</figcaption>
+              <div class="chart" id="latency"></div>
+            </figure>
+            <h3>Contadores</h3>
+            <dl class="counters" id="counters"></dl>
+          </section>
+
+          <section aria-labelledby="checks-title">
+            <h3 id="checks-title">Invariantes</h3>
+            <ul class="checks" id="checks" aria-live="polite"></ul>
+          </section>
+        </div>
+      </section>
+    </div>
+
+    <section aria-labelledby="rounds-title" id="rounds-section">
+      <h2 id="rounds-title">Rodadas</h2>
+      <table>
+        <thead>
+          <tr><th scope="col">Rodada</th><th scope="col">Cenário</th><th scope="col">Duração</th><th scope="col">Operações</th><th scope="col">Falhas</th><th scope="col">Veredito</th><th scope="col">Relatório</th></tr>
+        </thead>
+        <tbody id="rounds"></tbody>
+      </table>
     </section>
   </main>
 </body>

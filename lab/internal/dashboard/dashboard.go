@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 
 	"centavo/lab/internal/audit"
+	"centavo/lab/internal/replay"
 )
 
 // HealthPath is the route the container healthcheck polls.
@@ -56,11 +57,13 @@ func NewHandler(config Config) http.Handler {
 		panic(err)
 	}
 
-	panel := panelHandlers{config: config}
+	panel := panelHandlers{config: config, tracker: newTracker(config.RoundsDir)}
 
 	mux := http.NewServeMux()
 	mux.Handle("GET "+HealthPath, healthHandler{response: healthResponse{Service: "lab", Version: config.Version, Status: "ok"}})
 	mux.HandleFunc("GET /api/status", panel.status)
+	mux.HandleFunc("GET /api/live", panel.live)
+	mux.HandleFunc("GET /api/replay/{round}", panel.replay)
 	mux.HandleFunc("GET /rounds/{round}/report.md", panel.report)
 	mux.Handle("GET /", http.FileServerFS(static))
 
@@ -86,7 +89,41 @@ func (h healthHandler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 }
 
 type panelHandlers struct {
-	config Config
+	config  Config
+	tracker *tracker
+}
+
+// live is the current round, the headline and the round list.
+func (p panelHandlers) live(w http.ResponseWriter, r *http.Request) {
+	response, err := p.tracker.live()
+	if err != nil {
+		p.config.Logger.WarnContext(r.Context(), "following the rounds", "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "the rounds could not be read"})
+
+		return
+	}
+
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, response)
+}
+
+// replay is a finished round for the side-by-side mode.
+func (p panelHandlers) replay(w http.ResponseWriter, r *http.Request) {
+	round := r.PathValue("round")
+	if !roundDirPattern.MatchString(round) {
+		http.NotFound(w, r)
+
+		return
+	}
+
+	built, err := replay.FromRound(filepath.Join(p.config.RoundsDir, round))
+	if err != nil {
+		http.NotFound(w, r)
+
+		return
+	}
+
+	writeJSON(w, http.StatusOK, built)
 }
 
 func (p panelHandlers) status(w http.ResponseWriter, r *http.Request) {
