@@ -121,9 +121,14 @@ func (n *Nemesis) failOver(ctx context.Context, fault scenarios.Fault) error {
 
 	n.hasFailedOver.Store(true)
 
-	err = n.config.Docker.Kill(ctx, primary.ID)
-	if err != nil {
-		return err
+	// The links move first: Toxiproxy closes their live connections to the
+	// old primary, which takes no new write from then on. Moving them after
+	// the kill hangs on connections to a peer that is gone.
+	for _, link := range databaseLinks {
+		err := n.toxiproxy(ctx, http.MethodPost, "/proxies/"+url.PathEscape(link), map[string]string{"upstream": replicaUpstream})
+		if err != nil {
+			return err
+		}
 	}
 
 	err = n.config.Docker.Exec(ctx, replica.ID, promoteCommand)
@@ -131,11 +136,9 @@ func (n *Nemesis) failOver(ctx context.Context, fault scenarios.Fault) error {
 		return err
 	}
 
-	for _, link := range databaseLinks {
-		err := n.toxiproxy(ctx, http.MethodPost, "/proxies/"+url.PathEscape(link), map[string]string{"upstream": replicaUpstream})
-		if err != nil {
-			return err
-		}
+	err = n.config.Docker.Kill(ctx, primary.ID)
+	if err != nil {
+		return err
 	}
 
 	return nil
