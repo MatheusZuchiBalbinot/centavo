@@ -74,9 +74,21 @@ const (
 	DatabaseKillPostmaster = "kill_postmaster"
 	DatabaseKillBackend    = "kill_backend"
 	DatabaseFreeze         = "freeze"
+	// DatabaseFailover kills the primary and promotes the replica (replica
+	// profile only, docs/architecture.md, section 5.10).
+	DatabaseFailover = "failover"
 )
 
-var databaseActions = []string{DatabaseKillPostmaster, DatabaseKillBackend, DatabaseFreeze}
+// Replication modes of the replica profile (docs/chaos-bot.md, section 10).
+const (
+	ReplicationAsync = "async"
+	ReplicationSync  = "sync"
+)
+
+var (
+	databaseActions  = []string{DatabaseKillPostmaster, DatabaseKillBackend, DatabaseFreeze, DatabaseFailover}
+	replicationModes = []string{ReplicationAsync, ReplicationSync}
+)
 
 // Toxic types the bot puts on a link, with the three partitions of
 // docs/chaos-bot.md, section 8: reject (the proxy is down), blackhole
@@ -105,7 +117,11 @@ var partnerModeFields = []string{
 // ScheduleType is how a scheduled fault spreads over the round.
 type ScheduleType string
 
-const SchedulePoisson ScheduleType = "poisson"
+const (
+	SchedulePoisson ScheduleType = "poisson"
+	// ScheduleAt fires once, at a fixed time after the round starts.
+	ScheduleAt ScheduleType = "at"
+)
 
 // Targets the bot may hit; failpoints live only in the bank processes.
 var (
@@ -184,6 +200,10 @@ type Fault struct {
 	Proxies []string
 	Toxic   Toxic
 	Window  Window
+	// Replication and Lag set up a failover: how the replica follows the
+	// primary and how far behind its WAL stream runs.
+	Replication string
+	Lag         time.Duration
 }
 
 // Toxic is what a network fault does to a link.
@@ -205,6 +225,8 @@ type Window struct {
 type Schedule struct {
 	Type         ScheduleType
 	MeanInterval time.Duration
+	// At is when a ScheduleAt fault fires, from the start of the round.
+	At time.Duration
 }
 
 type rawScenario struct {
@@ -232,6 +254,8 @@ type rawFault struct {
 	Proxies     []string       `yaml:"proxies"`
 	Toxic       map[string]any `yaml:"toxic"`
 	Duration    rawWindow      `yaml:"duration"`
+	Replication string         `yaml:"replication"`
+	Lag         string         `yaml:"lag"`
 }
 
 type rawWindow struct {
@@ -242,6 +266,7 @@ type rawWindow struct {
 type rawSchedule struct {
 	Type         ScheduleType `yaml:"type"`
 	MeanInterval string       `yaml:"mean_interval"`
+	At           string       `yaml:"at"`
 }
 
 type rawWorkload struct {

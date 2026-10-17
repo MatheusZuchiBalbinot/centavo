@@ -43,6 +43,8 @@ const (
 	FunctionHealStart      Function = "heal_start"
 	// FunctionFreeze pauses a whole container for a freeze failpoint.
 	FunctionFreeze Function = "freeze"
+	// FunctionFailover sets up the replica or promotes it.
+	FunctionFailover Function = "failover"
 	// FunctionDatabase kills or freezes PostgreSQL.
 	FunctionDatabase Function = "database"
 	// FunctionNetwork starts or ends a network fault.

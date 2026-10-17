@@ -2,6 +2,7 @@ package nemesis
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"centavo/lab/internal/history"
@@ -27,12 +28,30 @@ type databaseRecord struct {
 	Duration string `json:"duration,omitempty"`
 }
 
-func (n *Nemesis) startDatabase(ctx context.Context) {
+// startDatabase starts the database faults. A failover sets up replication
+// right away, so a stack without the replica fails the round instead of
+// passing it without the fault.
+func (n *Nemesis) startDatabase(ctx context.Context) error {
 	for _, fault := range n.config.Scenario.Faults {
-		if fault.Kind == scenarios.FaultDatabase {
-			n.wg.Go(func() { n.databaseEpisodes(ctx, fault) })
+		if fault.Kind != scenarios.FaultDatabase {
+			continue
 		}
+
+		if fault.Action != scenarios.DatabaseFailover {
+			n.wg.Go(func() { n.databaseEpisodes(ctx, fault) })
+
+			continue
+		}
+
+		err := n.setUpReplication(ctx, fault)
+		if err != nil {
+			return fmt.Errorf("setting up replication for %s: %w", fault.ID, err)
+		}
+
+		n.wg.Go(func() { n.failOverAt(ctx, fault) })
 	}
+
+	return nil
 }
 
 func (n *Nemesis) databaseEpisodes(ctx context.Context, fault scenarios.Fault) {
@@ -103,8 +122,13 @@ func (n *Nemesis) freezeDatabase(ctx context.Context, id string, length time.Dur
 	return n.config.Docker.Unpause(context.WithoutCancel(ctx), id)
 }
 
-// healDatabase starts or resumes PostgreSQL if a fault left it down.
+// healDatabase starts or resumes PostgreSQL if a fault left it down. After
+// a failover the old primary stays down: starting it would be split brain.
 func (n *Nemesis) healDatabase(ctx context.Context) {
+	if n.hasFailedOver.Load() {
+		return
+	}
+
 	container, err := n.config.Docker.Find(ctx, databaseService)
 	if err != nil {
 		n.config.Logger.WarnContext(ctx, "finding the database to heal", "error", err)

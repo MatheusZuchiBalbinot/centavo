@@ -208,6 +208,18 @@ func (c Client) Pause(ctx context.Context, id string) error {
 	return c.call(ctx, http.MethodPost, "/containers/"+url.PathEscape(id)+"/pause", nil, nil)
 }
 
+// Kill sends SIGKILL from outside. Docker counts it as a manual stop, so the
+// restart policy leaves the container down: the fencing of an old primary
+// after a failover (docs/architecture.md, section 5.10).
+func (c Client) Kill(ctx context.Context, id string) error {
+	_, err := c.Inspect(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	return c.call(ctx, http.MethodPost, "/containers/"+url.PathEscape(id)+"/kill?signal=SIGKILL", nil, nil)
+}
+
 // Unpause resumes a paused target; resuming one that is not paused is a no-op.
 func (c Client) Unpause(ctx context.Context, id string) error {
 	container, err := c.Inspect(ctx, id)

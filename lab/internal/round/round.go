@@ -76,6 +76,13 @@ type SagaOptions struct {
 // quiescencePoll is how often the cure looks at the sagas in flight.
 const quiescencePoll = time.Second
 
+// The ledger state (I8): one file at the root of the rounds, the last
+// round's, and a copy in each round directory of the state it checked against.
+const (
+	ledgerStateFile   = "state.json"
+	previousStateFile = "state_before.json"
+)
+
 // ChaosOptions are the nemesis's means of action.
 type ChaosOptions struct {
 	Docker    docker.Client
@@ -343,7 +350,31 @@ func exportAndCheck(ctx context.Context, options Options, result Result) (checke
 		}
 	}
 
-	return options.Check(ctx, result.Dir)
+	statePath := filepath.Join(filepath.Dir(result.Dir), ledgerStateFile)
+
+	err = handOverState(statePath, filepath.Join(result.Dir, previousStateFile))
+	if err != nil {
+		return "", err
+	}
+
+	verdict, err := options.Check(ctx, result.Dir)
+	if err != nil {
+		return "", err
+	}
+
+	// The next round checks I8 against this ledger, whatever this verdict.
+	return verdict, snapshot.WriteState(statePath, snapshot.StateOf(s))
+}
+
+// handOverState copies the ledger state the last round left into this
+// round's directory, where the checker reads it.
+func handOverState(statePath, roundCopy string) error {
+	state, isFound, err := snapshot.ReadState(statePath)
+	if err != nil || !isFound {
+		return err
+	}
+
+	return snapshot.WriteState(roundCopy, state)
 }
 
 // createdAccounts lists the accounts the history says the round opened: the

@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"centavo/lab/internal/docker"
@@ -81,6 +82,8 @@ type Nemesis struct {
 	failpoints *failpointController
 	// toxiproxyURL is Toxiproxy's API; tests point it at a fake.
 	toxiproxyURL string
+	// hasFailedOver keeps the cure from starting a fenced old primary.
+	hasFailedOver atomic.Bool
 }
 
 // New builds the nemesis of a round.
@@ -139,7 +142,11 @@ func (n *Nemesis) Start(ctx context.Context) error {
 	}
 
 	n.startNetwork(ctx)
-	n.startDatabase(ctx)
+
+	err = n.startDatabase(ctx)
+	if err != nil {
+		return err
+	}
 
 	for _, fault := range n.config.Scenario.Faults {
 		if fault.Kind == scenarios.FaultProcess {

@@ -27,6 +27,7 @@ const (
 	transfersFile    = "external_transfers.csv"
 	transitionsFile  = "external_transfer_transitions.csv"
 	incomingFile     = "incoming_transfers.csv"
+	bandsFile        = "ledger_bands.csv"
 	metaFile         = "meta.json"
 )
 
@@ -123,6 +124,21 @@ type Entry struct {
 type Meta struct {
 	Round   string    `json:"round"`
 	TakenAt time.Time `json:"taken_at"`
+	// FirstTransactionID tells one database from another: a rebuilt stack
+	// starts a new ledger, and its bands owe nothing to the old one's.
+	FirstTransactionID string `json:"first_transaction_id"`
+}
+
+// BandSize is how many entry ids one immutability band covers (I8).
+const BandSize = 100_000
+
+// Band is the fingerprint of the ledger entries whose ids fall in one band
+// (docs/invariants-and-checker.md, I8).
+type Band struct {
+	Band     int64 `json:"band"`
+	Count    int64 `json:"count"`
+	SumCents int64 `json:"sum_cents"`
+	Hash     int64 `json:"hash"`
 }
 
 // Snapshot is the part of the ledger a round touched: the accounts it
@@ -137,6 +153,8 @@ type Snapshot struct {
 	Transfers    []ExternalTransfer
 	Transitions  []Transition
 	Incoming     []Incoming
+	// Bands cover the whole ledger, not only the round.
+	Bands []Band
 }
 
 type table struct {
@@ -154,6 +172,7 @@ var tables = []table{
 	{file: transfersFile, header: []string{"id", "end_to_end_id", "client_ref", "account_id", "amount_cents", "status", "status_seq", "failure_code"}, rows: transferRows, load: loadTransfer},
 	{file: transitionsFile, header: []string{"transfer_id", "seq", "from_status", "to_status", "cause", "ledger_transaction_id"}, rows: transitionRows, load: loadTransition},
 	{file: incomingFile, header: []string{"id", "end_to_end_id", "account_id", "amount_cents"}, rows: incomingRows, load: loadIncoming},
+	{file: bandsFile, header: []string{"band", "count", "sum_cents", "hash"}, rows: bandRows, load: loadBand},
 }
 
 // Write stores the snapshot in roundDir/export.
@@ -392,6 +411,26 @@ func loadEntry(s *Snapshot, record []string) error {
 	return nil
 }
 
+func bandRows(s *Snapshot) [][]string {
+	rows := make([][]string, 0, len(s.Bands))
+	for _, b := range s.Bands {
+		rows = append(rows, []string{itoa(b.Band), itoa(b.Count), itoa(b.SumCents), itoa(b.Hash)})
+	}
+
+	return rows
+}
+
+func loadBand(s *Snapshot, record []string) error {
+	numbers, err := atois(record...)
+	if err != nil {
+		return err
+	}
+
+	s.Bands = append(s.Bands, Band{Band: numbers[0], Count: numbers[1], SumCents: numbers[2], Hash: numbers[3]})
+
+	return nil
+}
+
 func itoa(value int64) string {
 	return strconv.FormatInt(value, 10)
 }
@@ -409,4 +448,47 @@ func atois(fields ...string) ([]int64, error) {
 	}
 
 	return numbers, nil
+}
+
+// LedgerState is what a round leaves for the next one to check I8 against:
+// the fingerprint of the whole ledger when it was exported.
+type LedgerState struct {
+	FirstTransactionID string `json:"first_transaction_id"`
+	Bands              []Band `json:"bands"`
+}
+
+// StateOf is the state the snapshot leaves behind.
+func StateOf(s Snapshot) LedgerState {
+	return LedgerState{FirstTransactionID: s.Meta.FirstTransactionID, Bands: append([]Band{}, s.Bands...)}
+}
+
+// WriteState stores a ledger state.
+func WriteState(path string, state LedgerState) error {
+	content, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encoding the ledger state: %w", err)
+	}
+
+	return os.WriteFile(path, append(content, '\n'), 0o600)
+}
+
+// ReadState loads a ledger state; false means there is none yet.
+func ReadState(path string) (LedgerState, bool, error) {
+	content, err := os.ReadFile(path) //nolint:gosec // G304: the path comes from the operator's rounds directory.
+	if errors.Is(err, os.ErrNotExist) {
+		return LedgerState{}, false, nil
+	}
+
+	if err != nil {
+		return LedgerState{}, false, fmt.Errorf("reading the ledger state: %w", err)
+	}
+
+	var state LedgerState
+
+	err = json.Unmarshal(content, &state)
+	if err != nil {
+		return LedgerState{}, false, fmt.Errorf("%w: ledger state: %w", ErrMalformedExport, err)
+	}
+
+	return state, true, nil
 }

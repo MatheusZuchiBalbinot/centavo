@@ -80,6 +80,16 @@ FROM external_transfer_transitions
 WHERE transfer_id IN (` + roundTransfersSQL + `)
 ORDER BY transfer_id, seq, id`
 
+	// bandsSQL fingerprints the whole ledger by bands of 100 thousand ids:
+	// count, sum and the XOR of a hash of every row (I8).
+	bandsSQL = `
+SELECT id / 100000, count(*), coalesce(sum(amount_cents), 0), coalesce(bit_xor(hashtextextended(e::text, 0)), 0)
+FROM ledger_entries e
+GROUP BY 1
+ORDER BY 1`
+
+	firstTransactionSQL = `SELECT coalesce(min(id::text), '') FROM ledger_transactions`
+
 	incomingSQL = `
 SELECT id::text, end_to_end_id, account_id::text, amount_cents
 FROM incoming_transfers
@@ -135,6 +145,16 @@ func Take(ctx context.Context, pool *pgxpool.Pool, request Request) (snapshot.Sn
 	s.Entries, err = collect(ctx, tx, entriesSQL, scanEntry, request.AccountIDs, request.Round)
 	if err != nil {
 		return snapshot.Snapshot{}, err
+	}
+
+	s.Bands, err = collect(ctx, tx, bandsSQL, scanBand)
+	if err != nil {
+		return snapshot.Snapshot{}, err
+	}
+
+	err = tx.QueryRow(ctx, firstTransactionSQL).Scan(&s.Meta.FirstTransactionID)
+	if err != nil {
+		return snapshot.Snapshot{}, fmt.Errorf("exporting: %w", err)
 	}
 
 	return s, nil
@@ -194,6 +214,13 @@ func scanIncoming(row pgx.CollectableRow) (snapshot.Incoming, error) {
 	err := row.Scan(&i.ID, &i.EndToEndID, &i.AccountID, &i.AmountCents)
 
 	return i, err
+}
+
+func scanBand(row pgx.CollectableRow) (snapshot.Band, error) {
+	var b snapshot.Band
+	err := row.Scan(&b.Band, &b.Count, &b.SumCents, &b.Hash)
+
+	return b, err
 }
 
 func scanEntry(row pgx.CollectableRow) (snapshot.Entry, error) {

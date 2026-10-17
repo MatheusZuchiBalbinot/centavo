@@ -1,0 +1,17 @@
+name: failover-sync
+description: "O mesmo failover com replicação síncrona: o primário só confirma depois que a réplica gravou o WAL, e nada confirmado se perde (FC32, prova do PM-016). Só no perfil replica."
+duration: 15m
+workload:
+  profile: balanced
+  clients: 8
+  rate_per_second: 20
+  accounts: 32
+  exclusive_accounts: true
+  client_mix: {polite: 1.0}
+faults:
+  - id: failover
+    kind: database
+    action: failover
+    replication: sync
+    lag: 2s
+    schedule: {type: at, at: 6m}

@@ -1,0 +1,17 @@
+name: failover-async
+description: "O primário morre com a réplica assíncrona dois segundos atrás; a réplica promovida não tem os últimos commits confirmados e precisa falhar (FC32, PM-016). Só no perfil replica."
+duration: 15m
+workload:
+  profile: balanced
+  clients: 8
+  rate_per_second: 20
+  accounts: 32
+  exclusive_accounts: true
+  client_mix: {polite: 1.0}
+faults:
+  - id: failover
+    kind: database
+    action: failover
+    replication: async
+    lag: 2s
+    schedule: {type: at, at: 6m}

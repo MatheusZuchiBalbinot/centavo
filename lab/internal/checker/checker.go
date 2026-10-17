@@ -93,7 +93,7 @@ var invariantsOfThisVersion = []struct {
 	{id: InvariantI5, isChecked: true, note: "transferências terminais e trânsito zero depois da quiescência"},
 	{id: InvariantI6, isChecked: true, note: "comparação direta com a verdade do parceiro; a conciliação chega na F9"},
 	{id: InvariantI7, isChecked: true},
-	{id: "I8", note: "chega com as faixas de imutabilidade"},
+	{id: InvariantI8, isChecked: true, note: "todas as faixas completas da rodada anterior, recalculadas a cada rodada"},
 }
 
 // Evaluate checks a history against a ledger snapshot, without the partner.
@@ -104,10 +104,18 @@ func Evaluate(records []history.Record, s snapshot.Snapshot) Result {
 // EvaluateWithTruth also compares the ledger with the partner's truth (I6,
 // the R and S terms of I1c, the authoritative part of I7).
 func EvaluateWithTruth(records []history.Record, s snapshot.Snapshot, truth *PartnerTruth) Result {
-	return evaluate(indexOperations(records), s, truth)
+	return evaluate(indexOperations(records), s, outsideSources{truth: truth})
 }
 
-func evaluate(ops operations, s snapshot.Snapshot, truth *PartnerTruth) Result {
+// outsideSources are what the checker compares the ledger with besides the
+// history: the partner's truth and the previous round's ledger state.
+type outsideSources struct {
+	truth    *PartnerTruth
+	previous *snapshot.LedgerState
+}
+
+func evaluate(ops operations, s snapshot.Snapshot, sources outsideSources) Result {
+	truth := sources.truth
 	e := evaluation{ops: ops, ledger: indexLedger(s)}
 
 	e.checkZeroSum()
@@ -116,6 +124,7 @@ func evaluate(ops operations, s snapshot.Snapshot, truth *PartnerTruth) Result {
 	e.checkOperations()
 	e.checkPhantoms()
 	e.checkPix(truth)
+	e.checkImmutability(sources.previous, s.Bands, s.Meta.FirstTransactionID)
 
 	slices.SortStableFunc(e.violations, byTime)
 
@@ -157,7 +166,12 @@ func Check(roundDir string) (Result, error) {
 	}
 
 	meta := readRoundMeta(roundDir, s.Meta.Round)
-	result := evaluate(ops, s, truth)
+	previous, err := readPreviousState(roundDir)
+	if err != nil {
+		return Result{}, err
+	}
+
+	result := evaluate(ops, s, outsideSources{truth: truth, previous: previous})
 	events := readEvents(roundDir)
 
 	histories, err := readHistoriesOf(roundDir, storiedOperations(result))
@@ -294,6 +308,16 @@ func scanHistory(roundDir string, take func(history.Record)) error {
 	}
 
 	return nil
+}
+
+// readPreviousState loads the state the round before left, if any.
+func readPreviousState(roundDir string) (*snapshot.LedgerState, error) {
+	state, isFound, err := snapshot.ReadState(filepath.Join(roundDir, previousStateFile))
+	if err != nil || !isFound {
+		return nil, err
+	}
+
+	return &state, nil
 }
 
 // readTruth loads truth.json, the partner's record for the round; a round

@@ -45,6 +45,10 @@ func validateDatabaseFault(fault Fault, r rawFault) (Fault, error) {
 		return Fault{}, fmt.Errorf("database action %q is not one of %s", r.Action, strings.Join(databaseActions, ", "))
 	}
 
+	if r.Action == DatabaseFailover {
+		return failoverFault(fault, r)
+	}
+
 	schedule, err := poissonOf(r.Schedule)
 	if err != nil {
 		return Fault{}, err
@@ -60,6 +64,33 @@ func validateDatabaseFault(fault Fault, r rawFault) (Fault, error) {
 	fault.Window, err = windowOf(r.Duration)
 
 	return fault, err
+}
+
+// failoverFault happens once, at a fixed time, with the replica following in
+// the given mode and lagging by the given time.
+func failoverFault(fault Fault, r rawFault) (Fault, error) {
+	if !slices.Contains(replicationModes, r.Replication) {
+		return Fault{}, fmt.Errorf("a failover needs replication %s", strings.Join(replicationModes, " or "))
+	}
+
+	lag, err := time.ParseDuration(r.Lag)
+	if err != nil || lag < 0 {
+		return Fault{}, errors.New("a failover needs a lag >= 0, such as 2s")
+	}
+
+	at, err := time.ParseDuration(r.Schedule.At)
+
+	isValidSchedule := r.Schedule.Type == ScheduleAt && err == nil && at > 0
+	if !isValidSchedule {
+		return Fault{}, errors.New("a failover needs schedule {type: at, at: <duration>}")
+	}
+
+	fault.Action = r.Action
+	fault.Replication = r.Replication
+	fault.Lag = lag
+	fault.Schedule = Schedule{Type: ScheduleAt, At: at}
+
+	return fault, nil
 }
 
 func scheduledNetworkFault(fault Fault, r rawFault) (Fault, error) {
