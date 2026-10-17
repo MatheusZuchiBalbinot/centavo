@@ -119,6 +119,25 @@ func TestPocket_ReusedIdleKeyBelongsToItsSender(t *testing.T) {
 	assertPasses(t, b.evaluate())
 }
 
+// TestPocket_IndeterminateReuseIsResolvedForItself: the buggy write that
+// reused a key timed out too; resolve answers for its own request.
+func TestPocket_IndeterminateReuseIsResolvedForItself(t *testing.T) {
+	b := newRoundBuilder(t)
+	alice := b.createAccount()
+	owner := b.deposit(alice, 500)
+	reuserArgs := map[string]any{"account_id": alice, "amount_cents": 300, "reused_key": owner}
+	reuser := b.operation(history.FunctionDeposit, reuserArgs, history.TypeInfo, nil)
+
+	result := b.evaluate()
+	if result.Verdict != VerdictInconclusive {
+		t.Fatalf("an unresolved reuse: verdict %s", result.Verdict)
+	}
+
+	b.resolveWith(reuser, owner, outcomeSuperseded)
+
+	assertPasses(t, b.evaluate())
+}
+
 // TestPocket_ResolveOfASupersededKeyMustNotSayApplied is the bank answering
 // the first write with the reuser's response, as it did before resolve
 // compared the request.

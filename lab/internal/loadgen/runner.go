@@ -58,6 +58,9 @@ type Result struct {
 // IndeterminateWrite is a write whose outcome the client does not know, with
 // the request it sent: resolve must name the request, not only its key.
 type IndeterminateWrite struct {
+	// Op is the operation being resolved; Key is the key it sent, its own or
+	// the one a buggy client reused.
+	Op   string
 	Key  string
 	Path string
 	Body json.RawMessage
@@ -642,11 +645,11 @@ func (c *client) complete(op operation, opID string, attempts int, result attemp
 		return nil
 	}
 
-	// A buggy write never owned its key: resolving the key would resolve
-	// the operation that did.
-	isResolvable := op.isWrite() && op.reusedKey == ""
-	if isResolvable {
-		c.run.noteIndeterminate(IndeterminateWrite{Key: opID, Path: op.request.path, Body: op.request.body})
+	// Resolve names the request as well as the key, so a buggy write that
+	// reused a key is resolved for itself, not for the key's owner.
+	if op.isWrite() {
+		write := IndeterminateWrite{Op: opID, Key: cmp.Or(op.reusedKey, opID), Path: op.request.path, Body: op.request.body}
+		c.run.noteIndeterminate(write)
 	}
 
 	c.retire()

@@ -141,7 +141,12 @@ func (b *roundBuilder) transfer(from, to string, amount int64) {
 
 // resolve records the cure's answer for an indeterminate operation.
 func (b *roundBuilder) resolve(op, outcome string) {
-	b.operation(history.FunctionResolve, resolveArgs{Key: op}, history.TypeOK, map[string]string{"key": op, "outcome": outcome})
+	b.resolveWith(op, op, outcome)
+}
+
+// resolveWith is resolve for an operation that sent another operation's key.
+func (b *roundBuilder) resolveWith(op, key, outcome string) {
+	b.operation(history.FunctionResolve, resolveArgs{Key: key, Op: op}, history.TypeOK, map[string]string{"key": key, "outcome": outcome})
 }
 
 // snapshot returns the export, with materialized balances that match the entries.

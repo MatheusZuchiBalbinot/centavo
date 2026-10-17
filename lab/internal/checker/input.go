@@ -84,6 +84,9 @@ type statementValue struct {
 
 type resolveArgs struct {
 	Key string `json:"key"`
+	// Op names the operation resolved; older histories only have the key,
+	// which was then always the operation's own.
+	Op string `json:"op"`
 }
 
 type resolveValue struct {
@@ -188,7 +191,8 @@ func (ops operations) indexResolutions() {
 		var value resolveValue
 		_ = json.Unmarshal(o.value, &value)
 
-		ops.resolutions[args.Key] = append(ops.resolutions[args.Key], value.Outcome)
+		resolved := cmp.Or(args.Op, args.Key)
+		ops.resolutions[resolved] = append(ops.resolutions[resolved], value.Outcome)
 	}
 }
 
