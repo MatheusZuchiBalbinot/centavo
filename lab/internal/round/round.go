@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime/debug"
 	"strconv"
 	"time"
 
@@ -314,22 +315,10 @@ func writeEvents(dir string, events []json.RawMessage) error {
 
 // exportAndCheck takes the ledger snapshot of the round and runs the checker on it.
 func exportAndCheck(ctx context.Context, options Options, result Result) (checker.Verdict, error) {
-	accounts, err := createdAccounts(result.Dir)
+	err := exportSnapshot(ctx, options, result)
 	if err != nil {
 		return "", err
 	}
-
-	s, err := options.Export(ctx, export.Request{Round: result.ID, AccountIDs: accounts})
-	if err != nil {
-		return "", err
-	}
-
-	err = snapshot.Write(result.Dir, s)
-	if err != nil {
-		return "", err
-	}
-
-	options.Logger.InfoContext(ctx, "ledger exported", "round", result.ID, "transactions", len(s.Transactions), "entries", len(s.Entries))
 
 	if options.Saga.Truth != nil {
 		truth, err := options.Saga.Truth(ctx)
@@ -343,7 +332,35 @@ func exportAndCheck(ctx context.Context, options Options, result Result) (checke
 		}
 	}
 
+	// The snapshot is on disk now. The checker runs in this same cgroup and
+	// loads it again, so the memory of this copy goes back to the system
+	// first instead of waiting for the scavenger (docs/architecture.md,
+	// section 11).
+	debug.FreeOSMemory()
+
 	return options.Check(ctx, result.Dir)
+}
+
+// exportSnapshot writes the ledger snapshot of the round to its directory.
+func exportSnapshot(ctx context.Context, options Options, result Result) error {
+	accounts, err := createdAccounts(result.Dir)
+	if err != nil {
+		return err
+	}
+
+	s, err := options.Export(ctx, export.Request{Round: result.ID, AccountIDs: accounts})
+	if err != nil {
+		return err
+	}
+
+	err = snapshot.Write(result.Dir, s)
+	if err != nil {
+		return err
+	}
+
+	options.Logger.InfoContext(ctx, "ledger exported", "round", result.ID, "transactions", len(s.Transactions), "entries", len(s.Entries))
+
+	return nil
 }
 
 // createdAccounts lists the accounts the history says the round opened: the

@@ -280,7 +280,10 @@ func indexLedger(s snapshot.Snapshot) ledger {
 		}
 	}
 
-	l.entriesByTx = groupEntries(s.Entries, transactionOfEntry)
+	// Nothing reads the snapshot's entries in their export order after this,
+	// so the second index sorts them in place: a long round keeps two copies
+	// of its entries instead of three.
+	l.entriesByTx = groupEntries(slices.Clone(s.Entries), transactionOfEntry)
 	l.entriesByAccount = groupEntries(s.Entries, accountOfEntry)
 
 	return l
@@ -290,12 +293,11 @@ func transactionOfEntry(entry snapshot.Entry) string { return entry.TransactionI
 
 func accountOfEntry(entry snapshot.Entry) string { return entry.AccountID }
 
-// groupEntries sorts one copy of the entries by key and then by id, and
-// indexes its runs: each group is a window of that copy, so a long round
-// pays for the entries once per index, not once per group. Entry ids grow
-// in insertion order, which is the order the bank wrote them.
-func groupEntries(entries []snapshot.Entry, keyOf func(snapshot.Entry) string) map[string][]snapshot.Entry {
-	sorted := slices.Clone(entries)
+// groupEntries sorts the entries it is given, in place, by key and then by
+// id, and indexes their runs: each group is a window of that slice, so a long
+// round pays for the entries once per index, not once per group. Entry ids
+// grow in insertion order, which is the order the bank wrote them.
+func groupEntries(sorted []snapshot.Entry, keyOf func(snapshot.Entry) string) map[string][]snapshot.Entry {
 	slices.SortFunc(sorted, func(a, b snapshot.Entry) int {
 		return cmp.Or(cmp.Compare(keyOf(a), keyOf(b)), cmp.Compare(a.ID, b.ID))
 	})

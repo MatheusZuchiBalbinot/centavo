@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"time"
+	"unique"
 )
 
 // Dir is the export directory inside a round directory.
@@ -386,7 +387,10 @@ func loadEntry(s *Snapshot, record []string) error {
 		return err
 	}
 
-	entry := Entry{ID: numbers[0], TransactionID: record[1], AccountID: record[2], AmountCents: numbers[1], AccountSeq: numbers[2], BalanceAfterCents: numbers[3]}
+	// Interned, the ids stop pinning the whole CSV line of every entry: a
+	// long round has millions of entries over a few accounts, and two entries
+	// per transaction.
+	entry := Entry{ID: numbers[0], TransactionID: unique.Make(record[1]).Value(), AccountID: unique.Make(record[2]).Value(), AmountCents: numbers[1], AccountSeq: numbers[2], BalanceAfterCents: numbers[3]}
 	s.Entries = append(s.Entries, entry)
 
 	return nil
