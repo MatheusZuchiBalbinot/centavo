@@ -64,6 +64,18 @@ func (s LedgerStore) ClaimKey(ctx context.Context, claim application.KeyClaim) (
 	return record, false, err
 }
 
+const touchKeySQL = `UPDATE idempotency_keys SET expires_at = expires_at WHERE key = $1`
+
+// TouchKey writes a new version of the key's row with the same values.
+func (s LedgerStore) TouchKey(ctx context.Context, key idempotency.Key) error {
+	_, err := s.db.Exec(ctx, touchKeySQL, string(key))
+	if err != nil {
+		return keyError(err, "touching idempotency key")
+	}
+
+	return nil
+}
+
 // VoidKey leaves a tombstone, or returns the record that is already there.
 func (s LedgerStore) VoidKey(ctx context.Context, key idempotency.Key) (idempotency.Record, bool, error) {
 	var inserted string

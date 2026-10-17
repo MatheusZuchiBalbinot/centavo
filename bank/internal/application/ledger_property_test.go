@@ -116,6 +116,8 @@ func (m *memoryLedger) CompleteKey(context.Context, idempotency.Key, ledger.Oper
 	return nil
 }
 
+func (m *memoryLedger) TouchKey(context.Context, idempotency.Key) error { return nil }
+
 func (m *memoryLedger) VoidKey(context.Context, idempotency.Key) (idempotency.Record, bool, error) {
 	return idempotency.Record{}, true, nil
 }

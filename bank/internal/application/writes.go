@@ -41,6 +41,11 @@ type KeyStore interface {
 	// VoidKey inserts a tombstone and reports true, or returns the existing
 	// record and false.
 	VoidKey(ctx context.Context, key idempotency.Key) (idempotency.Record, bool, error)
+	// TouchKey rewrites the key's row unchanged. The write is the point: its
+	// commit waits for the synchronous standby like any other, and its WAL
+	// comes after the commit that stored the answer, so once it returns that
+	// answer is on the replica too.
+	TouchKey(ctx context.Context, key idempotency.Key) error
 }
 
 // Write is one client write, ready to run exactly once per key.
@@ -50,6 +55,24 @@ type Write struct {
 	RequestHash idempotency.RequestHash
 	// Apply runs the use case in the unit of work and encodes the answer.
 	Apply func(ctx context.Context, stores Stores, operationID ledger.OperationID) (idempotency.StoredResponse, error)
+}
+
+// replayDurably answers a retry with the stored answer, but only once the
+// commit that stored it is as durable as a new one would be. A client that
+// gave up while its commit waited for the synchronous standby cancels that
+// wait: PostgreSQL keeps the commit locally, unreplicated, and a retry that
+// only read it would hand out an answer, or a refusal, that a failover then
+// loses (PM-016).
+func replayDurably(ctx context.Context, stores Stores, write Write, existing idempotency.Record) (idempotency.StoredResponse, error) {
+	isSettled := existing.Status != idempotency.StatusPending
+	if isSettled {
+		err := stores.TouchKey(ctx, write.Key)
+		if err != nil {
+			return idempotency.StoredResponse{}, err
+		}
+	}
+
+	return existing.Replay(write.Endpoint, write.RequestHash)
 }
 
 // KeyPolicy is defense D3's strategy inside a unit of work.
@@ -73,7 +96,7 @@ func (KeysInTheSameCommit) Run(ctx context.Context, stores Stores, write Write) 
 	}
 
 	if !isClaimed {
-		return existing.Replay(write.Endpoint, write.RequestHash)
+		return replayDurably(ctx, stores, write, existing)
 	}
 
 	operationID, err := ledger.NewOperationID()
@@ -232,12 +255,21 @@ func resolveKey(ctx context.Context, stores Stores, key idempotency.Key) (Resolu
 		return Resolution{}, err
 	}
 
-	if isVoided || existing.Status == idempotency.StatusVoided {
+	if isVoided {
 		return Resolution{Outcome: idempotency.OutcomeVoided}, nil
 	}
 
-	if existing.Status != idempotency.StatusCompleted {
+	if existing.Status == idempotency.StatusPending {
 		return Resolution{}, idempotency.ErrRequestInProgress
+	}
+
+	err = stores.TouchKey(ctx, key)
+	if err != nil {
+		return Resolution{}, err
+	}
+
+	if existing.Status == idempotency.StatusVoided {
+		return Resolution{Outcome: idempotency.OutcomeVoided}, nil
 	}
 
 	response := existing.Response

@@ -84,6 +84,7 @@ func startPostgres(ctx context.Context) (*tcpostgres.PostgresContainer, error) {
 		"BANK_MIGRATOR_PASSWORD": testPassword,
 		"BANK_APP_PASSWORD":      testPassword,
 		"BANK_AUDITOR_PASSWORD":  testPassword,
+		"REPLICATOR_PASSWORD":    testPassword,
 	}
 
 	container, err := tcpostgres.Run(ctx, postgresImage, tcpostgres.WithPassword(testPassword), tcpostgres.WithInitScripts(rolesScript), testcontainers.WithEnv(passwords), tcpostgres.BasicWaitStrategies())

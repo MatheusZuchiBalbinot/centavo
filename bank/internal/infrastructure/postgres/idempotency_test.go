@@ -246,3 +246,53 @@ func TestDeleteExpiredKeys_RemovesOnlyExpiredOnes(t *testing.T) {
 		t.Fatalf("the expired key is still there (%d, %v)", remaining, err)
 	}
 }
+
+// keyVersion is the transaction that wrote the key's current row version.
+func (w writes) keyVersion(t *testing.T, key idempotency.Key) string {
+	t.Helper()
+
+	var xmin string
+
+	err := w.bank.pool.QueryRow(t.Context(), `SELECT xmin::text FROM idempotency_keys WHERE key = $1`, string(key)).Scan(&xmin)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return xmin
+}
+
+// TestReplay_WritesBeforeAnswering is PM-016's replay hole: an answer read
+// from a commit whose wait for the synchronous standby was cancelled may not
+// be on the replica. The replay and resolve both write the key, so their own
+// commit waits for the standby before the answer goes out.
+func TestReplay_WritesBeforeAnswering(t *testing.T) {
+	w := newWrites(t)
+	account := w.bank.newCustomer(t)
+	key := newKey()
+
+	_, err := w.writer.Execute(t.Context(), w.depositWrite(t, key, account, 300))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stored := w.keyVersion(t, key)
+
+	_, err = w.writer.Execute(t.Context(), w.depositWrite(t, key, account, 300))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	replayed := w.keyVersion(t, key)
+	if replayed == stored {
+		t.Fatal("the replay answered without writing")
+	}
+
+	_, err = w.resolver.Resolve(t.Context(), key)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if w.keyVersion(t, key) == replayed {
+		t.Fatal("resolve answered without writing")
+	}
+}
