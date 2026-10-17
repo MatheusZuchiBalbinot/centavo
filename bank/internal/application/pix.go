@@ -13,6 +13,7 @@ import (
 	"centavo/bank/internal/domain/ledger"
 	"centavo/bank/internal/domain/money"
 	"centavo/bank/internal/domain/transfer"
+	"centavo/bank/internal/platform/correlation"
 	"centavo/bank/internal/platform/failpoint"
 )
 
@@ -267,6 +268,10 @@ func (r NaiveRelay) Relay(ctx context.Context, id transfer.ID) error {
 	if external.Status != transfer.StatusCreated {
 		return nil
 	}
+
+	// The transfer's client_ref follows it into the logs and the failpoint
+	// events, as the request's correlation id did in the API.
+	ctx = correlation.With(ctx, external.ClientRef)
 
 	attempt := nextAttemptOf(external.EndToEndID)
 	attemptID := id.AttemptEndToEndID(attempt)
