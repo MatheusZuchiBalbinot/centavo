@@ -211,6 +211,17 @@ func (a apiHandlers) runWrite(w http.ResponseWriter, r *http.Request, request wr
 	writeStored(w, response)
 }
 
+// resolveRequest names the request whose outcome the client asks about, as
+// it sent it: the key alone cannot tell it from another request that took the
+// same key (FC43).
+type resolveRequest struct {
+	Endpoint string          `json:"endpoint"`
+	Body     json.RawMessage `json:"body"`
+}
+
+// resolvableEndpoints are the writes whose keys resolve can settle.
+var resolvableEndpoints = map[string]bool{accountsEndpoint: true, depositsEndpoint: true, transfersEndpoint: true, pixOutEndpoint: true}
+
 type resolveResponse struct {
 	Key      string              `json:"key"`
 	Outcome  idempotency.Outcome `json:"outcome"`
@@ -232,7 +243,14 @@ func (a apiHandlers) resolve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resolution, err := a.useCases.Resolver.Resolve(r.Context(), key)
+	request, err := resolveRequestOf(w, r, key)
+	if err != nil {
+		writeError(w, r, a.logger, err)
+
+		return
+	}
+
+	resolution, err := a.useCases.Resolver.Resolve(r.Context(), request)
 	if err != nil {
 		writeError(w, r, a.logger, err)
 
@@ -247,6 +265,27 @@ func (a apiHandlers) resolve(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, response)
+}
+
+func resolveRequestOf(w http.ResponseWriter, r *http.Request, key idempotency.Key) (application.ResolveRequest, error) {
+	body, err := readBody(w, r)
+	if err != nil {
+		return application.ResolveRequest{}, err
+	}
+
+	var request resolveRequest
+
+	err = decodeBody(body, &request)
+	if err != nil {
+		return application.ResolveRequest{}, err
+	}
+
+	isValid := resolvableEndpoints[request.Endpoint] && len(request.Body) > 0
+	if !isValid {
+		return application.ResolveRequest{}, fmt.Errorf("%w: endpoint must be a write of the API and body the request it sent", errValidation)
+	}
+
+	return application.ResolveRequest{Key: key, Endpoint: request.Endpoint, RequestHash: idempotency.HashRequest(request.Endpoint, request.Body)}, nil
 }
 
 func depositInputOf(r *http.Request, body []byte) (application.DepositInput, error) {

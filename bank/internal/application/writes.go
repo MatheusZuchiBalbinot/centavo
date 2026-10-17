@@ -194,10 +194,18 @@ type Resolution struct {
 	Response *idempotency.StoredResponse
 }
 
+// ResolveRequest is the request whose outcome the client asks about: its key
+// and what it sent, since a key can end up holding another request (FC43).
+type ResolveRequest struct {
+	Key         idempotency.Key
+	Endpoint    string
+	RequestHash idempotency.RequestHash
+}
+
 // Resolver turns an operation with an unknown outcome into a known one
 // (docs/domain.md, section 5.1).
 type Resolver interface {
-	Resolve(ctx context.Context, key idempotency.Key) (Resolution, error)
+	Resolve(ctx context.Context, request ResolveRequest) (Resolution, error)
 }
 
 // TombstoneResolver is D3's resolve: a missing key gets a tombstone, so a
@@ -212,13 +220,13 @@ func NewTombstoneResolver(unitOfWork UnitOfWork) TombstoneResolver {
 }
 
 // Resolve voids an unknown key or reports how a known one ended.
-func (r TombstoneResolver) Resolve(ctx context.Context, key idempotency.Key) (Resolution, error) {
+func (r TombstoneResolver) Resolve(ctx context.Context, request ResolveRequest) (Resolution, error) {
 	var resolution Resolution
 
 	err := r.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
 		var err error
 
-		resolution, err = resolveKey(ctx, stores, key)
+		resolution, err = resolveKey(ctx, stores, request)
 
 		return err
 	})
@@ -226,8 +234,8 @@ func (r TombstoneResolver) Resolve(ctx context.Context, key idempotency.Key) (Re
 	return resolution, err
 }
 
-func resolveKey(ctx context.Context, stores Stores, key idempotency.Key) (Resolution, error) {
-	existing, isVoided, err := stores.VoidKey(ctx, key)
+func resolveKey(ctx context.Context, stores Stores, request ResolveRequest) (Resolution, error) {
+	existing, isVoided, err := stores.VoidKey(ctx, request.Key)
 	if err != nil {
 		return Resolution{}, err
 	}
@@ -238,6 +246,13 @@ func resolveKey(ctx context.Context, stores Stores, key idempotency.Key) (Resolu
 
 	if existing.Status != idempotency.StatusCompleted {
 		return Resolution{}, idempotency.ErrRequestInProgress
+	}
+
+	// The same check a retry gets: the stored answer belongs to the request
+	// that took the key, and only that request may hear "applied".
+	isSameRequest := existing.Endpoint == request.Endpoint && existing.RequestHash == request.RequestHash
+	if !isSameRequest {
+		return Resolution{Outcome: idempotency.OutcomeSuperseded}, nil
 	}
 
 	response := existing.Response

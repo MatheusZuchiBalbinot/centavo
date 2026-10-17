@@ -54,8 +54,8 @@ type ClientRefResolver struct {
 }
 
 // Resolve answers from the ledger as it is right now.
-func (r ClientRefResolver) Resolve(ctx context.Context, key idempotency.Key) (application.Resolution, error) {
-	isApplied, err := r.store.IsClientRefApplied(ctx, key)
+func (r ClientRefResolver) Resolve(ctx context.Context, request application.ResolveRequest) (application.Resolution, error) {
+	isApplied, err := r.store.IsClientRefApplied(ctx, request.Key)
 	if err != nil {
 		return application.Resolution{}, err
 	}

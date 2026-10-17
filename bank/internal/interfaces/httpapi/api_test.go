@@ -63,9 +63,17 @@ func (f *fakeWriter) Execute(ctx context.Context, write application.Write) (idem
 
 type fakeResolver struct{}
 
-func (fakeResolver) Resolve(_ context.Context, key idempotency.Key) (application.Resolution, error) {
-	if key == "r0001-p01-000404" {
+// resolvedDeposit is the request the fake resolver knows as applied.
+const resolvedDeposit = `{"account_id":"a","amount_cents":100}`
+
+func (fakeResolver) Resolve(_ context.Context, request application.ResolveRequest) (application.Resolution, error) {
+	if request.Key == "r0001-p01-000404" {
 		return application.Resolution{Outcome: idempotency.OutcomeVoided}, nil
+	}
+
+	isTheAppliedRequest := request.Endpoint == "/v1/deposits" && request.RequestHash == idempotency.HashRequest("/v1/deposits", []byte(resolvedDeposit))
+	if !isTheAppliedRequest {
+		return application.Resolution{Outcome: idempotency.OutcomeSuperseded}, nil
 	}
 
 	stored := idempotency.StoredResponse{Status: 201, Body: []byte(`{"transaction_id":"t"}`)}
@@ -370,19 +378,30 @@ func TestWrites_BindTheKeyToTheEndpointAndRawBody(t *testing.T) {
 
 func TestResolve_AnswersAppliedOrVoided(t *testing.T) {
 	fixture := newFixture(nil)
+	resolveBody := `{"endpoint":"/v1/deposits","body":` + resolvedDeposit + `}`
 
-	applied := fixture.do(t, apiRequest{method: http.MethodPost, path: "/v1/operations/" + validKey + "/resolve"})
+	applied := fixture.do(t, apiRequest{method: http.MethodPost, path: "/v1/operations/" + validKey + "/resolve", body: resolveBody})
 	if applied.Code != http.StatusOK || !strings.Contains(applied.Body.String(), `"outcome":"applied"`) || !strings.Contains(applied.Body.String(), `"transaction_id":"t"`) {
 		t.Fatalf("applied: %d %s", applied.Code, applied.Body)
 	}
 
-	voided := fixture.do(t, apiRequest{method: http.MethodPost, path: "/v1/operations/r0001-p01-000404/resolve"})
+	superseded := fixture.do(t, apiRequest{method: http.MethodPost, path: "/v1/operations/" + validKey + "/resolve", body: `{"endpoint":"/v1/deposits","body":{"account_id":"a","amount_cents":999}}`})
+	if superseded.Code != http.StatusOK || !strings.Contains(superseded.Body.String(), `"outcome":"superseded"`) {
+		t.Fatalf("another request's key: %d %s", superseded.Code, superseded.Body)
+	}
+
+	voided := fixture.do(t, apiRequest{method: http.MethodPost, path: "/v1/operations/r0001-p01-000404/resolve", body: resolveBody})
 	if voided.Code != http.StatusOK || !strings.Contains(voided.Body.String(), `"outcome":"voided"`) {
 		t.Fatalf("voided: %d %s", voided.Code, voided.Body)
 	}
 
-	invalid := fixture.do(t, apiRequest{method: http.MethodPost, path: "/v1/operations/short/resolve"})
+	invalid := fixture.do(t, apiRequest{method: http.MethodPost, path: "/v1/operations/short/resolve", body: resolveBody})
 	if invalid.Code != http.StatusBadRequest {
 		t.Fatalf("invalid key: %d", invalid.Code)
+	}
+
+	withoutRequest := fixture.do(t, apiRequest{method: http.MethodPost, path: "/v1/operations/" + validKey + "/resolve", body: `{}`})
+	if withoutRequest.Code != http.StatusBadRequest {
+		t.Fatalf("resolve without the request: %d", withoutRequest.Code)
 	}
 }
