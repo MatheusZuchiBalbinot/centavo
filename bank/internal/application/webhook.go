@@ -151,12 +151,14 @@ func creditIncoming(ctx context.Context, stores Stores, event PartnerEvent) erro
 
 	writer := poster{positions: stores, entries: stores}
 
-	_, err = writer.post(ctx, transactionID, accountID, amount.Cents())
+	// The partner mirror before the customer: balances in id order, as a
+	// return moves them.
+	_, err = writer.post(ctx, transactionID, ledger.PartnerSettlementAccountID(), amount.Negated())
 	if err != nil {
 		return err
 	}
 
-	_, err = writer.post(ctx, transactionID, ledger.PartnerSettlementAccountID(), amount.Negated())
+	_, err = writer.post(ctx, transactionID, accountID, amount.Cents())
 
 	return err
 }
