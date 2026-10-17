@@ -178,6 +178,26 @@ WHERE id = (
     FOR UPDATE SKIP LOCKED)
 RETURNING id, event_id, event_type, end_to_end_id, payload, correlation_id`
 
+// reclaimInboxSQL skips an event another processor holds: it is that
+// processor's to apply now.
+const reclaimInboxSQL = `SELECT id FROM inbox_events WHERE id = $1 AND status = 'pending' FOR UPDATE SKIP LOCKED`
+
+// ReclaimInbox locks a pending event no other transaction holds.
+func (s LedgerStore) ReclaimInbox(ctx context.Context, id int64) (bool, error) {
+	var locked int64
+
+	err := s.db.QueryRow(ctx, reclaimInboxSQL, id).Scan(&locked)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+
+	if err != nil {
+		return false, fmt.Errorf("reclaiming inbox event: %w", err)
+	}
+
+	return true, nil
+}
+
 // ClaimInbox returns the next event to apply, or false when none is ready.
 func (s LedgerStore) ClaimInbox(ctx context.Context) (application.InboxEvent, bool, error) {
 	var (
