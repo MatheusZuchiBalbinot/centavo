@@ -167,6 +167,13 @@ func Run(ctx context.Context, options Options) (Result, error) {
 		ParticipantID:   options.Saga.ParticipantID,
 	})
 
+	// Written now so the panel can follow the round as it runs; the end of
+	// the round writes it again with the history and the verdict.
+	err = writeManifest(dir, newManifest(options, Result{ID: id, Dir: dir}, startedAt, nil))
+	if err != nil {
+		return Result{ID: id, Dir: dir}, errors.Join(err, writer.Close())
+	}
+
 	// A target that fails the preflight is never touched, not even to cure it.
 	err = bot.Preflight(ctx)
 	if err != nil {

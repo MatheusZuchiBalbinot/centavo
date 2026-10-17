@@ -107,7 +107,7 @@ function lineChart(container, seconds, series) {
 
   for (const one of series) {
     const points = seconds.map((second, index) => (index * step).toFixed(1) + ',' + (CHART.height - (second[one.key] / peak) * (CHART.height - 4)).toFixed(1));
-    svg.append(svgElement('polyline', { points: points.join(' '), class: 'series series-' + one.key, fill: 'none' }));
+    svg.append(svgElement('polyline', { points: points.join(' '), class: 'series series-' + one.label, fill: 'none' }));
 
     const last = seconds.length > 0 ? seconds[seconds.length - 1][one.key] : 0;
     summary.push(one.label + ' ' + formatNumber(Math.round(last)));
