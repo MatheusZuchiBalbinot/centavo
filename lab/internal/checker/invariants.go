@@ -313,6 +313,10 @@ func (e *evaluation) checkOperations() {
 }
 
 func (e *evaluation) checkWrite(o *operation) {
+	if e.isReplayOfTheKey(o) {
+		return
+	}
+
 	applications := e.applications(o)
 
 	switch {
@@ -366,6 +370,11 @@ const (
 // depositStanding settles an operation with its result and, for an info,
 // with resolve's answer.
 func (e *evaluation) depositStanding(o *operation) standing {
+	// A replay is the key owner's deposit again; the owner counts it.
+	if e.isReplayOfTheKey(o) {
+		return standingNotApplied
+	}
+
 	if o.result == history.TypeOK {
 		return standingApplied
 	}
