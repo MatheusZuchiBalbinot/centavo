@@ -40,6 +40,7 @@ services:
       BANK_MIGRATOR_PASSWORD: ${BANK_MIGRATOR_PASSWORD:?run ./entrypoint.sh to generate .env}
       BANK_APP_PASSWORD: ${BANK_APP_PASSWORD:?run ./entrypoint.sh to generate .env}
       BANK_AUDITOR_PASSWORD: ${BANK_AUDITOR_PASSWORD:?run ./entrypoint.sh to generate .env}
+      REPLICATOR_PASSWORD: ${REPLICATOR_PASSWORD:?run ./entrypoint.sh to generate .env}
     volumes:
       # Since image 18 the volume lives at /var/lib/postgresql, not .../data.
       - pgdata:/var/lib/postgresql
@@ -51,6 +52,32 @@ services:
       timeout: 4s
       retries: 12
     mem_limit: 288m
+
+  # Replica profile (docs/chaos-bot.md, section 10): a hot standby cloned
+  # from the primary on first start, streaming through Toxiproxy's
+  # replication link, where the bot adds lag. A failover promotes it.
+  postgres-replica:
+    <<: *chaos-target
+    profiles: [replica]
+    image: postgres:18.6
+    user: postgres
+    entrypoint: ["/bin/sh", "/etc/postgresql/replica.sh"]
+    environment:
+      PGDATA: /var/lib/postgresql/18/docker
+      REPLICATOR_PASSWORD: ${REPLICATOR_PASSWORD:?run ./entrypoint.sh to generate .env}
+    volumes:
+      - pgreplica:/var/lib/postgresql
+      - ./deploy/compose/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./deploy/compose/replica.sh:/etc/postgresql/replica.sh:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "pg_isready", "--username", "postgres"]
+      interval: 5s
+      timeout: 4s
+      retries: 60
+    mem_limit: 224m
 
   toxiproxy:
     image: ghcr.io/shopify/toxiproxy:2.12.0
@@ -186,9 +213,10 @@ services:
       # Control calls of the cure (resolve) skip Toxiproxy: they run after it.
       BANK_CONTROL_URL: http://bank-api:8080
       ARTIFACT_STORE: file:///data/rounds
-      # The auditor and the exporter read the ledger directly, read-only:
-      # auditing is not a chaos target.
-      AUDITOR_DATABASE_URL: postgres://bank_auditor:${BANK_AUDITOR_PASSWORD}@postgres:5432/bank_robust?sslmode=disable
+      # The auditor and the exporter read the ledger read-only through
+      # auditor_pg, a link the bot never puts toxics on: it only follows the
+      # database when a failover moves it (docs/architecture.md, section 4.1).
+      AUDITOR_DATABASE_URL: postgres://bank_auditor:${BANK_AUDITOR_PASSWORD}@toxiproxy:15435/bank_robust?sslmode=disable
       CENTAVO_CHAOS_TOKEN: ${CENTAVO_CHAOS_TOKEN:?run ./entrypoint.sh to generate .env}
       # The bot reaches Docker only through docker-proxy (lock 5).
       DOCKER_HOST: tcp://docker-proxy:2375
@@ -218,6 +246,7 @@ networks:
 
 volumes:
   pgdata: {}
+  pgreplica: {}
   lab-data: {}
   lab-events: {}
   partner-data: {}
