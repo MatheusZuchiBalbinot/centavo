@@ -23,6 +23,10 @@ const baseVersionTable = "goose_base_version"
 type PoolConfig struct {
 	DatabaseURL    string
 	MaxConnections int32
+	// IsRelaxed turns synchronous_commit off on every connection: the naive
+	// variant of defense D12, where a commit is acknowledged before its WAL
+	// leaves shared memory (FC30).
+	IsRelaxed bool
 }
 
 // NewPool creates a lazily connecting pool; reachability is reported by the
@@ -35,6 +39,10 @@ func NewPool(ctx context.Context, cfg PoolConfig) (*pgxpool.Pool, error) {
 	}
 
 	poolConfig.MaxConns = cfg.MaxConnections
+
+	if cfg.IsRelaxed {
+		poolConfig.ConnConfig.RuntimeParams["synchronous_commit"] = "off"
+	}
 
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {

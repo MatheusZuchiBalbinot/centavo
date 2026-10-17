@@ -128,7 +128,7 @@ func runRole(ctx context.Context, selectedRole role) error {
 }
 
 func serveAPI(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
-	poolConfig := postgres.PoolConfig{DatabaseURL: cfg.DatabaseURL, MaxConnections: apiMaxConnections}
+	poolConfig := postgres.PoolConfig{DatabaseURL: cfg.DatabaseURL, MaxConnections: apiMaxConnections, IsRelaxed: !cfg.Defenses.IsEnabled(defenses.DurableDB)}
 
 	pool, err := postgres.NewPool(ctx, poolConfig)
 	if err != nil {
@@ -273,7 +273,7 @@ func newMoneyDependencies(pool *pgxpool.Pool, profile defenses.Profile) (applica
 }
 
 func serveWorker(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
-	poolConfig := postgres.PoolConfig{DatabaseURL: cfg.DatabaseURL, MaxConnections: workerMaxConnections}
+	poolConfig := postgres.PoolConfig{DatabaseURL: cfg.DatabaseURL, MaxConnections: workerMaxConnections, IsRelaxed: !cfg.Defenses.IsEnabled(defenses.DurableDB)}
 
 	pool, err := postgres.NewPool(ctx, poolConfig)
 	if err != nil {
@@ -495,6 +495,35 @@ func defenseMigrationsOf(profile defenses.Profile) ([]postgres.DefenseMigrations
 // step 3. A mismatch refuses to start; an unreachable database does not,
 // because under chaos it comes back, and bank migrate already ran before.
 func checkSchema(ctx context.Context, pool *pgxpool.Pool, cfg config.Config, logger *slog.Logger) error {
+	err := checkDurability(ctx, pool, cfg, logger)
+	if err != nil {
+		return err
+	}
+
+	return checkDefenseSchema(ctx, pool, cfg, logger)
+}
+
+// checkDurability is D12's startup check (FC30): a robust bank refuses to run
+// on connections that acknowledge commits before they are durable. As with
+// the schema, an unreachable database is only a warning.
+func checkDurability(ctx context.Context, pool *pgxpool.Pool, cfg config.Config, logger *slog.Logger) error {
+	if !cfg.Defenses.IsEnabled(defenses.DurableDB) {
+		return nil
+	}
+
+	err := postgres.CheckDurability(ctx, pool)
+	if errors.Is(err, postgres.ErrNotDurable) {
+		return err
+	}
+
+	if err != nil {
+		logger.WarnContext(ctx, "could not check durability at startup", "error", err)
+	}
+
+	return nil
+}
+
+func checkDefenseSchema(ctx context.Context, pool *pgxpool.Pool, cfg config.Config, logger *slog.Logger) error {
 	defenseMigrations, err := defenseMigrationsOf(cfg.Defenses)
 	if err != nil {
 		return err
