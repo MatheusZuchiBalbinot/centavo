@@ -1,6 +1,7 @@
 package loadgen
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"log/slog"
@@ -30,6 +31,9 @@ type ResolveConfig struct {
 
 type resolveArgs struct {
 	Key string `json:"key"`
+	// Op is the operation resolved, which is not the key's owner when a
+	// buggy client reused the key.
+	Op string `json:"op"`
 }
 
 // resolveBody is the request being resolved, as it was sent.
@@ -124,7 +128,7 @@ func resolveOperation(write IndeterminateWrite) (operation, error) {
 
 	resolveRequest := request{method: http.MethodPost, path: "/v1/operations/" + url.PathEscape(write.Key) + "/resolve", body: body}
 
-	op, err := newOperation(history.FunctionResolve, resolveRequest, resolveArgs{Key: write.Key}, parseResolve)
+	op, err := newOperation(history.FunctionResolve, resolveRequest, resolveArgs{Key: write.Key, Op: cmp.Or(write.Op, write.Key)}, parseResolve)
 	op.hasNoKey = true
 
 	return op, err
