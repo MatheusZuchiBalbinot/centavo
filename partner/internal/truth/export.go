@@ -97,9 +97,10 @@ func (s *Store) transferViews(ctx context.Context, participantID string, since t
 
 // statementSinceSQL is statementSQL bounded by time instead of by sequence.
 const statementSinceSQL = `
-SELECT e.seq, e.participant_id, e.kind, e.end_to_end_id, e.amount_cents, e.created_at, coalesce(i.account_id, '')
+SELECT e.seq, e.participant_id, e.kind, e.end_to_end_id, e.amount_cents, e.created_at, coalesce(i.account_id, ''), coalesce(t.correlation_id, i.correlation_id, '')
 FROM statement_entries e
 LEFT JOIN incoming i ON e.kind = 'incoming' AND i.end_to_end_id = e.end_to_end_id
+LEFT JOIN transfers t ON e.kind IN ('settlement', 'return') AND t.end_to_end_id = e.end_to_end_id
 WHERE e.participant_id = ? AND e.created_at >= ?
 ORDER BY e.seq`
 

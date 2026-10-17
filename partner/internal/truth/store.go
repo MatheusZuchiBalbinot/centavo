@@ -83,6 +83,9 @@ type StatementEntry struct {
 	CreatedAt     time.Time `json:"created_at"`
 	// DestinationAccountID is the account an incoming entry credits.
 	DestinationAccountID string `json:"destination_account_id,omitempty"`
+	// CorrelationID is the one the PIX came with, so the participant's
+	// reconciliation can follow the PIX in its logs and failpoints.
+	CorrelationID string `json:"correlation_id,omitempty"`
 }
 
 // Incoming is a PIX the partner credited to a participant.
@@ -579,11 +582,13 @@ func enqueue(ctx context.Context, tx *sql.Tx, event Event, planner Planner) erro
 }
 
 // statementSQL joins incoming entries with the account they credit, which a
-// reconciler needs to credit a PIX in whose webhook never came.
+// reconciler needs to credit a PIX in whose webhook never came, and every
+// entry with the correlation id of its PIX.
 const statementSQL = `
-SELECT e.seq, e.participant_id, e.kind, e.end_to_end_id, e.amount_cents, e.created_at, coalesce(i.account_id, '')
+SELECT e.seq, e.participant_id, e.kind, e.end_to_end_id, e.amount_cents, e.created_at, coalesce(i.account_id, ''), coalesce(t.correlation_id, i.correlation_id, '')
 FROM statement_entries e
 LEFT JOIN incoming i ON e.kind = 'incoming' AND i.end_to_end_id = e.end_to_end_id
+LEFT JOIN transfers t ON e.kind IN ('settlement', 'return') AND t.end_to_end_id = e.end_to_end_id
 WHERE e.participant_id = ? AND e.seq > ?
 ORDER BY e.seq
 LIMIT ?`
@@ -608,7 +613,7 @@ func scanStatement(rows *sql.Rows) ([]StatementEntry, error) {
 			created int64
 		)
 
-		err := rows.Scan(&entry.Seq, &entry.ParticipantID, &entry.Kind, &entry.EndToEndID, &entry.AmountCents, &created, &entry.DestinationAccountID)
+		err := rows.Scan(&entry.Seq, &entry.ParticipantID, &entry.Kind, &entry.EndToEndID, &entry.AmountCents, &created, &entry.DestinationAccountID, &entry.CorrelationID)
 		if err != nil {
 			return nil, err
 		}

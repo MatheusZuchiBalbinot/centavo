@@ -308,3 +308,35 @@ WHERE id NOT IN (SELECT min(id) FROM reconciliation_items GROUP BY partner_seq)`
 		t.Error(err)
 	}
 }
+
+// TestReconciliation_FailpointsMatchThePixCorrelation guards FP07 and FP08
+// as the lab arms them, by the round's prefix: the reconciler has no request
+// of its own, so without the PIX's correlation id from the statement they
+// never fire, and kill-during-reconciliation attacks nothing.
+func TestReconciliation_FailpointsMatchThePixCorrelation(t *testing.T) {
+	for _, name := range []failpoint.Name{failpoint.ReconAfterComputeBeforeApply, failpoint.ReconMidApply} {
+		t.Run(string(name), func(t *testing.T) {
+			p := newOutboxBank(t)
+			statement := newStatement(t, p)
+			created := p.sentTransfer(t, 1_000)
+			next := statement.entries[len(statement.entries)-1].Seq + 1
+			statement.entries = append(statement.entries, application.StatementEntry{Seq: next, Kind: application.StatementSettlement, EndToEndID: created.EndToEndID, AmountCents: 1_000, CorrelationID: "r0001-p01-000001"})
+
+			failpoint.DisarmAll()
+			failpoint.ConfigureEvents(failpoint.EventsConfig{Dir: t.TempDir(), Service: "bank-worker", Instance: "test"})
+			t.Cleanup(failpoint.DisarmAll)
+
+			rule := failpoint.Rule{Action: failpoint.ActionError, Arg: "crash", Probability: 1, Match: failpoint.Match{CorrelationPrefix: "r0001-"}, TTL: "1m"}
+
+			err := failpoint.Arm(name, rule, time.Now())
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			err = p.reconciler(statement, application.AtomicBatches{}).RunOnce(t.Context())
+			if !errors.Is(err, failpoint.ErrSynthetic) {
+				t.Fatalf("%s did not fire for the round's PIX: %v", name, err)
+			}
+		})
+	}
+}

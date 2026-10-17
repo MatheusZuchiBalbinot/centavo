@@ -134,7 +134,7 @@ func (r Reconciler) RunOnce(ctx context.Context) error {
 		}
 
 		// FP07: the batch is read and nothing is booked yet.
-		err = failpoint.Hit(ctx, failpoint.ReconAfterComputeBeforeApply)
+		err = failpoint.Hit(batchFailpointContext(ctx, batch), failpoint.ReconAfterComputeBeforeApply)
 		if err != nil {
 			return err
 		}
@@ -322,6 +322,29 @@ func incomingFacts(ctx context.Context, stores Stores, entry StatementEntry, fac
 	return facts, nil
 }
 
+// entryFailpointContext carries the entry's PIX correlation id to a
+// failpoint: the lab arms them for the round's correlation ids, and the
+// reconciler has no request of its own to take one from.
+func entryFailpointContext(ctx context.Context, entry StatementEntry) context.Context {
+	if entry.CorrelationID == "" {
+		return ctx
+	}
+
+	return correlation.With(ctx, entry.CorrelationID)
+}
+
+// batchFailpointContext is entryFailpointContext for a step that covers the
+// whole batch: it takes the first entry that has a correlation id.
+func batchFailpointContext(ctx context.Context, batch statementBatch) context.Context {
+	for _, entry := range batch.entries {
+		if entry.CorrelationID != "" {
+			return entryFailpointContext(ctx, entry)
+		}
+	}
+
+	return ctx
+}
+
 // entryCorrelation ties the ledger rows a reconciliation writes to the entry.
 func entryCorrelation(entry StatementEntry) string {
 	return fmt.Sprintf("recon-%d", entry.Seq)
@@ -357,7 +380,7 @@ func (AtomicBatches) Book(ctx context.Context, r Reconciler, batch statementBatc
 			}
 
 			// FP08: between two entries of the batch.
-			err = failpoint.Hit(ctx, failpoint.ReconMidApply)
+			err = failpoint.Hit(entryFailpointContext(ctx, entry), failpoint.ReconMidApply)
 			if err != nil {
 				return err
 			}
@@ -405,7 +428,7 @@ func (EntryByEntry) Book(ctx context.Context, r Reconciler, batch statementBatch
 			return err
 		}
 
-		err = failpoint.Hit(ctx, failpoint.ReconMidApply)
+		err = failpoint.Hit(entryFailpointContext(ctx, entry), failpoint.ReconMidApply)
 		if err != nil {
 			return err
 		}
