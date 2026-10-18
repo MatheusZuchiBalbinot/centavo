@@ -20,8 +20,8 @@ import (
 
 const (
 	// renewInterval and ruleTTL make every rule a lease: if the lab dies, the
-	// rules expire within ruleTTL (lock 6). A restarted process gets its
-	// rules back within renewInterval (docs/chaos-bot.md, section 5.4).
+	// rules expire within ruleTTL. A restarted process gets its rules back
+	// within renewInterval.
 	renewInterval = 2 * time.Second
 	ruleTTL       = "30s"
 	eventsPattern = "*.jsonl"
@@ -169,8 +169,8 @@ func (c *failpointController) pushTo(ctx context.Context, armed armedFault, serv
 }
 
 // ruleFor derives the rule's seed from the round seed, the target and its
-// restart count: each incarnation of a process gets its own decisions, and
-// the same round replays them (docs/chaos-bot.md, section 5.5).
+// restart count: each incarnation of a process gets its own decisions, and the
+// same round replays them.
 func (c *failpointController) ruleFor(armed armedFault, service string, restartCount int) failpointRule {
 	fault := armed.fault
 	stream := fmt.Sprintf("failpoints.%s#%d/%s", service, restartCount, fault.ID)

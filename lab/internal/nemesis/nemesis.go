@@ -1,6 +1,6 @@
-// Package nemesis is the chaos bot (docs/chaos-bot.md): it arms failpoints,
-// kills processes, records every injection in the history and cures
-// everything at the end of a round.
+// Package nemesis is the chaos bot: it arms failpoints, kills processes,
+// records every injection in the history and cures everything at the end of a
+// round.
 package nemesis
 
 import (
@@ -45,8 +45,8 @@ type target struct {
 	chaosURL string
 }
 
-// targets are the chaos targets of the Compose stack (docs/architecture.md,
-// section 2); their ports never leave the Compose network.
+// targets are the chaos targets of the Compose stack; their ports never leave
+// the Compose network.
 var targets = []target{
 	{service: "bank-api", binary: "/app/bank", adminURL: "http://bank-api:9090", chaosURL: "http://bank-api:9091"},
 	{service: "bank-worker-1", binary: "/app/bank", adminURL: "http://bank-worker-1:9090", chaosURL: "http://bank-worker-1:9091"},
@@ -95,9 +95,10 @@ func New(config Config) *Nemesis {
 	return n
 }
 
-// Preflight is lock 2 seen from the lab: it refuses to run against anything
-// that is not a chaoslab build in the chaoslab environment, then cures what
-// a previous run may have left behind (toxics never expire by themselves).
+// Preflight is the safety rule that a chaoslab build refuses to run in
+// production seen from the lab: it refuses to run against anything that is not
+// a chaoslab build in the chaoslab environment, then cures what a previous run
+// may have left behind (toxics never expire by themselves).
 func (n *Nemesis) Preflight(ctx context.Context) error {
 	err := n.waitHealthy(ctx, n.config.Scenario.HealTimeout)
 	if err != nil {
@@ -158,9 +159,9 @@ func (n *Nemesis) Start(ctx context.Context) error {
 	return nil
 }
 
-// Heal is the cure of docs/chaos-bot.md, section 3.1: stop injecting, clear
-// every failpoint, resume and start every target, and wait until all of them
-// are healthy. heal_complete marks t_h.
+// Heal is the cure: stop injecting, clear every failpoint, resume and start
+// every target, and wait until all of them are healthy. heal_complete marks
+// t_h.
 func (n *Nemesis) Heal(ctx context.Context) error {
 	if n.cancel != nil {
 		n.cancel()

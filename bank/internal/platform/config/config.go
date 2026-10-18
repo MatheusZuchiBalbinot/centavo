@@ -164,9 +164,10 @@ func parseSeed(raw string) (uint64, error) {
 	return seed, nil
 }
 
-// ValidateBuild enforces safety locks 1, 2 and 4 of docs/chaos-bot.md, section
-// 16: chaos code never runs in production, production never runs a naive
-// variant or takes chaos configuration, and the chaos port has a real secret.
+// ValidateBuild enforces the safety rule that chaos code exists only in
+// chaoslab builds: chaos code never runs in production, production never runs a
+// naive variant or takes chaos configuration, and the chaos port has a real
+// secret.
 func ValidateBuild(cfg Config, isChaosBuild bool) error {
 	isChaosBuildInProduction := isChaosBuild && cfg.Env == EnvProduction
 	if isChaosBuildInProduction {

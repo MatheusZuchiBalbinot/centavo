@@ -7,9 +7,9 @@ import (
 	"centavo/bank/internal/infrastructure/postgres"
 )
 
-// TestDurability_SynchronousCommitIsOnAtStartup is FC30 and PM-015: the
-// robust bank sees synchronous_commit on, and the naive variant's
-// connections are the ones the check refuses.
+// TestDurability_SynchronousCommitIsOnAtStartup is a regression test: the
+// robust bank sees synchronous_commit on, and the naive variant's connections
+// are the ones the check refuses.
 func TestDurability_SynchronousCommitIsOnAtStartup(t *testing.T) {
 	requireDatabase(t)
 

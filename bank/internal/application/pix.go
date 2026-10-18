@@ -17,12 +17,13 @@ import (
 	"centavo/bank/internal/platform/failpoint"
 )
 
-// The PIX use cases of phase F6 are naive by design (docs/architecture.md,
-// sections 5.4 and 5.5): the publication is a NOTIFY that is lost when no
-// worker listens (FC04), the relay sends a new end_to_end_id on every
-// attempt (FC05) and gives up on a timeout (FC21), and the webhook handler
-// applies the effect directly, overwriting the status (FC24 to FC26). The
-// robust variants arrive with defenses D4 to D9.
+// The naive PIX use cases here are the controls the robust ones are measured
+// against: the publication is a NOTIFY that is lost when no worker listens, the
+// relay sends a new end_to_end_id on every attempt and gives up on a timeout,
+// and the webhook handler applies the effect directly, overwriting the status
+// with whatever event arrives last. The robust variants are the outbox,
+// partner_idempotency, inbox, state_machine, recovery and resilient_client
+// defenses.
 
 // Causes recorded in the transition history.
 const (
@@ -42,7 +43,8 @@ const firstRelayAttempt = 1
 // Errors of the PIX use cases.
 var (
 	ErrUnknownEvent = errors.New("unknown partner event")
-	// ErrAlreadyCredited means the incoming PIX was credited before (BR12).
+	// ErrAlreadyCredited means the incoming PIX was credited before (a PIX in
+	// is credited once per end_to_end_id).
 	ErrAlreadyCredited = errors.New("incoming PIX already credited")
 )
 
@@ -134,7 +136,8 @@ type PixOutResult struct {
 	CreatedAt  time.Time
 }
 
-// CreatePixOut reserves the amount and creates the transfer (BR08).
+// CreatePixOut creates the transfer and reserves its amount in the same step,
+// so the money is never promised twice.
 type CreatePixOut struct {
 	locker      Locker
 	publication Publication
@@ -181,7 +184,7 @@ func (c CreatePixOut) Apply(ctx context.Context, stores Stores, operationID ledg
 }
 
 // reserveFunds locks the customer and transit and returns the customer's
-// position after the debit, refusing to overdraw (BR01).
+// position after the debit, refusing to take a customer below zero.
 func (c CreatePixOut) reserveFunds(ctx context.Context, stores Stores, input PixOutInput) (ledger.Position, error) {
 	// Transit is locked with the customer, in id order, so the reserve takes
 	// it first, like a refund that moves transit then the customer.
@@ -263,7 +266,8 @@ type Publisher interface {
 	Publish(ctx context.Context, id transfer.ID) error
 }
 
-// Publication is defense D4's strategy: how a new transfer reaches a relay.
+// Publication is the outbox defense's strategy: how a new transfer reaches a
+// relay.
 type Publication interface {
 	// WithinCommit runs in the unit of work that creates the transfer.
 	WithinCommit(ctx context.Context, stores Stores, external ExternalTransfer, correlationID string) error
@@ -271,9 +275,9 @@ type Publication interface {
 	AfterCommit(ctx context.Context, id transfer.ID) error
 }
 
-// NotifyAfterCommit is the naive publication: once the transfer is
-// committed, a NOTIFY tells the workers. Dying between the two, or having
-// no worker listening, leaves the transfer in created forever (FC04).
+// NotifyAfterCommit is the naive publication: once the transfer is committed, a
+// NOTIFY tells the workers. Dying between the two, or having no worker
+// listening, leaves the transfer in created forever.
 type NotifyAfterCommit struct {
 	publisher Publisher
 }
@@ -293,8 +297,9 @@ func (n NotifyAfterCommit) AfterCommit(ctx context.Context, id transfer.ID) erro
 	return n.publisher.Publish(ctx, id)
 }
 
-// PublishAfterCommit runs the step after the commit, with FP04 before it.
-// With the outbox (D4) the step does nothing and the failpoint is harmless.
+// PublishAfterCommit runs the step after the commit, with
+// `pixout.after_save_before_publish` before it. With the outbox the step does
+// nothing and the failpoint is harmless.
 func PublishAfterCommit(ctx context.Context, publication Publication, id transfer.ID) error {
 	err := failpoint.Hit(ctx, failpoint.PixOutAfterSaveBeforePublish)
 	if err != nil {
@@ -330,7 +335,7 @@ type PartnerSubmitter interface {
 	Submit(ctx context.Context, submission PartnerSubmission) PartnerAnswer
 }
 
-// NaiveRelay sends transfers to the partner (docs/architecture.md, section 5.4).
+// NaiveRelay sends transfers to the partner.
 type NaiveRelay struct {
 	unitOfWork UnitOfWork
 	partner    PartnerSubmitter
@@ -342,9 +347,9 @@ func NewNaiveRelay(unitOfWork UnitOfWork, partner PartnerSubmitter, machine Stat
 	return NaiveRelay{unitOfWork: unitOfWork, partner: partner, machine: machine}
 }
 
-// Relay sends one transfer. Each attempt gets a new end_to_end_id, so a
-// retry the partner already processed is paid twice (FC05); a timeout is
-// taken as a failure and refunded, though the partner may have paid (FC21).
+// Relay sends one transfer. Each attempt gets a new end_to_end_id, so a retry
+// the partner already processed is paid twice; a timeout is taken as a failure
+// and refunded, though the partner may have paid.
 func (r NaiveRelay) Relay(ctx context.Context, id transfer.ID) error {
 	var external ExternalTransfer
 
@@ -389,7 +394,7 @@ const pendingOnBoot = 500
 // RelayPending is the naive recovery: when a worker starts, it sends again
 // every transfer still in created, with no lease. A transfer the dead worker
 // had already handed to the partner goes out a second time, under a new
-// end_to_end_id (FC05, PM-005).
+// end_to_end_id.
 func (r NaiveRelay) RelayPending(ctx context.Context) error {
 	var pending []transfer.ID
 
@@ -430,8 +435,9 @@ func (r NaiveRelay) claim(ctx context.Context, id transfer.ID, seen, next transf
 
 func (r NaiveRelay) record(ctx context.Context, external ExternalTransfer, answer PartnerAnswer) error {
 	if answer == PartnerAccepted {
-		// FP03: the partner took the PIX; dying here leaves it created and a
-		// later attempt sends it again under a new id (FC05).
+		// `relay.after_partner_call_before_save`: the partner took the PIX;
+		// dying here leaves it created and a later attempt sends it again under
+		// a new id.
 		err := failpoint.Hit(ctx, failpoint.RelayAfterPartnerCallBeforeSave)
 		if err != nil {
 			return err
@@ -463,8 +469,7 @@ func nextAttemptOf(endToEndID transfer.EndToEndID) int {
 	return attempt + 1
 }
 
-// postTransferStep writes one step of a transfer's saga in the ledger
-// (docs/domain.md, section 4.1).
+// postTransferStep writes one step of a transfer's saga in the ledger.
 func postTransferStep(ctx context.Context, stores Stores, external ExternalTransfer, step transfer.Posting) (ledger.TransactionID, error) {
 	kind, entries, err := stepEntries(external, step)
 	if err != nil {

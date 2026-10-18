@@ -1,7 +1,7 @@
--- Outbox and inbox (docs/domain.md, sections 13.7 and 13.8). The tables are
--- shared by every profile; the naive bank publishes with NOTIFY and applies
--- webhooks in the handler, so it never writes here. Deduplication by
--- event_id belongs to defense D5 and lives in its migration.
+-- Outbox and inbox. The tables are shared by every profile; the naive bank
+-- publishes with NOTIFY and applies webhooks in the handler, so it never writes
+-- here. Deduplication by event_id belongs to the inbox defense and lives in its
+-- migration.
 
 -- +goose Up
 CREATE TYPE outbox_status AS ENUM ('pending', 'delivered', 'dead');

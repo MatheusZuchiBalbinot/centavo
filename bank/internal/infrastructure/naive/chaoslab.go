@@ -13,22 +13,22 @@ import (
 	"centavo/bank/internal/infrastructure/postgres"
 )
 
-// NewUnitOfWork is the naive variant of D1: every statement commits on its
-// own, so a crash between the debit and the credit destroys money (FC01).
+// NewUnitOfWork is the naive variant of atomic_ledger: every statement commits
+// on its own, so a crash between the debit and the credit destroys money.
 func NewUnitOfWork(pool *pgxpool.Pool) application.UnitOfWork {
 	return postgres.NewAutocommit(pool)
 }
 
-// NewIdempotency is the naive variant of D3: keys only recorded, a resolve
-// without tombstones and no retries.
+// NewIdempotency is the naive variant of idempotency: keys only recorded, a
+// resolve without tombstones and no retries.
 func NewIdempotency(pool *pgxpool.Pool) application.IdempotencyStrategy {
 	resolver := ClientRefResolver{store: postgres.NewLedgerStore(pool)}
 
 	return application.IdempotencyStrategy{Keys: IgnoredKeys{}, Resolver: resolver, Retries: application.NoRetries()}
 }
 
-// IgnoredKeys is the naive variant of D3: the key is recorded as client_ref
-// and nothing else, so a retry after a lost answer runs again (FC02).
+// IgnoredKeys is the naive variant of idempotency: the key is recorded as
+// client_ref and nothing else, so a retry after a lost answer runs again.
 type IgnoredKeys struct{}
 
 // Run executes every request as a new operation.
@@ -66,9 +66,9 @@ func (r ClientRefResolver) Resolve(ctx context.Context, request application.Reso
 	return application.Resolution{Outcome: idempotency.OutcomeVoided}, nil
 }
 
-// NoLocker is the naive variant of D2: it reads balances without locking
-// them, so a read and the write that follows can interleave with another
-// writer's (FC41).
+// NoLocker is the naive variant of balance_locking: it reads balances without
+// locking them, so a read and the write that follows can interleave with
+// another writer's.
 type NoLocker struct{}
 
 // Lock does nothing.

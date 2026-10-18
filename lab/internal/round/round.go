@@ -1,5 +1,5 @@
 // Package round runs one round of a scenario and archives what it produced:
-// history.jsonl and round.json (docs/chaos-bot.md, sections 3 and 15.2).
+// history.jsonl and round.json.
 package round
 
 import (
@@ -82,8 +82,8 @@ type SagaOptions struct {
 // quiescencePoll is how often the cure looks at the sagas in flight.
 const quiescencePoll = time.Second
 
-// The ledger state (I8): one file at the root of the rounds, the last
-// round's, and a copy in each round directory of the state it checked against.
+// The ledger state (I8): one file at the root of the rounds, the last round's,
+// and a copy in each round directory of the state it checked against.
 const (
 	ledgerStateFile   = "state.json"
 	previousStateFile = "state_before.json"
@@ -183,7 +183,7 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	loadConfig := newLoadConfig(options, id, writer, bot)
 	load, loadErr := loadgen.Run(ctx, loadConfig)
 
-	// The cure runs even after a failed load: nothing stays broken (lock 6).
+	// The cure runs even after a failed load: nothing stays broken.
 	healErr := bot.Heal(ctx)
 	if healErr == nil {
 		healErr = cure(ctx, options, cureState{round: id, writer: writer, load: load})
@@ -224,9 +224,9 @@ type cureState struct {
 	load   loadgen.Result
 }
 
-// cure is the end of the round after heal_complete (docs/chaos-bot.md,
-// section 3): resolve every indeterminate write, wait for the sagas to
-// settle until t_h + Δ, then read every PIX out once.
+// cure is the end of the round after heal_complete: resolve every indeterminate
+// write, wait for the sagas to settle until t_h + Δ, then read every PIX out
+// once.
 func cure(ctx context.Context, options Options, state cureState) error {
 	resolveConfig := loadgen.ResolveConfig{
 		Round: state.round, Seed: options.Seed, ControlURL: options.ControlURL, History: state.writer,
@@ -257,9 +257,9 @@ func cure(ctx context.Context, options Options, state cureState) error {
 	return loadgen.ReadPixOuts(ctx, resolveConfig, ids)
 }
 
-// waitQuiescence waits until no PIX of the round is in flight and the
-// partner has no webhook left, or the liveness deadline passes; then I5
-// judges what is still open.
+// waitQuiescence waits until no PIX of the round is in flight and the partner
+// has no webhook left, or the liveness deadline passes; then I5 judges what is
+// still open.
 func waitQuiescence(ctx context.Context, options Options, round string) error {
 	deadline := time.Now().Add(options.Scenario.LivenessDeadline)
 
@@ -350,9 +350,8 @@ func exportAndCheck(ctx context.Context, options Options, result Result) (checke
 	}
 
 	// The snapshot is on disk now. The checker runs in this same cgroup and
-	// loads it again, so the memory of this copy goes back to the system
-	// first instead of waiting for the scavenger (docs/architecture.md,
-	// section 11).
+	// loads it again, so the memory of this copy goes back to the system first
+	// instead of waiting for the scavenger.
 	debug.FreeOSMemory()
 
 	verdict, err := options.Check(ctx, result.Dir)
@@ -375,8 +374,8 @@ func handOverState(statePath, roundCopy string) error {
 	return snapshot.WriteState(roundCopy, state)
 }
 
-// exportSnapshot writes the ledger snapshot of the round to its directory
-// and keeps only its I8 state, which is small, for after the checker.
+// exportSnapshot writes the ledger snapshot of the round to its directory and
+// keeps only its I8 state, which is small, for after the checker.
 func exportSnapshot(ctx context.Context, options Options, result Result) (snapshot.LedgerState, error) {
 	accounts, err := createdAccounts(result.Dir)
 	if err != nil {

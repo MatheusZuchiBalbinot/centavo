@@ -1,5 +1,4 @@
-// Package workers runs the background loops of the worker role
-// (docs/architecture.md, section 6).
+// Package workers runs the background loops of the worker role.
 package workers
 
 import (

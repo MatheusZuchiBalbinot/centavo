@@ -1,5 +1,5 @@
 // Package correlation carries the id that ties a request to its ledger rows,
-// logs and chaos events (docs/architecture.md, section 4.2).
+// logs and chaos events.
 package correlation
 
 import "context"

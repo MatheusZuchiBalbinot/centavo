@@ -22,8 +22,7 @@ type DepositResult struct {
 	CreatedAt     time.Time
 }
 
-// Deposit credits a customer and debits sys_external_cash (docs/domain.md,
-// section 7).
+// Deposit credits a customer and debits sys_external_cash.
 type Deposit struct {
 	unitOfWork UnitOfWork
 	locker     Locker
@@ -34,10 +33,10 @@ func NewDeposit(deps MoneyDependencies) Deposit {
 	return Deposit{unitOfWork: deps.UnitOfWork, locker: deps.Locker}
 }
 
-// Execute locks the customer's balance (D2), then writes the transaction and
-// its two entries in one unit of work (D1). sys_external_cash is updated by
-// increment, never locked up front: every deposit touches it, and taking it
-// last keeps it out of any lock cycle.
+// Execute locks the customer's balance (balance_locking), then writes the
+// transaction and its two entries in one unit of work (atomic_ledger).
+// sys_external_cash is updated by increment, never locked up front: every
+// deposit touches it, and taking it last keeps it out of any lock cycle.
 func (d Deposit) Execute(ctx context.Context, input DepositInput) (DepositResult, error) {
 	operationID, err := ledger.NewOperationID()
 	if err != nil {

@@ -15,7 +15,7 @@ import (
 
 const correlationHeader = "X-Correlation-Id"
 
-// requestDeadline bounds each request (docs/architecture.md, section 7).
+// requestDeadline bounds each request.
 const requestDeadline = 5 * time.Second
 
 // correlationFormat keeps log lines and stored ids free of control characters.

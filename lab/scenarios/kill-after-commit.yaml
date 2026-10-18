@@ -1,5 +1,5 @@
 name: kill-after-commit
-description: Mata a API depois de aplicar a escrita e antes de responder; o cliente polido repete com a mesma chave (FP02, FC02, PM-003).
+description: Mata a API depois de aplicar a escrita e antes de responder; o cliente polido repete com a mesma chave (`api.after_commit_before_response`).
 duration: 10m
 heal_timeout: 2m
 workload:

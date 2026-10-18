@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Safety lock 1 (docs/chaos-bot.md, section 16): chaos code exists only in
-# chaoslab builds. Production binaries must not contain the chaoslab sentinel;
-# chaoslab binaries must, which proves the check can see it at all.
+# the safety rule that chaos code exists only in chaoslab builds: chaos code
+# exists only in chaoslab builds. Production binaries must not contain the
+# chaoslab sentinel; chaoslab binaries must, which proves the check can see it
+# at all.
 set -euo pipefail
 
 readonly SENTINEL="centavo:chaoslab-build"

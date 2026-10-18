@@ -91,7 +91,7 @@ func (s LedgerStore) LockExternalTransfer(ctx context.Context, id transfer.ID) (
 	return scanExternalTransfer(row)
 }
 
-// advanceStatusSQL is the compare-and-set of docs/domain.md, section 13.5.
+// advanceStatusSQL is the compare-and-set.
 const advanceStatusSQL = `
 UPDATE external_transfers
 SET status = $2::external_transfer_status,
@@ -136,8 +136,8 @@ func (s LedgerStore) DeferOutbox(ctx context.Context, claim application.OutboxCl
 	return tag.RowsAffected() == 1, nil
 }
 
-// insertInboxSQL is defense D5's intake: the unique (source, event_id) of the
-// inbox migration turns a redelivery into nothing.
+// insertInboxSQL is the inbox defense's intake: the unique (source, event_id)
+// of the inbox migration turns a redelivery into nothing.
 const insertInboxSQL = `
 INSERT INTO inbox_events (event_id, event_type, end_to_end_id, payload, correlation_id)
 VALUES ($1, $2, $3, $4, $5)

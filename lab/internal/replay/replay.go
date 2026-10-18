@@ -1,8 +1,7 @@
-// Package replay turns a round's history into what the panel draws
-// (docs/architecture.md, section 13): operations and latency per second,
-// the nemesis timeline and the chaos counters. The live panel feeds it the
-// lines of a history still being written; `lab export-replay` feeds it a
-// whole round, for the replay page.
+// Package replay turns a round's history into what the panel draws: operations
+// and latency per second, the nemesis timeline and the chaos counters. The live
+// panel feeds it the lines of a history still being written; `lab
+// export-replay` feeds it a whole round, for the replay page.
 package replay
 
 import (

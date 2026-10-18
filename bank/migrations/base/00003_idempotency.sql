@@ -1,8 +1,8 @@
--- Idempotency keys (docs/domain.md, section 13.4). The table is shared by
--- every profile; the naive bank never writes to it. The trigger that refuses
--- to commit a pending key belongs to defense D3 and lives in its migration.
--- response_body is bytea, not jsonb: a retry must get the first answer byte
--- for byte, and jsonb would reorder its keys.
+-- Idempotency keys. The table is shared by every profile; the naive bank never
+-- writes to it. The trigger that refuses to commit a pending key belongs to the
+-- idempotency defense and lives in its migration. response_body is bytea, not
+-- jsonb: a retry must get the first answer byte for byte, and jsonb would
+-- reorder its keys.
 
 -- +goose Up
 CREATE TYPE idempotency_status AS ENUM ('pending', 'completed', 'voided');

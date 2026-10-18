@@ -174,7 +174,9 @@ func TestLedger_AnySequenceOfOperationsKeepsTheInvariants(t *testing.T) {
 	})
 }
 
-// assertLedgerInvariants is I1a, I1b and I4 over the in-memory ledger.
+// assertLedgerInvariants is every transaction sums to zero, each account's
+// entries chain and customer balances never go negative over the in-memory
+// ledger.
 func assertLedgerInvariants(t *rapid.T, bank *memoryLedger) {
 	sums := map[ledger.TransactionID]money.Cents{}
 	counts := map[ledger.TransactionID]int{}

@@ -1,5 +1,5 @@
 name: network-partition
-description: Partições curtas em todos os links, dos três tipos (recusa, buraco negro e só de ida), uma de cada vez (FC14, FC15, FC16, PM-008, PM-012, PM-014).
+description: Partições curtas em todos os links, dos três tipos (recusa, buraco negro e só de ida), uma de cada vez.
 duration: 20m
 workload:
   profile: balanced

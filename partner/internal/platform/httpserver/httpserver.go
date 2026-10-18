@@ -16,7 +16,7 @@ const (
 	shutdownTimeout   = 10 * time.Second
 )
 
-// New builds a server with the timeouts of docs/architecture.md, section 7.
+// New builds a server with the timeouts.
 func New(addr string, handler http.Handler) *http.Server {
 	return &http.Server{
 		Addr: addr, Handler: handler, ReadHeaderTimeout: readHeaderTimeout, WriteTimeout: writeTimeout,

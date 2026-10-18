@@ -1,6 +1,5 @@
-// Package dashboard serves the lab panel (docs/architecture.md, section 13).
-// This is the minimal invariants page of phase F2: the live auditor's checks
-// and the verdict of the last round.
+// Package dashboard serves the lab panel. This is the minimal invariants page:
+// the live auditor's checks and the verdict of the last round.
 package dashboard
 
 import (

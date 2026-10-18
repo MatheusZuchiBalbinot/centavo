@@ -22,7 +22,7 @@ import (
 
 const depositEndpoint = "/v1/deposits"
 
-// writes is the robust D3 stack over the test database.
+// writes is the robust idempotency stack over the test database.
 type writes struct {
 	bank     bank
 	writer   application.Writer
@@ -67,9 +67,9 @@ func newKey() idempotency.Key {
 	return idempotency.Key("test-" + uuid.NewString())
 }
 
-// TestWrite_RetryAfterCrashPostCommit_ReturnsStoredResponse is the regression
-// test of PM-003: the retry after a lost answer gets the stored answer, byte
-// for byte, and the ledger has one application.
+// TestWrite_RetryAfterCrashPostCommit_ReturnsStoredResponse is a regression
+// test: the retry after a lost answer gets the stored answer, byte for byte,
+// and the ledger has one application.
 func TestWrite_RetryAfterCrashPostCommit_ReturnsStoredResponse(t *testing.T) {
 	w := newWrites(t)
 	account := w.bank.newCustomer(t)
@@ -111,8 +111,8 @@ func TestWrite_SameKeyWithAnotherBodyIsRefused(t *testing.T) {
 	}
 }
 
-// TestWrite_ConcurrentRequestsWithTheSameKey_ApplyOnce is the duplicator
-// client against D3: the primary key serializes the copies.
+// TestWrite_ConcurrentRequestsWithTheSameKey_ApplyOnce is the duplicator client
+// against idempotency: the primary key serializes the copies.
 func TestWrite_ConcurrentRequestsWithTheSameKey_ApplyOnce(t *testing.T) {
 	w := newWrites(t)
 	account := w.bank.newCustomer(t)
@@ -195,8 +195,8 @@ func TestResolve_VoidsUnknownKeysForGood(t *testing.T) {
 	}
 }
 
-// TestResolve_KeyTakenByAnotherRequest_IsSuperseded guards FC43 under
-// resolve: a buggy client reused an idle key with another body, which
+// TestResolve_KeyTakenByAnotherRequest_IsSuperseded guards a known failure
+// under resolve: a buggy client reused an idle key with another body, which
 // applied. Resolving the first request must not answer "applied" for it.
 func TestResolve_KeyTakenByAnotherRequest_IsSuperseded(t *testing.T) {
 	w := newWrites(t)
@@ -291,10 +291,10 @@ func (w writes) keyVersion(t *testing.T, key idempotency.Key) string {
 	return xmin
 }
 
-// TestReplay_WritesBeforeAnswering is PM-016's replay hole: an answer read
-// from a commit whose wait for the synchronous standby was cancelled may not
-// be on the replica. The replay and resolve both write the key, so their own
-// commit waits for the standby before the answer goes out.
+// TestReplay_WritesBeforeAnswering is a regression test: an answer read from a
+// commit whose wait for the synchronous standby was cancelled may not be on the
+// replica. The replay and resolve both write the key, so their own commit waits
+// for the standby before the answer goes out.
 func TestReplay_WritesBeforeAnswering(t *testing.T) {
 	w := newWrites(t)
 	account := w.bank.newCustomer(t)

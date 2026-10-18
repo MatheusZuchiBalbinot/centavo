@@ -1,6 +1,6 @@
-# Local lab: `./entrypoint.sh` (or `make up`) generates .env and starts everything.
-# Only the panel is published, and only on localhost; chaos and admin ports stay
-# on the internal network (docs/chaos-bot.md, section 16, lock 3).
+# Local lab: `./entrypoint.sh` (or `make up`) generates .env and starts
+# everything. Only the panel is published, and only on localhost; chaos and
+# admin ports stay on the internal network.
 name: centavo
 
 x-chaos-target: &chaos-target
@@ -53,9 +53,9 @@ services:
       retries: 12
     mem_limit: 288m
 
-  # Replica profile (docs/chaos-bot.md, section 10): a hot standby cloned
-  # from the primary on first start, streaming through Toxiproxy's
-  # replication link, where the bot adds lag. A failover promotes it.
+  # Replica profile: a hot standby cloned from the primary on first start,
+  # streaming through Toxiproxy's replication link, where the bot adds lag. A
+  # failover promotes it.
   postgres-replica:
     <<: *chaos-target
     profiles: [replica]
@@ -191,7 +191,7 @@ services:
       PARTNER_WEBHOOK_SECRET: ${PARTNER_WEBHOOK_SECRET:?run ./entrypoint.sh to generate .env}
       GOMEMLIMIT: 56MiB
     volumes:
-      # The truth lives apart from the bank's PostgreSQL (ADR-014).
+      # The truth lives apart from the bank's PostgreSQL.
       - partner-data:/data
     healthcheck:
       test: ["CMD", "/app/partner", "healthcheck"]
@@ -215,10 +215,10 @@ services:
       ARTIFACT_STORE: file:///data/rounds
       # The auditor and the exporter read the ledger read-only through
       # auditor_pg, a link the bot never puts toxics on: it only follows the
-      # database when a failover moves it (docs/architecture.md, section 4.1).
+      # database when a failover moves it.
       AUDITOR_DATABASE_URL: postgres://bank_auditor:${BANK_AUDITOR_PASSWORD}@toxiproxy:15435/bank_robust?sslmode=disable
       CENTAVO_CHAOS_TOKEN: ${CENTAVO_CHAOS_TOKEN:?run ./entrypoint.sh to generate .env}
-      # The bot reaches Docker only through docker-proxy (lock 5).
+      # The bot reaches Docker only through docker-proxy.
       DOCKER_HOST: tcp://docker-proxy:2375
       CENTAVO_COMPOSE_PROJECT: ${COMPOSE_PROJECT_NAME:-centavo}
       PARTNER_ADMIN_URL: http://partner:9092
@@ -235,13 +235,13 @@ services:
       retries: 12
     restart: unless-stopped
     # 160 MiB for the lab plus 256 MiB for the checker, which runs as its
-    # subprocess between rounds, in this same cgroup (docs/architecture.md, section 11).
+    # subprocess between rounds, in this same cgroup.
     mem_limit: 416m
 
 networks:
   default:
     driver_opts:
-      # Fixed name, used by the FIS latency experiment (docs/infrastructure.md, section 8).
+      # Fixed name, used by the FIS latency experiment.
       com.docker.network.bridge.name: br-centavo
 
 volumes:

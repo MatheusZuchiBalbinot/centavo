@@ -29,7 +29,7 @@ type IncomingView struct {
 }
 
 // Export is the whole truth of one participant, double processing included:
-// what the checker compares the bank against (docs/invariants-and-checker.md, section 2).
+// what the checker compares the bank against.
 type Export struct {
 	ParticipantID string           `json:"participant_id"`
 	Transfers     []TransferView   `json:"transfers"`

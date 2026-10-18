@@ -1,8 +1,8 @@
 'use strict';
 
-// The panel of docs/architecture.md, section 13. Three modes on one page:
-// live (the default), ?replay=<file> plays an exported round, and
-// ?compare=<round>,<round> puts two finished rounds side by side.
+// The panel. Three modes on one page: live (the default), ?replay=<file> plays
+// an exported round, and ?compare=<round>,<round> puts two finished rounds side
+// by side.
 
 const REFRESH_MS = 2000;
 const SVG = 'http://www.w3.org/2000/svg';

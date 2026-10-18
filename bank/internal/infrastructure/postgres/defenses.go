@@ -14,8 +14,7 @@ import (
 	"github.com/pressly/goose/v3/lock"
 )
 
-// defenseVersionTablePrefix gives each defense its own goose version table
-// (docs/architecture.md, section 8.2, step 5).
+// defenseVersionTablePrefix gives each defense its own goose version table.
 const defenseVersionTablePrefix = "goose_defense_"
 
 // ErrSchemaProfileMismatch means the process and the database disagree on
@@ -86,8 +85,8 @@ func reconcile(ctx context.Context, provider *goose.Provider, isEnabled bool) er
 const appliedDefenseSQL = `SELECT to_regclass($1) IS NOT NULL`
 
 // CheckDefenseSchema refuses a process whose profile differs from the
-// database's: with D2 off in the database but on in the process, for
-// instance, a lost update would still be caught by the missing constraint
+// database's: with balance_locking off in the database but on in the process,
+// for instance, a lost update would still be caught by the missing constraint
 // and the round would prove nothing.
 func CheckDefenseSchema(ctx context.Context, pool *pgxpool.Pool, defenses []DefenseMigrations) error {
 	for _, defense := range defenses {

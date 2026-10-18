@@ -17,7 +17,7 @@ import (
 // TopicPixOutSubmit is the outbox topic of a PIX out to send.
 const TopicPixOutSubmit = "pix_out.submit"
 
-// Outbox timings of docs/architecture.md, section 6.
+// Outbox timings.
 const (
 	OutboxLeaseTTL   = 30 * time.Second
 	OutboxPoll       = 500 * time.Millisecond
@@ -57,9 +57,8 @@ type OutboxStore interface {
 	DeferOutbox(ctx context.Context, claim OutboxClaim, delay time.Duration, reason string) (bool, error)
 }
 
-// OutboxPublication is defense D4 (docs/domain.md, section 13.7): the
-// message to send is written in the same commit as the transfer, so it can
-// never be lost between the two (FC04).
+// OutboxPublication is the outbox defense: the message to send is written in
+// the same commit as the transfer, so it can never be lost between the two.
 type OutboxPublication struct{}
 
 type pixOutPayload struct {
@@ -83,13 +82,15 @@ func (OutboxPublication) AfterCommit(context.Context, transfer.ID) error {
 	return nil
 }
 
-// EndToEndPolicy is defense D6's strategy: which end_to_end_id a send uses.
+// EndToEndPolicy is the partner_idempotency defense's strategy: which
+// end_to_end_id a send uses.
 type EndToEndPolicy interface {
 	Next(external ExternalTransfer) transfer.EndToEndID
 }
 
-// FixedEndToEnd is D6: the id derived at creation, on every send, so the
-// partner sees a retry as the same PIX and never pays twice (BR11).
+// FixedEndToEnd is the partner_idempotency defense: the id derived at creation,
+// on every send, so the partner sees a retry as the same PIX and never pays
+// twice (the end_to_end_id is fixed at creation).
 type FixedEndToEnd struct{}
 
 // Next returns the transfer's own id.
@@ -105,8 +106,8 @@ func (NewEndToEndPerAttempt) Next(external ExternalTransfer) transfer.EndToEndID
 	return external.ID.AttemptEndToEndID(nextAttemptOf(external.EndToEndID))
 }
 
-// OutboxRelay delivers outbox messages to the partner (docs/architecture.md,
-// section 5.3), with a lease per message and the token as fencing.
+// OutboxRelay delivers outbox messages to the partner, with a lease per message
+// and the token as fencing.
 type OutboxRelay struct {
 	unitOfWork UnitOfWork
 	partner    PartnerSubmitter
@@ -141,8 +142,8 @@ func NewOutboxRelay(config OutboxRelayConfig) OutboxRelay {
 	}
 }
 
-// Run polls the outbox until ctx ends. Polling is the source of truth; a
-// NOTIFY would only make it sooner (ADR-003).
+// Run polls the outbox until ctx ends. Polling is the source of truth; a NOTIFY
+// would only make it sooner.
 func (r OutboxRelay) Run(ctx context.Context) {
 	ticker := time.NewTicker(OutboxPoll)
 	defer ticker.Stop()
@@ -214,8 +215,9 @@ func (r OutboxRelay) deliver(ctx context.Context, claim OutboxClaim) error {
 	}
 	answer := r.partner.Submit(ctx, submission)
 
-	// FP03: with the outbox the message stays pending; the lease expires and
-	// another relay sends again, under the same end_to_end_id (D6).
+	// `relay.after_partner_call_before_save`: with the outbox the message stays
+	// pending; the lease expires and another relay sends again, under the same
+	// end_to_end_id (partner_idempotency).
 	err = failpoint.Hit(ctx, failpoint.RelayAfterPartnerCallBeforeSave)
 	if err != nil {
 		return err
@@ -232,8 +234,8 @@ func (r OutboxRelay) deliver(ctx context.Context, claim OutboxClaim) error {
 	return r.finish(ctx, claim, &command)
 }
 
-// useEndToEnd switches the transfer to the id this send uses; with D6 it
-// never changes.
+// useEndToEnd switches the transfer to the id this send uses; with
+// partner_idempotency it never changes.
 func (r OutboxRelay) useEndToEnd(ctx context.Context, external ExternalTransfer) (ExternalTransfer, error) {
 	next := r.endToEnd.Next(external)
 	if next == external.EndToEndID {
@@ -288,7 +290,7 @@ func (r OutboxRelay) load(ctx context.Context, id transfer.ID) (ExternalTransfer
 
 // answerCommand is what the partner's answer does to a transfer in created.
 // Only the naive relay gets here with a doubtful answer, and takes it for a
-// failure (FC21).
+// failure.
 func answerCommand(external ExternalTransfer, answer PartnerAnswer) TransitionCommand {
 	command := TransitionCommand{TransferID: external.ID, From: transfer.StatusCreated, Cause: causeRelay}
 

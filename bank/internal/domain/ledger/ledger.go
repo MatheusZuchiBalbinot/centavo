@@ -1,5 +1,5 @@
-// Package ledger holds accounts, ledger transactions and entries, and the
-// rules that decide whether money may move (docs/domain.md, sections 3 and 4).
+// Package ledger holds accounts, ledger transactions and entries, and the rules
+// that decide whether money may move.
 package ledger
 
 import (
@@ -53,8 +53,8 @@ const (
 	TransactionKindPixOutRefund     TransactionKind = "pix_out_refund"
 	TransactionKindPixOutReturn     TransactionKind = "pix_out_return"
 	TransactionKindPixInCredit      TransactionKind = "pix_in_credit"
-	// TransactionKindAdjustment moves an explained divergence with the
-	// partner to suspense (docs/domain.md, section 10).
+	// TransactionKindAdjustment moves an explained divergence with the partner
+	// to suspense.
 	TransactionKindAdjustment TransactionKind = "reconciliation_adjustment"
 )
 
@@ -146,7 +146,7 @@ func NewOperationID() (OperationID, error) {
 }
 
 // ExternalCashAccountID is sys_external_cash, which mirrors money that came in
-// by direct deposit (docs/domain.md, section 3.2).
+// by direct deposit.
 func ExternalCashAccountID() AccountID {
 	return externalCashAccountID
 }
@@ -196,7 +196,7 @@ func ParseHolderName(raw string) (string, error) {
 	return name, nil
 }
 
-// CheckTransferAccounts enforces BR05: two distinct accounts.
+// CheckTransferAccounts refuses an internal transfer from an account to itself.
 func CheckTransferAccounts(from, to AccountID) error {
 	if from == to {
 		return ErrSameAccount
@@ -205,7 +205,8 @@ func CheckTransferAccounts(from, to AccountID) error {
 	return nil
 }
 
-// Debit returns the position after paying amount, refusing to overdraw (BR01).
+// Debit returns the position after paying amount, refusing to overdraw (a
+// customer balance never goes below zero).
 func (p Position) Debit(amount money.Amount) (Position, error) {
 	if !p.Balance.Covers(amount) {
 		return Position{}, ErrInsufficientFunds

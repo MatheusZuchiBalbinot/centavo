@@ -15,7 +15,7 @@ import (
 	"centavo/bank/internal/platform/failpoint"
 )
 
-// Reconciler timings (docs/architecture.md, section 6).
+// Reconciler timings.
 const (
 	ReconcileInterval   = time.Minute
 	ReconcilerLeaseTTL  = 30 * time.Second
@@ -48,7 +48,7 @@ type ReconciliationItem struct {
 // ReconciliationStore keeps the cursor, the runs and the items.
 type ReconciliationStore interface {
 	ReadCursor(ctx context.Context) (int64, error)
-	// AdvanceCursor is the compare-and-set of docs/domain.md, section 13.10.
+	// AdvanceCursor is the compare-and-set.
 	AdvanceCursor(ctx context.Context, from, to int64) (bool, error)
 	// SaveCursor is the naive write, with no check of where it was.
 	SaveCursor(ctx context.Context, to int64) error
@@ -74,14 +74,13 @@ type statementBatch struct {
 	entries []StatementEntry
 }
 
-// BatchPolicy is defense D10's strategy: how a batch is booked.
+// BatchPolicy is the reconciliation defense's strategy: how a batch is booked.
 type BatchPolicy interface {
 	Book(ctx context.Context, r Reconciler, batch statementBatch) error
 }
 
-// Reconciler is the reconciliation of docs/architecture.md, section 5.8: it
-// reads the partner's statement from a cursor and books every entry against
-// the ledger.
+// Reconciler is the reconciliation: it reads the partner's statement from a
+// cursor and books every entry against the ledger.
 type Reconciler struct {
 	unitOfWork UnitOfWork
 	lease      LeasePolicy
@@ -139,14 +138,16 @@ func (r Reconciler) RunOnce(ctx context.Context) error {
 			return err
 		}
 
-		// FP07: the batch is read and nothing is booked yet.
+		// `recon.after_compute_before_apply`: the batch is read and nothing is
+		// booked yet.
 		err = failpoint.Hit(batchFailpointContext(ctx, batch), failpoint.ReconAfterComputeBeforeApply)
 		if err != nil {
 			return err
 		}
 
-		// FP10: the lease was checked when the batch was read; a worker
-		// paused here past the TTL comes back as a zombie.
+		// `lease.after_check_before_write`: the lease was checked when the
+		// batch was read; a worker paused here past the TTL comes back as a
+		// zombie.
 		err = failpoint.Hit(batchFailpointContext(ctx, batch), failpoint.LeaseAfterCheckBeforeWrite)
 		if err != nil {
 			return err
@@ -329,7 +330,8 @@ func incomingFacts(ctx context.Context, stores Stores, entry StatementEntry, fac
 	accountID, err := ledger.ParseAccountID(entry.AccountID)
 	if err != nil {
 		// A destination the bank cannot even parse is an account it does not
-		// have: the entry goes to suspense like any unknown destination (BR15).
+		// have: the entry goes to suspense like any unknown destination (an
+		// unexplained divergence goes to suspense, never to a customer).
 		return facts, nil //nolint:nilerr // an unparsable account is an unknown one, not a failure
 	}
 
@@ -398,10 +400,9 @@ func entryCorrelation(entry StatementEntry) string {
 	return fmt.Sprintf("recon-%d", entry.Seq)
 }
 
-// AtomicBatches is D10 (docs/architecture.md, section 5.8): the run, its
-// items, their actions and the cursor fall in one commit, behind the lease.
-// A death in the middle undoes the batch, and the next run starts again
-// from the cursor.
+// AtomicBatches is the reconciliation defense: the run, its items, their
+// actions and the cursor fall in one commit, behind the lease. A death in the
+// middle undoes the batch, and the next run starts again from the cursor.
 type AtomicBatches struct{}
 
 // Book books the whole batch or nothing.
@@ -432,7 +433,7 @@ func (AtomicBatches) Book(ctx context.Context, r Reconciler, batch statementBatc
 				return err
 			}
 
-			// FP08: between two entries of the batch.
+			// `recon.mid_apply`: between two entries of the batch.
 			err = failpoint.Hit(entryFailpointContext(ctx, entry), failpoint.ReconMidApply)
 			if err != nil {
 				return err
@@ -454,8 +455,7 @@ func (AtomicBatches) Book(ctx context.Context, r Reconciler, batch statementBatc
 
 // EntryByEntry is the naive variant: each entry commits on its own and the
 // cursor is saved after the batch. A death in the middle leaves the first
-// entries booked and the cursor behind them, so the next run books them
-// again (FC09, PM-011).
+// entries booked and the cursor behind them, so the next run books them again.
 type EntryByEntry struct{}
 
 // Book books the batch an entry at a time.

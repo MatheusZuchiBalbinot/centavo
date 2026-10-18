@@ -12,8 +12,7 @@ import (
 	"time"
 )
 
-// outcomeKind classifies what one HTTP attempt showed the client
-// (docs/invariants-and-checker.md, section 5).
+// outcomeKind classifies what one HTTP attempt showed the client.
 type outcomeKind string
 
 const (
@@ -44,9 +43,8 @@ const (
 // maxResponseBytes bounds what the client reads from one response.
 const maxResponseBytes = 1 << 20
 
-// definitiveCodes are the 4xx codes after which nothing was applied
-// (docs/domain.md, section 12). The lab keeps its own list: it never imports
-// the bank.
+// definitiveCodes are the 4xx codes after which nothing was applied. The lab
+// keeps its own list: it never imports the bank.
 var definitiveCodes = map[string]bool{
 	"VALIDATION_FAILED": true, "IDEMPOTENCY_KEY_MISSING": true, "ACCOUNT_NOT_FOUND": true, "TRANSFER_NOT_FOUND": true,
 	"SAME_ACCOUNT_TRANSFER": true, "INSUFFICIENT_FUNDS": true, "AMOUNT_ABOVE_LIMIT": true, "IDEMPOTENCY_KEY_MISMATCH": true, "OPERATION_VOIDED": true,

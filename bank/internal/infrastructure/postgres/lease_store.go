@@ -13,8 +13,8 @@ import (
 	"centavo/bank/internal/domain/transfer"
 )
 
-// acquireLeaseSQL is the acquisition of docs/domain.md, section 13.9: the
-// token only grows when the lease changes hands or had expired.
+// acquireLeaseSQL is the acquisition: the token only grows when the lease
+// changes hands or had expired.
 const acquireLeaseSQL = `
 UPDATE worker_leases
 SET token = CASE WHEN holder = $2 AND expires_at > now() THEN token ELSE token + 1 END,

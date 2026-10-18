@@ -1,5 +1,5 @@
 // Package seed derives the independent random streams of a round from one
-// 64-bit seed (docs/chaos-bot.md, section 15.1).
+// 64-bit seed.
 package seed
 
 import (

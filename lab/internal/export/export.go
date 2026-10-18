@@ -232,8 +232,8 @@ func scanEntry(row pgx.CollectableRow) (snapshot.Entry, error) {
 }
 
 // inFlightSQL also counts the partner events the bank took in and has not
-// applied yet: with the inbox (D5) a webhook is acknowledged before its
-// effect, and a snapshot taken in between would miss it.
+// applied yet: with the inbox a webhook is acknowledged before its effect, and
+// a snapshot taken in between would miss it.
 const inFlightSQL = `
 SELECT (SELECT count(*) FROM external_transfers
         WHERE status IN ('created', 'sent') AND id IN (` + roundTransfersSQL + `))

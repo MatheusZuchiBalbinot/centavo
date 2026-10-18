@@ -11,7 +11,7 @@ import (
 	"centavo/bank/internal/platform/failpoint"
 )
 
-// Sweeper timings (docs/architecture.md, sections 5.7 and 6).
+// Sweeper timings.
 const (
 	SweeperInterval = 10 * time.Second
 	SweeperLeaseTTL = 30 * time.Second
@@ -34,7 +34,7 @@ type StuckTransfer struct {
 	ClientRef  string
 }
 
-// LeaseStore keeps the leases of the singleton loops (docs/domain.md, section 13.9).
+// LeaseStore keeps the leases of the singleton loops.
 type LeaseStore interface {
 	// AcquireLease takes or renews the lease; the token grows when the lease
 	// changes hands. false means another holder has it.
@@ -48,10 +48,10 @@ type LeaseStore interface {
 	ListStuck(ctx context.Context, olderThan time.Duration, limit int) ([]StuckTransfer, error)
 }
 
-// Sweeper is defense D8 (docs/architecture.md, section 5.7): it asks the
-// partner about transfers stuck in created or sent, because their webhook
-// never came or was lost, and walks them to the partner's answer. It never
-// fails a transfer on its own: only the partner's refusal does that.
+// Sweeper is the recovery defense: it asks the partner about transfers stuck in
+// created or sent, because their webhook never came or was lost, and walks them
+// to the partner's answer. It never fails a transfer on its own: only the
+// partner's refusal does that.
 type Sweeper struct {
 	unitOfWork UnitOfWork
 	lease      LeasePolicy
@@ -146,8 +146,9 @@ func (s Sweeper) sweep(ctx context.Context, candidate StuckTransfer, token int64
 		return err
 	}
 
-	// FP11: the status is in hand and nothing is written yet; a sweeper
-	// that pauses here must not write with a lease it lost.
+	// `sweeper.after_status_before_transition`: the status is in hand and
+	// nothing is written yet; a sweeper that pauses here must not write with a
+	// lease it lost.
 	err = failpoint.Hit(ctx, failpoint.SweeperAfterStatusBeforeTransition)
 	if err != nil {
 		return err

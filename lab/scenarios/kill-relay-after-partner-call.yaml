@@ -1,5 +1,5 @@
 name: kill-relay-after-partner-call
-description: O relay morre logo depois de o parceiro aceitar o PIX e antes de gravar a resposta (FP03, FC05, PM-005).
+description: O relay morre logo depois de o parceiro aceitar o PIX e antes de gravar a resposta (`relay.after_partner_call_before_save`).
 duration: 15m
 workload:
   profile: payments-heavy

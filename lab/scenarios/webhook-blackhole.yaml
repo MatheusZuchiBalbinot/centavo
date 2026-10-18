@@ -1,5 +1,5 @@
 name: webhook-blackhole
-description: O parceiro processa tudo e nenhum webhook chega ao banco (FC17, FC27, PM-009).
+description: O parceiro processa tudo e nenhum webhook chega ao banco.
 duration: 20m
 workload:
   profile: balanced

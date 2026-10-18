@@ -42,7 +42,7 @@ func Setup(config Config) error {
 	return failpoint.ArmFromSpec(config.FailpointSpec, config.Seed, time.Now())
 }
 
-// Server is the chaos control server (docs/chaos-bot.md, section 5.3).
+// Server is the chaos control server.
 func Server(config Config) *http.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("PUT /chaos/failpoints/{name}", armFailpoint)
@@ -54,7 +54,8 @@ func Server(config Config) *http.Server {
 	return httpserver.New(Addr, requireToken(config.Token, mux))
 }
 
-// requireToken is lock 4: every control call carries the secret.
+// requireToken is the safety rule that every chaos call carries the chaos
+// token: every control call carries the secret.
 func requireToken(token string, next http.Handler) http.Handler {
 	expected := []byte(token)
 
@@ -113,7 +114,7 @@ type skewRequest struct {
 	TTL    string `json:"ttl"`
 }
 
-// setClock skews this process's wall clock (docs/chaos-bot.md, section 6).
+// setClock skews this process's wall clock.
 func setClock(w http.ResponseWriter, r *http.Request) {
 	var request skewRequest
 
@@ -158,10 +159,9 @@ func writeJSON(w http.ResponseWriter, body any) {
 	_ = json.NewEncoder(w).Encode(body)
 }
 
-// KillMain finds the main process of the container (the binary started by
-// tini, not this chaos-kill invocation) and sends it SIGKILL. The images have
-// no shell and no kill command, so the binary kills itself this way
-// (docs/chaos-bot.md, section 7).
+// KillMain finds the main process of the container (the binary started by tini,
+// not this chaos-kill invocation) and sends it SIGKILL. The images have no
+// shell and no kill command, so the binary kills itself this way.
 func KillMain(binary string) error {
 	entries, err := os.ReadDir(procDir)
 	if err != nil {

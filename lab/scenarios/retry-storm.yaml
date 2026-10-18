@@ -1,5 +1,5 @@
 name: retry-storm
-description: Clientes agressivos, duplicadores e bugados ao mesmo tempo (FC40, FC42, PM-003).
+description: Clientes agressivos, duplicadores e bugados ao mesmo tempo.
 duration: 10m
 heal_timeout: 2m
 workload:

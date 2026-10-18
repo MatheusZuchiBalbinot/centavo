@@ -1,5 +1,5 @@
 name: partner-returns
-description: O parceiro devolve PIX já liquidados, e parte dos webhooks se perde; a devolução tem de chegar ao ledger pelo webhook, pelo sweeper ou pela conciliação (FC23, PM-007, PM-010).
+description: O parceiro devolve PIX já liquidados, e parte dos webhooks se perde; a devolução tem de chegar ao ledger pelo webhook, pelo sweeper ou pela conciliação.
 duration: 15m
 workload:
   profile: payments-heavy

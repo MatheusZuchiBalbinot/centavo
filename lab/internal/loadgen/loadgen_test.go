@@ -358,7 +358,7 @@ func readHistory(t *testing.T, path string) []history.Record {
 type fakeBank struct {
 	failFirstAttempt    bool
 	alwaysFailTransfers bool
-	// enforcesKeys refuses a key reused with another body, like D3.
+	// enforcesKeys refuses a key reused with another body, like idempotency.
 	enforcesKeys bool
 
 	mu           sync.Mutex

@@ -25,7 +25,7 @@ import (
 const (
 	pixOutEndpoint  = "/v1/external-transfers"
 	signatureHeader = "X-Partner-Signature"
-	// signatureTolerance bounds how old a signed webhook may be (docs/architecture.md, section 4.2).
+	// signatureTolerance bounds how old a signed webhook may be.
 	signatureTolerance = 5 * time.Minute
 )
 
@@ -249,8 +249,8 @@ func (a apiHandlers) webhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// FP05: the event is taken in and the partner not yet answered; it will
-	// deliver the event again (FC06).
+	// `webhook.after_receive_before_ack`: the event is taken in and the partner
+	// not yet answered; it will deliver the event again.
 	err = failpoint.Hit(r.Context(), failpoint.WebhookAfterReceiveBeforeAck)
 	if err != nil {
 		writeError(w, r, a.logger, err)

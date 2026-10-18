@@ -8,12 +8,12 @@ import (
 	"regexp"
 )
 
-// Key is the client-generated identity of one logical operation; retries
-// reuse it (BR06).
+// Key is the client-generated identity of one logical operation; retries reuse
+// it (every client write carries an Idempotency-Key).
 type Key string
 
-// keyFormat matches the idempotency_key_format constraint of docs/domain.md,
-// section 13.4. Short keys or odd characters usually mean a buggy client.
+// keyFormat matches the idempotency_key_format constraint. Short keys or odd
+// characters usually mean a buggy client.
 var keyFormat = regexp.MustCompile(`^[A-Za-z0-9._:-]{8,128}$`)
 
 // Errors of reading an Idempotency-Key.
@@ -35,7 +35,7 @@ func ParseKey(raw string) (Key, error) {
 	return Key(raw), nil
 }
 
-// Status is where a key stands (docs/domain.md, section 13.4).
+// Status is where a key stands.
 type Status string
 
 // The states of a stored key.

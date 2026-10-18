@@ -9,9 +9,9 @@ import (
 	"centavo/bank/internal/application"
 )
 
-// UnitOfWork runs a use case in one READ COMMITTED transaction (defense D1,
-// docs/architecture.md, section 3): every statement commits together or none
-// does, and the deferred zero-sum triggers run at the commit.
+// UnitOfWork runs a use case in one READ COMMITTED transaction (the
+// atomic_ledger defense): every statement commits together or none does, and
+// the deferred zero-sum triggers run at the commit.
 type UnitOfWork struct {
 	pool *pgxpool.Pool
 }

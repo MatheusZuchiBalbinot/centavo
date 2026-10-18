@@ -1,6 +1,5 @@
 // Package history writes and validates history.jsonl, the record of what
-// clients asked and what they got back (docs/invariants-and-checker.md,
-// section 4).
+// clients asked and what they got back.
 package history
 
 import "encoding/json"

@@ -8,14 +8,24 @@ import (
 	"centavo/lab/internal/snapshot"
 )
 
-// Invariants of the PIX saga (docs/invariants-and-checker.md, section 6).
+// Invariants of the PIX saga.
 const (
+	// InvariantI5 is liveness: after the cure and the liveness deadline, every
+	// transfer is final and sys_pix_out_transit is back to zero.
 	InvariantI5 Invariant = "I5"
+	// InvariantI6 is agreement: the ledger settled, returned and credited
+	// exactly what the partner's own record says it did.
 	InvariantI6 Invariant = "I6"
+	// InvariantI7 is the state machine: every transfer starts at created, takes
+	// only allowed steps, posts once per step and ends where the partner says.
 	InvariantI7 Invariant = "I7"
 )
 
-// Rules of the PIX invariants.
+// Rules of the PIX invariants. I1c matches each system account of a round with
+// the outside world: what left sys_external_cash is what clients deposited
+// (term D), the ledger's mirror of the partner reserve moved as much as the
+// partner says (term R), and suspense holds what the partner owes for double
+// processing (term S).
 const (
 	RuleI1cPartnerReserve Rule = "I1c.term_r"
 	RuleI1cDoubleProcess  Rule = "I1c.term_s"
@@ -52,7 +62,7 @@ const (
 )
 
 // allowedTransitions is the checker's own copy of the state machine, written
-// apart from the bank's domain and from its database table (ADR-007).
+// apart from the bank's domain and from its database table.
 var allowedTransitions = map[[2]snapshot.TransferStatus]bool{
 	{statusCreated, statusSent}:       true,
 	{statusCreated, statusConfirmed}:  true,
@@ -201,8 +211,8 @@ func (t *truthIndex) settlementsOf(endToEndID, base string) int {
 	return count
 }
 
-// checkPix runs I5, I6, I7 and the R and S terms of I1c. Without the
-// partner's truth, only what the ledger alone can tell is checked.
+// checkPix runs I5, I6, I7 and the R and S terms of I1c. Without the partner's
+// truth, only what the ledger alone can tell is checked.
 func (e *evaluation) checkPix(truth *PartnerTruth) {
 	for _, transfer := range e.ledger.transfers {
 		e.checkPath(transfer)
@@ -271,8 +281,8 @@ func (e *evaluation) checkPath(transfer snapshot.ExternalTransfer) {
 	}
 }
 
-// checkPostings is I7's ledger side: one reserve, and a settlement, refund
-// or return exactly when the path goes through confirmed, failed or reversed.
+// checkPostings is I7's ledger side: one reserve, and a settlement, refund or
+// return exactly when the path goes through confirmed, failed or reversed.
 func (e *evaluation) checkPostings(transfer snapshot.ExternalTransfer) {
 	visited := map[snapshot.TransferStatus]bool{}
 	for _, transition := range e.ledger.transitions[transfer.ID] {
@@ -317,8 +327,9 @@ func (e *evaluation) checkLiveness(transfer snapshot.ExternalTransfer) {
 	))
 }
 
-// checkTransit is I5 and BR13: once every transfer of the round is final,
-// what the round put in sys_pix_out_transit came back out.
+// checkTransit is the transit rule of I5: sys_pix_out_transit holds exactly the
+// transfers still in created or sent, so once every transfer of the round is
+// final, what the round put in it came back out.
 func (e *evaluation) checkTransit() {
 	transitID := e.ledger.systemID(snapshot.PixOutTransitCode)
 
@@ -343,9 +354,9 @@ func (e *evaluation) checkTransit() {
 
 // checkAgreement is I6 for one transfer: every PIX the partner settled or
 // returned has exactly one ledger transaction, and back. A PIX is an
-// end_to_end_id: the same one settled twice is the partner's double
-// processing, which the S term accounts for, while a naive retry's new id is
-// a second PIX the bank must book (or never have sent).
+// end_to_end_id: the same one settled twice is the partner's double processing,
+// which the S term accounts for, while a naive retry's new id is a second PIX
+// the bank must book (or never have sent).
 func (e *evaluation) checkAgreement(transfer snapshot.ExternalTransfer, index truthIndex) {
 	base := fixedEndToEnd(transfer.ID)
 
@@ -396,8 +407,8 @@ func (e *evaluation) checkAuthority(transfer snapshot.ExternalTransfer, index tr
 	))
 }
 
-// checkIncoming is I6 and BR12 for PIX in: each one the partner credited is
-// credited exactly once in the ledger, and nothing else is.
+// checkIncoming is I6 for PIX in: each one the partner credited is credited
+// exactly once in the ledger, and nothing else is.
 func (e *evaluation) checkIncoming(index truthIndex) {
 	for e2e := range index.incomingByE2E {
 		credits := e.creditsOf(e2e)

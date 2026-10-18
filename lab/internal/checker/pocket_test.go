@@ -7,8 +7,7 @@ import (
 	"centavo/lab/internal/snapshot"
 )
 
-// Pocket histories (docs/invariants-and-checker.md, section 12): one small
-// round per bug pattern, written by hand.
+// Pocket histories: one small round per bug pattern, written by hand.
 
 func TestPocket_CorrectRoundPasses(t *testing.T) {
 	t.Parallel()
@@ -23,8 +22,8 @@ func TestPocket_CorrectRoundPasses(t *testing.T) {
 	assertPasses(t, b.evaluate())
 }
 
-// TestPocket_LostUpdateOverdraws is PM-001: two debits of 60 read the same
-// balance of 100, both pass the check and both write 40.
+// TestPocket_LostUpdateOverdraws is a regression test: two debits of 60 read
+// the same balance of 100, both pass the check and both write 40.
 func TestPocket_LostUpdateOverdraws(t *testing.T) {
 	t.Parallel()
 
@@ -56,7 +55,8 @@ func TestPocket_LostUpdateOverdraws(t *testing.T) {
 	assertBreaks(t, result, RuleI1bSequence, RuleI1bChain, RuleI1bMaterialized, RuleI4RealBalance)
 }
 
-// TestPocket_DebitWithoutCredit is FC01: the process died between the two entries.
+// TestPocket_DebitWithoutCredit is a regression test: the process died between
+// the two entries.
 func TestPocket_DebitWithoutCredit(t *testing.T) {
 	t.Parallel()
 
@@ -74,7 +74,8 @@ func TestPocket_DebitWithoutCredit(t *testing.T) {
 	assertBreaks(t, result, RuleI1aZeroSum)
 }
 
-// TestPocket_RetryAppliedTwice is FC02: the response was lost, the retry ran again.
+// TestPocket_RetryAppliedTwice is a regression test: the response was lost, the
+// retry ran again.
 func TestPocket_RetryAppliedTwice(t *testing.T) {
 	t.Parallel()
 

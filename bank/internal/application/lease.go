@@ -14,7 +14,7 @@ type Lease struct {
 	Holder   string
 }
 
-// LeasePolicy is defense D11's strategy: how a singleton loop (sweeper,
+// LeasePolicy is the fencing defense's strategy: how a singleton loop (sweeper,
 // reconciler) knows it may still write.
 type LeasePolicy interface {
 	// Acquire takes or renews the lease; false means another holder has it.
@@ -25,10 +25,10 @@ type LeasePolicy interface {
 	MoveCursor(ctx context.Context, stores Stores, from, to int64) (bool, error)
 }
 
-// FencedLeases is D11 (docs/domain.md, section 13.9): expiry by the
-// database's now(), the token checked FOR SHARE in the very transaction
-// that writes, and, as a second line, a compare-and-set on the cursor (with
-// partner_seq UNIQUE in the schema). A paused or skewed worker cannot write.
+// FencedLeases is the fencing defense: expiry by the database's now(), the
+// token checked FOR SHARE in the very transaction that writes, and, as a second
+// line, a compare-and-set on the cursor (with partner_seq UNIQUE in the
+// schema). A paused or skewed worker cannot write.
 type FencedLeases struct{}
 
 // Acquire takes the lease by the database's clock.
@@ -47,10 +47,9 @@ func (FencedLeases) MoveCursor(ctx context.Context, stores Stores, from, to int6
 }
 
 // LocalClockLeases is the naive variant: the worker computes expiry with its
-// own wall clock, believes the check it made before the write, and saves
-// the cursor blindly. A worker whose clock runs ahead takes a live lease
-// (FC35), and one that paused past the TTL writes as if it still held it
-// (FC36).
+// own wall clock, believes the check it made before the write, and saves the
+// cursor blindly. A worker whose clock runs ahead takes a live lease, and one
+// that paused past the TTL writes as if it still held it.
 type LocalClockLeases struct{}
 
 // Acquire takes the lease by this process's clock.

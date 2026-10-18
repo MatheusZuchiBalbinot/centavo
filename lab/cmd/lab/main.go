@@ -57,7 +57,7 @@ const (
 	panelAddr          = ":8090"
 	healthcheckURL     = "http://127.0.0.1:8090" + dashboard.HealthPath
 	healthcheckTimeout = 3 * time.Second
-	// Pool sizes of docs/architecture.md, section 11.1.
+	// Pool sizes.
 	auditorConnections = 2
 	exportConnections  = 2
 	// eventsDir is the shared volume where services record fired failpoints.
@@ -66,7 +66,7 @@ const (
 	checkerMemoryLimit = "GOMEMLIMIT=256MiB"
 )
 
-// Exit codes; lab check uses the checker's own (docs/invariants-and-checker.md, section 7).
+// Exit codes; lab check uses the checker's own.
 const (
 	exitOK                = 0
 	exitError             = 1
@@ -358,8 +358,8 @@ func runCheck(args []string) error {
 	return verdictError(result.Verdict)
 }
 
-// exportReplay writes the replay of an archived round, the file the replay
-// page plays (docs/architecture.md, section 13).
+// exportReplay writes the replay of an archived round, the file the replay page
+// plays.
 func exportReplay(args []string) error {
 	flags := flag.NewFlagSet(commandExportReplay, flag.ContinueOnError)
 	flags.SetOutput(io.Discard)

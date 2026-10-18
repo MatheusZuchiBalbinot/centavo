@@ -9,14 +9,25 @@ import (
 	"centavo/lab/internal/snapshot"
 )
 
-// Invariant names one invariant of docs/invariants-and-checker.md, section 6.
+// Invariant names one invariant.
 type Invariant string
 
 // The invariants the checker judges.
 const (
+	// InvariantI1 is conservation: every transaction sums to zero (I1a), each
+	// account's entries chain from one balance to the next (I1b), and the
+	// round's balance identity holds (I1c).
 	InvariantI1 Invariant = "I1"
+	// InvariantI2 is exactly once: an operation that ended ok is applied once,
+	// as asked; one that failed is not applied; nothing is applied that no
+	// client asked for.
 	InvariantI2 Invariant = "I2"
+	// InvariantI3 is about unknown outcomes: an operation without an answer is
+	// applied at most once, and resolve tells the truth about it, the same way
+	// every time.
 	InvariantI3 Invariant = "I3"
+	// InvariantI4 is the floor: no customer balance, stored, recomputed or
+	// read, ever goes below zero, and every statement page is coherent.
 	InvariantI4 Invariant = "I4"
 )
 
@@ -62,8 +73,8 @@ type evaluation struct {
 	ops        operations
 	ledger     ledger
 	violations []Violation
-	// unresolved are indeterminate writes resolve never answered; they make
-	// a round inconclusive, never failed (docs/invariants-and-checker.md, section 8).
+	// unresolved are indeterminate writes resolve never answered; they make a
+	// round inconclusive, never failed.
 	unresolved []string
 }
 
@@ -95,8 +106,8 @@ func (e *evaluation) checkZeroSum() {
 	}
 }
 
-// checkAccounts runs I1b on every exported account and the entry-level part
-// of I4 on customer accounts.
+// checkAccounts runs I1b on every exported account and the entry-level part of
+// I4 on customer accounts.
 func (e *evaluation) checkAccounts() {
 	for _, accountID := range e.ledger.accountIDs {
 		entries := e.ledger.entriesByAccount[accountID]
@@ -235,8 +246,8 @@ func (e *evaluation) checkMaterialized(accountID string, entries []snapshot.Entr
 // checkNeverNegative is I4 on the ledger: the stored balance_after, the real
 // balance (the running sum of entries, in the order the bank wrote them) and
 // the materialized balance never go below zero. The real balance is what
-// "balance" means (docs/domain.md, section 1); a lost update can let it go
-// negative while every stored number still looks fine.
+// "balance" means; a lost update can let it go negative while every stored
+// number still looks fine.
 func (e *evaluation) checkNeverNegative(accountID string, entries []snapshot.Entry) {
 	var running int64
 
@@ -338,7 +349,8 @@ func (e *evaluation) checkDepositTerm() {
 	})
 }
 
-// checkOperations is I2 and the at-most-once part of I3, operation by operation.
+// checkOperations is I2 and the at-most-once part of I3, operation by
+// operation.
 func (e *evaluation) checkOperations() {
 	for _, o := range e.ops.ordered {
 		switch o.function {
@@ -353,7 +365,8 @@ func (e *evaluation) checkOperations() {
 		case history.FunctionReadStatement:
 			e.checkStatementPage(o)
 		case history.FunctionResolve, history.FunctionReadPixOut:
-			// Read by the I3 and PIX checks, which follow the writes they answer.
+			// Read by the I3 and PIX checks, which follow the writes they
+			// answer.
 		case history.FunctionKill,
 			history.FunctionArmFailpoint,
 			history.FunctionArmPartner,

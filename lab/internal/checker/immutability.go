@@ -6,7 +6,8 @@ import (
 	"centavo/lab/internal/snapshot"
 )
 
-// I8 is immutability (docs/invariants-and-checker.md, I8).
+// I8 is immutability: every ledger band a previous round saw complete still has
+// the same count, sum and hash.
 const (
 	InvariantI8 Invariant = "I8"
 	RuleI8Bands Rule      = "I8.bands"

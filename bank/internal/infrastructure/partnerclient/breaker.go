@@ -11,7 +11,7 @@ import (
 	"centavo/bank/internal/domain/transfer"
 )
 
-// Circuit breaker settings (docs/architecture.md, section 7).
+// Circuit breaker settings.
 const (
 	breakerWindow     = 20
 	breakerOpenFor    = 10 * time.Second
@@ -30,10 +30,11 @@ const (
 	breakerHalfOpen
 )
 
-// Breaker is defense D9's circuit breaker around the partner: it opens when
-// half of the last 20 calls failed, stays open for 10 s and then lets one
-// probe through. An open breaker answers "unknown" without calling, so the
-// relay reschedules and nothing is failed (BR10).
+// Breaker is the resilient_client defense's circuit breaker around the partner:
+// it opens when half of the last 20 calls failed, stays open for 10 s and then
+// lets one probe through. An open breaker answers "unknown" without calling, so
+// the relay reschedules and nothing is failed (a transfer fails only on the
+// partner's authoritative refusal).
 type Breaker struct {
 	client Client
 	now    func() time.Time

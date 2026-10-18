@@ -1,5 +1,5 @@
 name: postgres-freeze
-description: O PostgreSQL congela por alguns segundos com conexões abertas; transações penduradas não podem segurar locks nem confirmar pela metade (FC34).
+description: O PostgreSQL congela por alguns segundos com conexões abertas; transações penduradas não podem segurar locks nem confirmar pela metade.
 duration: 15m
 workload:
   profile: balanced

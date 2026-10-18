@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Runs once, when the data directory is initialized. Creates the three roles of
-# docs/domain.md, section 13, the database of the robust stack and the
-# replication role of the replica profile (docs/chaos-bot.md, section 10).
+# Runs once, when the data directory is initialized. Creates the three roles,
+# the database of the robust stack and the replication role of the replica
+# profile.
 set -euo pipefail
 
 psql --set ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \

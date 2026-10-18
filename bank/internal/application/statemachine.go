@@ -24,18 +24,18 @@ type TransitionCommand struct {
 	CorrelationID string
 }
 
-// StateMachine is defense D7's strategy: how a transfer changes status,
-// inside the caller's unit of work.
+// StateMachine is the state_machine defense's strategy: how a transfer changes
+// status, inside the caller's unit of work.
 type StateMachine interface {
 	// Move applies the command. The guarded machine refuses, with
 	// transfer.ErrInvalidStateTransition, a transfer that is not in From.
 	Move(ctx context.Context, stores Stores, command TransitionCommand) error
 }
 
-// GuardedTransitions is D7 (docs/domain.md, sections 8.3 and 13.5): the
-// transfer is locked, its current status must be the command's From and the
-// move an allowed transition; the status changes by compare-and-set and the
-// ledger gets exactly the posting the transition requires.
+// GuardedTransitions is the state_machine defense: the transfer is locked, its
+// current status must be the command's From and the move an allowed transition;
+// the status changes by compare-and-set and the ledger gets exactly the posting
+// the transition requires.
 type GuardedTransitions struct{}
 
 // Move applies the transition or refuses it.
@@ -66,9 +66,9 @@ func (GuardedTransitions) Move(ctx context.Context, stores Stores, command Trans
 	return recordStep(ctx, stores, step)
 }
 
-// OverwriteTransitions is the naive variant: it writes the new status
-// whatever the current one is and posts what the target implies, without
-// asking where the transfer comes from (FC25, FC26).
+// OverwriteTransitions is the naive variant: it writes the new status whatever
+// the current one is and posts what the target implies, without asking where
+// the transfer comes from.
 type OverwriteTransitions struct{}
 
 // Move overwrites the status.

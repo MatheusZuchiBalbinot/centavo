@@ -155,8 +155,9 @@ func (s LedgerStore) IsClientRefApplied(ctx context.Context, key idempotency.Key
 	return isApplied, nil
 }
 
-// deleteExpiredKeysSQL keeps an hour of margin past the 24 hours of BR07 and
-// measures both with the database clock, immune to any worker's clock (FC37).
+// deleteExpiredKeysSQL keeps an hour of margin past the 24 hours of idempotency
+// keys live 24 hours by the database clock and measures both with the database
+// clock, immune to any worker's clock.
 const deleteExpiredKeysSQL = `
 DELETE FROM idempotency_keys
 WHERE key IN (

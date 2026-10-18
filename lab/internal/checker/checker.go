@@ -1,7 +1,6 @@
 // Package checker proves, from the history and the ledger export of a round,
-// that the bank kept its invariants (docs/invariants-and-checker.md). This is
-// version 1: I1 (I1a, I1b and the D term of I1c, per round), I2, the
-// at-most-once part of I3 and I4.
+// that the bank kept its invariants, I1 to I8, each documented where it is
+// declared.
 package checker
 
 import (
@@ -93,7 +92,7 @@ var invariantsOfThisVersion = []struct {
 	{id: InvariantI3, isChecked: true, note: "no máximo uma vez, convergência pelo resolve e estabilidade numa amostra"},
 	{id: InvariantI4, isChecked: true},
 	{id: InvariantI5, isChecked: true, note: "transferências terminais e trânsito zero depois da quiescência"},
-	{id: InvariantI6, isChecked: true, note: "comparação direta com a verdade do parceiro; a conciliação chega na F9"},
+	{id: InvariantI6, isChecked: true, note: "comparação direta com a verdade do parceiro"},
 	{id: InvariantI7, isChecked: true},
 	{id: InvariantI8, isChecked: true, note: "todas as faixas completas da rodada anterior, recalculadas a cada rodada"},
 }
@@ -103,8 +102,8 @@ func Evaluate(records []history.Record, s snapshot.Snapshot) Result {
 	return EvaluateWithTruth(records, s, nil)
 }
 
-// EvaluateWithTruth also compares the ledger with the partner's truth (I6,
-// the R and S terms of I1c, the authoritative part of I7).
+// EvaluateWithTruth also compares the ledger with the partner's truth (I6, the
+// R and S terms of I1c, the authoritative part of I7).
 func EvaluateWithTruth(records []history.Record, s snapshot.Snapshot, truth *PartnerTruth) Result {
 	return evaluate(indexOperations(records), s, outsideSources{truth: truth})
 }
@@ -352,7 +351,7 @@ func readTruth(roundDir string) (*PartnerTruth, error) {
 }
 
 // chaosEvents are the failpoint events of the round, by correlation id. They
-// never decide an invariant; they only tell the story (section 2).
+// never decide an invariant; they only tell the story of a violation.
 type chaosEvents map[string][]json.RawMessage
 
 // readEvents loads events.jsonl when it exists; a round without chaos has none.

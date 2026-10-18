@@ -1,5 +1,5 @@
 // Package engine runs the partner's background work: deciding transfers and
-// delivering webhooks (docs/architecture.md, section 4.4).
+// delivering webhooks.
 package engine
 
 import (
@@ -207,8 +207,7 @@ func (e *Engine) send(ctx context.Context, delivery truth.Delivery, now time.Tim
 	return nil
 }
 
-// Sign is t=<unix>,v1=<hex of HMAC-SHA256(secret, t + "." + body)>
-// (docs/architecture.md, section 4.2).
+// Sign is t=<unix>,v1=<hex of HMAC-SHA256(secret, t + "." + body)>.
 func Sign(secret []byte, at time.Time, body []byte) string {
 	timestamp := strconv.FormatInt(at.Unix(), 10)
 

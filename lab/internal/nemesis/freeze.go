@@ -14,10 +14,10 @@ type freezeRecord struct {
 	Duration  string `json:"duration"`
 }
 
-// freeze completes a freeze failpoint: the process blocked its own path,
-// and the lab pauses the whole container for the same time, so the lease
-// renewals stop too and the lease really expires (docs/chaos-bot.md,
-// section 5.2). The cure unpauses whatever is still paused.
+// freeze completes a freeze failpoint: the process blocked its own path, and
+// the lab pauses the whole container for the same time, so the lease renewals
+// stop too and the lease really expires. The cure unpauses whatever is still
+// paused.
 func (n *Nemesis) freeze(event failpointEvent) {
 	duration, err := time.ParseDuration(event.Arg)
 	if err != nil {

@@ -11,8 +11,8 @@ import (
 	"centavo/lab/internal/docker"
 )
 
-// minKillGap keeps Docker's restart backoff from growing: it resets only
-// after a container stays up for 10 s (docs/chaos-bot.md, section 7).
+// minKillGap keeps Docker's restart backoff from growing: it resets only after
+// a container stays up for 10 s.
 const minKillGap = 10 * time.Second
 
 const chaosKillCommand = "chaos-kill"

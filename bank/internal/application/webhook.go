@@ -14,7 +14,7 @@ import (
 // EventType is the kind of a partner webhook.
 type EventType string
 
-// Event types the partner sends (docs/architecture.md, section 4.4).
+// Event types the partner sends.
 const (
 	EventSettled  EventType = "transfer.settled"
 	EventRejected EventType = "transfer.rejected"
@@ -34,7 +34,7 @@ type PartnerEvent struct {
 }
 
 // NaiveWebhook applies partner events as they arrive, in the request that
-// carries them (docs/architecture.md, section 5.4): no inbox, no dedup.
+// carries them: no inbox, no dedup.
 type NaiveWebhook struct {
 	unitOfWork UnitOfWork
 	events     eventApplier
@@ -45,8 +45,8 @@ func NewNaiveWebhook(unitOfWork UnitOfWork, machine StateMachine) NaiveWebhook {
 	return NaiveWebhook{unitOfWork: unitOfWork, events: eventApplier{machine: machine}}
 }
 
-// Apply runs the event's effect. With the guarded machine (D7), an event
-// that does not fit the transfer is refused, and the partner delivers it
+// Apply runs the event's effect. With the guarded machine (state_machine), an
+// event that does not fit the transfer is refused, and the partner delivers it
 // again later.
 func (w NaiveWebhook) Apply(ctx context.Context, event PartnerEvent) error {
 	return w.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
@@ -59,9 +59,9 @@ type eventApplier struct {
 	machine StateMachine
 }
 
-// expectedFrom is the status each transfer event speaks for (docs/domain.md,
-// section 8.3). Reaching another status, created to confirmed for one, needs
-// the partner's authoritative status, never just the webhook.
+// expectedFrom is the status each transfer event speaks for. Reaching another
+// status, created to confirmed for one, needs the partner's authoritative
+// status, never just the webhook.
 var expectedFrom = map[EventType]transfer.Status{
 	EventSettled: transfer.StatusSent, EventRejected: transfer.StatusSent, EventReturned: transfer.StatusConfirmed,
 }
@@ -104,8 +104,8 @@ func failureCodeOf(event PartnerEvent) string {
 	return event.Reason
 }
 
-// creditIncoming credits a PIX in (docs/domain.md, section 9). The unique
-// end_to_end_id of incoming_transfers keeps it to one credit in every profile.
+// creditIncoming credits a PIX in. The unique end_to_end_id of
+// incoming_transfers keeps it to one credit in every profile.
 func creditIncoming(ctx context.Context, stores Stores, event PartnerEvent) error {
 	accountID, err := ledger.ParseAccountID(event.AccountID)
 	if err != nil {

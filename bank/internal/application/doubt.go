@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// Backoff of the relay towards the partner (docs/architecture.md, section 7).
+// Backoff of the relay towards the partner.
 const (
 	relayBackoffBase = 200 * time.Millisecond
 	relayBackoffCap  = 30 * time.Second
@@ -18,15 +18,16 @@ const (
 // doubtReason is what a deferred message records as its last error.
 const doubtReason = "partner answer unknown"
 
-// DoubtPolicy is defense D9's strategy for an answer that may hide a PIX the
-// partner processed: a timeout, a 5xx, a broken connection or an open
-// circuit breaker. It runs in the commit that would have recorded the answer.
+// DoubtPolicy is the resilient_client defense's strategy for an answer that may
+// hide a PIX the partner processed: a timeout, a 5xx, a broken connection or an
+// open circuit breaker. It runs in the commit that would have recorded the
+// answer.
 type DoubtPolicy interface {
 	OnUnknown(ctx context.Context, stores Stores, claim OutboxClaim, external ExternalTransfer) error
 }
 
 // GiveUpOnDoubt is the naive variant: doubt is taken for a failure and the
-// amount refunded, though the partner may have paid (FC21, PM-008).
+// amount refunded, though the partner may have paid.
 type GiveUpOnDoubt struct {
 	machine StateMachine
 }
@@ -50,9 +51,11 @@ func (g GiveUpOnDoubt) OnUnknown(ctx context.Context, stores Stores, claim Outbo
 	return ignoreMovedOn(g.machine.Move(ctx, stores, answerCommand(external, PartnerUnknown)))
 }
 
-// RetryOnDoubt is D9: a timeout never becomes a failure (BR10). The message
-// goes back to the outbox after an exponential backoff with full jitter, and
-// the next send, under the same end_to_end_id (D6), gets the partner's answer.
+// RetryOnDoubt is the resilient_client defense: a timeout never becomes a
+// failure (a transfer fails only on the partner's authoritative refusal). The
+// message goes back to the outbox after an exponential backoff with full
+// jitter, and the next send, under the same end_to_end_id
+// (partner_idempotency), gets the partner's answer.
 type RetryOnDoubt struct{}
 
 // OnUnknown reschedules the message.
@@ -71,7 +74,7 @@ func (RetryOnDoubt) OnUnknown(ctx context.Context, stores Stores, claim OutboxCl
 
 // fullJitterBackoff waits a random time between zero and the exponential
 // ceiling, so workers coming back from a partner outage do not all return at
-// once (docs/architecture.md, section 7).
+// once.
 func fullJitterBackoff(attempts int) time.Duration {
 	doublings := min(max(attempts-1, 0), maxBackoffDoublings)
 	ceiling := min(relayBackoffBase<<doublings, relayBackoffCap)

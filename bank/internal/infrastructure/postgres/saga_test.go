@@ -49,10 +49,10 @@ func newEventID() string {
 	return "evt_" + uuid.NewString()
 }
 
-// TestTransfer_DuplicateEffectWithNewEventID_IsNoop is PM-007 (FC25): the
-// partner sent "settled" twice under two event ids, which the inbox cannot
-// tell apart. The second does not fit a confirmed transfer, so the
-// processor asks the partner, finds it settled, and posts nothing more.
+// TestTransfer_DuplicateEffectWithNewEventID_IsNoop is a regression test: the
+// partner sent "settled" twice under two event ids, which the inbox cannot tell
+// apart. The second does not fit a confirmed transfer, so the processor asks
+// the partner, finds it settled, and posts nothing more.
 func TestTransfer_DuplicateEffectWithNewEventID_IsNoop(t *testing.T) {
 	p := newOutboxBank(t)
 	intake, processor := newInbox(p, statusAnswer(transfer.PartnerSettled))
@@ -145,8 +145,8 @@ func (p pixBank) releaseSweeperLease(t *testing.T) {
 	}
 }
 
-// TestSweeper_LostWebhook_TransferConvergesByPolling is PM-009: the partner
-// settled and its webhooks were lost. The sweeper asks and confirms.
+// TestSweeper_LostWebhook_TransferConvergesByPolling is a regression test: the
+// partner settled and its webhooks were lost. The sweeper asks and confirms.
 func TestSweeper_LostWebhook_TransferConvergesByPolling(t *testing.T) {
 	p := newOutboxBank(t)
 	p.releaseSweeperLease(t)
@@ -208,9 +208,10 @@ func TestSweeper_OnlyTheLeaseHolderSweeps(t *testing.T) {
 	}
 }
 
-// TestRelay_PartnerTimeout_NeverFailsTransfer is PM-008 (FC21): with D9 a doubtful answer
-// reschedules the message and refunds nothing; the next send, under the
-// same end_to_end_id, gets the partner's answer.
+// TestRelay_PartnerTimeout_NeverFailsTransfer is a regression test: with
+// resilient_client a doubtful answer reschedules the message and refunds
+// nothing; the next send, under the same end_to_end_id, gets the partner's
+// answer.
 func TestRelay_PartnerTimeout_NeverFailsTransfer(t *testing.T) {
 	p := newOutboxBank(t)
 	p.drainOutbox(t)
@@ -252,8 +253,9 @@ func TestRelay_PartnerTimeout_NeverFailsTransfer(t *testing.T) {
 	}
 }
 
-// pausingPartner answers with a status and, before the sweeper can use it,
-// lets the webhook move the transfer on: a sweeper frozen at FP11.
+// pausingPartner answers with a status and, before the sweeper can use it, lets
+// the webhook move the transfer on: a sweeper frozen at
+// `sweeper.after_status_before_transition`.
 type pausingPartner struct {
 	answer   transfer.PartnerStatus
 	meantime func()
@@ -265,10 +267,10 @@ func (p pausingPartner) Status(context.Context, transfer.EndToEndID) (applicatio
 	return application.AuthoritativeStatus{Status: p.answer}, nil
 }
 
-// TestSweeper_StaleStatusAfterPause_DoesNotRegressState is FC11: the
-// sweeper read "processing", paused, and the settlement came in meanwhile.
-// The walk starts from the status under the lock, so the stale answer
-// writes nothing.
+// TestSweeper_StaleStatusAfterPause_DoesNotRegressState is a regression test:
+// the sweeper read "processing", paused, and the settlement came in meanwhile.
+// The walk starts from the status under the lock, so the stale answer writes
+// nothing.
 func TestSweeper_StaleStatusAfterPause_DoesNotRegressState(t *testing.T) {
 	p := newOutboxBank(t)
 	p.releaseSweeperLease(t)

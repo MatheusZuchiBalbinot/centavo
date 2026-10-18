@@ -1,5 +1,5 @@
 name: slow-network
-description: Latência, variação e banda reduzida em todos os links; timeouts disparam no meio de transações e as janelas de corrida ficam largas (FC18, FC19).
+description: Latência, variação e banda reduzida em todos os links; timeouts disparam no meio de transações e as janelas de corrida ficam largas.
 duration: 20m
 workload:
   profile: balanced

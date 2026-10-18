@@ -24,7 +24,7 @@ type TransferResult struct {
 	CreatedAt     time.Time
 }
 
-// TransferInternal moves money between two customers (docs/domain.md, section 6).
+// TransferInternal moves money between two customers.
 type TransferInternal struct {
 	unitOfWork UnitOfWork
 	locker     Locker
@@ -35,12 +35,13 @@ func NewTransferInternal(deps MoneyDependencies) TransferInternal {
 	return TransferInternal{unitOfWork: deps.UnitOfWork, locker: deps.Locker}
 }
 
-// Execute locks both balances in id order (D2), checks funds in the domain
-// and writes the transaction, the debit and the credit in one unit of work
-// (D1). Without D2 the source balance is read unlocked and overwritten with
-// the value computed here, so two concurrent debits can both pass the check
-// and one of them is lost (FC41); without D1 a crash at FP01 leaves the debit
-// without its credit (FC01).
+// Execute locks both balances in id order (balance_locking), checks funds in
+// the domain and writes the transaction, the debit and the credit in one unit
+// of work (atomic_ledger). Without balance_locking the source balance is read
+// unlocked and overwritten with the value computed here, so two concurrent
+// debits can both pass the check and one of them is lost; without atomic_ledger
+// a crash at `transfer.after_debit_before_credit` leaves the debit without its
+// credit.
 func (t TransferInternal) Execute(ctx context.Context, input TransferInput) (TransferResult, error) {
 	operationID, err := ledger.NewOperationID()
 	if err != nil {
@@ -106,8 +107,9 @@ func (t TransferInternal) Apply(ctx context.Context, stores Stores, operationID 
 		return TransferResult{}, err
 	}
 
-	// FP01: the debit is written; with D1 it is not committed yet, and dying
-	// here rolls everything back. Without D1 it destroys money (FC01).
+	// `transfer.after_debit_before_credit`: the debit is written; with
+	// atomic_ledger it is not committed yet, and dying here rolls everything
+	// back. Without atomic_ledger it destroys money.
 	err = failpoint.Hit(ctx, failpoint.TransferAfterDebitBeforeCredit)
 	if err != nil {
 		return TransferResult{}, err

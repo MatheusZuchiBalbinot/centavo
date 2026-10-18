@@ -130,7 +130,8 @@ func migrate(ctx context.Context) error {
 	return migrateDefenses(ctx, true)
 }
 
-// migrateDefenses puts the D1 and D2 constraints in (robust) or takes them out.
+// migrateDefenses puts the atomic_ledger and balance_locking constraints in
+// (robust) or takes them out.
 func migrateDefenses(ctx context.Context, isRobust bool) error {
 	return migrateSchema(ctx, schema{hasAtomicLedger: isRobust, hasBalanceLocking: isRobust, hasIdempotency: isRobust, hasInbox: isRobust, hasFencing: isRobust})
 }

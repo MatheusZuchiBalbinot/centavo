@@ -14,8 +14,8 @@ import (
 // replicaService is the hot standby of the replica profile.
 const replicaService = "postgres-replica"
 
-// replicaUpstream is where the database links point after a failover:
-// Toxiproxy plays the part of the virtual IP (docs/architecture.md, 4.1).
+// replicaUpstream is where the database links point after a failover: Toxiproxy
+// plays the part of the virtual IP.
 const replicaUpstream = "postgres-replica:5432"
 
 // replicationLink carries the WAL from the primary to the replica.
@@ -54,9 +54,8 @@ func synchronousStandbyCommand(replication string) []string {
 	return []string{"psql", "--username", "postgres", "--command", setting, "--command", "SELECT pg_reload_conf()"}
 }
 
-// failOverAt is the procedure of docs/architecture.md, section 5.10: at the
-// set time the primary dies for good, the replica is promoted and every
-// database link moves to it.
+// failOverAt is the procedure: at the set time the primary dies for good, the
+// replica is promoted and every database link moves to it.
 func (n *Nemesis) failOverAt(ctx context.Context, fault scenarios.Fault) {
 	select {
 	case <-ctx.Done():

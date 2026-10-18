@@ -1,6 +1,6 @@
--- Defense D3, idempotency (docs/domain.md, sections 13.4 and 14): a pending
--- key only exists inside the transaction that owns it. If the code ever
--- forgets to complete it, the commit fails instead of leaving a key stuck.
+-- Defense idempotency, idempotency: a pending key only exists inside the
+-- transaction that owns it. If the code ever forgets to complete it, the commit
+-- fails instead of leaving a key stuck.
 
 -- +goose Up
 -- +goose StatementBegin

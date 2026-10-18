@@ -11,7 +11,7 @@ const nemesisName = "nemesis"
 var errInvalidProcess = errors.New(`process must be a client number or "nemesis"`)
 
 // Process is who wrote a record: a logical client (a number) or the nemesis,
-// the chaos bot (docs/invariants-and-checker.md, section 4.1).
+// the chaos bot.
 type Process struct {
 	client    int
 	isNemesis bool

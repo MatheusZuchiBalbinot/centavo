@@ -32,12 +32,12 @@ const (
 	ActionError Action = "error"
 	ActionPanic Action = "panic"
 	// ActionFreeze blocks this path and asks the lab to pause the whole
-	// container for the same time (docs/chaos-bot.md, section 5.2).
+	// container for the same time.
 	ActionFreeze Action = "freeze"
 )
 
 const (
-	// maxTTL bounds every rule: chaos stops by itself if the lab dies (lock 6).
+	// maxTTL bounds every rule: chaos stops by itself if the lab dies.
 	maxTTL = time.Hour
 	// envRuleTTL is the life of a rule armed by CENTAVO_FAILPOINTS.
 	envRuleTTL = time.Hour
@@ -78,7 +78,7 @@ type Match struct {
 	CorrelationID     string `json:"correlation_id,omitempty"`
 }
 
-// Rule arms one failpoint (docs/chaos-bot.md, section 5.3).
+// Rule arms one failpoint.
 type Rule struct {
 	Action      Action  `json:"action"`
 	Arg         string  `json:"arg,omitempty"`
@@ -153,7 +153,7 @@ func Arm(name Name, rule Rule, now time.Time) error {
 	return nil
 }
 
-// DisarmAll clears every rule: the cure of docs/chaos-bot.md, section 3.1.
+// DisarmAll clears every rule: the cure.
 func DisarmAll() {
 	registry.mu.Lock()
 	defer registry.mu.Unlock()
@@ -260,8 +260,8 @@ func decide(ctx context.Context, name Name, now time.Time) (firing, bool) {
 		return firing{}, false
 	}
 
-	// One draw per eligible hit: the same seed and the same hits give the
-	// same decisions (docs/chaos-bot.md, section 5.5).
+	// One draw per eligible hit: the same seed and the same hits give the same
+	// decisions.
 	if a.decisions.Float64() >= a.rule.Probability {
 		return firing{}, false
 	}
@@ -318,8 +318,7 @@ type event struct {
 }
 
 // record appends the event and fsyncs it before the action runs, so even a
-// SIGKILL the process sends itself is in the history (docs/architecture.md,
-// section 9.2).
+// SIGKILL the process sends itself is in the history.
 func record(ctx context.Context, f firing) error {
 	events.mu.Lock()
 	defer events.mu.Unlock()

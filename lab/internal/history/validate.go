@@ -31,9 +31,9 @@ type Report struct {
 	Violations  []Violation
 }
 
-// IsWellFormed reports whether every rule of docs/invariants-and-checker.md,
-// section 4.2, holds. Open operations are allowed: they are what a crashed lab
-// leaves behind, and the caller decides whether they are acceptable.
+// IsWellFormed reports whether every rule, holds. Open operations are allowed:
+// they are what a crashed lab leaves behind, and the caller decides whether
+// they are acceptable.
 func (r Report) IsWellFormed() bool {
 	return len(r.Violations) == 0
 }

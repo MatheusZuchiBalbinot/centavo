@@ -1,5 +1,5 @@
 name: postgres-crash
-description: O PostgreSQL morre sob carga, pelo postmaster e por um backend; nenhum commit confirmado pode sumir (FC29, FC30, FC31, PM-015).
+description: O PostgreSQL morre sob carga, pelo postmaster e por um backend; nenhum commit confirmado pode sumir.
 duration: 20m
 workload:
   profile: balanced

@@ -14,9 +14,10 @@ import (
 	"centavo/bank/internal/platform/failpoint"
 )
 
-// TestNaiveRelay_FailpointMatchesTheTransfersClientRef guards FP03 in the
-// naive relay: the lab arms it for the round's correlation ids, so a relay
-// without the transfer's client_ref in its context never reaches the window.
+// TestNaiveRelay_FailpointMatchesTheTransfersClientRef guards
+// `relay.after_partner_call_before_save` in the naive relay: the lab arms it
+// for the round's correlation ids, so a relay without the transfer's client_ref
+// in its context never reaches the window.
 func TestNaiveRelay_FailpointMatchesTheTransfersClientRef(t *testing.T) {
 	p := newPixBank(t)
 	account := p.bank.newCustomer(t)
@@ -47,6 +48,6 @@ func TestNaiveRelay_FailpointMatchesTheTransfersClientRef(t *testing.T) {
 	view := p.status(t, created.TransferID)
 	isStuckAfterTheCall := calls.Load() == 1 && view.Transfer.Status == transfer.StatusCreated
 	if !isStuckAfterTheCall {
-		t.Fatalf("%d calls, status %s: FP03 did not stop the relay after the partner call", calls.Load(), view.Transfer.Status)
+		t.Fatalf("%d calls, status %s: relay.after_partner_call_before_save did not stop the relay after the partner call", calls.Load(), view.Transfer.Status)
 	}
 }

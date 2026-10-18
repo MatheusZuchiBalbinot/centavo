@@ -1,10 +1,9 @@
--- Accounts, balances and the ledger (docs/domain.md, sections 13.1 to 13.3).
--- This is the shared base schema: constraints that belong to a defense
--- (balance floor and unique account_seq for D2, zero-sum and non-empty
--- triggers for D1) live in their own defense migrations, so the naive
--- profile runs on the same tables without them. Columns that link ledger
--- transactions to transfers, incoming PIX and reconciliation arrive with the
--- phases that create those tables.
+-- Accounts, balances and the ledger. This is the shared base schema:
+-- constraints that belong to a defense (balance floor and unique account_seq
+-- for balance_locking, zero-sum and non-empty triggers for atomic_ledger) live
+-- in their own defense migrations, so the naive profile runs on the same tables
+-- without them. Columns that link ledger transactions to transfers, incoming
+-- PIX and reconciliation arrive with the migrations that create those tables.
 
 -- +goose Up
 CREATE TYPE account_kind AS ENUM ('customer', 'system');
@@ -65,8 +64,9 @@ CREATE TABLE ledger_entries (
     CONSTRAINT entry_seq_positive CHECK (account_seq > 0)
 );
 
--- Keyset pagination of the statement. D2 adds the unique constraint on the
--- same columns; until then two writers can claim the same position.
+-- Keyset pagination of the statement. balance_locking adds the unique
+-- constraint on the same columns; until then two writers can claim the same
+-- position.
 CREATE INDEX ledger_entries_by_account_seq ON ledger_entries (account_id, account_seq);
 CREATE INDEX ledger_entries_by_transaction ON ledger_entries (transaction_id);
 
@@ -98,8 +98,8 @@ CREATE TRIGGER ledger_transactions_no_truncate
 REVOKE ALL ON ledger_entries, ledger_transactions FROM bank_app;
 GRANT SELECT, INSERT ON ledger_entries, ledger_transactions TO bank_app;
 
--- The chart of system accounts (docs/domain.md, section 3.2). No floor: they
--- mirror the outside world and go negative when money enters the bank.
+-- The chart of system accounts. No floor: they mirror the outside world and go
+-- negative when money enters the bank.
 INSERT INTO accounts (id, kind, system_code) VALUES
     ('00000000-0000-7000-8000-000000000001', 'system', 'sys_external_cash'),
     ('00000000-0000-7000-8000-000000000002', 'system', 'sys_pix_out_transit'),

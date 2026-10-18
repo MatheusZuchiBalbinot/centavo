@@ -37,7 +37,7 @@ type summary struct {
 	ReportURL  string          `json:"report_url"`
 }
 
-// headline is the panel's top line (docs/architecture.md, section 13).
+// headline is the panel's top line.
 type headline struct {
 	ChaosSeconds  int `json:"chaos_seconds"`
 	Kills         int `json:"kills"`

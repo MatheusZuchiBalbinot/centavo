@@ -18,22 +18,22 @@ const (
 )
 
 var (
-	// ErrStatusConflict is a bank status the partner's cannot follow from;
-	// it is never resolved automatically (docs/domain.md, section 8.4).
+	// ErrStatusConflict is a bank status the partner's cannot follow from; it
+	// is never resolved automatically.
 	ErrStatusConflict = errors.New("bank and partner disagree on a transfer's status")
 	// ErrSentButUnknown is a transfer the bank saw accepted and the partner
 	// does not know: an anomaly to alert on, while the outbox sends again.
 	ErrSentButUnknown = errors.New("transfer sent but unknown to the partner")
 )
 
-// pathKey is one cell of the table of section 8.4.
+// pathKey is one cell of the paths table below.
 type pathKey struct {
 	current       Status
 	authoritative PartnerStatus
 }
 
-// paths is the table of docs/domain.md, section 8.4: the shortest valid
-// path from the bank's status to the partner's. A missing cell is a conflict.
+// paths is the table: the shortest valid path from the bank's status to the
+// partner's. A missing cell is a conflict.
 var paths = map[pathKey][]Status{
 	{StatusCreated, PartnerProcessing}: {StatusSent},
 	{StatusCreated, PartnerSettled}:    {StatusConfirmed},

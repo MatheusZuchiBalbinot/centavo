@@ -1,5 +1,5 @@
 name: partner-timeout-but-processed
-description: O parceiro processa o PIX e responde tarde demais ou com 500 (FC21, PM-005, PM-008).
+description: O parceiro processa o PIX e responde tarde demais ou com 500.
 duration: 15m
 workload:
   profile: payments-heavy

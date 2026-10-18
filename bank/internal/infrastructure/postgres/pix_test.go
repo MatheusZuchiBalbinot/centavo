@@ -19,7 +19,7 @@ import (
 	"centavo/bank/internal/infrastructure/postgres"
 )
 
-// pixBank is the naive PIX of phase F6 over the test database.
+// pixBank is the naive PIX over the test database.
 type pixBank struct {
 	writes
 	unitOfWork application.UnitOfWork
@@ -117,7 +117,7 @@ func TestNaiveRelay_RecordsWhatThePartnerAnswered(t *testing.T) {
 		{name: "accepted", status: http.StatusAccepted, want: transfer.StatusSent},
 		{name: "rejected", status: http.StatusUnprocessableEntity, want: transfer.StatusFailed, wantRefund: true, wantFailure: "partner_rejected"},
 		// The naive relay takes doubt for failure and refunds: if the partner
-		// did pay, the bank just created money (FC21, PM-008).
+		// did pay, the bank just created money.
 		{name: "unknown", status: http.StatusInternalServerError, want: transfer.StatusFailed, wantRefund: true, wantFailure: "partner_timeout"},
 	}
 
@@ -157,8 +157,8 @@ func TestNaiveRelay_RecordsWhatThePartnerAnswered(t *testing.T) {
 	}
 }
 
-// TestNaiveWebhook_AppliesDuplicatesTwice documents FC24: without the inbox
-// and the guarded state machine, the same event settles a transfer twice.
+// TestNaiveWebhook_AppliesDuplicatesTwice guards a known failure: without the
+// inbox and the guarded state machine, the same event settles a transfer twice.
 func TestNaiveWebhook_AppliesDuplicatesTwice(t *testing.T) {
 	p := newPixBank(t)
 	account := p.bank.newCustomer(t)

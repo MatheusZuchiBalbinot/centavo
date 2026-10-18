@@ -21,8 +21,8 @@ type operation struct {
 	args     json.RawMessage
 	result   history.Type
 	value    json.RawMessage
-	// key is the Idempotency-Key the operation sent: its own id, or the key
-	// of an earlier operation that a buggy client reused (FC43).
+	// key is the Idempotency-Key the operation sent: its own id, or the key of
+	// an earlier operation that a buggy client reused.
 	key string
 }
 
@@ -109,7 +109,7 @@ type statementEntry struct {
 }
 
 // transactionKindOf maps a client write to the ledger transaction it produces
-// (K in docs/invariants-and-checker.md, section 6).
+// (K).
 var transactionKindOf = map[history.Function]snapshot.TransactionKind{
 	history.FunctionDeposit:  snapshot.TransactionDeposit,
 	history.FunctionTransfer: snapshot.TransactionInternalTransfer,
@@ -353,7 +353,7 @@ func (e *evaluation) applications(o *operation) []snapshot.Transaction {
 
 // isReplayOfTheKey reports a buggy write that reused a key with the same
 // request: the bank answered with the stored response of the write that owns
-// the key, so both operations are the one application (FC43, equal body).
+// the key, so both operations are the one application (equal body).
 func (e *evaluation) isReplayOfTheKey(o *operation) bool {
 	isReusedOK := o.key != o.op && o.result == history.TypeOK
 	if !isReusedOK {
@@ -376,10 +376,10 @@ func (e *evaluation) isReplayOfTheKey(o *operation) bool {
 	return false
 }
 
-// ownerOf is the operation a client transaction applied. Its client_ref is
-// the key, which names the operation that owns it, unless a buggy client
-// took an idle key for another request: the bank then records that request's
-// correlation id, which is its operation id (FC43).
+// ownerOf is the operation a client transaction applied. Its client_ref is the
+// key, which names the operation that owns it, unless a buggy client took an
+// idle key for another request: the bank then records that request's
+// correlation id, which is its operation id.
 func (e *evaluation) ownerOf(transaction snapshot.Transaction) string {
 	sender, isKnown := e.ops.byID[transaction.CorrelationID]
 	isSentWithThisKey := isKnown && sender.key == transaction.ClientRef

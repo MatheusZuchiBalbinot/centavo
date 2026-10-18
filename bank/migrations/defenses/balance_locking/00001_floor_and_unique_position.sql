@@ -1,7 +1,6 @@
--- Defense D2, balance_locking (docs/domain.md, sections 13.2, 13.3 and 14):
--- the safety net under the row locks. If a lock is ever skipped by a bug, the
--- commit fails instead of overdrawing an account or giving two entries the
--- same position.
+-- Defense balance_locking, balance_locking: the safety net under the row locks.
+-- If a lock is ever skipped by a bug, the commit fails instead of overdrawing
+-- an account or giving two entries the same position.
 
 -- +goose Up
 ALTER TABLE account_balances

@@ -7,8 +7,8 @@ import "errors"
 // Cents is the smallest unit of money.
 type Cents int64
 
-// MaxOperationCents is the largest amount a single operation may move
-// (BR04: R$ 1.000.000,00).
+// MaxOperationCents is the largest amount a single operation may move (an
+// amount is positive and at most R$ 1,000,000.00: R$ 1.000.000,00).
 const MaxOperationCents Cents = 100_000_000
 
 // Errors of validating an amount.
@@ -24,7 +24,8 @@ type Amount struct {
 	cents Cents
 }
 
-// NewAmount validates an operation value (BR04).
+// NewAmount validates an operation value: positive and at most
+// MaxOperationCents.
 func NewAmount(cents Cents) (Amount, error) {
 	isPositive := cents > 0
 	if !isPositive {

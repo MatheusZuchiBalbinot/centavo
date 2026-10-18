@@ -1,5 +1,5 @@
 name: zombie-reconciler
-description: O conciliador congela com o lote lido além do TTL do lease, outro worker assume, e o zumbi acorda querendo gravar (FP07, FP10, FC36, PM-012).
+description: O conciliador congela com o lote lido além do TTL do lease, outro worker assume, e o zumbi acorda querendo gravar (`recon.after_compute_before_apply`, `lease.after_check_before_write`).
 duration: 15m
 workload:
   profile: payments-heavy
@@ -20,9 +20,10 @@ faults:
     arg: 45s
     probability: 0.5
     max_fires: 6
-  # FP10 is shared with the sweeper, which runs far more often and is held
-  # back by the state machine anyway; FP07 is the reconciler's alone, at the
-  # same point of the batch, so every round gets reconciler zombies.
+  # `lease.after_check_before_write` is shared with the sweeper, which runs far
+  # more often and is held back by the state machine anyway;
+  # `recon.after_compute_before_apply` is the reconciler's alone, at the same
+  # point of the batch, so every round gets reconciler zombies.
   - id: zombie-reconciler
     kind: failpoint
     targets: [bank-worker-1, bank-worker-2]

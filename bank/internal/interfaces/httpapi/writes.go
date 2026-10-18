@@ -22,7 +22,7 @@ const (
 	maxBodyBytes = 16 << 10
 )
 
-// Endpoints of the writes; each key is bound to one (docs/domain.md, section 13.4).
+// Endpoints of the writes; each key is bound to one.
 const (
 	accountsEndpoint  = "/v1/accounts"
 	depositsEndpoint  = "/v1/deposits"
@@ -196,7 +196,8 @@ func (a apiHandlers) runWrite(w http.ResponseWriter, r *http.Request, request wr
 		}
 	}
 
-	// FP02: the write is committed and the answer not sent (FC02).
+	// `api.after_commit_before_response`: the write is committed and the answer
+	// not sent.
 	err = failpoint.Hit(r.Context(), failpoint.APIAfterCommitBeforeResponse)
 	if err != nil {
 		writeError(w, r, a.logger, err)
@@ -207,9 +208,9 @@ func (a apiHandlers) runWrite(w http.ResponseWriter, r *http.Request, request wr
 	writeStored(w, response)
 }
 
-// resolveRequest names the request whose outcome the client asks about, as
-// it sent it: the key alone cannot tell it from another request that took the
-// same key (FC43).
+// resolveRequest names the request whose outcome the client asks about, as it
+// sent it: the key alone cannot tell it from another request that took the same
+// key.
 type resolveRequest struct {
 	Endpoint string          `json:"endpoint"`
 	Body     json.RawMessage `json:"body"`
@@ -230,7 +231,7 @@ type storedAnswer struct {
 }
 
 // resolve answers "applied" or "voided" for an operation whose outcome the
-// client does not know (docs/domain.md, section 5.1).
+// client does not know.
 func (a apiHandlers) resolve(w http.ResponseWriter, r *http.Request) {
 	key, err := idempotency.ParseKey(r.PathValue("key"))
 	if err != nil {

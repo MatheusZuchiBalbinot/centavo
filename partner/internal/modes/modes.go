@@ -1,6 +1,6 @@
-// Package modes holds the partner's lies (docs/chaos-bot.md, section 9):
-// probabilities per participant, with their own seed and a TTL. Without an
-// active mode the partner is honest. Only the chaoslab build can set a mode.
+// Package modes holds the partner's lies: probabilities per participant, with
+// their own seed and a TTL. Without an active mode the partner is honest. Only
+// the chaoslab build can set a mode.
 package modes
 
 import (

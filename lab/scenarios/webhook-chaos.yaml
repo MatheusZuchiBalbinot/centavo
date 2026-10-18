@@ -1,5 +1,5 @@
 name: webhook-chaos
-description: Webhooks atrasados e fora de ordem, com devoluções depois da liquidação, e o sweeper parado com um status velho na mão (FP11, FC11, FC23, FC26, PM-007).
+description: Webhooks atrasados e fora de ordem, com devoluções depois da liquidação, e o sweeper parado com um status velho na mão (`sweeper.after_status_before_transition`).
 duration: 15m
 workload:
   profile: payments-heavy

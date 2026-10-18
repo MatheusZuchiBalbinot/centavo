@@ -22,9 +22,10 @@ import (
 	"centavo/bank/internal/platform/failpoint"
 )
 
-// armFP01 makes FP01 fail every transfer of one correlation id. The error
-// action stands in for the kill: either way the use case stops between the
-// debit and the credit, and a real transaction rolls back.
+// armFP01 makes `transfer.after_debit_before_credit` fail every transfer of one
+// correlation id. The error action stands in for the kill: either way the use
+// case stops between the debit and the credit, and a real transaction rolls
+// back.
 func armFP01(t *testing.T, correlationID string) {
 	t.Helper()
 
@@ -79,8 +80,8 @@ func naiveMoney(t *testing.T, b bank, profile string) application.MoneyDependenc
 	return deps
 }
 
-// TestInternalTransfer_CrashBetweenDebitAndCredit_LeavesNoPartialEntries is
-// the regression test of PM-002, with its positive control.
+// TestInternalTransfer_CrashBetweenDebitAndCredit_LeavesNoPartialEntries is a
+// regression test, with its positive control.
 func TestInternalTransfer_CrashBetweenDebitAndCredit_LeavesNoPartialEntries(t *testing.T) {
 	cases := []struct {
 		name            string
@@ -132,8 +133,9 @@ func TestInternalTransfer_CrashBetweenDebitAndCredit_LeavesNoPartialEntries(t *t
 }
 
 // TestBalance_ConcurrentDebits_WithoutBalanceLocking is the positive control
-// of PM-001: without D2 the same concurrent debits are no longer serialized,
-// and the safety net in the database refuses some of the conflicting writes.
+// of: without balance_locking the same concurrent debits are no longer
+// serialized, and the safety net in the database refuses some of the
+// conflicting writes.
 func TestBalance_ConcurrentDebits_WithoutBalanceLocking(t *testing.T) {
 	b := newBank(t)
 	source, destination := b.newCustomer(t), b.newCustomer(t)
@@ -169,9 +171,10 @@ func TestBalance_ConcurrentDebits_WithoutBalanceLocking(t *testing.T) {
 	}
 }
 
-// TestInbox_CrashBetweenApplyAndMark_AppliesOnce is FC07: the processor
-// stopped after applying an event and before marking it (FP06). The effect
-// and the mark share the transaction, so the next pass applies it once.
+// TestInbox_CrashBetweenApplyAndMark_AppliesOnce is a regression test: the
+// processor stopped after applying an event and before marking it
+// (`inbox.after_apply_before_mark`). The effect and the mark share the
+// transaction, so the next pass applies it once.
 func TestInbox_CrashBetweenApplyAndMark_AppliesOnce(t *testing.T) {
 	p := newOutboxBank(t)
 	intake, processor := newInbox(p, statusAnswer(transfer.PartnerSettled))
@@ -235,10 +238,10 @@ func armFP08(t *testing.T) {
 	}
 }
 
-// TestReconciliation_CrashMidBatch_AppliesEachEntryOnce is FC09 and PM-011:
-// the reconciler died between two entries (FP08). With D10 the batch rolls
-// back as a whole and the rerun books each entry once; the naive variant
-// had committed the first entry and books it again.
+// TestReconciliation_CrashMidBatch_AppliesEachEntryOnce is a regression test:
+// the reconciler died between two entries (`recon.mid_apply`). With
+// reconciliation the batch rolls back as a whole and the rerun books each entry
+// once; the naive variant had committed the first entry and books it again.
 func TestReconciliation_CrashMidBatch_AppliesEachEntryOnce(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -247,9 +250,9 @@ func TestReconciliation_CrashMidBatch_AppliesEachEntryOnce(t *testing.T) {
 		wantOwed int64
 	}{
 		{name: "atomic batches", policy: application.AtomicBatches{}, schema: schema{hasAtomicLedger: true, hasBalanceLocking: true, hasIdempotency: true, hasInbox: true, hasFencing: true}, wantOwed: 1_000},
-		// FP08 fires after the second entry, so the rerun books both again:
-		// the first settlement now looks like a duplicate of itself, and the
-		// partner owes 1000 while suspense says 3000.
+		// `recon.mid_apply` fires after the second entry, so the rerun books
+		// both again: the first settlement now looks like a duplicate of
+		// itself, and the partner owes 1000 while suspense says 3000.
 		{name: "entry by entry", policy: application.EntryByEntry{}, schema: schema{hasAtomicLedger: true, hasBalanceLocking: true, hasIdempotency: true, hasInbox: true}, wantOwed: 3_000},
 	}
 
@@ -290,8 +293,9 @@ func TestReconciliation_CrashMidBatch_AppliesEachEntryOnce(t *testing.T) {
 	}
 }
 
-// renumberRebookedItems moves the items the naive variant booked twice out
-// of the way of D10's unique partner_seq, so the robust schema comes back.
+// renumberRebookedItems moves the items the naive variant booked twice out of
+// the way of reconciliation's unique partner_seq, so the robust schema comes
+// back.
 func renumberRebookedItems(t *testing.T, p pixBank) {
 	t.Helper()
 
@@ -305,7 +309,8 @@ WHERE id NOT IN (SELECT min(id) FROM reconciliation_items GROUP BY partner_seq)`
 
 // pausingStatement hands out the statement and, before the reconciler that
 // asked can book it, lets its lease expire and another worker take over: a
-// reconciler frozen past the TTL (FP07 or FP10 with freeze).
+// reconciler frozen past the TTL (`recon.after_compute_before_apply` or
+// `lease.after_check_before_write` with freeze).
 type pausingStatement struct {
 	statement *fakeStatement
 	meantime  func()
@@ -324,11 +329,11 @@ func (p pixBank) reconcilerWith(statement application.PartnerStatementReader, le
 	return application.NewReconciler(config)
 }
 
-// TestFencing_ZombieReconcilerWriteIsRejected is FC36 and PM-012: the
-// reconciler read a batch with a double settlement, paused past its lease,
-// and another worker booked the batch. With D11 the zombie's transaction
-// sees a stale token and aborts; the naive lease trusts its old check and
-// books the double settlement a second time.
+// TestFencing_ZombieReconcilerWriteIsRejected is a regression test: the
+// reconciler read a batch with a double settlement, paused past its lease, and
+// another worker booked the batch. With fencing the zombie's transaction sees a
+// stale token and aborts; the naive lease trusts its old check and books the
+// double settlement a second time.
 func TestFencing_ZombieReconcilerWriteIsRejected(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -381,9 +386,9 @@ func TestFencing_ZombieReconcilerWriteIsRejected(t *testing.T) {
 	}
 }
 
-// TestLease_ExpiryUsesDatabaseClock is FC35 and PM-013: a worker whose clock
-// runs two minutes ahead thinks a live lease expired. With D11 expiry is
-// the database's now(), and the skew changes nothing.
+// TestLease_ExpiryUsesDatabaseClock is a regression test: a worker whose clock
+// runs two minutes ahead thinks a live lease expired. With fencing expiry is
+// the database's now, and the skew changes nothing.
 func TestLease_ExpiryUsesDatabaseClock(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -434,10 +439,12 @@ func TestLease_ExpiryUsesDatabaseClock(t *testing.T) {
 	}
 }
 
-// TestReconciliation_FailpointsMatchThePixCorrelation guards FP07, FP08 and
-// FP10 as the lab arms them, by the round's prefix: the reconciler has no request
-// of its own, so without the PIX's correlation id from the statement they
-// never fire, and kill-during-reconciliation attacks nothing.
+// TestReconciliation_FailpointsMatchThePixCorrelation guards
+// `recon.after_compute_before_apply`, `recon.mid_apply` and
+// `lease.after_check_before_write` as the lab arms them, by the round's prefix:
+// the reconciler has no request of its own, so without the PIX's correlation id
+// from the statement they never fire, and kill-during-reconciliation attacks
+// nothing.
 func TestReconciliation_FailpointsMatchThePixCorrelation(t *testing.T) {
 	for _, name := range []failpoint.Name{failpoint.ReconAfterComputeBeforeApply, failpoint.ReconMidApply, failpoint.LeaseAfterCheckBeforeWrite} {
 		t.Run(string(name), func(t *testing.T) {

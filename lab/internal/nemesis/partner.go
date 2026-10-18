@@ -11,7 +11,7 @@ import (
 	"centavo/lab/scenarios"
 )
 
-// partnerModesTTL makes the lies a lease, renewed with the failpoints (lock 6).
+// partnerModesTTL makes the lies a lease, renewed with the failpoints.
 const partnerModesTTL = "30s"
 
 type armPartnerRecord struct {
@@ -79,8 +79,8 @@ func (n *Nemesis) partnerModes(fault scenarios.Fault) ([]byte, error) {
 	return json.Marshal(modes)
 }
 
-// clearPartner makes the partner honest again; deliveries already planned
-// still go out (docs/chaos-bot.md, section 3.1).
+// clearPartner makes the partner honest again; deliveries already planned still
+// go out.
 func (n *Nemesis) clearPartner(ctx context.Context) {
 	if n.config.PartnerAdminURL == "" {
 		return

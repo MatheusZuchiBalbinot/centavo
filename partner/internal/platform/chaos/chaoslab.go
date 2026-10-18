@@ -17,7 +17,7 @@ const (
 	maxModeBytes = 8 << 10
 )
 
-// Handler serves PUT and DELETE /chaos/modes behind the chaos token (lock 4).
+// Handler serves PUT and DELETE /chaos/modes behind the chaos token.
 func Handler(token string, registry *modes.Registry) http.Handler {
 	controls := controls{registry: registry}
 

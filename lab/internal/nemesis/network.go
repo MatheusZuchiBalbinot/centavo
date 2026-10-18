@@ -14,7 +14,7 @@ import (
 	"centavo/lab/scenarios"
 )
 
-// toxiproxyURL is Toxiproxy's API, on the Compose network only (lock 3).
+// toxiproxyURL is Toxiproxy's API, on the Compose network only.
 const toxiproxyURL = "http://toxiproxy:8474"
 
 // timeoutToxic is the toxic that holds data, the base of both partitions

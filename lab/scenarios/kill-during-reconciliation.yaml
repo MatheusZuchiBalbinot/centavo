@@ -1,5 +1,5 @@
 name: kill-during-reconciliation
-description: Os workers morrem com o lote da conciliação lido e antes de aplicar (FP07) e no meio do lote (FP08), com liquidações em dobro e webhooks perdidos para a conciliação ter o que corrigir (FC08, FC09, PM-011).
+description: Os workers morrem com o lote da conciliação lido e antes de aplicar (`recon.after_compute_before_apply`) e no meio do lote (`recon.mid_apply`), com liquidações em dobro e webhooks perdidos para a conciliação ter o que corrigir.
 duration: 15m
 workload:
   profile: payments-heavy

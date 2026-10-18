@@ -16,7 +16,7 @@ import (
 )
 
 // baseVersionTable keeps the base schema apart from the per-defense migration
-// tables (docs/architecture.md, section 8.2, step 5).
+// tables.
 const baseVersionTable = "goose_base_version"
 
 // PoolConfig sizes a connection pool for one process role.
@@ -24,8 +24,8 @@ type PoolConfig struct {
 	DatabaseURL    string
 	MaxConnections int32
 	// IsRelaxed turns synchronous_commit off on every connection: the naive
-	// variant of defense D12, where a commit is acknowledged before its WAL
-	// leaves shared memory (FC30).
+	// variant of the durable_db defense, where a commit is acknowledged before
+	// its WAL leaves shared memory.
 	IsRelaxed bool
 }
 

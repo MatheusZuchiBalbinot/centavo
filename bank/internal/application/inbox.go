@@ -13,7 +13,7 @@ import (
 	"centavo/bank/internal/platform/failpoint"
 )
 
-// Inbox timings of docs/architecture.md, section 6.
+// Inbox timings.
 const (
 	InboxPoll       = 500 * time.Millisecond
 	inboxRetryDelay = 2 * time.Second
@@ -25,8 +25,8 @@ type InboxStatus string
 // Final statuses of an inbox event.
 const (
 	InboxProcessed InboxStatus = "processed"
-	// InboxConflict is an event the bank cannot apply: it waits for a human
-	// or, from F9 on, for the reconciliation.
+	// InboxConflict is an event the bank cannot apply: it waits for a human or
+	// for the reconciliation.
 	InboxConflict InboxStatus = "conflict"
 )
 
@@ -61,9 +61,9 @@ type InboxStore interface {
 	DeferInbox(ctx context.Context, id int64, delay time.Duration, reason string) error
 }
 
-// InboxIntake is defense D5's webhook side (docs/domain.md, section 13.8):
-// the event is only written down, once per event_id, before the 200. The
-// partner redelivering it changes nothing (FC06).
+// InboxIntake is the inbox defense's webhook side: the event is only written
+// down, once per event_id, before the 200. The partner redelivering it changes
+// nothing.
 type InboxIntake struct {
 	unitOfWork UnitOfWork
 }
@@ -84,8 +84,8 @@ func (i InboxIntake) Apply(ctx context.Context, event PartnerEvent) error {
 	})
 }
 
-// InboxProcessor applies inbox events, each in the same transaction that
-// marks it, so a crash in between leaves neither (FC07).
+// InboxProcessor applies inbox events, each in the same transaction that marks
+// it, so a crash in between leaves neither.
 type InboxProcessor struct {
 	unitOfWork UnitOfWork
 	events     eventApplier
@@ -98,8 +98,8 @@ type InboxProcessor struct {
 type InboxProcessorConfig struct {
 	UnitOfWork UnitOfWork
 	Machine    StateMachine
-	// Partner answers the status queries of a resync, which only the
-	// guarded machine (D7) asks for.
+	// Partner answers the status queries of a resync, which only the guarded
+	// machine (state_machine) asks for.
 	Partner PartnerStatusReader
 	Logger  *slog.Logger
 }
@@ -166,7 +166,8 @@ func (p InboxProcessor) RunOnce(ctx context.Context) (bool, error) {
 			return err
 		}
 
-		// FP06: inside the transaction, so dying here undoes the effect too.
+		// `inbox.after_apply_before_mark`: inside the transaction, so dying
+		// here undoes the effect too.
 		err = failpoint.Hit(ctx, failpoint.InboxAfterApplyBeforeMark)
 		if err != nil {
 			return err
@@ -219,9 +220,9 @@ func (p InboxProcessor) settleFailure(ctx context.Context, claimed InboxEvent, c
 }
 
 // resync handles an event that does not fit the transfer's status: out of
-// order, repeated under a new id, or contradictory (docs/architecture.md,
-// section 5.5). The partner is asked outside any transaction, and the
-// transfer walks to its answer in a new one, which also closes the event.
+// order, repeated under a new id, or contradictory. The partner is asked
+// outside any transaction, and the transfer walks to its answer in a new one,
+// which also closes the event.
 func (p InboxProcessor) resync(ctx context.Context, claimed InboxEvent) error {
 	ctx = correlation.With(ctx, claimed.CorrelationID)
 

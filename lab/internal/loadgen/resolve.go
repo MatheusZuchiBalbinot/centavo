@@ -12,11 +12,11 @@ import (
 	"centavo/lab/internal/seed"
 )
 
-// stabilitySample is the share of keys resolved twice; the second answer
-// must match the first (I3, stability).
+// stabilitySample is the share of keys resolved twice; the second answer must
+// match the first (I3, stability).
 const stabilitySample = 0.1
 
-// ResolveConfig is the resolve step of the cure (docs/chaos-bot.md, section 3).
+// ResolveConfig is the resolve step of the cure.
 type ResolveConfig struct {
 	Round string
 	Seed  seed.Seed
@@ -88,8 +88,8 @@ func Resolve(ctx context.Context, config ResolveConfig) (int, error) {
 	return int(r.nextProcess.Load()) + 1, nil
 }
 
-// ReadPixOuts records the final state of every PIX out of the round, after
-// the quiescence (read_pix_out of docs/invariants-and-checker.md, section 3).
+// ReadPixOuts records the final state of every PIX out of the round, after the
+// quiescence (read_pix_out).
 func ReadPixOuts(ctx context.Context, config ResolveConfig, transferIDs []string) error {
 	r := &run{
 		config: Config{Round: config.Round, History: config.History, Logger: config.Logger}, policy: politePolicy, bank: newBankClient(config.ControlURL, 1),

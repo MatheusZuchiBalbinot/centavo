@@ -19,8 +19,8 @@ import (
 
 const (
 	maxBodyBytes = 16 << 10
-	// lateAnswer is past the bank's 2 s timeout: the transfer is processed,
-	// the bank never hears it (FC21).
+	// lateAnswer is past the bank's 2 s timeout: the transfer is processed, the
+	// bank never hears it.
 	lateAnswer            = 3 * time.Second
 	invalidKeyPrefix      = "invalid-"
 	invalidKeyReason      = "invalid_destination_key"
@@ -239,8 +239,8 @@ type incomingRequest struct {
 	AmountCents   int64  `json:"amount_cents"`
 }
 
-// incoming is a lab-only call: a PIX arrives for an account of the bank and
-// the partner announces it by webhook (docs/architecture.md, section 5.6).
+// incoming is a lab-only call: a PIX arrives for an account of the bank and the
+// partner announces it by webhook.
 func (a API) incoming(w http.ResponseWriter, r *http.Request) {
 	var request incomingRequest
 

@@ -1,5 +1,5 @@
 name: duplicate-webhooks
-description: Webhooks repetidos com o mesmo id e com id novo, e a API morrendo antes de responder ao parceiro (FC06, FC24, FC25, PM-006, PM-007).
+description: Webhooks repetidos com o mesmo id e com id novo, e a API morrendo antes de responder ao parceiro.
 duration: 15m
 workload:
   profile: balanced

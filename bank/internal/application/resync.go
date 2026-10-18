@@ -37,11 +37,10 @@ type pathWalk struct {
 	correlationID string
 }
 
-// walkPath applies, in the caller's unit of work, the shortest valid path
-// from the transfer's current status to the partner's (docs/domain.md,
-// section 8.4), each step a guarded transition with its own posting. The
-// current status is read under the lock, so a concurrent walk finds nothing
-// left to do.
+// walkPath applies, in the caller's unit of work, the shortest valid path from
+// the transfer's current status to the partner's, each step a guarded
+// transition with its own posting. The current status is read under the lock,
+// so a concurrent walk finds nothing left to do.
 func walkPath(ctx context.Context, stores Stores, machine StateMachine, walk pathWalk) error {
 	external, err := stores.LockExternalTransfer(ctx, walk.transferID)
 	if err != nil {

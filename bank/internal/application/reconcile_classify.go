@@ -35,8 +35,7 @@ type StatementEntry struct {
 	CorrelationID string
 }
 
-// Divergence is how a statement entry compares with the ledger
-// (docs/domain.md, section 10).
+// Divergence is how a statement entry compares with the ledger.
 type Divergence string
 
 // The verdicts of reconciling one statement line.
@@ -89,7 +88,7 @@ type verdict struct {
 
 // classify compares one statement entry with the ledger. It never touches a
 // customer's account without a known cause: what has no explanation goes to
-// suspense (BR15).
+// suspense (an unexplained divergence goes to suspense, never to a customer).
 func classify(entry StatementEntry, facts entryFacts) (verdict, error) {
 	switch entry.Kind {
 	case StatementSettlement:
@@ -127,8 +126,8 @@ func classifySettlement(entry StatementEntry, facts entryFacts) (verdict, error)
 	case transfer.StatusCreated, transfer.StatusSent:
 		return verdict{divergence: DivergenceMissingSettlement, action: actionWalk, walkTo: transfer.PartnerSettled}, nil
 	case transfer.StatusFailed:
-		// The bank refunded a PIX the partner paid (FC21 in a naive relay):
-		// the money is owed back to the bank and waits in suspense.
+		// The bank refunded a PIX the partner paid (in a naive relay): the
+		// money is owed back to the bank and waits in suspense.
 		paidOut.divergence = DivergenceMissingSettlement
 
 		return paidOut, nil

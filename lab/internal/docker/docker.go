@@ -1,6 +1,6 @@
 // Package docker talks to the Docker Engine API through docker-proxy, which
-// exposes only the calls the chaos bot needs (lock 5 of docs/chaos-bot.md,
-// section 16). It acts only on containers labeled as chaos targets.
+// exposes only the calls the chaos bot needs. It acts only on containers
+// labeled as chaos targets.
 package docker
 
 import (
@@ -237,8 +237,8 @@ func (c Client) Pause(ctx context.Context, id string) error {
 }
 
 // Kill sends SIGKILL from outside. Docker counts it as a manual stop, so the
-// restart policy leaves the container down: the fencing of an old primary
-// after a failover (docs/architecture.md, section 5.10).
+// restart policy leaves the container down: the fencing of an old primary after
+// a failover.
 func (c Client) Kill(ctx context.Context, id string) error {
 	_, err := c.Inspect(ctx, id)
 	if err != nil {

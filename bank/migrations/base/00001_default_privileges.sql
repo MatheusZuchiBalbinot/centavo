@@ -1,6 +1,6 @@
--- Privileges for every table bank_migrator creates from now on (docs/domain.md, section 13).
--- Append-only tables (ledger, transitions) revoke UPDATE and DELETE from bank_app in their own
--- migrations; bank_auditor stays read-only.
+-- Privileges for every table bank_migrator creates from now on. Append-only
+-- tables (ledger, transitions) revoke UPDATE and DELETE from bank_app in their
+-- own migrations; bank_auditor stays read-only.
 
 -- +goose Up
 ALTER DEFAULT PRIVILEGES FOR ROLE bank_migrator IN SCHEMA public

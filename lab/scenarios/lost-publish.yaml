@@ -1,5 +1,5 @@
 name: lost-publish
-description: A API morre entre gravar o PIX e avisar o relay, e os workers morrem e voltam (FP04, FC04, PM-004).
+description: A API morre entre gravar o PIX e avisar o relay, e os workers morrem e voltam (`pixout.after_save_before_publish`).
 duration: 15m
 workload:
   profile: payments-heavy

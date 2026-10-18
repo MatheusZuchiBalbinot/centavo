@@ -125,7 +125,8 @@ func TestPocketPix_SettledTransferPasses(t *testing.T) {
 	assertPasses(t, p.evaluate())
 }
 
-// TestPocketPix_DuplicateWebhookSettlesTwice is FC24, PM-006.
+// TestPocketPix_DuplicateWebhookSettlesTwice: a webhook applied twice settles
+// the transfer twice, and the checker sees the second settlement.
 func TestPocketPix_DuplicateWebhookSettlesTwice(t *testing.T) {
 	t.Parallel()
 
@@ -141,7 +142,8 @@ func TestPocketPix_DuplicateWebhookSettlesTwice(t *testing.T) {
 	assertBreaks(t, p.evaluate(), RuleI7Path, RuleI7Postings, RuleI6Settlements, RuleI5Transit)
 }
 
-// TestPocketPix_LostPublishLeavesTheTransferStuck is FC04, PM-004.
+// TestPocketPix_LostPublishLeavesTheTransferStuck: a publication lost after the
+// commit leaves the transfer in created, which liveness catches.
 func TestPocketPix_LostPublishLeavesTheTransferStuck(t *testing.T) {
 	t.Parallel()
 
@@ -153,8 +155,8 @@ func TestPocketPix_LostPublishLeavesTheTransferStuck(t *testing.T) {
 	assertBreaks(t, p.evaluate(), RuleI5NotTerminal, RuleI5Transit)
 }
 
-// TestPocketPix_TimeoutTakenAsFailureCreatesMoney is FC21, PM-008: the
-// partner paid, the bank refunded the customer too.
+// TestPocketPix_TimeoutTakenAsFailureCreatesMoney: the partner paid, the bank
+// refunded the customer too.
 func TestPocketPix_TimeoutTakenAsFailureCreatesMoney(t *testing.T) {
 	t.Parallel()
 
@@ -169,8 +171,8 @@ func TestPocketPix_TimeoutTakenAsFailureCreatesMoney(t *testing.T) {
 	assertBreaks(t, p.evaluate(), RuleI7Authority, RuleI6Settlements, RuleI1cPartnerReserve)
 }
 
-// TestPocketPix_RetryWithANewIDPaysTwice is FC05, PM-005: the naive relay
-// sends E<id>-1 and E<id>-2, and the partner pays both.
+// TestPocketPix_RetryWithANewIDPaysTwice: the naive relay sends E<id>-1 and
+// E<id>-2, and the partner pays both.
 func TestPocketPix_RetryWithANewIDPaysTwice(t *testing.T) {
 	t.Parallel()
 
@@ -191,8 +193,8 @@ func TestPocketPix_RetryWithANewIDPaysTwice(t *testing.T) {
 	assertBreaks(t, p.evaluate(), RuleI6Settlements, RuleI1cPartnerReserve)
 }
 
-// TestPocketPix_PartnerDoubleProcessing is FC22, PM-010: the same
-// end_to_end_id settled twice is money the partner owes.
+// TestPocketPix_PartnerDoubleProcessing: the same end_to_end_id settled twice
+// is money the partner owes.
 func TestPocketPix_PartnerDoubleProcessing(t *testing.T) {
 	t.Parallel()
 
@@ -207,9 +209,9 @@ func TestPocketPix_PartnerDoubleProcessing(t *testing.T) {
 	assertBreaks(t, p.evaluate(), RuleI1cDoubleProcess, RuleI1cPartnerReserve)
 }
 
-// TestPocketPix_ReconciledDoubleProcessingPasses: the reconciliation booked
-// the second settlement against suspense (D10), so the reserve mirror and
-// what the partner owes both agree with the truth.
+// TestPocketPix_ReconciledDoubleProcessingPasses: the reconciliation booked the
+// second settlement against suspense, so the reserve mirror and what the
+// partner owes both agree with the truth.
 func TestPocketPix_ReconciledDoubleProcessingPasses(t *testing.T) {
 	t.Parallel()
 

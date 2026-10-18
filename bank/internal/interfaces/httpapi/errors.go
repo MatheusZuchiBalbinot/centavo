@@ -14,8 +14,8 @@ import (
 	"centavo/bank/internal/domain/transfer"
 )
 
-// errorCode is the machine-readable code clients branch on (docs/domain.md,
-// section 12). Only 4xx codes are definitive; every 5xx is indeterminate.
+// errorCode is the machine-readable code clients branch on. Only 4xx codes are
+// definitive; every 5xx is indeterminate.
 type errorCode string
 
 const (

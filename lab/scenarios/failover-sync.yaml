@@ -1,5 +1,5 @@
 name: failover-sync
-description: "O mesmo failover com replicação síncrona: o primário só confirma depois que a réplica gravou o WAL, e nada confirmado se perde (FC32, prova do PM-016). Só no perfil replica."
+description: "O mesmo failover com replicação síncrona: o primário só confirma depois que a réplica gravou o WAL, e nada confirmado se perde. Só no perfil replica."
 duration: 15m
 workload:
   profile: balanced

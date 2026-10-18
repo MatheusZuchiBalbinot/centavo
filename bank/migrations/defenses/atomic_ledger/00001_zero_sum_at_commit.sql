@@ -1,6 +1,6 @@
--- Defense D1, atomic_ledger (docs/domain.md, sections 13.3 and 14): every
--- ledger transaction sums to zero and has entries, checked at commit by
--- deferred constraint triggers, because entries are inserted one by one.
+-- Defense atomic_ledger, atomic_ledger: every ledger transaction sums to zero
+-- and has entries, checked at commit by deferred constraint triggers, because
+-- entries are inserted one by one.
 
 -- +goose Up
 -- +goose StatementBegin

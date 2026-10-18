@@ -1,5 +1,5 @@
 name: duplicate-concurrent
-description: Cada escrita sai duas vezes ao mesmo tempo com a mesma chave de idempotência (FC40, PM-003).
+description: Cada escrita sai duas vezes ao mesmo tempo com a mesma chave de idempotência.
 duration: 10m
 workload:
   profile: ledger-only

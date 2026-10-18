@@ -12,15 +12,15 @@ import (
 	"centavo/bank/internal/application"
 )
 
-// SQLSTATE codes of docs/architecture.md, section 7.1.
+// SQLSTATE codes.
 const (
 	serializationFailure = "40001"
 	deadlockDetected     = "40P01"
 	queryCanceled        = "57014"
 )
 
-// classify sorts a unit of work's failure (docs/architecture.md, section 7.1).
-// Domain errors pass through untouched; only storage failures are classified.
+// classify sorts a unit of work's failure. Domain errors pass through
+// untouched; only storage failures are classified.
 func classify(err error) error {
 	if err == nil {
 		return nil
@@ -56,7 +56,7 @@ func classifyServerError(pgErr *pgconn.PgError, err error) error {
 }
 
 // isConnectionLost is the ambiguous case: the request may have reached the
-// server, so a COMMIT may have happened (PM-014).
+// server, so a COMMIT may have happened.
 func isConnectionLost(err error) bool {
 	var netErr net.Error
 

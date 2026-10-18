@@ -1,5 +1,5 @@
 name: concurrency-hotspot
-description: Dezesseis clientes concorrentes sobre quatro contas, sem nenhuma falha injetada (FC41, PM-001).
+description: Dezesseis clientes concorrentes sobre quatro contas, sem nenhuma falha injetada.
 duration: 10m
 workload:
   profile: ledger-only

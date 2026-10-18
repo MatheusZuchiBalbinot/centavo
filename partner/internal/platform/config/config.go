@@ -96,9 +96,9 @@ func Load(lookup LookupFunc) (Config, error) {
 	return Config{Env: env, DBPath: dbPath, Participants: participants, WebhookSecret: secret, ChaosToken: token}, nil
 }
 
-// ValidateBuild enforces safety locks 2 and 4 of docs/chaos-bot.md, section
-// 16: the lying modes of a chaoslab build never run in production, and the
-// chaos port has a real secret.
+// ValidateBuild enforces the safety rule that a chaoslab build refuses to run
+// in production: the lying modes of a chaoslab build never run in production,
+// and the chaos port has a real secret.
 func ValidateBuild(cfg Config, isChaosBuild bool) error {
 	isChaosBuildInProduction := isChaosBuild && cfg.Env == EnvProduction
 	if isChaosBuildInProduction {

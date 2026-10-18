@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// maxSkew bounds a skew: enough for the key cleanup's +30h (FC37).
+// maxSkew bounds a skew: enough for the key cleanup's +30h.
 const maxSkew = 48 * time.Hour
 
 // ErrInvalidSkew is a skew too large or with no lifetime.
@@ -20,8 +20,8 @@ var skew = struct {
 	expiresAt time.Time
 }{}
 
-// SetSkew moves this process's wall clock by offset until ttl passes, so a
-// lab that dies leaves the clock right again (lock 6).
+// SetSkew moves this process's wall clock by offset until ttl passes, so a lab
+// that dies leaves the clock right again.
 func SetSkew(offset, ttl time.Duration, now time.Time) error {
 	isValid := offset >= -maxSkew && offset <= maxSkew && ttl > 0
 	if !isValid {

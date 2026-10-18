@@ -1,5 +1,5 @@
 name: cut-responses
-description: Respostas cortadas no meio e conexões resetadas entre a API e o banco e entre o cliente e a API; o COMMIT pode ter acontecido sem que ninguém saiba (FC03, FC20, PM-003, PM-014).
+description: Respostas cortadas no meio e conexões resetadas entre a API e o banco e entre o cliente e a API; o COMMIT pode ter acontecido sem que ninguém saiba.
 duration: 15m
 workload:
   profile: balanced

@@ -1,6 +1,6 @@
-// Package scenarios embeds and parses the named scenarios of
-// docs/chaos-bot.md, section 13. Only the fields the lab implements are
-// accepted; an unknown field fails loudly instead of being ignored.
+// Package scenarios embeds and parses the named scenarios. Only the fields the
+// lab implements are accepted; an unknown field fails loudly instead of being
+// ignored.
 package scenarios
 
 import (
@@ -24,7 +24,7 @@ import (
 //go:embed *.yaml
 var files embed.FS
 
-// Profile is the operation mix of a workload (docs/chaos-bot.md, section 11).
+// Profile is the operation mix of a workload.
 type Profile string
 
 // The operation mixes of a workload.
@@ -33,7 +33,7 @@ const (
 	ProfileBalanced      Profile = "balanced"
 	ProfilePaymentsHeavy Profile = "payments-heavy"
 	// ProfilePaymentsOut has no PIX in: a scenario that cuts every webhook
-	// leaves a PIX in for the reconciliation alone to find (F9).
+	// leaves a PIX in for the reconciliation alone to find.
 	ProfilePaymentsOut Profile = "payments-out"
 )
 
@@ -55,34 +55,34 @@ const (
 
 var clientProfiles = []ClientProfile{ClientPolite, ClientDuplicator, ClientAggressive, ClientBuggy}
 
-// FaultKind is the fault family of docs/chaos-bot.md, section 4.
+// FaultKind is the fault family.
 type FaultKind string
 
 // The fault families.
 const (
 	FaultFailpoint FaultKind = "failpoint"
 	FaultProcess   FaultKind = "process"
-	// FaultPartner makes the partner lie (docs/chaos-bot.md, section 9).
+	// FaultPartner makes the partner lie.
 	FaultPartner FaultKind = "partner"
-	// FaultClock skews a process's wall clock (docs/chaos-bot.md, section 6).
+	// FaultClock skews a process's wall clock.
 	FaultClock FaultKind = "clock"
-	// FaultNetwork puts toxics on Toxiproxy's links (docs/chaos-bot.md, section 8).
+	// FaultNetwork puts toxics on Toxiproxy's links.
 	FaultNetwork FaultKind = "network"
-	// FaultDatabase kills or freezes PostgreSQL (docs/chaos-bot.md, section 10).
+	// FaultDatabase kills or freezes PostgreSQL.
 	FaultDatabase FaultKind = "database"
 )
 
-// Database actions (docs/chaos-bot.md, section 10).
+// Database actions.
 const (
 	DatabaseKillPostmaster = "kill_postmaster"
 	DatabaseKillBackend    = "kill_backend"
 	DatabaseFreeze         = "freeze"
-	// DatabaseFailover kills the primary and promotes the replica (replica
-	// profile only, docs/architecture.md, section 5.10).
+	// DatabaseFailover kills the primary and promotes the replica; it needs the
+	// replica profile.
 	DatabaseFailover = "failover"
 )
 
-// Replication modes of the replica profile (docs/chaos-bot.md, section 10).
+// Replication modes of the replica profile.
 const (
 	ReplicationAsync = "async"
 	ReplicationSync  = "sync"
@@ -93,9 +93,9 @@ var (
 	replicationModes = []string{ReplicationAsync, ReplicationSync}
 )
 
-// Toxic types the bot puts on a link, with the three partitions of
-// docs/chaos-bot.md, section 8: reject (the proxy is down), blackhole
-// (nothing moves either way) and one_way (requests arrive, answers do not).
+// Toxic types the bot puts on a link, with the three partitions: reject (the
+// proxy is down), blackhole (nothing moves either way) and one_way (requests
+// arrive, answers do not).
 const (
 	ToxicReject    = "reject"
 	ToxicBlackhole = "blackhole"
@@ -104,7 +104,7 @@ const (
 
 var (
 	toxicTypes = []string{"latency", "timeout", "reset_peer", "limit_data", "slicer", "bandwidth", "slow_close", ToxicReject, ToxicBlackhole, ToxicOneWay}
-	// networkLinks are Toxiproxy's proxies (docs/architecture.md, section 4.1).
+	// networkLinks are Toxiproxy's proxies.
 	networkLinks = []string{"client_api", "api_pg", "worker1_pg", "worker2_pg", "worker1_partner", "worker2_partner", "partner_webhooks"}
 	toxicStreams = []string{"upstream", "downstream"}
 )
@@ -137,7 +137,7 @@ var (
 
 const (
 	defaultHealTimeout = 2 * time.Minute
-	// defaultLivenessDeadline is Δ of docs/invariants-and-checker.md, section 6.
+	// defaultLivenessDeadline is Δ.
 	defaultLivenessDeadline = 120 * time.Second
 	minMeanInterval         = time.Second
 )
@@ -166,7 +166,8 @@ type Scenario struct {
 	Description string
 	Duration    time.Duration
 	HealTimeout time.Duration
-	// LivenessDeadline is Δ: how long after the cure the sagas have to end (I5).
+	// LivenessDeadline is how long after the cure every saga has to end; a
+	// transfer still in flight after it breaks I5.
 	LivenessDeadline time.Duration
 	Workload         Workload
 	Faults           []Fault

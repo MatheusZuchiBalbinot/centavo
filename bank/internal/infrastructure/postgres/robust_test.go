@@ -20,8 +20,9 @@ const (
 	checkViolation  = "23514"
 )
 
-// TestBalance_ConcurrentDebits_NeverOverdraw is the regression test of PM-001:
-// with D2 the debits queue on the balance row, and the eleventh one is refused.
+// TestBalance_ConcurrentDebits_NeverOverdraw is a regression test: with
+// balance_locking the debits queue on the balance row, and the eleventh one is
+// refused.
 func TestBalance_ConcurrentDebits_NeverOverdraw(t *testing.T) {
 	b := newBank(t)
 	source, destination := b.newCustomer(t), b.newCustomer(t)
@@ -96,8 +97,9 @@ func TestTransfer_OppositeDirections_NeverDeadlock(t *testing.T) {
 	assertChainedAndNeverNegative(t, b, second, 10_000)
 }
 
-// assertChainedAndNeverNegative checks I1b and I4 on one account, the way the
-// checker does: positions 1..n, chained balances, materialized equal to the sum.
+// assertChainedAndNeverNegative checks each account's entries chain and
+// customer balances never go negative on one account, the way the checker does:
+// positions 1..n, chained balances, materialized equal to the sum.
 func assertChainedAndNeverNegative(t *testing.T, b bank, account ledger.AccountID, want int64) {
 	t.Helper()
 
@@ -124,9 +126,9 @@ func assertChainedAndNeverNegative(t *testing.T, b bank, account ledger.AccountI
 	}
 }
 
-// TestDefenseConstraints_CatchWhatTheLocksMiss checks the safety net of D1
-// and D2: writes a skipped lock or a crash would let through fail at the
-// database instead of corrupting the ledger.
+// TestDefenseConstraints_CatchWhatTheLocksMiss checks the safety net of
+// atomic_ledger and balance_locking: writes a skipped lock or a crash would let
+// through fail at the database instead of corrupting the ledger.
 func TestDefenseConstraints_CatchWhatTheLocksMiss(t *testing.T) {
 	b := newBank(t)
 	account := b.newCustomer(t)

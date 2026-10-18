@@ -1,5 +1,5 @@
 name: partner-double-settle
-description: O parceiro liquida alguns PIX duas vezes; só a conciliação vê a segunda saída da reserva (FC22, PM-010).
+description: O parceiro liquida alguns PIX duas vezes; só a conciliação vê a segunda saída da reserva.
 duration: 15m
 workload:
   profile: payments-heavy

@@ -61,8 +61,7 @@ func (p *recordingPartner) calls() []transfer.EndToEndID {
 	return append([]transfer.EndToEndID{}, p.endToEndIDs...)
 }
 
-// newOutboxBank is the PIX of phase F7: the transfer and its outbox message
-// share a commit.
+// newOutboxBank is the PIX: the transfer and its outbox message share a commit.
 func newOutboxBank(t *testing.T) pixBank {
 	t.Helper()
 
@@ -127,8 +126,9 @@ func (p pixBank) drainOutbox(t *testing.T) {
 	}
 }
 
-// TestPixOut_CrashAfterSave_IsStillSubmitted is PM-004: the API died after
-// the commit (FP04), so nothing was published, and the transfer still goes.
+// TestPixOut_CrashAfterSave_IsStillSubmitted is a regression test: the API died
+// after the commit (`pixout.after_save_before_publish`), so nothing was
+// published, and the transfer still goes.
 func TestPixOut_CrashAfterSave_IsStillSubmitted(t *testing.T) {
 	p := newOutboxBank(t)
 	p.drainOutbox(t)
@@ -189,10 +189,11 @@ func TestOutbox_StaleTokenCannotFinish(t *testing.T) {
 	}
 }
 
-// TestRelay_RedeliveryAfterCrash_ReusesEndToEndID is PM-005: the relay died
-// after the partner took the PIX (FP03). With D6 the next relay sends the
-// same end_to_end_id, which the partner answers without paying again; the
-// naive id per attempt is a second PIX.
+// TestRelay_RedeliveryAfterCrash_ReusesEndToEndID is a regression test: the
+// relay died after the partner took the PIX
+// (`relay.after_partner_call_before_save`). With partner_idempotency the next
+// relay sends the same end_to_end_id, which the partner answers without paying
+// again; the naive id per attempt is a second PIX.
 func TestRelay_RedeliveryAfterCrash_ReusesEndToEndID(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -249,8 +250,8 @@ func TestRelay_RedeliveryAfterCrash_ReusesEndToEndID(t *testing.T) {
 }
 
 // dyingAfterSubmit lets the submission reach the partner and then ends the
-// relay's context, so nothing it does after the call is saved: a kill at FP03
-// without the chaoslab build.
+// relay's context, so nothing it does after the call is saved: a kill at
+// `relay.after_partner_call_before_save` without the chaoslab build.
 type dyingAfterSubmit struct {
 	partner application.PartnerSubmitter
 	die     context.CancelFunc
@@ -314,7 +315,7 @@ func (a statusAnswer) Status(context.Context, transfer.EndToEndID) (application.
 	return application.AuthoritativeStatus{Status: transfer.PartnerStatus(a)}, nil
 }
 
-// newInbox is D5 over the test database.
+// newInbox is inbox over the test database.
 func newInbox(p pixBank, partner application.PartnerStatusReader) (application.InboxIntake, application.InboxProcessor) {
 	config := application.InboxProcessorConfig{UnitOfWork: p.unitOfWork, Machine: application.GuardedTransitions{}, Partner: partner, Logger: discardLogger()}
 
@@ -349,9 +350,9 @@ func countRows(t *testing.T, p pixBank, query string, args ...any) int {
 	return count
 }
 
-// TestInbox_DuplicateEventID_IsIgnored is PM-006: the API died before the
-// 200 (FP05), the partner delivered the same event again, and the transfer
-// is settled once.
+// TestInbox_DuplicateEventID_IsIgnored is a regression test: the API died
+// before the 200 (`webhook.after_receive_before_ack`), the partner delivered
+// the same event again, and the transfer is settled once.
 func TestInbox_DuplicateEventID_IsIgnored(t *testing.T) {
 	p := newOutboxBank(t)
 	intake, processor := newInbox(p, statusAnswer(transfer.PartnerSettled))

@@ -1,7 +1,6 @@
 // Package audit is the live auditor: every few seconds it reads the bank's
-// materialized balances with bank_auditor and reports the two checks of
-// version 0 (docs/invariants-and-checker.md, section 10). It feeds the panel;
-// the verdict always belongs to the checker.
+// materialized balances with bank_auditor and reports the two checks of version
+// 0. It feeds the panel; the verdict always belongs to the checker.
 package audit
 
 import (

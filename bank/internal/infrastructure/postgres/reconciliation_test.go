@@ -85,7 +85,7 @@ func (p pixBank) systemBalance(t *testing.T, id ledger.AccountID) int64 {
 	return balance
 }
 
-// reconcile runs the robust reconciler (D10) once.
+// reconcile runs the robust reconciler (reconciliation) once.
 func (p pixBank) reconcile(t *testing.T, statement application.PartnerStatementReader) {
 	t.Helper()
 
@@ -111,8 +111,8 @@ func TestReconciliation_MissingSettlement_ConfirmsTheTransfer(t *testing.T) {
 	}
 }
 
-// TestReconciliation_PartnerDoubleSettlement_BooksSuspense is FC34: the
-// partner settled the same PIX twice. The second settlement left the
+// TestReconciliation_PartnerDoubleSettlement_BooksSuspense is a regression
+// test: the partner settled the same PIX twice. The second settlement left the
 // reserve too, and suspense holds what the partner owes back.
 func TestReconciliation_PartnerDoubleSettlement_BooksSuspense(t *testing.T) {
 	p := newOutboxBank(t)

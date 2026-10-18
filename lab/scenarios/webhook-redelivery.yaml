@@ -1,5 +1,5 @@
 name: webhook-redelivery
-description: O parceiro entrega de novo o mesmo evento, com o mesmo id, e o banco morre antes do ack ou entre aplicar e marcar (FP05, FP06, FC06, FC07, FC24, PM-006). Sem duplicatas de id novo, que são do PM-007.
+description: O parceiro entrega de novo o mesmo evento, com o mesmo id, e o banco morre antes do ack ou entre aplicar e marcar (`webhook.after_receive_before_ack`, `inbox.after_apply_before_mark`). Sem duplicatas de id novo, que só a máquina de estados reconhece.
 duration: 15m
 workload:
   profile: balanced

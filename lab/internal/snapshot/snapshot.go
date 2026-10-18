@@ -1,7 +1,6 @@
 // Package snapshot is the ledger export the checker reads: one CSV per table,
 // taken from a single REPEATABLE READ snapshot. The ledger schema is an audit
-// contract (docs/invariants-and-checker.md, section 2): changing it means
-// changing this package on purpose.
+// contract: changing it means changing this package on purpose.
 package snapshot
 
 import (
@@ -143,8 +142,7 @@ type Meta struct {
 // BandSize is how many entry ids one immutability band covers (I8).
 const BandSize = 100_000
 
-// Band is the fingerprint of the ledger entries whose ids fall in one band
-// (docs/invariants-and-checker.md, I8).
+// Band is the fingerprint of the ledger entries whose ids fall in one band.
 type Band struct {
 	Band     int64 `json:"band"`
 	Count    int64 `json:"count"`
@@ -555,8 +553,8 @@ func atois(fields ...string) ([]int64, error) {
 	return numbers, nil
 }
 
-// LedgerState is what a round leaves for the next one to check I8 against:
-// the fingerprint of the whole ledger when it was exported.
+// LedgerState is what a round leaves for the next one to check I8 against: the
+// fingerprint of the whole ledger when it was exported.
 type LedgerState struct {
 	FirstTransactionID string `json:"first_transaction_id"`
 	Bands              []Band `json:"bands"`

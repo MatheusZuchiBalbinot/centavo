@@ -11,7 +11,7 @@ import (
 )
 
 // groupSyncInterval batches fsyncs: an invoke waits at most this long to be
-// durable (docs/invariants-and-checker.md, section 4.3).
+// durable.
 const groupSyncInterval = 10 * time.Millisecond
 
 const wallFormat = "2006-01-02T15:04:05.000Z07:00"

@@ -83,10 +83,10 @@ func TestPathTo_ConflictsAreNeverResolved(t *testing.T) {
 	}
 }
 
-// TestTransfer_AnyEventOrderWithDuplicates_ConvergesToAuthoritativeState is the confluence property of the
-// state machine (docs/roadmap.md, F8): the partner moves its transfer along
-// its lifecycle, the bank resyncs at arbitrary moments with whatever status
-// it reads, and once the bank reads the final status it agrees with it.
+// TestTransfer_AnyEventOrderWithDuplicates_ConvergesToAuthoritativeState is the
+// confluence property of the state machine: the partner moves its transfer
+// along its lifecycle, the bank resyncs at arbitrary moments with whatever
+// status it reads, and once the bank reads the final status it agrees with it.
 func TestTransfer_AnyEventOrderWithDuplicates_ConvergesToAuthoritativeState(t *testing.T) {
 	t.Parallel()
 

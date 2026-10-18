@@ -202,7 +202,7 @@ func newUseCases(pool *pgxpool.Pool, cfg config.Config) (httpapi.UseCases, error
 	return useCases, nil
 }
 
-// newPublication picks D4: the outbox row in the transfer's own commit, or
+// newPublication picks outbox: the outbox row in the transfer's own commit, or
 // the naive NOTIFY after it.
 func newPublication(pool *pgxpool.Pool, profile defenses.Profile) application.Publication {
 	if profile.IsEnabled(defenses.Outbox) {
@@ -212,7 +212,7 @@ func newPublication(pool *pgxpool.Pool, profile defenses.Profile) application.Pu
 	return application.NewNotifyAfterCommit(postgres.NewNotifyPublisher(pool))
 }
 
-// newWebhook picks D5: write to the inbox, or apply in the request.
+// newWebhook picks inbox: write to the inbox, or apply in the request.
 func newWebhook(profile defenses.Profile, unitOfWork application.UnitOfWork, machine application.StateMachine) httpapi.WebhookApplier {
 	if profile.IsEnabled(defenses.Inbox) {
 		return application.NewInboxIntake(unitOfWork)
@@ -221,7 +221,8 @@ func newWebhook(profile defenses.Profile, unitOfWork application.UnitOfWork, mac
 	return application.NewNaiveWebhook(unitOfWork, machine)
 }
 
-// newStateMachine picks D7: guarded transitions, or the naive overwrite.
+// newStateMachine picks state_machine: guarded transitions, or the naive
+// overwrite.
 func newStateMachine(profile defenses.Profile) application.StateMachine {
 	if profile.IsEnabled(defenses.StateMachine) {
 		return application.GuardedTransitions{}
@@ -230,8 +231,9 @@ func newStateMachine(profile defenses.Profile) application.StateMachine {
 	return application.OverwriteTransitions{}
 }
 
-// newIdempotency picks D3. Its key shares the commit of the effect, so it
-// needs D1: without atomic_ledger the naive variant runs (Profile.Notes says so).
+// newIdempotency picks idempotency. Its key shares the commit of the effect, so
+// it needs atomic_ledger: without atomic_ledger the naive variant runs
+// (Profile.Notes says so).
 func newIdempotency(pool *pgxpool.Pool, profile defenses.Profile, unitOfWork application.UnitOfWork) (application.IdempotencyStrategy, error) {
 	isRobust := profile.IsEnabled(defenses.Idempotency) && profile.IsEnabled(defenses.AtomicLedger)
 	if isRobust {
@@ -254,9 +256,9 @@ type naiveVariants struct {
 	idempotency application.IdempotencyStrategy
 }
 
-// newMoneyDependencies is the composition root of docs/architecture.md,
-// section 8.2: the robust strategy unless the profile turns its defense off,
-// in which case the naive variant of the chaoslab build.
+// newMoneyDependencies is the composition root: the robust strategy unless the
+// profile turns its defense off, in which case the naive variant of the
+// chaoslab build.
 func newMoneyDependencies(pool *pgxpool.Pool, profile defenses.Profile) (application.MoneyDependencies, error) {
 	deps := application.MoneyDependencies{UnitOfWork: postgres.NewUnitOfWork(pool), Locker: application.RowLocker{}}
 
@@ -335,7 +337,8 @@ type sagaDependencies struct {
 }
 
 // startSaga starts the worker's PIX loops, each in the variant the profile
-// picks: the relay (D4, D6, D9), the inbox processor (D5) and the sweeper (D8).
+// picks: the relay (outbox, partner_idempotency, resilient_client), the inbox
+// processor (inbox) and the sweeper (recovery).
 func startSaga(ctx context.Context, pool *pgxpool.Pool, cfg config.Config, logger *slog.Logger) error {
 	err := cfg.Partner.RequireEndpoint()
 	if err != nil {
@@ -375,7 +378,7 @@ func startSaga(ctx context.Context, pool *pgxpool.Pool, cfg config.Config, logge
 	return nil
 }
 
-// newLeasePolicy picks D11: leases by the database's clock with a token
+// newLeasePolicy picks fencing: leases by the database's clock with a token
 // checked at write time, or by the worker's own clock and word.
 func newLeasePolicy(profile defenses.Profile) application.LeasePolicy {
 	if profile.IsEnabled(defenses.Fencing) {
@@ -385,8 +388,8 @@ func newLeasePolicy(profile defenses.Profile) application.LeasePolicy {
 	return application.LocalClockLeases{}
 }
 
-// newBatchPolicy picks D10: a batch in one commit with the cursor, or an
-// entry at a time with the cursor saved last.
+// newBatchPolicy picks reconciliation: a batch in one commit with the cursor,
+// or an entry at a time with the cursor saved last.
 func newBatchPolicy(profile defenses.Profile) application.BatchPolicy {
 	if profile.IsEnabled(defenses.Reconciliation) {
 		return application.AtomicBatches{}
@@ -395,7 +398,8 @@ func newBatchPolicy(profile defenses.Profile) application.BatchPolicy {
 	return application.EntryByEntry{}
 }
 
-// newPartner picks D9's circuit breaker around the partner client.
+// newPartner picks resilient_client's circuit breaker around the partner
+// client.
 func newPartner(cfg config.Config) partner {
 	client := partnerclient.New(cfg.Partner.BaseURL, cfg.Partner.ParticipantID)
 
@@ -406,8 +410,8 @@ func newPartner(cfg config.Config) partner {
 	return client
 }
 
-// startRelay starts what sends PIX out to the partner: the outbox relay
-// with D4, or the naive LISTEN relay of phase F6.
+// startRelay starts what sends PIX out to the partner: the outbox relay with
+// outbox, or the naive LISTEN relay.
 func startRelay(ctx context.Context, pool *pgxpool.Pool, profile defenses.Profile, saga sagaDependencies) {
 	if profile.IsEnabled(defenses.Outbox) {
 		relayConfig := application.OutboxRelayConfig{
@@ -426,7 +430,8 @@ func startRelay(ctx context.Context, pool *pgxpool.Pool, profile defenses.Profil
 	go relayPendingOnBoot(ctx, relay, saga.logger)
 }
 
-// newEndToEnd picks D6: one end_to_end_id per transfer, or one per attempt.
+// newEndToEnd picks partner_idempotency: one end_to_end_id per transfer, or one
+// per attempt.
 func newEndToEnd(profile defenses.Profile) application.EndToEndPolicy {
 	if profile.IsEnabled(defenses.PartnerIdempotency) {
 		return application.FixedEndToEnd{}
@@ -435,7 +440,8 @@ func newEndToEnd(profile defenses.Profile) application.EndToEndPolicy {
 	return application.NewEndToEndPerAttempt{}
 }
 
-// newDoubt picks D9's answer to a doubtful send: retry later, or give up.
+// newDoubt picks resilient_client's answer to a doubtful send: retry later, or
+// give up.
 func newDoubt(profile defenses.Profile, machine application.StateMachine) application.DoubtPolicy {
 	if profile.IsEnabled(defenses.ResilientClient) {
 		return application.RetryOnDoubt{}
@@ -509,9 +515,9 @@ func defenseMigrationsOf(profile defenses.Profile) ([]postgres.DefenseMigrations
 	return list, nil
 }
 
-// checkSchema is the startup validation of docs/architecture.md, section 8.2,
-// step 3. A mismatch refuses to start; an unreachable database does not,
-// because under chaos it comes back, and bank migrate already ran before.
+// checkSchema is the startup validation. A mismatch refuses to start; an
+// unreachable database does not, because under chaos it comes back, and bank
+// migrate already ran before.
 func checkSchema(ctx context.Context, pool *pgxpool.Pool, cfg config.Config, logger *slog.Logger) error {
 	err := checkDurability(ctx, pool, cfg, logger)
 	if err != nil {
@@ -521,9 +527,9 @@ func checkSchema(ctx context.Context, pool *pgxpool.Pool, cfg config.Config, log
 	return checkDefenseSchema(ctx, pool, cfg, logger)
 }
 
-// checkDurability is D12's startup check (FC30): a robust bank refuses to run
-// on connections that acknowledge commits before they are durable. As with
-// the schema, an unreachable database is only a warning.
+// checkDurability is durable_db's startup check: a robust bank refuses to run
+// on connections that acknowledge commits before they are durable. As with the
+// schema, an unreachable database is only a warning.
 func checkDurability(ctx context.Context, pool *pgxpool.Pool, cfg config.Config, logger *slog.Logger) error {
 	if !cfg.Defenses.IsEnabled(defenses.DurableDB) {
 		return nil

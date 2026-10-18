@@ -30,8 +30,8 @@ var (
 	errUnknownParticipant    = errors.New("unknown participant_id")
 	errInvalidSince          = errors.New("since must be RFC 3339")
 	errUnavailable           = errors.New(unavailableMessage)
-	// errAnswerAfterProcess is the partner's lie: it processed the transfer
-	// and answers 500 anyway (FC21).
+	// errAnswerAfterProcess is the partner's lie: it processed the transfer and
+	// answers 500 anyway.
 	errAnswerAfterProcess = errors.New(internalMessage)
 )
 

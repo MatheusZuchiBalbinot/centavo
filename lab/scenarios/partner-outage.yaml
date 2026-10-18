@@ -1,5 +1,5 @@
 name: partner-outage
-description: O parceiro fica fora do ar por minutos, e às vezes processa antes de falhar (FC28, PM-008).
+description: O parceiro fica fora do ar por minutos, e às vezes processa antes de falhar.
 duration: 20m
 workload:
   profile: payments-heavy

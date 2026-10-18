@@ -1,7 +1,6 @@
--- Leases of the singleton loops (docs/domain.md, section 13.9). The token
--- grows whenever the lease changes hands or expires, so a holder that lost
--- it can be told apart from the current one. Every time comes from now(),
--- the database's clock (ADR-010).
+-- Leases of the singleton loops. The token grows whenever the lease changes
+-- hands or expires, so a holder that lost it can be told apart from the current
+-- one. Every time comes from now(), the database's clock.
 
 -- +goose Up
 CREATE TABLE worker_leases (

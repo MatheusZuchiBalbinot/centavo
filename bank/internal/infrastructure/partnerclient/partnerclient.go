@@ -1,5 +1,5 @@
-// Package partnerclient calls the partner's PIX API (docs/architecture.md,
-// section 4.4). It is the only place that knows the partner's HTTP contract.
+// Package partnerclient calls the partner's PIX API. It is the only place that
+// knows the partner's HTTP contract.
 package partnerclient
 
 import (
@@ -15,7 +15,7 @@ import (
 	"centavo/bank/internal/domain/transfer"
 )
 
-// attemptTimeout is the partner call's timeout (docs/architecture.md, section 7).
+// attemptTimeout is the partner call's timeout.
 const attemptTimeout = 2 * time.Second
 
 const maxResponseBytes = 64 << 10

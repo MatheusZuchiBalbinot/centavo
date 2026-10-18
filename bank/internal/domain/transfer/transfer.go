@@ -1,4 +1,4 @@
-// Package transfer is the PIX out state machine (docs/domain.md, section 8).
+// Package transfer is the PIX out state machine.
 package transfer
 
 import (
@@ -100,8 +100,7 @@ func ParseID(raw string) (ID, error) {
 func (id ID) String() string { return uuid.UUID(id).String() }
 
 // EndToEndID is a PIX's id at the partner. Ours are E followed by the 32 hex
-// digits of the transfer id (docs/domain.md, section 13.5); incoming ones are
-// whatever the partner sent.
+// digits of the transfer id; incoming ones are whatever the partner sent.
 type EndToEndID string
 
 func (e EndToEndID) String() string { return string(e) }

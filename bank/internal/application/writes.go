@@ -10,9 +10,8 @@ import (
 	"centavo/bank/internal/domain/ledger"
 )
 
-// Errors the storage layer classifies its failures into (docs/architecture.md,
-// section 7.1). The HTTP layer maps them; only the robust unit of work
-// produces them.
+// Errors the storage layer classifies its failures into. The HTTP layer maps
+// them; only the robust unit of work produces them.
 var (
 	// ErrTransient is safe to retry: nothing was applied (serialization
 	// failure, deadlock, or a connection error before the request was sent).
@@ -58,11 +57,10 @@ type Write struct {
 }
 
 // replayDurably answers a retry with the stored answer, but only once the
-// commit that stored it is as durable as a new one would be. A client that
-// gave up while its commit waited for the synchronous standby cancels that
-// wait: PostgreSQL keeps the commit locally, unreplicated, and a retry that
-// only read it would hand out an answer, or a refusal, that a failover then
-// loses (PM-016).
+// commit that stored it is as durable as a new one would be. A client that gave
+// up while its commit waited for the synchronous standby cancels that wait:
+// PostgreSQL keeps the commit locally, unreplicated, and a retry that only read
+// it would hand out an answer, or a refusal, that a failover then loses.
 func replayDurably(ctx context.Context, stores Stores, write Write, existing idempotency.Record) (idempotency.StoredResponse, error) {
 	isSettled := existing.Status != idempotency.StatusPending
 	if isSettled {
@@ -75,15 +73,14 @@ func replayDurably(ctx context.Context, stores Stores, write Write, existing ide
 	return existing.Replay(write.Endpoint, write.RequestHash)
 }
 
-// KeyPolicy is defense D3's strategy inside a unit of work.
+// KeyPolicy is the idempotency defense's strategy inside a unit of work.
 type KeyPolicy interface {
 	Run(ctx context.Context, stores Stores, write Write) (idempotency.StoredResponse, error)
 }
 
-// KeysInTheSameCommit is defense D3 (docs/domain.md, section 5): the key is
-// claimed, the effect applied and the key completed in the same transaction,
-// so a crash before the commit erases both and a retry after it gets the
-// stored answer.
+// KeysInTheSameCommit is the idempotency defense: the key is claimed, the
+// effect applied and the key completed in the same transaction, so a crash
+// before the commit erases both and a retry after it gets the stored answer.
 type KeysInTheSameCommit struct{}
 
 // Run claims the key or replays it.
@@ -124,9 +121,9 @@ type RetryPolicy struct {
 	MaxDelay   time.Duration
 }
 
-// UnitRetries is D3's internal retry (docs/architecture.md, section 7): the
-// unit is idempotent, so redoing it after a transient or ambiguous failure is
-// safe, and the key decides whether it was already applied.
+// UnitRetries is idempotency's internal retry: the unit is idempotent, so
+// redoing it after a transient or ambiguous failure is safe, and the key
+// decides whether it was already applied.
 func UnitRetries() RetryPolicy {
 	return RetryPolicy{MaxRetries: 3, BaseDelay: 20 * time.Millisecond, MaxDelay: 200 * time.Millisecond}
 }
@@ -218,21 +215,20 @@ type Resolution struct {
 }
 
 // ResolveRequest is the request whose outcome the client asks about: its key
-// and what it sent, since a key can end up holding another request (FC43).
+// and what it sent, since a key can end up holding another request.
 type ResolveRequest struct {
 	Key         idempotency.Key
 	Endpoint    string
 	RequestHash idempotency.RequestHash
 }
 
-// Resolver turns an operation with an unknown outcome into a known one
-// (docs/domain.md, section 5.1).
+// Resolver turns an operation with an unknown outcome into a known one.
 type Resolver interface {
 	Resolve(ctx context.Context, request ResolveRequest) (Resolution, error)
 }
 
-// TombstoneResolver is D3's resolve: a missing key gets a tombstone, so a
-// late original request can never apply after the answer "voided".
+// TombstoneResolver is idempotency's resolve: a missing key gets a tombstone,
+// so a late original request can never apply after the answer "voided".
 type TombstoneResolver struct {
 	unitOfWork UnitOfWork
 }
@@ -292,15 +288,15 @@ func resolveKey(ctx context.Context, stores Stores, request ResolveRequest) (Res
 	return Resolution{Outcome: idempotency.OutcomeApplied, Response: &response}, nil
 }
 
-// IdempotencyStrategy is everything defense D3 decides.
+// IdempotencyStrategy is everything the idempotency defense decides.
 type IdempotencyStrategy struct {
 	Keys     KeyPolicy
 	Resolver Resolver
 	Retries  RetryPolicy
 }
 
-// RobustIdempotency is D3: keys in the same commit as the effect, resolve
-// with tombstones and internal retries of the idempotent unit.
+// RobustIdempotency is the idempotency defense: keys in the same commit as the
+// effect, resolve with tombstones and internal retries of the idempotent unit.
 func RobustIdempotency(unitOfWork UnitOfWork) IdempotencyStrategy {
 	return IdempotencyStrategy{Keys: KeysInTheSameCommit{}, Resolver: NewTombstoneResolver(unitOfWork), Retries: UnitRetries()}
 }

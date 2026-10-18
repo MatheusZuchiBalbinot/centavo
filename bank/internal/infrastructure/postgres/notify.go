@@ -18,7 +18,7 @@ const PixOutChannel = "pix_out"
 const reconnectDelay = time.Second
 
 // NotifyPublisher publishes a transfer with NOTIFY: the naive publication,
-// which nobody receives while no worker is listening (FC04).
+// which nobody receives while no worker is listening.
 type NotifyPublisher struct {
 	store LedgerStore
 }

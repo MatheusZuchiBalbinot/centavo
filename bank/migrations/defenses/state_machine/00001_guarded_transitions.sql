@@ -1,7 +1,7 @@
--- Defense D7, state_machine (docs/domain.md, sections 13.3, 13.5 and 14):
--- the state machine exists in the database too. An invalid transition fails
--- at the INSERT, and a transfer gets at most one reservation, settlement and
--- refund or return, however many duplicate webhooks arrive.
+-- Defense state_machine, state_machine: the state machine exists in the
+-- database too. An invalid transition fails at the INSERT, and a transfer gets
+-- at most one reservation, settlement and refund or return, however many
+-- duplicate webhooks arrive.
 
 -- +goose Up
 ALTER TABLE external_transfer_transitions

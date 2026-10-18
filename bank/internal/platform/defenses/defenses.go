@@ -1,5 +1,5 @@
-// Package defenses parses the defense profile that selects, at run time,
-// which defenses (D1 to D12) are active. See docs/architecture.md, section 8.
+// Package defenses parses the defense profile that selects, at run time, which
+// defenses (atomic_ledger to durable_db) are active.
 package defenses
 
 import (
@@ -12,7 +12,7 @@ import (
 // Defense is the flag name of one defense technique.
 type Defense string
 
-// The defenses, D1 to D12 (docs/defenses.md).
+// The defenses, atomic_ledger to durable_db.
 const (
 	AtomicLedger       Defense = "atomic_ledger"
 	BalanceLocking     Defense = "balance_locking"
@@ -43,13 +43,13 @@ var (
 	ErrMissingPrefix     = errors.New("defense modifiers must start with '-'")
 	ErrUnknownDefense    = errors.New("unknown defense")
 	ErrDuplicateDefense  = errors.New("defense disabled more than once")
-	// ErrNoNaiveVariant means the binary has no naive variant of a defense:
-	// the production build never does (lock 1 of docs/chaos-bot.md, section 16).
+	// ErrNoNaiveVariant means the binary has no naive variant of a defense: the
+	// production build never does.
 	ErrNoNaiveVariant = errors.New("this binary has no naive variant of the defense")
 )
 
-// all lists the defenses in catalog order (D1 to D12); String relies on it
-// to print a canonical profile.
+// all lists the defenses in catalog order (atomic_ledger to durable_db); String
+// relies on it to print a canonical profile.
 var all = []Defense{
 	AtomicLedger,
 	BalanceLocking,
@@ -179,8 +179,8 @@ func compareCatalogOrder(a, b Defense) int {
 	return slices.Index(all, a) - slices.Index(all, b)
 }
 
-// Notes explains the combinations where one defense depends on another that
-// is off (docs/architecture.md, section 8.2, step 3); /internal/health shows them.
+// Notes explains the combinations where one defense depends on another that is
+// off; /internal/health shows them.
 func (p Profile) Notes() []string {
 	var notes []string
 

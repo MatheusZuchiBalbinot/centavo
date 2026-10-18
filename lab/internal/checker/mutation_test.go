@@ -20,8 +20,8 @@ type mutation struct {
 	apply func(t *rapid.T, b *roundBuilder) ([]history.Record, snapshot.Snapshot, bool)
 }
 
-// mutations are the export mutations of docs/invariants-and-checker.md,
-// section 12; the CI requires every one of them to be caught by the rule in want.
+// mutations are the export mutations; the CI requires every one of them to be
+// caught by the rule in want.
 var mutations = []mutation{
 	{name: "delete an entry", want: RuleI1aZeroSum, apply: deleteEntry},
 	{name: "duplicate a transaction cleanly", want: RuleI2Duplicated, apply: duplicateTransaction},

@@ -6,7 +6,7 @@ workload:
   clients: 4
   rate_per_second: 20
   accounts: 16
-  # Each client works only on its own accounts, so the naive bank's lost
-  # updates (FC41) cannot show up in a round meant to pass.
+  # Each client works only on its own accounts, so the naive bank's lost updates
+  # cannot show up in a round meant to pass.
   exclusive_accounts: true
   client_mix: {polite: 1.0}

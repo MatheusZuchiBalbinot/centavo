@@ -50,9 +50,9 @@ type Run struct {
 	BankURL string
 	// ControlURL is the same API without Toxiproxy, for the cure's calls.
 	ControlURL string
-	// ChaosToken authenticates the lab on the chaos ports (lock 4).
+	// ChaosToken authenticates the lab on the chaos ports.
 	ChaosToken string
-	// DockerHost is docker-proxy, the only way to the Docker API (lock 5).
+	// DockerHost is docker-proxy, the only way to the Docker API.
 	DockerHost string
 	// Project is the Compose project whose chaos targets the bot may touch.
 	Project string
@@ -185,7 +185,8 @@ func validateBankURL(raw string) error {
 	return nil
 }
 
-// roundsDirOf maps the store URL to a directory. S3 arrives with phase F13.
+// roundsDirOf maps the store URL to a directory. S3 arrives with an earlier
+// version.
 func roundsDirOf(store string) (string, error) {
 	parsed, err := url.Parse(store)
 	if err != nil {

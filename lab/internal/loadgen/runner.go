@@ -31,13 +31,12 @@ type retryPolicy struct {
 	deadline time.Duration
 }
 
-// politePolicy is the polite client of docs/architecture.md, section 7.
+// politePolicy is the polite client.
 var politePolicy = retryPolicy{
 	attemptTimeout: 2 * time.Second, maxRetries: 8, backoffBase: 100 * time.Millisecond, backoffCap: 5 * time.Second, deadline: 30 * time.Second,
 }
 
-// aggressivePolicy retries at once, up to 20 times, with the same key
-// (docs/chaos-bot.md, section 11).
+// aggressivePolicy retries at once, up to 20 times, with the same key.
 var aggressivePolicy = retryPolicy{
 	attemptTimeout: 2 * time.Second, maxRetries: 20, deadline: 30 * time.Second,
 }
@@ -99,7 +98,7 @@ type weightedFunction struct {
 	weight   int
 }
 
-// mixes are the workload profiles of docs/chaos-bot.md, section 11.
+// mixes are the workload profiles.
 var mixes = map[scenarios.Profile][]weightedFunction{
 	scenarios.ProfileLedgerOnly: {
 		{function: history.FunctionTransfer, weight: 50},
@@ -324,8 +323,8 @@ func (r *run) ownedAccounts(index int) []int {
 	return owned
 }
 
-// prepare opens and funds the client's accounts (the preparation phase of
-// docs/chaos-bot.md, section 3). A round cannot start without them.
+// prepare opens and funds the client's accounts (the preparation phase). A
+// round cannot start without them.
 func (c *client) prepare(ctx context.Context) error {
 	for _, account := range c.accounts {
 		holderName := fmt.Sprintf("%s client %d account %d", c.run.config.Round, c.index+1, account)
@@ -461,8 +460,8 @@ func (c *client) perform(ctx context.Context, op operation) error {
 	return err
 }
 
-// invoke assigns the operation id, durably records the invoke and returns
-// the request to send (docs/invariants-and-checker.md, section 4.3).
+// invoke assigns the operation id, durably records the invoke and returns the
+// request to send.
 func (c *client) invoke(op operation) (string, request, error) {
 	c.seq++
 	opID := fmt.Sprintf("%s-p%02d-%06d", c.run.config.Round, c.process, c.seq)
@@ -528,9 +527,9 @@ func (c *client) execute(ctx context.Context, op operation) (attemptResult, erro
 // duplicateCopies is how many times a duplicator sends each operation.
 const duplicateCopies = 2
 
-// executeTwice is the duplicator client of docs/chaos-bot.md, section 11:
-// the same request, with the same key, twice in parallel. One success is a
-// success; two definitive failures are a failure; anything else is info.
+// executeTwice is the duplicator client: the same request, with the same key,
+// twice in parallel. One success is a success; two definitive failures are a
+// failure; anything else is info.
 func (c *client) executeTwice(ctx context.Context, op operation) error {
 	opID, req, err := c.invoke(op)
 	if err != nil {

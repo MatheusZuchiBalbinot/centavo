@@ -43,9 +43,9 @@ WHERE account_id = ANY($1::uuid[])
 ORDER BY account_id
 FOR UPDATE`
 
-// LockPositions takes the row locks of the accounts' balances in id order,
-// so two transfers in opposite directions never wait for each other in a
-// cycle (docs/domain.md, section 6). The locks last until the transaction ends.
+// LockPositions takes the row locks of the accounts' balances in id order, so
+// two transfers in opposite directions never wait for each other in a cycle.
+// The locks last until the transaction ends.
 func (s LedgerStore) LockPositions(ctx context.Context, ids []ledger.AccountID) error {
 	uuids := make([]uuid.UUID, 0, len(ids))
 	for _, id := range ids {
@@ -67,7 +67,7 @@ func (s LedgerStore) LockPositions(ctx context.Context, ids []ledger.AccountID) 
 	return nil
 }
 
-// customerFloorCents is BR01: customer balances never go below zero.
+// customerFloorCents is the lowest a customer balance may go.
 const customerFloorCents = 0
 
 const createCustomerSQL = `
@@ -227,7 +227,8 @@ func (s LedgerStore) InsertEntry(ctx context.Context, entry ledger.Entry) error 
 	return nil
 }
 
-// The id breaks ties: without defense D2, two entries can share a position.
+// The id breaks ties: without the balance_locking defense, two entries can
+// share a position.
 const readStatementSQL = `
 SELECT e.account_seq, e.transaction_id, t.kind, e.amount_cents, e.balance_after_cents, e.created_at
 FROM ledger_entries e

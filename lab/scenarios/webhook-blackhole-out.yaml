@@ -1,5 +1,5 @@
 name: webhook-blackhole-out
-description: Nenhum webhook chega ao banco e só há PIX de saída, que o sweeper completa consultando o parceiro (FC17, FC27, PM-009). O PIX de entrada sem webhook fica para a conciliação, no webhook-blackhole.
+description: Nenhum webhook chega ao banco e só há PIX de saída, que o sweeper completa consultando o parceiro. O PIX de entrada sem webhook fica para a conciliação, no webhook-blackhole.
 duration: 20m
 workload:
   profile: payments-out

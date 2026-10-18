@@ -1,8 +1,8 @@
 // Package truth is the partner's own record of what it did, in SQLite with
-// synchronous=FULL, a failure domain apart from the bank's PostgreSQL
-// (docs/decisions/ADR-014). The partner may lie in answers and deliveries;
-// it never lies here. Double processing is the one exception: it is a bug
-// of the partner itself, so it changes the truth.
+// synchronous=FULL, a failure domain apart from the bank's PostgreSQL. The
+// partner may lie in answers and deliveries; it never lies here. Double
+// processing is the one exception: it is a bug of the partner itself, so it
+// changes the truth.
 package truth
 
 import (
@@ -15,7 +15,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// Status is the authoritative status of a transfer (docs/architecture.md, section 4.4).
+// Status is the authoritative status of a transfer.
 type Status string
 
 // The statuses of a transfer at the partner.

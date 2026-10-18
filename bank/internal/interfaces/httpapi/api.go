@@ -38,8 +38,8 @@ type Transferrer interface {
 	Apply(ctx context.Context, stores application.Stores, operationID ledger.OperationID, input application.TransferInput) (application.TransferResult, error)
 }
 
-// WriteExecutor runs a client write exactly once per idempotency key (D3) or
-// every time (naive).
+// WriteExecutor runs a client write exactly once per idempotency key
+// (idempotency) or every time (naive).
 type WriteExecutor interface {
 	Execute(ctx context.Context, write application.Write) (idempotency.StoredResponse, error)
 }

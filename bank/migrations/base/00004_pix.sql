@@ -1,7 +1,7 @@
--- External transfers (PIX out), their state machine and incoming PIX
--- (docs/domain.md, sections 13.5 and 13.6). The constraints that belong to
--- defense D7 (allowed transitions as a foreign key, one ledger transaction
--- per step, refund or return but not both) live in its own migration.
+-- External transfers (PIX out), their state machine and incoming PIX. The
+-- constraints that belong to the state_machine defense (allowed transitions as
+-- a foreign key, one ledger transaction per step, refund or return but not
+-- both) live in its own migration.
 
 -- +goose Up
 CREATE TYPE external_transfer_status AS ENUM ('created', 'sent', 'confirmed', 'failed', 'reversed');
@@ -61,7 +61,8 @@ ALTER TABLE ledger_transactions ADD CONSTRAINT ledger_tx_has_cause CHECK (
     OR (kind = 'correction' AND reverses_id IS NOT NULL)
 );
 
--- Always on, in every profile: an incoming PIX is credited once (BR12).
+-- Always on, in every profile: an incoming PIX is credited once (a PIX in is
+-- credited once per end_to_end_id).
 CREATE UNIQUE INDEX ledger_tx_one_per_incoming
     ON ledger_transactions (incoming_transfer_id) WHERE incoming_transfer_id IS NOT NULL;
 CREATE INDEX ledger_tx_by_external_transfer

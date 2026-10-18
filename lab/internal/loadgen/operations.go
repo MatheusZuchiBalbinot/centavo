@@ -344,8 +344,8 @@ func parseReadPixOut(body []byte, status int) (json.RawMessage, error) {
 	return json.Marshal(response)
 }
 
-// readStatementResult keeps the page as the bank sent it: the checker
-// verifies contiguous positions and chained balances on each page (I4).
+// readStatementResult keeps the page as the bank sent it: the checker verifies
+// contiguous positions and chained balances on each page (I4).
 type readStatementResult struct {
 	Entries      json.RawMessage `json:"entries"`
 	NextAfterSeq *int64          `json:"next_after_seq"`

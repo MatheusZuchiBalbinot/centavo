@@ -19,7 +19,7 @@ const (
 	maxReportedViolations = 1_000
 	// maxFailurePaths is how many violations get their story told.
 	maxFailurePaths = 10
-	// maxPathLines bounds one story (docs/invariants-and-checker.md, section 9).
+	// maxPathLines bounds one story.
 	maxPathLines = 20
 )
 
@@ -169,7 +169,7 @@ func writeReports(roundDir string, report Report) error {
 }
 
 // renderMarkdown writes report.md: text in Portuguese, invariant names and
-// codes in English (docs/invariants-and-checker.md, section 11).
+// codes in English.
 func renderMarkdown(report Report) string {
 	var b strings.Builder
 
