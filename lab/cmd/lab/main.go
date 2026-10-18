@@ -266,8 +266,10 @@ func verdictError(verdict checker.Verdict) error {
 		return nil
 	case checker.VerdictInconclusive:
 		return errRoundInconclusive
-	default:
+	case checker.VerdictFail:
 		return errRoundFailed
+	default:
+		return fmt.Errorf("%w: unknown verdict %q", errRoundFailed, verdict)
 	}
 }
 

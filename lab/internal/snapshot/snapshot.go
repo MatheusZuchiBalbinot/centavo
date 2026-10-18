@@ -55,6 +55,7 @@ const (
 	TransactionReconciliationAdjustment = "reconciliation_adjustment"
 )
 
+// ErrMalformedExport means the bank's export does not decode.
 var ErrMalformedExport = errors.New("malformed export")
 
 // Account is a row of accounts.

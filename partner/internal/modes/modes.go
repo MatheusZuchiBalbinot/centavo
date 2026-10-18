@@ -29,11 +29,13 @@ const (
 // OutageMode is how the partner is unavailable.
 type OutageMode string
 
+// The ways the partner can be down.
 const (
 	OutageServiceUnavailable OutageMode = "503"
 	OutageRefuse             OutageMode = "refuse"
 )
 
+// ErrInvalidMode means a mode request does not decode or is out of range.
 var ErrInvalidMode = errors.New("invalid partner mode")
 
 // Range is a duration range.
@@ -177,22 +179,24 @@ func (d Decider) Outage() (OutageMode, bool) {
 	return result.mode, result.isDown
 }
 
-// TimeoutAfterProcess: process the transfer, then answer too late.
+// TimeoutAfterProcess reports whether to process the transfer, then answer too
+// late.
 func (d Decider) TimeoutAfterProcess() bool {
 	return draw(d, false, func(m *mode) bool { return m.draws.Float64() < m.config.TimeoutAfterProcess })
 }
 
-// ErrorAfterProcess: process the transfer, then answer 500.
+// ErrorAfterProcess reports whether to process the transfer, then answer 500.
 func (d Decider) ErrorAfterProcess() bool {
 	return draw(d, false, func(m *mode) bool { return m.draws.Float64() < m.config.ErrorAfterProcess })
 }
 
-// DoubleProcess: the partner's own bug, it settles the transfer twice.
+// DoubleProcess reports whether to settle the transfer twice, the partner's own
+// bug.
 func (d Decider) DoubleProcess() bool {
 	return draw(d, false, func(m *mode) bool { return m.draws.Float64() < m.config.DoubleProcess })
 }
 
-// Reject: refuse a transfer that was accepted.
+// Reject reports whether to refuse a transfer that was accepted.
 func (d Decider) Reject() bool {
 	return draw(d, false, func(m *mode) bool { return m.draws.Float64() < m.config.RejectRate })
 }

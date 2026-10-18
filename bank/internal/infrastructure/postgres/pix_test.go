@@ -213,7 +213,8 @@ func TestNotify_ReachesAListener(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
-	go postgres.Listen(ctx, p.bank.pool, postgres.PixOutChannel, func(_ context.Context, payload string) { received <- payload }, discardLogger())
+	listener := postgres.Listener{Pool: p.bank.pool, Channel: postgres.PixOutChannel, Handle: func(_ context.Context, payload string) { received <- payload }, Logger: discardLogger()}
+	go listener.Run(ctx)
 
 	id, err := transfer.NewID()
 	if err != nil {

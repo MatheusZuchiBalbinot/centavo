@@ -8,6 +8,7 @@ import (
 // PartnerStatus is the authoritative status of a PIX at the partner.
 type PartnerStatus string
 
+// The statuses a PIX can have at the partner.
 const (
 	PartnerProcessing PartnerStatus = "processing"
 	PartnerSettled    PartnerStatus = "settled"

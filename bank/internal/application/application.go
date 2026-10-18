@@ -153,6 +153,14 @@ type posting struct {
 	delta   money.Cents
 }
 
+// debitLine is a customer debit: the account, the position ledger.Position.Debit
+// computed for it and the amount taken.
+type debitLine struct {
+	account ledger.AccountID
+	debited ledger.Position
+	amount  money.Amount
+}
+
 // post adds delta to the account in the database and appends the entry. The
 // increment is atomic, so concurrent posts never lose each other; only the
 // debit path, which checks funds first, writes a value it computed itself.
@@ -200,13 +208,13 @@ func (p poster) postAll(ctx context.Context, transactionID ledger.TransactionID,
 // ledger.Position.Debit, under the lock it took, and the matching entry. It
 // is the one write of a balance computed here instead of incremented in SQL,
 // so the funds check and the write see the same row (BR01, D2).
-func (p poster) debit(ctx context.Context, transactionID ledger.TransactionID, accountID ledger.AccountID, debited ledger.Position, amount money.Amount) error {
-	err := p.positions.OverwritePosition(ctx, accountID, debited)
+func (p poster) debit(ctx context.Context, transactionID ledger.TransactionID, line debitLine) error {
+	err := p.positions.OverwritePosition(ctx, line.account, line.debited)
 	if err != nil {
 		return err
 	}
 
-	entry := ledger.Entry{TransactionID: transactionID, AccountID: accountID, Amount: amount.Negated(), Seq: debited.LastSeq, BalanceAfter: debited.Balance}
+	entry := ledger.Entry{TransactionID: transactionID, AccountID: line.account, Amount: line.amount.Negated(), Seq: line.debited.LastSeq, BalanceAfter: line.debited.Balance}
 
 	return p.entries.InsertEntry(ctx, entry)
 }

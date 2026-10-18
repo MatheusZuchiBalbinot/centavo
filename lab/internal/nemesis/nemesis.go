@@ -30,6 +30,7 @@ const (
 	maxResponseBytes = 1 << 20
 )
 
+// Errors of injecting and healing faults.
 var (
 	ErrUnsafeTarget = errors.New("a target is not a chaoslab build in the chaoslab environment")
 	ErrHealTimeout  = errors.New("targets did not become healthy before the heal timeout")

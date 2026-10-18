@@ -13,6 +13,7 @@ import (
 // Env is the deployment environment the process declares it runs in.
 type Env string
 
+// The environments the bank knows.
 const (
 	EnvLocal      Env = "local"
 	EnvChaoslab   Env = "chaoslab"
@@ -34,6 +35,7 @@ const (
 	minChaosTokenLength = 32
 )
 
+// Errors of reading the configuration.
 var (
 	ErrMissingVariable        = errors.New("required environment variable is not set")
 	ErrUnknownEnv             = errors.New("unknown CENTAVO_ENV")

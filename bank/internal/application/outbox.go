@@ -293,7 +293,7 @@ func answerCommand(external ExternalTransfer, answer PartnerAnswer) TransitionCo
 	case PartnerRejected:
 		command.To = transfer.StatusFailed
 		command.FailureCode = failurePartner
-	default:
+	case PartnerUnknown:
 		command.To = transfer.StatusFailed
 		command.FailureCode = failureTimeout
 	}

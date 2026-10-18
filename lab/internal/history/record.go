@@ -8,6 +8,7 @@ import "encoding/json"
 // Type is the kind of a history record.
 type Type string
 
+// The kinds of history record.
 const (
 	TypeInvoke  Type = "invoke"
 	TypeAttempt Type = "attempt"
@@ -19,6 +20,7 @@ const (
 // Function is the operation a client performed, or the injection the nemesis made.
 type Function string
 
+// The operations and injections a history records.
 const (
 	FunctionCreateAccount Function = "create_account"
 	FunctionDeposit       Function = "deposit"

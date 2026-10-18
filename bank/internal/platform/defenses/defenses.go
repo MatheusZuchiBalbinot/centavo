@@ -12,6 +12,7 @@ import (
 // Defense is the flag name of one defense technique.
 type Defense string
 
+// The defenses, D1 to D12 (docs/defenses.md).
 const (
 	AtomicLedger       Defense = "atomic_ledger"
 	BalanceLocking     Defense = "balance_locking"
@@ -34,6 +35,7 @@ const (
 	disablePrefix    = "-"
 )
 
+// Errors of parsing a defense profile.
 var (
 	ErrEmptyProfile      = errors.New("defense profile is empty")
 	ErrUnknownBase       = errors.New("defense profile must start with robust or naive")

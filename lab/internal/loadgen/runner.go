@@ -77,6 +77,8 @@ const (
 	percent             = 100
 )
 
+// ErrPreparationFailed means the accounts or balances a round needs could not
+// be created, so the round never started.
 var ErrPreparationFailed = errors.New("round preparation failed")
 
 // Config is one load phase of a round.
@@ -410,6 +412,8 @@ func (c *client) nextOperation() (operation, error) {
 	function := pickFunction(c.ops, mixes[c.run.config.Workload.Profile])
 	accounts := c.workingAccounts()
 
+	// A mix draws only client operations; anything else is an error below.
+	//exhaustive:ignore
 	switch function {
 	case history.FunctionPixOut:
 		amount := drawCents(c.amounts, minTransferCents, maxTransferCents)

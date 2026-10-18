@@ -16,6 +16,7 @@ type ID uuid.UUID
 // Status is one state of an external transfer; states are exclusive.
 type Status string
 
+// The states of an external transfer.
 const (
 	StatusCreated   Status = "created"
 	StatusSent      Status = "sent"
@@ -27,6 +28,7 @@ const (
 // Posting is the ledger transaction a transition requires.
 type Posting string
 
+// The ledger transactions a transition can require.
 const (
 	PostingNone   Posting = "none"
 	PostingSettle Posting = "pix_out_settle"
@@ -55,6 +57,7 @@ var allowedTransitions = map[Transition]Posting{
 // destinationKeyPattern bounds what a client may send as a PIX key.
 var destinationKeyPattern = regexp.MustCompile(`^[A-Za-z0-9._@+-]{3,77}$`)
 
+// Errors of creating or moving an external transfer.
 var (
 	ErrInvalidStateTransition = errors.New("invalid state transition")
 	ErrInvalidDestinationKey  = errors.New("destination key must have 3 to 77 letters, digits or . _ @ + -")

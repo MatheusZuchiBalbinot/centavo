@@ -16,6 +16,7 @@ import (
 // Seed is the 64-bit seed of a round.
 type Seed uint64
 
+// ErrInvalidSeed means the text is not a 64-bit number.
 var ErrInvalidSeed = errors.New("seed must be a 64-bit number, such as 0x5eed0142")
 
 // Parse reads a seed in hexadecimal (0x...) or decimal form.

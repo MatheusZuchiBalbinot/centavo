@@ -22,6 +22,7 @@ const (
 	minChaosTokenLength   = 32
 )
 
+// Errors of reading the configuration.
 var (
 	ErrMissingVariable  = errors.New("required environment variable is not set")
 	ErrInvalidBankURL   = errors.New("BANK_API_URL must be an absolute http or https URL")

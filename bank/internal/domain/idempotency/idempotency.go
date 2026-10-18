@@ -16,6 +16,7 @@ type Key string
 // section 13.4. Short keys or odd characters usually mean a buggy client.
 var keyFormat = regexp.MustCompile(`^[A-Za-z0-9._:-]{8,128}$`)
 
+// Errors of reading an Idempotency-Key.
 var (
 	ErrKeyMissing = errors.New("the Idempotency-Key header is required")
 	ErrKeyInvalid = errors.New("the Idempotency-Key header must have 8 to 128 characters among letters, digits and . _ : -")
@@ -37,6 +38,7 @@ func ParseKey(raw string) (Key, error) {
 // Status is where a key stands (docs/domain.md, section 13.4).
 type Status string
 
+// The states of a stored key.
 const (
 	// StatusPending exists only inside the transaction that owns the key.
 	StatusPending   Status = "pending"
@@ -49,6 +51,7 @@ const (
 // does not know.
 type Outcome string
 
+// The outcomes resolve reports for a key.
 const (
 	OutcomeApplied Outcome = "applied"
 	OutcomeVoided  Outcome = "voided"
@@ -57,6 +60,7 @@ const (
 	OutcomeSuperseded Outcome = "superseded"
 )
 
+// Errors of replaying or resolving a key.
 var (
 	ErrKeyMismatch       = errors.New("the Idempotency-Key was already used with another request")
 	ErrOperationVoided   = errors.New("the operation was voided by resolve; nothing will be applied for this key")

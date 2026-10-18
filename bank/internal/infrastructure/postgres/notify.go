@@ -33,14 +33,24 @@ func (p NotifyPublisher) Publish(ctx context.Context, id transfer.ID) error {
 	return p.store.Notify(ctx, PixOutChannel, id.String())
 }
 
-// Listen holds a connection with LISTEN on the channel and calls handle for
-// every notification, reconnecting until ctx ends. Notifications sent while
-// the connection is down are lost: NOTIFY is not a queue.
-func Listen(ctx context.Context, pool *pgxpool.Pool, channel string, handle func(ctx context.Context, payload string), logger *slog.Logger) {
+// Listener holds a connection with LISTEN on Channel and calls Handle for
+// every notification.
+type Listener struct {
+	Pool    *pgxpool.Pool
+	Channel string
+	Handle  func(ctx context.Context, payload string)
+	Logger  *slog.Logger
+}
+
+// Run listens, reconnecting until ctx ends. Notifications sent while the
+// connection is down are lost: NOTIFY is not a queue.
+func (l Listener) Run(ctx context.Context) {
 	for ctx.Err() == nil {
-		err := listenOnce(ctx, pool, channel, handle)
-		if err != nil && ctx.Err() == nil {
-			logger.WarnContext(ctx, "listener lost its connection", "channel", channel, "error", err)
+		err := listenOnce(ctx, l.Pool, l.Channel, l.Handle)
+
+		isConnectionLost := err != nil && ctx.Err() == nil
+		if isConnectionLost {
+			l.Logger.WarnContext(ctx, "listener lost its connection", "channel", l.Channel, "error", err)
 		}
 
 		select {

@@ -27,6 +27,7 @@ var files embed.FS
 // Profile is the operation mix of a workload (docs/chaos-bot.md, section 11).
 type Profile string
 
+// The operation mixes of a workload.
 const (
 	ProfileLedgerOnly    Profile = "ledger-only"
 	ProfileBalanced      Profile = "balanced"
@@ -41,6 +42,7 @@ var workloadProfiles = []Profile{ProfileLedgerOnly, ProfileBalanced, ProfilePaym
 // ClientProfile is how a client behaves around timeouts and retries.
 type ClientProfile string
 
+// The client behaviors around timeouts and retries.
 const (
 	ClientPolite ClientProfile = "polite"
 	// ClientDuplicator sends each operation twice, in parallel, with the same key.
@@ -56,6 +58,7 @@ var clientProfiles = []ClientProfile{ClientPolite, ClientDuplicator, ClientAggre
 // FaultKind is the fault family of docs/chaos-bot.md, section 4.
 type FaultKind string
 
+// The fault families.
 const (
 	FaultFailpoint FaultKind = "failpoint"
 	FaultProcess   FaultKind = "process"
@@ -117,6 +120,7 @@ var partnerModeFields = []string{
 // ScheduleType is how a scheduled fault spreads over the round.
 type ScheduleType string
 
+// The ways a scheduled fault spreads over the round.
 const (
 	SchedulePoisson ScheduleType = "poisson"
 	// ScheduleAt fires once, at a fixed time after the round starts.
@@ -150,6 +154,7 @@ const (
 
 var namePattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
+// Errors of loading a scenario.
 var (
 	ErrUnknownScenario = errors.New("unknown scenario")
 	ErrInvalidScenario = errors.New("invalid scenario")

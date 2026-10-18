@@ -34,6 +34,7 @@ const (
 // Verdict is the outcome of a round.
 type Verdict string
 
+// The verdicts of a round.
 const (
 	VerdictPass Verdict = "pass"
 	VerdictFail Verdict = "fail"
@@ -44,6 +45,7 @@ const (
 // Status is the outcome of one invariant.
 type Status string
 
+// The outcomes of one invariant.
 const (
 	StatusOK         Status = "ok"
 	StatusFailed     Status = "failed"
@@ -211,6 +213,8 @@ func countOperations(ops operations) OperationCounts {
 	counts := OperationCounts{Total: len(ops.ordered)}
 
 	for _, o := range ops.ordered {
+		// A result is a completion or empty, never an invoke or an attempt.
+		//exhaustive:ignore
 		switch o.result {
 		case history.TypeOK:
 			counts.OK++

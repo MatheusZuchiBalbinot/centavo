@@ -25,6 +25,7 @@ const (
 	maxBodyBytes = 1 << 20
 )
 
+// Errors of acting on the chaos targets.
 var (
 	ErrNotATarget      = errors.New("container is not a chaos target")
 	ErrUnknownService  = errors.New("no chaos target runs this service")
@@ -79,7 +80,7 @@ func (c Client) Targets(ctx context.Context) ([]Container, error) {
 
 	var listed []listedContainer
 
-	err = c.call(ctx, http.MethodGet, "/containers/json?all=1&filters="+url.QueryEscape(string(filters)), nil, &listed)
+	err = c.get(ctx, "/containers/json?all=1&filters="+url.QueryEscape(string(filters)), &listed)
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +135,7 @@ type inspected struct {
 func (c Client) Inspect(ctx context.Context, id string) (Container, error) {
 	var details inspected
 
-	err := c.call(ctx, http.MethodGet, "/containers/"+url.PathEscape(id)+"/json", nil, &details)
+	err := c.get(ctx, "/containers/"+url.PathEscape(id)+"/json", &details)
 	if err != nil {
 		return Container{}, err
 	}
@@ -175,12 +176,12 @@ func (c Client) Exec(ctx context.Context, id string, command []string) error {
 
 	var created execCreated
 
-	err = c.call(ctx, http.MethodPost, "/containers/"+url.PathEscape(id)+"/exec", map[string][]string{"Cmd": command}, &created)
+	err = c.post(ctx, "/containers/"+url.PathEscape(id)+"/exec", map[string][]string{"Cmd": command}, &created)
 	if err != nil {
 		return err
 	}
 
-	return c.call(ctx, http.MethodPost, "/exec/"+url.PathEscape(created.ID)+"/start", map[string]bool{"Detach": true}, nil)
+	return c.post(ctx, "/exec/"+url.PathEscape(created.ID)+"/start", map[string]bool{"Detach": true}, nil)
 }
 
 // Start starts a stopped target; starting a running one is a no-op.
@@ -190,7 +191,7 @@ func (c Client) Start(ctx context.Context, id string) error {
 		return err
 	}
 
-	return c.call(ctx, http.MethodPost, "/containers/"+url.PathEscape(id)+"/start", nil, nil)
+	return c.post(ctx, "/containers/"+url.PathEscape(id)+"/start", nil, nil)
 }
 
 // Pause freezes a running target, every goroutine of it included; pausing
@@ -205,7 +206,7 @@ func (c Client) Pause(ctx context.Context, id string) error {
 		return nil
 	}
 
-	return c.call(ctx, http.MethodPost, "/containers/"+url.PathEscape(id)+"/pause", nil, nil)
+	return c.post(ctx, "/containers/"+url.PathEscape(id)+"/pause", nil, nil)
 }
 
 // Kill sends SIGKILL from outside. Docker counts it as a manual stop, so the
@@ -217,7 +218,7 @@ func (c Client) Kill(ctx context.Context, id string) error {
 		return err
 	}
 
-	return c.call(ctx, http.MethodPost, "/containers/"+url.PathEscape(id)+"/kill?signal=SIGKILL", nil, nil)
+	return c.post(ctx, "/containers/"+url.PathEscape(id)+"/kill?signal=SIGKILL", nil, nil)
 }
 
 // Unpause resumes a paused target; resuming one that is not paused is a no-op.
@@ -231,15 +232,31 @@ func (c Client) Unpause(ctx context.Context, id string) error {
 		return nil
 	}
 
-	return c.call(ctx, http.MethodPost, "/containers/"+url.PathEscape(id)+"/unpause", nil, nil)
+	return c.post(ctx, "/containers/"+url.PathEscape(id)+"/unpause", nil, nil)
+}
+
+// apiCall is one request to the Docker Engine API; body is sent as JSON when
+// it is not nil.
+type apiCall struct {
+	method string
+	path   string
+	body   any
+}
+
+func (c Client) get(ctx context.Context, path string, into any) error {
+	return c.call(ctx, apiCall{method: http.MethodGet, path: path}, into)
+}
+
+func (c Client) post(ctx context.Context, path string, body, into any) error {
+	return c.call(ctx, apiCall{method: http.MethodPost, path: path, body: body}, into)
 }
 
 // call sends one request. 304 (already started) is not an error.
-func (c Client) call(ctx context.Context, method, path string, body, into any) error {
-	var payload io.Reader
+func (c Client) call(ctx context.Context, sent apiCall, into any) error {
+	var payload io.Reader = http.NoBody
 
-	if body != nil {
-		encoded, err := json.Marshal(body)
+	if sent.body != nil {
+		encoded, err := json.Marshal(sent.body)
 		if err != nil {
 			return err
 		}
@@ -247,7 +264,7 @@ func (c Client) call(ctx context.Context, method, path string, body, into any) e
 		payload = bytes.NewReader(encoded)
 	}
 
-	request, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, payload)
+	request, err := http.NewRequestWithContext(ctx, sent.method, c.baseURL+sent.path, payload)
 	if err != nil {
 		return err
 	}
@@ -256,18 +273,18 @@ func (c Client) call(ctx context.Context, method, path string, body, into any) e
 
 	response, err := c.http.Do(request)
 	if err != nil {
-		return fmt.Errorf("docker %s %s: %w", method, path, err)
+		return fmt.Errorf("docker %s %s: %w", sent.method, sent.path, err)
 	}
 	defer response.Body.Close()
 
 	content, err := io.ReadAll(io.LimitReader(response.Body, maxBodyBytes))
 	if err != nil {
-		return fmt.Errorf("docker %s %s: %w", method, path, err)
+		return fmt.Errorf("docker %s %s: %w", sent.method, sent.path, err)
 	}
 
 	isSuccess := response.StatusCode < http.StatusMultipleChoices || response.StatusCode == http.StatusNotModified
 	if !isSuccess {
-		return fmt.Errorf("%w: %s %s answered %d: %s", errUnexpectedReply, method, path, response.StatusCode, bytes.TrimSpace(content))
+		return fmt.Errorf("%w: %s %s answered %d: %s", errUnexpectedReply, sent.method, sent.path, response.StatusCode, bytes.TrimSpace(content))
 	}
 
 	if into == nil || len(content) == 0 {

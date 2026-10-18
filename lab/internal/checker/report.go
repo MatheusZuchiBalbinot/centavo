@@ -265,8 +265,10 @@ func statusText(invariant InvariantResult) string {
 		return "ok"
 	case StatusFailed:
 		return fmt.Sprintf("falhou (%d)", invariant.Violations)
-	default:
+	case StatusNotChecked:
 		return "não verificada"
+	default:
+		return string(invariant.Status)
 	}
 }
 

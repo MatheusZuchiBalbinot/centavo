@@ -12,6 +12,7 @@ import (
 // Invariant names one invariant of docs/invariants-and-checker.md, section 6.
 type Invariant string
 
+// The invariants the checker judges.
 const (
 	InvariantI1 Invariant = "I1"
 	InvariantI2 Invariant = "I2"
@@ -22,6 +23,7 @@ const (
 // Rule names the precise rule inside an invariant.
 type Rule string
 
+// The rules inside each invariant.
 const (
 	RuleI1aZeroSum          Rule = "I1a.zero_sum"
 	RuleI1bSequence         Rule = "I1b.account_seq"
@@ -307,6 +309,10 @@ func (e *evaluation) checkOperations() {
 			e.checkReadBalance(o)
 		case history.FunctionReadStatement:
 			e.checkStatementPage(o)
+		case history.FunctionResolve, history.FunctionReadPixOut:
+			// Read by the I3 and PIX checks, which follow the writes they answer.
+		case history.FunctionKill, history.FunctionArmFailpoint, history.FunctionArmPartner, history.FunctionFailpointFired, history.FunctionHealStart, history.FunctionFreeze, history.FunctionFailover, history.FunctionDatabase, history.FunctionNetwork, history.FunctionSkewClock, history.FunctionHealComplete:
+			// The nemesis's own records; no invariant judges them.
 		}
 	}
 }

@@ -41,6 +41,7 @@ const (
 
 var roundDirPattern = regexp.MustCompile(`^r(\d{4,})$`)
 
+// ErrNoRoundID means every candidate round directory was already taken.
 var ErrNoRoundID = errors.New("could not allocate a round id")
 
 // Options configure one round.
@@ -186,7 +187,8 @@ func Run(ctx context.Context, options Options) (Result, error) {
 		return Result{ID: id, Dir: dir}, errors.Join(err, writer.Close())
 	}
 
-	load, loadErr := runLoad(ctx, options, id, writer, bot)
+	loadConfig := newLoadConfig(options, id, writer, bot)
+	load, loadErr := loadgen.Run(ctx, loadConfig)
 
 	// The cure runs even after a failed load: nothing stays broken (lock 6).
 	healErr := bot.Heal(ctx)
@@ -297,8 +299,9 @@ func waitQuiescence(ctx context.Context, options Options, round string) error {
 	return nil
 }
 
-func runLoad(ctx context.Context, options Options, id string, writer *history.Writer, bot *nemesis.Nemesis) (loadgen.Result, error) {
-	loadConfig := loadgen.Config{
+// newLoadConfig is the workload of the round, started once the nemesis is.
+func newLoadConfig(options Options, id string, writer *history.Writer, bot *nemesis.Nemesis) loadgen.Config {
+	return loadgen.Config{
 		Round:         id,
 		Seed:          options.Seed,
 		Workload:      options.Scenario.Workload,
@@ -310,8 +313,6 @@ func runLoad(ctx context.Context, options Options, id string, writer *history.Wr
 		PartnerURL:    options.Saga.PartnerURL,
 		ParticipantID: options.Saga.ParticipantID,
 	}
-
-	return loadgen.Run(ctx, loadConfig)
 }
 
 // writeEvents keeps the failpoint events of the round next to its history;

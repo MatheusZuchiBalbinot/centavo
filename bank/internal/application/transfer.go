@@ -99,7 +99,9 @@ func (t TransferInternal) Apply(ctx context.Context, stores Stores, operationID 
 
 	entries := poster{positions: stores, entries: stores}
 
-	err = entries.debit(ctx, transaction.ID, input.From, debited, input.Amount)
+	line := debitLine{account: input.From, debited: debited, amount: input.Amount}
+
+	err = entries.debit(ctx, transaction.ID, line)
 	if err != nil {
 		return TransferResult{}, err
 	}

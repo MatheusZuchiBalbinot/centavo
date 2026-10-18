@@ -15,6 +15,7 @@ var errUnknownTransferStatus = errors.New("reconciliation has no rule for the tr
 // StatementKind is a line of the partner's statement.
 type StatementKind string
 
+// The kinds of a partner statement line.
 const (
 	StatementSettlement StatementKind = "settlement"
 	StatementReturn     StatementKind = "return"
@@ -38,6 +39,7 @@ type StatementEntry struct {
 // (docs/domain.md, section 10).
 type Divergence string
 
+// The verdicts of reconciling one statement line.
 const (
 	DivergenceMatched           Divergence = "matched"
 	DivergenceMissingSettlement Divergence = "missing_settlement"

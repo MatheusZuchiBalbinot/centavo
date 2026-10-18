@@ -315,7 +315,7 @@ func incomingFacts(ctx context.Context, stores Stores, entry StatementEntry, fac
 	if err != nil {
 		// A destination the bank cannot even parse is an account it does not
 		// have: the entry goes to suspense like any unknown destination (BR15).
-		return facts, nil
+		return facts, nil //nolint:nilerr // an unparsable account is an unknown one, not a failure
 	}
 
 	_, err = stores.ReadCustomerPosition(ctx, accountID)

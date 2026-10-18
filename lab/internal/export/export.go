@@ -160,7 +160,8 @@ func Take(ctx context.Context, pool *pgxpool.Pool, request Request) (snapshot.Sn
 	return s, nil
 }
 
-func collect[T any](ctx context.Context, tx pgx.Tx, sql string, scan pgx.RowToFunc[T], args ...any) ([]T, error) {
+// collect reads every row of one export query.
+func collect[T any](ctx context.Context, tx pgx.Tx, sql string, scan pgx.RowToFunc[T], args ...any) ([]T, error) { //nolint:revive // argument-limit: the variadic args mirror pgx.Tx.Query
 	rows, err := tx.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("exporting: %w", err)

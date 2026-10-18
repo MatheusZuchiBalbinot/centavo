@@ -4,31 +4,60 @@ linters:
   enable:
     - bodyclose
     - errorlint
+    - exhaustive
+    - gocognit
     - gocritic
+    - gocyclo
     - gosec
     - misspell
+    - nestif
+    - nilerr
     - noctx
     - nolintlint
     - revive
+    - rowserrcheck
+    - sqlclosecheck
     - unconvert
     - unparam
     - usestdlibvars
   settings:
+    exhaustive:
+      # Every switch over an enum lists its cases; a default only says "none of
+      # the known ones", it never stands in for one.
+      default-signifies-exhaustive: false
+    gocyclo:
+      min-complexity: 15
+    gocognit:
+      min-complexity: 25
+    nestif:
+      min-complexity: 4
+    gocritic:
+      enabled-tags: [diagnostic, style]
+      # sprintfQuotedString suggests Go quoting for text that is JSON or a
+      # Markdown code span, where %q and %#q escape the wrong way.
+      disabled-checks: [unnamedResult, sprintfQuotedString]
     revive:
       rules:
         - name: early-return
         - name: indent-error-flow
         - name: superfluous-else
         - name: unused-parameter
+        - name: exported
+        - name: argument-limit
+          arguments: [4]
+        - name: function-length
+          arguments: [45, 80]
   exclusions:
     presets:
       - std-error-handling
     rules:
       # Tests read the files they just wrote in t.TempDir and serve fixed
-      # bodies from fake servers; gosec's taint rules only add noise there.
+      # bodies from fake servers; gosec's taint rules only add noise there,
+      # and table-driven tests run long by design.
       - path: _test\.go
         linters:
           - gosec
+          - revive
 
 formatters:
   enable:

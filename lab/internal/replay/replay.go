@@ -119,6 +119,8 @@ func (b *Builder) Feed(record history.Record) {
 func (b *Builder) feedCompletion(record history.Record) {
 	second := b.secondAt(record.TimeNS)
 
+	// feed passes only completions.
+	//exhaustive:ignore
 	switch record.Type {
 	case history.TypeOK:
 		second.OK++
@@ -213,6 +215,8 @@ func (b *Builder) feedNemesis(record history.Record) {
 
 	counters := &b.replay.Counters
 
+	// Client operations are counted per second, not told as events.
+	//exhaustive:ignore
 	switch record.F {
 	case history.FunctionKill:
 		counters.Kills++

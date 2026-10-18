@@ -114,6 +114,8 @@ func runRole(ctx context.Context, selectedRole role) error {
 	logger := newLogger(selectedRole, cfg)
 	announceBuild(ctx, logger)
 
+	// healthcheck and chaos-kill returned above, before any configuration.
+	//exhaustive:ignore
 	switch selectedRole {
 	case roleAPI:
 		return serveAPI(ctx, cfg, logger)
@@ -411,7 +413,8 @@ func startRelay(ctx context.Context, pool *pgxpool.Pool, profile defenses.Profil
 
 	relay := application.NewNaiveRelay(saga.unitOfWork, saga.partner, saga.machine)
 
-	go postgres.Listen(ctx, pool, postgres.PixOutChannel, workers.RelayNotified(relay, saga.logger), saga.logger)
+	listener := postgres.Listener{Pool: pool, Channel: postgres.PixOutChannel, Handle: workers.RelayNotified(relay, saga.logger), Logger: saga.logger}
+	go listener.Run(ctx)
 	go relayPendingOnBoot(ctx, relay, saga.logger)
 }
 

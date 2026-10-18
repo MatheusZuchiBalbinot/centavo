@@ -25,6 +25,7 @@ import (
 // Action is what a failpoint does when it fires.
 type Action string
 
+// The actions a failpoint can take.
 const (
 	ActionKill  Action = "kill"
 	ActionDelay Action = "delay"
@@ -63,6 +64,7 @@ var known = []Name{
 // specPattern is name=[probability%]action[(argument)][*max_fires].
 var specPattern = regexp.MustCompile(`^([a-z_.]+)=(?:([0-9]+(?:\.[0-9]+)?)%)?([a-z]+)(?:\(([^)]*)\))?(?:\*([0-9]+))?$`)
 
+// Errors of parsing failpoint rules.
 var (
 	ErrUnknownFailpoint = errors.New("unknown failpoint")
 	ErrInvalidRule      = errors.New("invalid failpoint rule")
@@ -225,7 +227,7 @@ func hit(ctx context.Context, name Name) error {
 	err := record(ctx, f)
 	if err != nil {
 		// Never act without a record: the history would show a fault nobody injected.
-		return nil
+		return nil //nolint:nilerr // dropping the fault is the answer to a failed record
 	}
 
 	return execute(ctx, f)

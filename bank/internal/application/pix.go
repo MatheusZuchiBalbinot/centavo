@@ -34,6 +34,7 @@ const (
 	firstRelayAttempt = 1
 )
 
+// Errors of the PIX use cases.
 var (
 	ErrUnknownEvent = errors.New("unknown partner event")
 	// ErrAlreadyCredited means the incoming PIX was credited before (BR12).
@@ -232,7 +233,9 @@ func postReserve(ctx context.Context, stores Stores, r reservation) (ledger.Tran
 
 	entries := poster{positions: stores, entries: stores}
 
-	err = entries.debit(ctx, transaction.ID, r.external.AccountID, r.debited, r.external.Amount)
+	line := debitLine{account: r.external.AccountID, debited: r.debited, amount: r.external.Amount}
+
+	err = entries.debit(ctx, transaction.ID, line)
 	if err != nil {
 		return ledger.TransactionID{}, err
 	}

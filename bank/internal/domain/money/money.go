@@ -11,6 +11,7 @@ type Cents int64
 // (BR04: R$ 1.000.000,00).
 const MaxOperationCents Cents = 100_000_000
 
+// Errors of validating an amount.
 var (
 	ErrAmountNotPositive = errors.New("amount must be greater than zero")
 	ErrAmountAboveLimit  = errors.New("amount is above the per-operation limit")

@@ -26,6 +26,7 @@ type OperationID uuid.UUID
 // AccountKind tells customer accounts (floor at zero) from system accounts.
 type AccountKind string
 
+// The kinds of account.
 const (
 	AccountKindCustomer AccountKind = "customer"
 	AccountKindSystem   AccountKind = "system"
@@ -43,6 +44,7 @@ var (
 // TransactionKind is the kind of a ledger transaction.
 type TransactionKind string
 
+// The kinds of ledger transaction.
 const (
 	TransactionKindDeposit          TransactionKind = "deposit"
 	TransactionKindInternalTransfer TransactionKind = "internal_transfer"
@@ -61,6 +63,7 @@ type Seq int64
 
 const maxHolderNameLength = 120
 
+// Errors of the ledger's rules.
 var (
 	ErrAccountNotFound    = errors.New("account not found")
 	ErrSameAccount        = errors.New("a transfer needs two distinct accounts")

@@ -16,6 +16,7 @@ const groupSyncInterval = 10 * time.Millisecond
 
 const wallFormat = "2006-01-02T15:04:05.000Z07:00"
 
+// ErrWriterClosed means a record arrived after the writer closed.
 var ErrWriterClosed = errors.New("history writer is closed")
 
 // Writer appends records to history.jsonl. Index and time are assigned under

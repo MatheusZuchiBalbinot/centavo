@@ -18,6 +18,7 @@ import (
 // Status is the authoritative status of a transfer (docs/architecture.md, section 4.4).
 type Status string
 
+// The statuses of a transfer at the partner.
 const (
 	StatusProcessing Status = "processing"
 	StatusSettled    Status = "settled"
@@ -28,6 +29,7 @@ const (
 // EntryKind is a line of the participant's statement.
 type EntryKind string
 
+// The kinds of statement line.
 const (
 	EntrySettlement EntryKind = "settlement"
 	EntryReturn     EntryKind = "return"
@@ -37,6 +39,7 @@ const (
 // EventType is the type of a webhook.
 type EventType string
 
+// The webhook event types.
 const (
 	EventSettled  EventType = "transfer.settled"
 	EventRejected EventType = "transfer.rejected"
@@ -47,6 +50,7 @@ const (
 // DeliveryStatus is where a webhook delivery stands.
 type DeliveryStatus string
 
+// The states of a webhook delivery.
 const (
 	DeliveryPending   DeliveryStatus = "pending"
 	DeliveryDelivered DeliveryStatus = "delivered"
@@ -54,6 +58,7 @@ const (
 	DeliveryAbandoned DeliveryStatus = "abandoned"
 )
 
+// ErrNotFound means the partner has no record of the transfer.
 var ErrNotFound = errors.New("not found")
 
 // Transfer is a PIX the partner received.

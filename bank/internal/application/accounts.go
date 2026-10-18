@@ -15,6 +15,8 @@ const (
 	MaxStatementLimit = 200
 )
 
+// ErrInvalidStatementQuery means a statement page asked for a cursor or a size
+// out of bounds.
 var ErrInvalidStatementQuery = errors.New("after_seq must be zero or positive and limit between 1 and 200")
 
 // AccountView is a customer account and its balance.

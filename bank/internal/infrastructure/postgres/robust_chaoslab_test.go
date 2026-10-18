@@ -139,7 +139,7 @@ func TestBalance_ConcurrentDebits_WithoutBalanceLocking(t *testing.T) {
 	source, destination := b.newCustomer(t), b.newCustomer(t)
 	b.fund(t, source, 1_000)
 
-	transfer := application.NewTransferInternal(naiveMoney(t, b, "robust,-balance_locking"))
+	transferInternal := application.NewTransferInternal(naiveMoney(t, b, "robust,-balance_locking"))
 
 	var (
 		wg       sync.WaitGroup
@@ -151,7 +151,7 @@ func TestBalance_ConcurrentDebits_WithoutBalanceLocking(t *testing.T) {
 		wg.Go(func() {
 			input := application.TransferInput{From: source, To: destination, Amount: amountOf(t, 100), Write: newWrite(t)}
 
-			_, err := transfer.Execute(context.Background(), input)
+			_, err := transferInternal.Execute(context.Background(), input)
 
 			isUnexpected := err != nil && !errors.Is(err, ledger.ErrInsufficientFunds)
 			if isUnexpected {

@@ -206,6 +206,8 @@ func (v *validator) checkCompletion(record Record) {
 // count tallies a completion; an info retires its process (Jepsen's rule: after
 // an indeterminate result the process is no longer sequential).
 func (v *validator) count(record Record) {
+	// Only completions are counted.
+	//exhaustive:ignore
 	switch record.Type {
 	case TypeOK:
 		v.report.OK++
