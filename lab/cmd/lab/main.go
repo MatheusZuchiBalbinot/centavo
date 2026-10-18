@@ -451,7 +451,7 @@ func probeHealth(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, healthcheckTimeout)
 	defer cancel()
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, healthcheckURL, nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, healthcheckURL, http.NoBody)
 	if err != nil {
 		return err
 	}

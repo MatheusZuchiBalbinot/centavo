@@ -70,7 +70,7 @@ func (c Client) PendingWebhooks(ctx context.Context) (int, error) {
 }
 
 func (c Client) get(ctx context.Context, path string) ([]byte, error) {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, http.NoBody)
 	if err != nil {
 		return nil, err
 	}
