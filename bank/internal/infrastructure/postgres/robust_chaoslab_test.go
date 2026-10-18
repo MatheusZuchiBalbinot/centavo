@@ -413,7 +413,7 @@ func TestLease_ExpiryUsesDatabaseClock(t *testing.T) {
 				err := p.unitOfWork.Run(t.Context(), func(ctx context.Context, stores application.Stores) error {
 					var err error
 
-					_, isHeld, err = tc.lease.Acquire(ctx, stores, application.LeaseSweeper, owner, application.SweeperLeaseTTL)
+					_, isHeld, err = tc.lease.Acquire(ctx, stores, application.Lease{Resource: application.LeaseSweeper, Holder: owner}, application.SweeperLeaseTTL)
 
 					return err
 				})

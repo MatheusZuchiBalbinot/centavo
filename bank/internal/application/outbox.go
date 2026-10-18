@@ -54,7 +54,7 @@ type OutboxStore interface {
 	FinishOutbox(ctx context.Context, id, token int64) (bool, error)
 	// DeferOutbox releases the message for another attempt after delay, if
 	// the token still owns it.
-	DeferOutbox(ctx context.Context, id, token int64, delay time.Duration, reason string) (bool, error)
+	DeferOutbox(ctx context.Context, claim OutboxClaim, delay time.Duration, reason string) (bool, error)
 }
 
 // OutboxPublication is defense D4 (docs/domain.md, section 13.7): the

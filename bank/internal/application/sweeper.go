@@ -38,13 +38,13 @@ type StuckTransfer struct {
 type LeaseStore interface {
 	// AcquireLease takes or renews the lease; the token grows when the lease
 	// changes hands. false means another holder has it.
-	AcquireLease(ctx context.Context, resource, holder string, ttl time.Duration) (int64, bool, error)
+	AcquireLease(ctx context.Context, lease Lease, ttl time.Duration) (int64, bool, error)
 	// AcquireLeaseAt is the naive acquisition: expiry computed from the
 	// caller's own clock.
-	AcquireLeaseAt(ctx context.Context, resource, holder string, now time.Time, ttl time.Duration) (int64, bool, error)
+	AcquireLeaseAt(ctx context.Context, lease Lease, now time.Time, ttl time.Duration) (int64, bool, error)
 	// HoldsLease checks the lease and keeps it from moving until the
 	// transaction ends, so the check and the writes after it are atomic.
-	HoldsLease(ctx context.Context, resource, holder string, token int64) (bool, error)
+	HoldsLease(ctx context.Context, lease Lease, token int64) (bool, error)
 	ListStuck(ctx context.Context, olderThan time.Duration, limit int) ([]StuckTransfer, error)
 }
 
@@ -107,7 +107,7 @@ func (s Sweeper) RunOnce(ctx context.Context, olderThan time.Duration) error {
 	err := s.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
 		var err error
 
-		token, isHeld, err = s.lease.Acquire(ctx, stores, LeaseSweeper, s.owner, SweeperLeaseTTL)
+		token, isHeld, err = s.lease.Acquire(ctx, stores, Lease{Resource: LeaseSweeper, Holder: s.owner}, SweeperLeaseTTL)
 		if err != nil || !isHeld {
 			return err
 		}
@@ -157,7 +157,7 @@ func (s Sweeper) sweep(ctx context.Context, candidate StuckTransfer, token int64
 	}
 
 	err = s.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
-		isHeld, err := s.lease.Holds(ctx, stores, LeaseSweeper, s.owner, token)
+		isHeld, err := s.lease.Holds(ctx, stores, Lease{Resource: LeaseSweeper, Holder: s.owner}, token)
 		if err != nil {
 			return err
 		}

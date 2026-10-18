@@ -7,13 +7,20 @@ import (
 	"centavo/bank/internal/platform/clock"
 )
 
+// Lease names a singleton loop's lease and the worker that wants it: two
+// strings the compiler could not tell apart as separate arguments.
+type Lease struct {
+	Resource string
+	Holder   string
+}
+
 // LeasePolicy is defense D11's strategy: how a singleton loop (sweeper,
 // reconciler) knows it may still write.
 type LeasePolicy interface {
 	// Acquire takes or renews the lease; false means another holder has it.
-	Acquire(ctx context.Context, stores Stores, resource, holder string, ttl time.Duration) (int64, bool, error)
+	Acquire(ctx context.Context, stores Stores, lease Lease, ttl time.Duration) (int64, bool, error)
 	// Holds runs inside the protected write's transaction.
-	Holds(ctx context.Context, stores Stores, resource, holder string, token int64) (bool, error)
+	Holds(ctx context.Context, stores Stores, lease Lease, token int64) (bool, error)
 	// MoveCursor writes the reconciliation cursor in the batch's commit.
 	MoveCursor(ctx context.Context, stores Stores, from, to int64) (bool, error)
 }
@@ -25,13 +32,13 @@ type LeasePolicy interface {
 type FencedLeases struct{}
 
 // Acquire takes the lease by the database's clock.
-func (FencedLeases) Acquire(ctx context.Context, stores Stores, resource, holder string, ttl time.Duration) (int64, bool, error) {
-	return stores.AcquireLease(ctx, resource, holder, ttl)
+func (FencedLeases) Acquire(ctx context.Context, stores Stores, lease Lease, ttl time.Duration) (int64, bool, error) {
+	return stores.AcquireLease(ctx, lease, ttl)
 }
 
 // Holds checks holder and token in the write's transaction.
-func (FencedLeases) Holds(ctx context.Context, stores Stores, resource, holder string, token int64) (bool, error) {
-	return stores.HoldsLease(ctx, resource, holder, token)
+func (FencedLeases) Holds(ctx context.Context, stores Stores, lease Lease, token int64) (bool, error) {
+	return stores.HoldsLease(ctx, lease, token)
 }
 
 // MoveCursor advances only from where the batch started.
@@ -47,12 +54,12 @@ func (FencedLeases) MoveCursor(ctx context.Context, stores Stores, from, to int6
 type LocalClockLeases struct{}
 
 // Acquire takes the lease by this process's clock.
-func (LocalClockLeases) Acquire(ctx context.Context, stores Stores, resource, holder string, ttl time.Duration) (int64, bool, error) {
-	return stores.AcquireLeaseAt(ctx, resource, holder, clock.Now(), ttl)
+func (LocalClockLeases) Acquire(ctx context.Context, stores Stores, lease Lease, ttl time.Duration) (int64, bool, error) {
+	return stores.AcquireLeaseAt(ctx, lease, clock.Now(), ttl)
 }
 
 // Holds trusts the check made when the lease was taken.
-func (LocalClockLeases) Holds(context.Context, Stores, string, string, int64) (bool, error) {
+func (LocalClockLeases) Holds(context.Context, Stores, Lease, int64) (bool, error) {
 	return true, nil
 }
 

@@ -57,7 +57,7 @@ type RetryOnDoubt struct{}
 
 // OnUnknown reschedules the message.
 func (RetryOnDoubt) OnUnknown(ctx context.Context, stores Stores, claim OutboxClaim, _ ExternalTransfer) error {
-	isOurs, err := stores.DeferOutbox(ctx, claim.ID, claim.Token, fullJitterBackoff(claim.Attempts), doubtReason)
+	isOurs, err := stores.DeferOutbox(ctx, claim, fullJitterBackoff(claim.Attempts), doubtReason)
 	if err != nil {
 		return err
 	}

@@ -127,8 +127,8 @@ SET next_attempt_at = now() + $3::bigint * interval '1 millisecond', last_error 
 WHERE id = $1 AND lease_token = $2 AND status = 'pending'`
 
 // DeferOutbox reschedules the message if the token still owns it.
-func (s LedgerStore) DeferOutbox(ctx context.Context, id, token int64, delay time.Duration, reason string) (bool, error) {
-	tag, err := s.db.Exec(ctx, deferOutboxSQL, id, token, delay.Milliseconds(), reason)
+func (s LedgerStore) DeferOutbox(ctx context.Context, claim application.OutboxClaim, delay time.Duration, reason string) (bool, error) {
+	tag, err := s.db.Exec(ctx, deferOutboxSQL, claim.ID, claim.Token, delay.Milliseconds(), reason)
 	if err != nil {
 		return false, fmt.Errorf("deferring outbox message: %w", err)
 	}

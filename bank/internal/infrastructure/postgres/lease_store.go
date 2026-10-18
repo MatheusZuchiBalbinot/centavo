@@ -25,16 +25,16 @@ WHERE resource = $1
 RETURNING token`
 
 // AcquireLease takes or renews the lease.
-func (s LedgerStore) AcquireLease(ctx context.Context, resource, holder string, ttl time.Duration) (int64, bool, error) {
+func (s LedgerStore) AcquireLease(ctx context.Context, lease application.Lease, ttl time.Duration) (int64, bool, error) {
 	var token int64
 
-	err := s.db.QueryRow(ctx, acquireLeaseSQL, resource, holder, ttl.Milliseconds()).Scan(&token)
+	err := s.db.QueryRow(ctx, acquireLeaseSQL, lease.Resource, lease.Holder, ttl.Milliseconds()).Scan(&token)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, false, nil
 	}
 
 	if err != nil {
-		return 0, false, fmt.Errorf("acquiring lease %s: %w", resource, err)
+		return 0, false, fmt.Errorf("acquiring lease %s: %w", lease.Resource, err)
 	}
 
 	return token, true, nil
@@ -52,16 +52,16 @@ WHERE resource = $1
 RETURNING token`
 
 // AcquireLeaseAt takes or renews the lease by the caller's clock.
-func (s LedgerStore) AcquireLeaseAt(ctx context.Context, resource, holder string, now time.Time, ttl time.Duration) (int64, bool, error) {
+func (s LedgerStore) AcquireLeaseAt(ctx context.Context, lease application.Lease, now time.Time, ttl time.Duration) (int64, bool, error) {
 	var token int64
 
-	err := s.db.QueryRow(ctx, acquireLeaseAtSQL, resource, holder, now, ttl.Milliseconds()).Scan(&token)
+	err := s.db.QueryRow(ctx, acquireLeaseAtSQL, lease.Resource, lease.Holder, now, ttl.Milliseconds()).Scan(&token)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, false, nil
 	}
 
 	if err != nil {
-		return 0, false, fmt.Errorf("acquiring lease %s: %w", resource, err)
+		return 0, false, fmt.Errorf("acquiring lease %s: %w", lease.Resource, err)
 	}
 
 	return token, true, nil
@@ -75,16 +75,16 @@ WHERE resource = $1 AND holder = $2 AND token = $3 AND expires_at > now()
 FOR SHARE`
 
 // HoldsLease checks the lease within the caller's transaction.
-func (s LedgerStore) HoldsLease(ctx context.Context, resource, holder string, token int64) (bool, error) {
+func (s LedgerStore) HoldsLease(ctx context.Context, lease application.Lease, token int64) (bool, error) {
 	var one int
 
-	err := s.db.QueryRow(ctx, holdsLeaseSQL, resource, holder, token).Scan(&one)
+	err := s.db.QueryRow(ctx, holdsLeaseSQL, lease.Resource, lease.Holder, token).Scan(&one)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
 
 	if err != nil {
-		return false, fmt.Errorf("checking lease %s: %w", resource, err)
+		return false, fmt.Errorf("checking lease %s: %w", lease.Resource, err)
 	}
 
 	return true, nil

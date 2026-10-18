@@ -167,7 +167,7 @@ func (r Reconciler) nextBatch(ctx context.Context) (statementBatch, bool, error)
 	err := r.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
 		var err error
 
-		batch.token, isHeld, err = r.lease.Acquire(ctx, stores, LeaseReconciler, r.owner, ReconcilerLeaseTTL)
+		batch.token, isHeld, err = r.lease.Acquire(ctx, stores, Lease{Resource: LeaseReconciler, Holder: r.owner}, ReconcilerLeaseTTL)
 		if err != nil || !isHeld {
 			return err
 		}
@@ -390,7 +390,7 @@ type AtomicBatches struct{}
 // Book books the whole batch or nothing.
 func (AtomicBatches) Book(ctx context.Context, r Reconciler, batch statementBatch) error {
 	return r.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
-		isHeld, err := r.lease.Holds(ctx, stores, LeaseReconciler, r.owner, batch.token)
+		isHeld, err := r.lease.Holds(ctx, stores, Lease{Resource: LeaseReconciler, Holder: r.owner}, batch.token)
 		if err != nil {
 			return err
 		}
