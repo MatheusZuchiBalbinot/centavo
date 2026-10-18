@@ -22,7 +22,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        module: [bank, partner, lab]
+        include:
+          - {module: bank, coverage-floor: 65}
+          - {module: partner, coverage-floor: 68}
+          - {module: lab, coverage-floor: 60}
     defaults:
       run:
         working-directory: ${{ matrix.module }}
@@ -46,7 +49,12 @@ jobs:
         run: go vet ./... && go vet -tags chaoslab ./...
 
       - name: test
-        run: go test -race ./... && go test -race -tags chaoslab ./...
+        run: go test -race ./... && go test -race -tags chaoslab -coverpkg=./... -coverprofile=cover.out ./...
+
+      - name: coverage floor
+        env:
+          COVERAGE_FLOOR: ${{ matrix.coverage-floor }}
+        run: ../scripts/check-coverage.sh cover.out "$COVERAGE_FLOOR"
 
       - name: lint (production build)
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
