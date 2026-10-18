@@ -10,8 +10,8 @@ import (
 
 // Causes of the transitions a resync records.
 const (
-	causeResync  = "resync"
-	causeSweeper = "sweeper"
+	causeResync  TransitionCause = "resync"
+	causeSweeper TransitionCause = "sweeper"
 )
 
 // errPartnerUnreachable is a status query that got no answer.
@@ -33,7 +33,7 @@ type PartnerStatusReader interface {
 type pathWalk struct {
 	transferID    transfer.ID
 	authoritative AuthoritativeStatus
-	cause         string
+	cause         TransitionCause
 	correlationID string
 }
 

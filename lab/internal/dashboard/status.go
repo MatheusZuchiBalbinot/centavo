@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"centavo/lab/internal/audit"
+
+	"centavo/lab/internal/checker"
 )
 
 // checkState is how the panel paints one check; the text says it too, so the
@@ -48,10 +50,10 @@ type checkStatus struct {
 
 // lastRound is the part of report.json the panel shows.
 type lastRound struct {
-	Round      string `json:"round"`
-	Scenario   string `json:"scenario"`
-	Seed       string `json:"seed"`
-	Verdict    string `json:"verdict"`
+	Round      string          `json:"round"`
+	Scenario   string          `json:"scenario"`
+	Seed       string          `json:"seed"`
+	Verdict    checker.Verdict `json:"verdict"`
 	Operations struct {
 		Total int `json:"total"`
 		OK    int `json:"ok"`

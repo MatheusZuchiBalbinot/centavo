@@ -54,7 +54,7 @@ func (p *pixRound) pixOut(account string, cents int64) snapshot.ExternalTransfer
 }
 
 // step moves a transfer, posting what the target status implies.
-func (p *pixRound) step(transfer snapshot.ExternalTransfer, from, to string) {
+func (p *pixRound) step(transfer snapshot.ExternalTransfer, from, to snapshot.TransferStatus) {
 	var ledgerID string
 
 	switch to {

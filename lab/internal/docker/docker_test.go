@@ -103,7 +103,7 @@ func TestFind_ReadsTheTargetState(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	isRead := target.ID == "api" && target.IsPaused && target.RestartCount == 2 && target.Health == "healthy" && !target.IsHealthy()
+	isRead := target.ID == "api" && target.State == docker.StatePaused && target.RestartCount == 2 && target.Health == docker.HealthHealthy && !target.IsHealthy()
 	if !isRead {
 		t.Fatalf("target: %+v", target)
 	}

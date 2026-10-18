@@ -146,11 +146,11 @@ func pixOutInputOf(r *http.Request, body []byte) (application.PixOutInput, error
 }
 
 type transitionResponse struct {
-	Seq       int              `json:"seq"`
-	From      *transfer.Status `json:"from"`
-	To        transfer.Status  `json:"to"`
-	Cause     string           `json:"cause"`
-	CreatedAt time.Time        `json:"created_at"`
+	Seq       int                         `json:"seq"`
+	From      *transfer.Status            `json:"from"`
+	To        transfer.Status             `json:"to"`
+	Cause     application.TransitionCause `json:"cause"`
+	CreatedAt time.Time                   `json:"created_at"`
 }
 
 type externalTransferResponse struct {
@@ -199,13 +199,13 @@ func newExternalTransferResponse(view application.ExternalTransferView) external
 }
 
 type webhookEvent struct {
-	EventID     string              `json:"event_id"`
-	Type        string              `json:"type"`
-	EndToEndID  transfer.EndToEndID `json:"end_to_end_id"`
-	AmountCents int64               `json:"amount_cents"`
-	Sequence    int                 `json:"sequence"`
-	Reason      string              `json:"reason"`
-	AccountID   string              `json:"destination_account_id"`
+	EventID     string                `json:"event_id"`
+	Type        application.EventType `json:"type"`
+	EndToEndID  transfer.EndToEndID   `json:"end_to_end_id"`
+	AmountCents int64                 `json:"amount_cents"`
+	Sequence    int                   `json:"sequence"`
+	Reason      string                `json:"reason"`
+	AccountID   string                `json:"destination_account_id"`
 }
 
 // webhook takes a partner event. Only a valid signature gets in; what it

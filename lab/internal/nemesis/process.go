@@ -7,6 +7,8 @@ import (
 
 	"centavo/lab/internal/history"
 	"centavo/lab/scenarios"
+
+	"centavo/lab/internal/docker"
 )
 
 // minKillGap keeps Docker's restart backoff from growing: it resets only
@@ -67,7 +69,7 @@ func (n *Nemesis) kill(ctx context.Context, fault scenarios.Fault, service strin
 		return err
 	}
 
-	if !container.IsRunning {
+	if container.State == docker.StateStopped {
 		return fmt.Errorf("%s is not running", service)
 	}
 

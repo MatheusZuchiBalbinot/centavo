@@ -9,6 +9,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+
+	"centavo/lab/internal/checker"
 )
 
 // Files of a round directory the replay reads.
@@ -24,15 +26,15 @@ const (
 
 // Manifest is the part of round.json a replay shows.
 type Manifest struct {
-	Round    string `json:"round"`
-	Scenario string `json:"scenario"`
-	Seed     string `json:"seed"`
-	Verdict  string `json:"verdict"`
+	Round    string          `json:"round"`
+	Scenario string          `json:"scenario"`
+	Seed     string          `json:"seed"`
+	Verdict  checker.Verdict `json:"verdict"`
 }
 
 type report struct {
-	Verdict    string  `json:"verdict"`
-	Invariants []Check `json:"invariants"`
+	Verdict    checker.Verdict `json:"verdict"`
+	Invariants []Check         `json:"invariants"`
 }
 
 // ReadManifest loads round.json.

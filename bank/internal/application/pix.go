@@ -26,13 +26,18 @@ import (
 
 // Causes recorded in the transition history.
 const (
-	causeAPI          = "api"
-	causeRelay        = "relay"
-	causeWebhook      = "webhook"
-	failurePartner    = "partner_rejected"
-	failureTimeout    = "partner_timeout"
-	firstRelayAttempt = 1
+	causeAPI     TransitionCause = "api"
+	causeRelay   TransitionCause = "relay"
+	causeWebhook TransitionCause = "webhook"
 )
+
+// Failure codes the bank records itself; a partner refusal can bring its own.
+const (
+	failurePartner = "partner_rejected"
+	failureTimeout = "partner_timeout"
+)
+
+const firstRelayAttempt = 1
 
 // Errors of the PIX use cases.
 var (
@@ -62,7 +67,7 @@ type TransitionRecord struct {
 	Seq                 int
 	From                *transfer.Status
 	To                  transfer.Status
-	Cause               string
+	Cause               TransitionCause
 	LedgerTransactionID *ledger.TransactionID
 	CorrelationID       string
 	CreatedAt           time.Time

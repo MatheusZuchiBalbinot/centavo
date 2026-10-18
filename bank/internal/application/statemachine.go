@@ -9,6 +9,9 @@ import (
 	"centavo/bank/internal/domain/transfer"
 )
 
+// TransitionCause is what moved a transfer, as the transition history records it.
+type TransitionCause string
+
 // TransitionCommand asks to move one transfer from a status to another.
 type TransitionCommand struct {
 	TransferID transfer.ID
@@ -17,7 +20,7 @@ type TransitionCommand struct {
 	From          transfer.Status
 	To            transfer.Status
 	FailureCode   string
-	Cause         string
+	Cause         TransitionCause
 	CorrelationID string
 }
 

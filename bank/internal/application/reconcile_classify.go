@@ -50,15 +50,18 @@ const (
 	DivergenceUnknownEntry      Divergence = "unknown_entry"
 )
 
-// Actions recorded with each item.
+// ReconciliationAction is what the reconciler did about one statement entry.
+type ReconciliationAction string
+
+// The actions recorded with each item.
 const (
-	actionNone     = "none"
-	actionWalk     = "walk_to_partner_status"
-	actionCredit   = "credit_incoming"
-	actionSuspense = "suspense"
+	actionNone     ReconciliationAction = "none"
+	actionWalk     ReconciliationAction = "walk_to_partner_status"
+	actionCredit   ReconciliationAction = "credit_incoming"
+	actionSuspense ReconciliationAction = "suspense"
 	// actionWalkAndSuspense settles the amount the bank knows and books the
 	// rest of what the partner moved to suspense.
-	actionWalkAndSuspense = "walk_and_suspense"
+	actionWalkAndSuspense ReconciliationAction = "walk_and_suspense"
 )
 
 // entryFacts are what the ledger says about one statement entry.
@@ -75,7 +78,7 @@ type entryFacts struct {
 // verdict is what the reconciler books for an entry.
 type verdict struct {
 	divergence Divergence
-	action     string
+	action     ReconciliationAction
 	// walkTo is the partner status to walk the transfer to, if any.
 	walkTo transfer.PartnerStatus
 	// suspenseCents moves money from the partner reserve mirror to suspense:

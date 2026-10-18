@@ -11,6 +11,7 @@ import (
 	"slices"
 	"time"
 
+	"centavo/lab/internal/checker"
 	"centavo/lab/internal/history"
 )
 
@@ -19,15 +20,15 @@ const maxEvents = 2_000
 
 // Replay is one round as the panel plays it.
 type Replay struct {
-	Round    string    `json:"round"`
-	Scenario string    `json:"scenario"`
-	Seed     string    `json:"seed"`
-	Seconds  []Second  `json:"seconds"`
-	Events   []Event   `json:"events"`
-	Counters Counters  `json:"counters"`
-	Verdict  string    `json:"verdict,omitempty"`
-	Checks   []Check   `json:"checks,omitempty"`
-	BuiltAt  time.Time `json:"built_at"`
+	Round    string          `json:"round"`
+	Scenario string          `json:"scenario"`
+	Seed     string          `json:"seed"`
+	Seconds  []Second        `json:"seconds"`
+	Events   []Event         `json:"events"`
+	Counters Counters        `json:"counters"`
+	Verdict  checker.Verdict `json:"verdict,omitempty"`
+	Checks   []Check         `json:"checks,omitempty"`
+	BuiltAt  time.Time       `json:"built_at"`
 }
 
 // Second is what the clients saw in one second of the round.
@@ -41,11 +42,25 @@ type Second struct {
 	P99 float64 `json:"p99_ms"`
 }
 
+// EventFamily groups the timeline's events; the panel colors them by family.
+type EventFamily string
+
+// The families of the timeline.
+const (
+	familyProcess   EventFamily = "process"
+	familyFailpoint EventFamily = "failpoint"
+	familyNetwork   EventFamily = "network"
+	familyDatabase  EventFamily = "database"
+	familyClock     EventFamily = "clock"
+	familyPartner   EventFamily = "partner"
+	familyHeal      EventFamily = "heal"
+)
+
 // Event is one entry of the chaos timeline.
 type Event struct {
-	TMillis int64  `json:"t_ms"`
-	Family  string `json:"family"`
-	Text    string `json:"text"`
+	TMillis int64       `json:"t_ms"`
+	Family  EventFamily `json:"family"`
+	Text    string      `json:"text"`
 }
 
 // Counters add up the chaos of the round.
@@ -63,9 +78,9 @@ type Counters struct {
 
 // Check is one invariant's result, from the report.
 type Check struct {
-	ID         string `json:"id"`
-	Status     string `json:"status"`
-	Violations int    `json:"violations"`
+	ID         string         `json:"id"`
+	Status     checker.Status `json:"status"`
+	Violations int            `json:"violations"`
 }
 
 // Builder accumulates a replay a record at a time.
@@ -184,7 +199,7 @@ func percentile(sorted []float64, p int) float64 {
 	return sorted[max(rank-1, 0)]
 }
 
-func (b *Builder) addEvent(record history.Record, family, text string) {
+func (b *Builder) addEvent(record history.Record, family EventFamily, text string) {
 	if len(b.replay.Events) >= maxEvents {
 		return
 	}
@@ -220,30 +235,30 @@ func (b *Builder) feedNemesis(record history.Record) {
 	switch record.F {
 	case history.FunctionKill:
 		counters.Kills++
-		b.addEvent(record, "process", "processo morto: "+value.Target)
+		b.addEvent(record, familyProcess, "processo morto: "+value.Target)
 	case history.FunctionFailpointFired:
 		counters.FailpointFires++
-		b.addEvent(record, "failpoint", fmt.Sprintf("failpoint %s (%s) em %s", value.Failpoint, value.Action, value.Instance))
+		b.addEvent(record, familyFailpoint, fmt.Sprintf("failpoint %s (%s) em %s", value.Failpoint, value.Action, value.Instance))
 	case history.FunctionFreeze:
 		counters.Freezes++
-		b.addEvent(record, "process", fmt.Sprintf("contêiner congelado: %s por %s", value.Target, value.Duration))
+		b.addEvent(record, familyProcess, fmt.Sprintf("contêiner congelado: %s por %s", value.Target, value.Duration))
 	case history.FunctionNetwork:
 		b.feedNetwork(record, value)
 	case history.FunctionDatabase:
 		counters.Database++
-		b.addEvent(record, "database", "banco de dados: "+value.Action)
+		b.addEvent(record, familyDatabase, "banco de dados: "+value.Action)
 	case history.FunctionFailover:
 		b.feedFailover(record, value)
 	case history.FunctionSkewClock:
 		counters.ClockSkews++
-		b.addEvent(record, "clock", fmt.Sprintf("relógio desviado em %s: %s", value.Targets, value.Offset))
+		b.addEvent(record, familyClock, fmt.Sprintf("relógio desviado em %s: %s", value.Targets, value.Offset))
 	case history.FunctionArmPartner:
 		counters.PartnerLies++
-		b.addEvent(record, "partner", "o parceiro passa a mentir: "+value.Fault)
+		b.addEvent(record, familyPartner, "o parceiro passa a mentir: "+value.Fault)
 	case history.FunctionHealStart:
-		b.addEvent(record, "heal", "cura começou")
+		b.addEvent(record, familyHeal, "cura começou")
 	case history.FunctionHealComplete:
-		b.addEvent(record, "heal", "cura terminou")
+		b.addEvent(record, familyHeal, "cura terminou")
 	}
 }
 
@@ -253,7 +268,7 @@ func (b *Builder) feedNetwork(record history.Record, value nemesisValue) {
 	}
 
 	b.replay.Counters.Network++
-	b.addEvent(record, "network", fmt.Sprintf("rede: %s em %v", value.Toxic, value.Proxies))
+	b.addEvent(record, familyNetwork, fmt.Sprintf("rede: %s em %v", value.Toxic, value.Proxies))
 }
 
 func (b *Builder) feedFailover(record history.Record, value nemesisValue) {
@@ -262,5 +277,5 @@ func (b *Builder) feedFailover(record history.Record, value nemesisValue) {
 	}
 
 	b.replay.Counters.Failovers++
-	b.addEvent(record, "database", "failover: réplica promovida")
+	b.addEvent(record, familyDatabase, "failover: réplica promovida")
 }

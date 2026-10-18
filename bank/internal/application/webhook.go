@@ -11,18 +11,21 @@ import (
 	"centavo/bank/internal/domain/transfer"
 )
 
+// EventType is the kind of a partner webhook.
+type EventType string
+
 // Event types the partner sends (docs/architecture.md, section 4.4).
 const (
-	EventSettled  = "transfer.settled"
-	EventRejected = "transfer.rejected"
-	EventReturned = "transfer.returned"
-	EventIncoming = "incoming.received"
+	EventSettled  EventType = "transfer.settled"
+	EventRejected EventType = "transfer.rejected"
+	EventReturned EventType = "transfer.returned"
+	EventIncoming EventType = "incoming.received"
 )
 
 // PartnerEvent is a webhook from the partner.
 type PartnerEvent struct {
 	ID          string
-	Type        string
+	Type        EventType
 	EndToEndID  transfer.EndToEndID
 	AmountCents money.Cents
 	Sequence    int
@@ -59,7 +62,7 @@ type eventApplier struct {
 // expectedFrom is the status each transfer event speaks for (docs/domain.md,
 // section 8.3). Reaching another status, created to confirmed for one, needs
 // the partner's authoritative status, never just the webhook.
-var expectedFrom = map[string]transfer.Status{
+var expectedFrom = map[EventType]transfer.Status{
 	EventSettled: transfer.StatusSent, EventRejected: transfer.StatusSent, EventReturned: transfer.StatusConfirmed,
 }
 

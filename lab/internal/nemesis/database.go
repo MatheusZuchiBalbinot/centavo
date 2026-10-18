@@ -7,6 +7,8 @@ import (
 
 	"centavo/lab/internal/history"
 	"centavo/lab/scenarios"
+
+	"centavo/lab/internal/docker"
 )
 
 // databaseService is PostgreSQL's Compose service, a chaos target with its
@@ -80,7 +82,7 @@ func (n *Nemesis) hitDatabase(ctx context.Context, fault scenarios.Fault, length
 		return err
 	}
 
-	isDown := !container.IsRunning || container.IsPaused
+	isDown := container.State != docker.StateRunning
 	if isDown {
 		// Still coming back from the last fault: hitting it again would only
 		// stretch the outage.
@@ -136,11 +138,11 @@ func (n *Nemesis) healDatabase(ctx context.Context) {
 		return
 	}
 
-	if container.IsPaused {
+	if container.State == docker.StatePaused {
 		err = n.config.Docker.Unpause(ctx, container.ID)
 	}
 
-	if !container.IsRunning && err == nil {
+	if container.State == docker.StateStopped && err == nil {
 		err = n.config.Docker.Start(ctx, container.ID)
 	}
 

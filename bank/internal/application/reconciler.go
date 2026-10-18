@@ -26,7 +26,7 @@ const (
 const LeaseReconciler = "reconciler"
 
 // causeReconciliation marks the transitions a reconciliation walks.
-const causeReconciliation = "reconciliation"
+const causeReconciliation TransitionCause = "reconciliation"
 
 var (
 	errReconcilerLeaseLost = errors.New("reconciler lease lost to another worker")
@@ -42,7 +42,7 @@ type ReconciliationItem struct {
 	EntryKind   StatementKind
 	AmountCents money.Cents
 	Divergence  Divergence
-	Action      string
+	Action      ReconciliationAction
 }
 
 // ReconciliationStore keeps the cursor, the runs and the items.

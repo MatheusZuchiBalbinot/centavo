@@ -30,14 +30,17 @@ const (
 	RuleI7Authority       Rule = "I7.authoritative_status"
 )
 
-// Statuses of the bank's state machine and of the partner's truth.
+// Statuses of the bank's state machine.
 const (
-	statusCreated   = "created"
-	statusSent      = "sent"
-	statusConfirmed = "confirmed"
-	statusFailed    = "failed"
-	statusReversed  = "reversed"
+	statusCreated   snapshot.TransferStatus = "created"
+	statusSent      snapshot.TransferStatus = "sent"
+	statusConfirmed snapshot.TransferStatus = "confirmed"
+	statusFailed    snapshot.TransferStatus = "failed"
+	statusReversed  snapshot.TransferStatus = "reversed"
+)
 
+// Statuses and entry kinds of the partner's truth.
+const (
 	truthSettled    = "settled"
 	truthRejected   = "rejected"
 	truthReturned   = "returned"
@@ -50,7 +53,7 @@ const (
 
 // allowedTransitions is the checker's own copy of the state machine, written
 // apart from the bank's domain and from its database table (ADR-007).
-var allowedTransitions = map[[2]string]bool{
+var allowedTransitions = map[[2]snapshot.TransferStatus]bool{
 	{statusCreated, statusSent}:       true,
 	{statusCreated, statusConfirmed}:  true,
 	{statusCreated, statusFailed}:     true,
@@ -60,10 +63,10 @@ var allowedTransitions = map[[2]string]bool{
 }
 
 // terminalStatuses end the saga (I5).
-var terminalStatuses = map[string]bool{statusConfirmed: true, statusFailed: true, statusReversed: true}
+var terminalStatuses = map[snapshot.TransferStatus]bool{statusConfirmed: true, statusFailed: true, statusReversed: true}
 
 // authoritativeOf is what the partner's truth must say for a final status.
-var authoritativeOf = map[string]string{statusConfirmed: truthSettled, statusFailed: truthRejected, statusReversed: truthReturned}
+var authoritativeOf = map[snapshot.TransferStatus]string{statusConfirmed: truthSettled, statusFailed: truthRejected, statusReversed: truthReturned}
 
 // PartnerTruth is the partner's record (GET /internal/truth), read with the
 // checker's own types.
@@ -228,12 +231,13 @@ func (e *evaluation) checkPix(truth *PartnerTruth) {
 // follows the previous one, and the current status is the last step.
 func (e *evaluation) checkPath(transfer snapshot.ExternalTransfer) {
 	transitions := e.ledger.transitions[transfer.ID]
-	previous := ""
+	var previous snapshot.TransferStatus
 
 	for k, transition := range transitions {
 		isFirst := k == 0
 		isValidFirst := isFirst && transition.From == "" && transition.To == statusCreated && transition.Seq == 1
-		isValidStep := !isFirst && transition.From == previous && allowedTransitions[[2]string{transition.From, transition.To}] && transition.Seq == int64(k+1)
+		step := [2]snapshot.TransferStatus{transition.From, transition.To}
+		isValidStep := !isFirst && transition.From == previous && allowedTransitions[step] && transition.Seq == int64(k+1)
 
 		if !isValidFirst && !isValidStep {
 			e.add(e.transferViolation(
@@ -270,17 +274,17 @@ func (e *evaluation) checkPath(transfer snapshot.ExternalTransfer) {
 // checkPostings is I7's ledger side: one reserve, and a settlement, refund
 // or return exactly when the path goes through confirmed, failed or reversed.
 func (e *evaluation) checkPostings(transfer snapshot.ExternalTransfer) {
-	visited := map[string]bool{}
+	visited := map[snapshot.TransferStatus]bool{}
 	for _, transition := range e.ledger.transitions[transfer.ID] {
 		visited[transition.To] = true
 	}
 
-	counts := map[string]int{}
+	counts := map[snapshot.TransactionKind]int{}
 	for _, transaction := range e.ledger.byTransfer[transfer.ID] {
 		counts[transaction.Kind]++
 	}
 
-	expected := map[string]int{
+	expected := map[snapshot.TransactionKind]int{
 		snapshot.TransactionPixOutReserve: 1,
 		snapshot.TransactionPixOutSettle:  boolCount(visited[statusConfirmed]),
 		snapshot.TransactionPixOutRefund:  boolCount(visited[statusFailed]),
@@ -345,7 +349,7 @@ func (e *evaluation) checkTransit() {
 func (e *evaluation) checkAgreement(transfer snapshot.ExternalTransfer, index truthIndex) {
 	base := fixedEndToEnd(transfer.ID)
 
-	counts := map[string]int{}
+	counts := map[snapshot.TransactionKind]int{}
 	for _, transaction := range e.ledger.byTransfer[transfer.ID] {
 		counts[transaction.Kind]++
 	}

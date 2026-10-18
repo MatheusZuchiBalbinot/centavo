@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"centavo/lab/internal/replay"
+
+	"centavo/lab/internal/checker"
 )
 
 // Bounds of what the panel sends and keeps.
@@ -27,7 +29,7 @@ type summary struct {
 	Round      string          `json:"round"`
 	Scenario   string          `json:"scenario"`
 	Seed       string          `json:"seed"`
-	Verdict    string          `json:"verdict"`
+	Verdict    checker.Verdict `json:"verdict"`
 	Seconds    int             `json:"seconds"`
 	Operations int             `json:"operations"`
 	Fails      int             `json:"fails"`
@@ -164,7 +166,7 @@ func (t *tracker) summarize(ids []string) (headline, []summary) {
 		total.Failovers += round.Counters.Failovers
 		total.NetworkFaults += round.Counters.Network
 
-		if round.Verdict == "fail" {
+		if round.Verdict == checker.VerdictFail {
 			total.FailedRounds++
 		}
 

@@ -32,10 +32,19 @@ const (
 	metaFile         = "meta.json"
 )
 
+// AccountKind tells customer accounts from system ones.
+type AccountKind string
+
+// TransactionKind is the kind of a ledger transaction.
+type TransactionKind string
+
+// TransferStatus is one state of an external transfer.
+type TransferStatus string
+
 // Account kinds and the system accounts the checker reads by code.
 const (
-	KindCustomer = "customer"
-	KindSystem   = "system"
+	KindCustomer AccountKind = "customer"
+	KindSystem   AccountKind = "system"
 
 	ExternalCashCode      = "sys_external_cash"
 	PixOutTransitCode     = "sys_pix_out_transit"
@@ -45,14 +54,14 @@ const (
 
 // Ledger transaction kinds the checker reads.
 const (
-	TransactionDeposit                  = "deposit"
-	TransactionInternalTransfer         = "internal_transfer"
-	TransactionPixOutReserve            = "pix_out_reserve"
-	TransactionPixOutSettle             = "pix_out_settle"
-	TransactionPixOutRefund             = "pix_out_refund"
-	TransactionPixOutReturn             = "pix_out_return"
-	TransactionPixInCredit              = "pix_in_credit"
-	TransactionReconciliationAdjustment = "reconciliation_adjustment"
+	TransactionDeposit                  TransactionKind = "deposit"
+	TransactionInternalTransfer         TransactionKind = "internal_transfer"
+	TransactionPixOutReserve            TransactionKind = "pix_out_reserve"
+	TransactionPixOutSettle             TransactionKind = "pix_out_settle"
+	TransactionPixOutRefund             TransactionKind = "pix_out_refund"
+	TransactionPixOutReturn             TransactionKind = "pix_out_return"
+	TransactionPixInCredit              TransactionKind = "pix_in_credit"
+	TransactionReconciliationAdjustment TransactionKind = "reconciliation_adjustment"
 )
 
 // ErrMalformedExport means the bank's export does not decode.
@@ -61,7 +70,7 @@ var ErrMalformedExport = errors.New("malformed export")
 // Account is a row of accounts.
 type Account struct {
 	ID         string
-	Kind       string
+	Kind       AccountKind
 	SystemCode string
 }
 
@@ -75,7 +84,7 @@ type Balance struct {
 // Transaction is a row of ledger_transactions.
 type Transaction struct {
 	ID                 string
-	Kind               string
+	Kind               TransactionKind
 	ClientRef          string
 	CorrelationID      string
 	ExternalTransferID string
@@ -89,7 +98,7 @@ type ExternalTransfer struct {
 	ClientRef   string
 	AccountID   string
 	AmountCents int64
-	Status      string
+	Status      TransferStatus
 	StatusSeq   int64
 	FailureCode string
 }
@@ -98,8 +107,8 @@ type ExternalTransfer struct {
 type Transition struct {
 	TransferID          string
 	Seq                 int64
-	From                string
-	To                  string
+	From                TransferStatus
+	To                  TransferStatus
 	Cause               string
 	LedgerTransactionID string
 }
@@ -296,7 +305,7 @@ func readTable(path string, header []string, load func([]string) error) error {
 func accountRows(s *Snapshot) [][]string {
 	rows := make([][]string, 0, len(s.Accounts))
 	for _, a := range s.Accounts {
-		rows = append(rows, []string{a.ID, a.Kind, a.SystemCode})
+		rows = append(rows, []string{a.ID, string(a.Kind), a.SystemCode})
 	}
 
 	return rows
@@ -314,7 +323,7 @@ func balanceRows(s *Snapshot) [][]string {
 func transactionRows(s *Snapshot) [][]string {
 	rows := make([][]string, 0, len(s.Transactions))
 	for _, t := range s.Transactions {
-		rows = append(rows, []string{t.ID, t.Kind, t.ClientRef, t.CorrelationID, t.ExternalTransferID, t.IncomingTransferID})
+		rows = append(rows, []string{t.ID, string(t.Kind), t.ClientRef, t.CorrelationID, t.ExternalTransferID, t.IncomingTransferID})
 	}
 
 	return rows
@@ -332,7 +341,7 @@ func entryRows(s *Snapshot) [][]string {
 func transferRows(s *Snapshot) [][]string {
 	rows := make([][]string, 0, len(s.Transfers))
 	for _, t := range s.Transfers {
-		rows = append(rows, []string{t.ID, t.EndToEndID, t.ClientRef, t.AccountID, itoa(t.AmountCents), t.Status, itoa(t.StatusSeq), t.FailureCode})
+		rows = append(rows, []string{t.ID, t.EndToEndID, t.ClientRef, t.AccountID, itoa(t.AmountCents), string(t.Status), itoa(t.StatusSeq), t.FailureCode})
 	}
 
 	return rows
@@ -341,7 +350,7 @@ func transferRows(s *Snapshot) [][]string {
 func transitionRows(s *Snapshot) [][]string {
 	rows := make([][]string, 0, len(s.Transitions))
 	for _, t := range s.Transitions {
-		rows = append(rows, []string{t.TransferID, itoa(t.Seq), t.From, t.To, t.Cause, t.LedgerTransactionID})
+		rows = append(rows, []string{t.TransferID, itoa(t.Seq), string(t.From), string(t.To), t.Cause, t.LedgerTransactionID})
 	}
 
 	return rows
@@ -356,15 +365,74 @@ func incomingRows(s *Snapshot) [][]string {
 	return rows
 }
 
+// Columns of each CSV, in the order of its header in tables.
+const (
+	colTransferID = iota
+	colTransferEndToEnd
+	colTransferClientRef
+	colTransferAccount
+	colTransferAmount
+	colTransferStatus
+	colTransferStatusSeq
+	colTransferFailure
+)
+
+const (
+	colTransitionTransfer = iota
+	colTransitionSeq
+	colTransitionFrom
+	colTransitionTo
+	colTransitionCause
+	colTransitionLedger
+)
+
+const (
+	colIncomingID = iota
+	colIncomingEndToEnd
+	colIncomingAccount
+	colIncomingAmount
+)
+
+const (
+	colAccountID = iota
+	colAccountKind
+	colAccountCode
+)
+
+const (
+	colBalanceAccount = iota
+	colBalanceCents
+	colBalanceLastSeq
+)
+
+const (
+	colTransactionID = iota
+	colTransactionKind
+	colTransactionClientRef
+	colTransactionCorrelation
+	colTransactionExternal
+	colTransactionIncoming
+)
+
+const (
+	colEntryID = iota
+	colEntryTransaction
+	colEntryAccount
+	colEntryAmount
+	colEntrySeq
+	colEntryBalanceAfter
+)
+
 func loadTransfer(s *Snapshot, record []string) error {
-	numbers, err := atois(record[4], record[6])
+	numbers, err := atois(record[colTransferAmount], record[colTransferStatusSeq])
 	if err != nil {
 		return err
 	}
 
 	transfer := ExternalTransfer{
-		ID: record[0], EndToEndID: record[1], ClientRef: record[2], AccountID: record[3], AmountCents: numbers[0],
-		Status: record[5], StatusSeq: numbers[1], FailureCode: record[7],
+		ID: record[colTransferID], EndToEndID: record[colTransferEndToEnd], ClientRef: record[colTransferClientRef],
+		AccountID: record[colTransferAccount], AmountCents: numbers[0], Status: TransferStatus(record[colTransferStatus]),
+		StatusSeq: numbers[1], FailureCode: record[colTransferFailure],
 	}
 	s.Transfers = append(s.Transfers, transfer)
 
@@ -372,12 +440,15 @@ func loadTransfer(s *Snapshot, record []string) error {
 }
 
 func loadTransition(s *Snapshot, record []string) error {
-	numbers, err := atois(record[1])
+	numbers, err := atois(record[colTransitionSeq])
 	if err != nil {
 		return err
 	}
 
-	transition := Transition{TransferID: record[0], Seq: numbers[0], From: record[2], To: record[3], Cause: record[4], LedgerTransactionID: record[5]}
+	transition := Transition{
+		TransferID: record[colTransitionTransfer], Seq: numbers[0], From: TransferStatus(record[colTransitionFrom]),
+		To: TransferStatus(record[colTransitionTo]), Cause: record[colTransitionCause], LedgerTransactionID: record[colTransitionLedger],
+	}
 
 	s.Transitions = append(s.Transitions, transition)
 
@@ -385,36 +456,41 @@ func loadTransition(s *Snapshot, record []string) error {
 }
 
 func loadIncoming(s *Snapshot, record []string) error {
-	numbers, err := atois(record[3])
+	numbers, err := atois(record[colIncomingAmount])
 	if err != nil {
 		return err
 	}
 
-	s.Incoming = append(s.Incoming, Incoming{ID: record[0], EndToEndID: record[1], AccountID: record[2], AmountCents: numbers[0]})
+	incoming := Incoming{ID: record[colIncomingID], EndToEndID: record[colIncomingEndToEnd], AccountID: record[colIncomingAccount], AmountCents: numbers[0]}
+	s.Incoming = append(s.Incoming, incoming)
 
 	return nil
 }
 
 func loadAccount(s *Snapshot, record []string) error {
-	s.Accounts = append(s.Accounts, Account{ID: record[0], Kind: record[1], SystemCode: record[2]})
+	account := Account{ID: record[colAccountID], Kind: AccountKind(record[colAccountKind]), SystemCode: record[colAccountCode]}
+	s.Accounts = append(s.Accounts, account)
 
 	return nil
 }
 
 func loadBalance(s *Snapshot, record []string) error {
-	numbers, err := atois(record[1], record[2])
+	numbers, err := atois(record[colBalanceCents], record[colBalanceLastSeq])
 	if err != nil {
 		return err
 	}
 
-	s.Balances = append(s.Balances, Balance{AccountID: record[0], BalanceCents: numbers[0], LastEntrySeq: numbers[1]})
+	balance := Balance{AccountID: record[colBalanceAccount], BalanceCents: numbers[0], LastEntrySeq: numbers[1]}
+	s.Balances = append(s.Balances, balance)
 
 	return nil
 }
 
 func loadTransaction(s *Snapshot, record []string) error {
 	transaction := Transaction{
-		ID: record[0], Kind: record[1], ClientRef: record[2], CorrelationID: record[3], ExternalTransferID: record[4], IncomingTransferID: record[5],
+		ID: record[colTransactionID], Kind: TransactionKind(record[colTransactionKind]), ClientRef: record[colTransactionClientRef],
+		CorrelationID: record[colTransactionCorrelation], ExternalTransferID: record[colTransactionExternal],
+		IncomingTransferID: record[colTransactionIncoming],
 	}
 
 	s.Transactions = append(s.Transactions, transaction)
@@ -423,7 +499,7 @@ func loadTransaction(s *Snapshot, record []string) error {
 }
 
 func loadEntry(s *Snapshot, record []string) error {
-	numbers, err := atois(record[0], record[3], record[4], record[5])
+	numbers, err := atois(record[colEntryID], record[colEntryAmount], record[colEntrySeq], record[colEntryBalanceAfter])
 	if err != nil {
 		return err
 	}
@@ -432,7 +508,7 @@ func loadEntry(s *Snapshot, record []string) error {
 	// long round has millions of entries over a few accounts, and two entries
 	// per transaction.
 	entry := Entry{
-		ID: numbers[0], TransactionID: unique.Make(record[1]).Value(), AccountID: unique.Make(record[2]).Value(),
+		ID: numbers[0], TransactionID: unique.Make(record[colEntryTransaction]).Value(), AccountID: unique.Make(record[colEntryAccount]).Value(),
 		AmountCents: numbers[1], AccountSeq: numbers[2], BalanceAfterCents: numbers[3],
 	}
 	s.Entries = append(s.Entries, entry)

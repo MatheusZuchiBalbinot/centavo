@@ -33,20 +33,41 @@ var (
 	errUnexpectedReply = errors.New("unexpected answer from the Docker API")
 )
 
+// ContainerState is where a container stands. Docker reports a paused
+// container as running too; here the three are exclusive.
+type ContainerState string
+
+// The states of a container.
+const (
+	StateStopped ContainerState = "stopped"
+	StateRunning ContainerState = "running"
+	StatePaused  ContainerState = "paused"
+)
+
+// HealthStatus is a container's healthcheck result, empty without one.
+type HealthStatus string
+
+// The healthcheck results the bot tells apart.
+const (
+	HealthNone    HealthStatus = ""
+	HealthHealthy HealthStatus = "healthy"
+)
+
 // Container is what the bot needs to know about a chaos target.
 type Container struct {
 	ID           string
 	Service      string
-	IsRunning    bool
-	IsPaused     bool
-	Health       string
+	State        ContainerState
+	Health       HealthStatus
 	RestartCount int
 }
 
 // IsHealthy reports a running container whose healthcheck passes; a
 // container without a healthcheck counts as healthy once it runs.
 func (c Container) IsHealthy() bool {
-	return c.IsRunning && !c.IsPaused && (c.Health == "" || c.Health == "healthy")
+	isCheckPassing := c.Health == HealthNone || c.Health == HealthHealthy
+
+	return c.State == StateRunning && isCheckPassing
 }
 
 // Client is a Docker API client scoped to one Compose project.
@@ -147,15 +168,25 @@ func (c Client) Inspect(ctx context.Context, id string) (Container, error) {
 		return Container{}, fmt.Errorf("%w: %s", ErrNotATarget, id)
 	}
 
-	container := Container{
-		ID: details.ID, Service: labels[serviceLabel], IsRunning: details.State.Running, IsPaused: details.State.Paused, RestartCount: details.RestartCount,
-	}
+	container := Container{ID: details.ID, Service: labels[serviceLabel], State: stateOf(details), RestartCount: details.RestartCount}
 
 	if details.State.Health != nil {
-		container.Health = details.State.Health.Status
+		container.Health = HealthStatus(details.State.Health.Status)
 	}
 
 	return container, nil
+}
+
+func stateOf(details inspected) ContainerState {
+	if details.State.Paused {
+		return StatePaused
+	}
+
+	if details.State.Running {
+		return StateRunning
+	}
+
+	return StateStopped
 }
 
 type execCreated struct {
@@ -198,7 +229,7 @@ func (c Client) Pause(ctx context.Context, id string) error {
 		return err
 	}
 
-	if container.IsPaused {
+	if container.State == StatePaused {
 		return nil
 	}
 
@@ -224,7 +255,7 @@ func (c Client) Unpause(ctx context.Context, id string) error {
 		return err
 	}
 
-	if !container.IsPaused {
+	if container.State != StatePaused {
 		return nil
 	}
 

@@ -147,7 +147,7 @@ func okTransactions(b *roundBuilder) []snapshot.Transaction {
 	return applied
 }
 
-func pickTransaction(t *rapid.T, b *roundBuilder, kind string) (snapshot.Transaction, bool) {
+func pickTransaction(t *rapid.T, b *roundBuilder, kind snapshot.TransactionKind) (snapshot.Transaction, bool) {
 	var candidates []snapshot.Transaction
 
 	for _, transaction := range okTransactions(b) {

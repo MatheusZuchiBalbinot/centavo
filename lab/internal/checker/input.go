@@ -110,7 +110,7 @@ type statementEntry struct {
 
 // transactionKindOf maps a client write to the ledger transaction it produces
 // (K in docs/invariants-and-checker.md, section 6).
-var transactionKindOf = map[history.Function]string{
+var transactionKindOf = map[history.Function]snapshot.TransactionKind{
 	history.FunctionDeposit:  snapshot.TransactionDeposit,
 	history.FunctionTransfer: snapshot.TransactionInternalTransfer,
 	history.FunctionPixOut:   snapshot.TransactionPixOutReserve,
@@ -118,7 +118,7 @@ var transactionKindOf = map[history.Function]string{
 
 // isClientKind tells the transactions a client operation causes from those
 // the partner's events cause (settlements, refunds, returns, PIX in).
-func isClientKind(kind string) bool {
+func isClientKind(kind snapshot.TransactionKind) bool {
 	for _, clientKind := range transactionKindOf {
 		if clientKind == kind {
 			return true
