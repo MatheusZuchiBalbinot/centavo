@@ -97,14 +97,9 @@ func (t TransferInternal) Apply(ctx context.Context, stores Stores, operationID 
 		return TransferResult{}, err
 	}
 
-	err = stores.OverwritePosition(ctx, input.From, debited)
-	if err != nil {
-		return TransferResult{}, err
-	}
+	entries := poster{positions: stores, entries: stores}
 
-	debit := ledger.Entry{TransactionID: transaction.ID, AccountID: input.From, Amount: input.Amount.Negated(), Seq: debited.LastSeq, BalanceAfter: debited.Balance}
-
-	err = stores.InsertEntry(ctx, debit)
+	err = entries.debit(ctx, transaction.ID, input.From, debited, input.Amount)
 	if err != nil {
 		return TransferResult{}, err
 	}
@@ -115,8 +110,6 @@ func (t TransferInternal) Apply(ctx context.Context, stores Stores, operationID 
 	if err != nil {
 		return TransferResult{}, err
 	}
-
-	entries := poster{positions: stores, entries: stores}
 
 	_, err = entries.post(ctx, transaction.ID, input.To, input.Amount.Cents())
 	if err != nil {

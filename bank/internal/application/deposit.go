@@ -80,17 +80,12 @@ func (d Deposit) Apply(ctx context.Context, stores Stores, operationID ledger.Op
 		return DepositResult{}, err
 	}
 
-	entries := poster{positions: stores, entries: stores}
+	postings := []posting{{account: input.AccountID, delta: input.Amount.Cents()}, {account: ledger.ExternalCashAccountID(), delta: input.Amount.Negated()}}
 
-	customer, err := entries.post(ctx, transaction.ID, input.AccountID, input.Amount.Cents())
+	positions, err := poster{positions: stores, entries: stores}.postAll(ctx, transaction.ID, postings)
 	if err != nil {
 		return DepositResult{}, err
 	}
 
-	_, err = entries.post(ctx, transaction.ID, ledger.ExternalCashAccountID(), input.Amount.Negated())
-	if err != nil {
-		return DepositResult{}, err
-	}
-
-	return DepositResult{TransactionID: transaction.ID, Balance: customer.Balance, CreatedAt: createdAt}, nil
+	return DepositResult{TransactionID: transaction.ID, Balance: positions[input.AccountID].Balance, CreatedAt: createdAt}, nil
 }

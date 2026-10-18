@@ -184,17 +184,14 @@ func (c CreatePixOut) Apply(ctx context.Context, stores Stores, operationID ledg
 		return PixOutResult{}, err
 	}
 
-	err = stores.OverwritePosition(ctx, input.AccountID, debited)
+	entries := poster{positions: stores, entries: stores}
+
+	err = entries.debit(ctx, transaction.ID, input.AccountID, debited, input.Amount)
 	if err != nil {
 		return PixOutResult{}, err
 	}
 
-	err = stores.InsertEntry(ctx, ledger.Entry{TransactionID: transaction.ID, AccountID: input.AccountID, Amount: input.Amount.Negated(), Seq: debited.LastSeq, BalanceAfter: debited.Balance})
-	if err != nil {
-		return PixOutResult{}, err
-	}
-
-	_, err = poster{positions: stores, entries: stores}.post(ctx, transaction.ID, ledger.PixOutTransitAccountID(), input.Amount.Cents())
+	_, err = entries.post(ctx, transaction.ID, ledger.PixOutTransitAccountID(), input.Amount.Cents())
 	if err != nil {
 		return PixOutResult{}, err
 	}
@@ -419,8 +416,8 @@ func nextAttemptOf(endToEndID string) int {
 
 // postTransferStep writes one step of a transfer's saga in the ledger
 // (docs/domain.md, section 4.1).
-func postTransferStep(ctx context.Context, stores Stores, external ExternalTransfer, posting transfer.Posting) (ledger.TransactionID, error) {
-	kind, entries, err := stepEntries(external, posting)
+func postTransferStep(ctx context.Context, stores Stores, external ExternalTransfer, step transfer.Posting) (ledger.TransactionID, error) {
+	kind, entries, err := stepEntries(external, step)
 	if err != nil {
 		return ledger.TransactionID{}, err
 	}
@@ -438,37 +435,28 @@ func postTransferStep(ctx context.Context, stores Stores, external ExternalTrans
 		return ledger.TransactionID{}, err
 	}
 
-	writer := poster{positions: stores, entries: stores}
-
-	for _, entry := range entries {
-		_, err = writer.post(ctx, transactionID, entry.account, entry.delta)
-		if err != nil {
-			return ledger.TransactionID{}, err
-		}
+	_, err = poster{positions: stores, entries: stores}.postAll(ctx, transactionID, entries)
+	if err != nil {
+		return ledger.TransactionID{}, err
 	}
 
 	return transactionID, nil
 }
 
-type stepEntry struct {
-	account ledger.AccountID
-	delta   money.Cents
-}
-
-func stepEntries(external ExternalTransfer, posting transfer.Posting) (ledger.TransactionKind, []stepEntry, error) {
+func stepEntries(external ExternalTransfer, step transfer.Posting) (ledger.TransactionKind, []posting, error) {
 	amount := external.Amount.Cents()
 	transit, settlement, customer := ledger.PixOutTransitAccountID(), ledger.PartnerSettlementAccountID(), external.AccountID
 
-	switch posting {
+	switch step {
 	case transfer.PostingSettle:
-		return ledger.TransactionKindPixOutSettle, []stepEntry{{transit, -amount}, {settlement, amount}}, nil
+		return ledger.TransactionKindPixOutSettle, []posting{{transit, -amount}, {settlement, amount}}, nil
 	case transfer.PostingRefund:
-		return ledger.TransactionKindPixOutRefund, []stepEntry{{transit, -amount}, {customer, amount}}, nil
+		return ledger.TransactionKindPixOutRefund, []posting{{transit, -amount}, {customer, amount}}, nil
 	case transfer.PostingReturn:
-		return ledger.TransactionKindPixOutReturn, []stepEntry{{settlement, -amount}, {customer, amount}}, nil
+		return ledger.TransactionKindPixOutReturn, []posting{{settlement, -amount}, {customer, amount}}, nil
 	case transfer.PostingNone:
-		return "", nil, fmt.Errorf("no ledger step for %s", posting)
+		return "", nil, fmt.Errorf("no ledger step for %s", step)
 	default:
-		return "", nil, fmt.Errorf("unknown posting %q", posting)
+		return "", nil, fmt.Errorf("unknown posting %q", step)
 	}
 }

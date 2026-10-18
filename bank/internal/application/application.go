@@ -146,6 +146,13 @@ type poster struct {
 	entries   LedgerWriter
 }
 
+// posting is one line of a ledger transaction: an account and how much it
+// moves.
+type posting struct {
+	account ledger.AccountID
+	delta   money.Cents
+}
+
 // post adds delta to the account in the database and appends the entry. The
 // increment is atomic, so concurrent posts never lose each other; only the
 // debit path, which checks funds first, writes a value it computed itself.
@@ -163,4 +170,43 @@ func (p poster) post(ctx context.Context, transactionID ledger.TransactionID, ac
 	}
 
 	return position, nil
+}
+
+// postAll posts a transaction's lines in account id order, whatever order
+// the caller lists them in. Every write takes balances in that order, system
+// accounts first, so two writers never wait on each other in a circle; a
+// write that posted a customer before a system account deadlocked against a
+// refund or a return several times a minute (see lock_order_test.go). It
+// returns each account's new position.
+func (p poster) postAll(ctx context.Context, transactionID ledger.TransactionID, postings []posting) (map[ledger.AccountID]ledger.Position, error) {
+	ordered := slices.Clone(postings)
+	slices.SortFunc(ordered, func(a, b posting) int { return compareAccountIDs(a.account, b.account) })
+
+	positions := make(map[ledger.AccountID]ledger.Position, len(ordered))
+
+	for _, line := range ordered {
+		position, err := p.post(ctx, transactionID, line.account, line.delta)
+		if err != nil {
+			return nil, err
+		}
+
+		positions[line.account] = position
+	}
+
+	return positions, nil
+}
+
+// debit writes a customer's debit: the position the caller computed with
+// ledger.Position.Debit, under the lock it took, and the matching entry. It
+// is the one write of a balance computed here instead of incremented in SQL,
+// so the funds check and the write see the same row (BR01, D2).
+func (p poster) debit(ctx context.Context, transactionID ledger.TransactionID, accountID ledger.AccountID, debited ledger.Position, amount money.Amount) error {
+	err := p.positions.OverwritePosition(ctx, accountID, debited)
+	if err != nil {
+		return err
+	}
+
+	entry := ledger.Entry{TransactionID: transactionID, AccountID: accountID, Amount: amount.Negated(), Seq: debited.LastSeq, BalanceAfter: debited.Balance}
+
+	return p.entries.InsertEntry(ctx, entry)
 }

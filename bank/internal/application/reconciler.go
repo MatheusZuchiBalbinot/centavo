@@ -266,14 +266,9 @@ func bookSuspense(ctx context.Context, stores Stores, itemID int64, cents money.
 		return err
 	}
 
-	writer := poster{positions: stores, entries: stores}
+	postings := []posting{{account: ledger.PartnerSettlementAccountID(), delta: cents}, {account: ledger.SuspenseAccountID(), delta: -cents}}
 
-	_, err = writer.post(ctx, transactionID, ledger.PartnerSettlementAccountID(), cents)
-	if err != nil {
-		return err
-	}
-
-	_, err = writer.post(ctx, transactionID, ledger.SuspenseAccountID(), -cents)
+	_, err = poster{positions: stores, entries: stores}.postAll(ctx, transactionID, postings)
 
 	return err
 }
