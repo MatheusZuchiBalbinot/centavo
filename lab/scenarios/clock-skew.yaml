@@ -12,19 +12,13 @@ faults:
   - id: divergences
     kind: partner
     modes: {double_process: 0.05, webhook_drop: 0.2}
-  # The worker ahead takes a live lease from the one behind a second after it
-  # was taken, but once it holds the lease the one behind sees it valid for
-  # the TTL plus the skew, past the next renewal: it keeps the lease.
+  # Just under the 30 s lease: each worker sees the other's lease expire a
+  # second after it was taken, so the two take it from each other every run.
+  # Two minutes would leave it to the one ahead forever.
   - id: worker-ahead
     kind: clock
     targets: [bank-worker-2]
     offset: +29s
-  # Restarting the worker ahead now and then hands the lease back to the one
-  # behind, so the one ahead takes it again, often from a batch in flight.
-  - id: restart-ahead
-    kind: process
-    targets: [bank-worker-2]
-    schedule: {type: poisson, mean_interval: 150s}
   - id: api-behind
     kind: clock
     targets: [bank-api]
