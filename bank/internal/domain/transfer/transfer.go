@@ -82,7 +82,9 @@ func NewID() (ID, error) {
 	return ID(id), nil
 }
 
-// ParseID reads a transfer id from its canonical text form.
+// ParseID reads a transfer id from its canonical text form. Text that is not
+// a UUID answers ErrTransferNotFound on purpose: it names no transfer, and a
+// caller probing ids learns nothing from a different error.
 func ParseID(raw string) (ID, error) {
 	id, err := uuid.Parse(raw)
 	if err != nil {

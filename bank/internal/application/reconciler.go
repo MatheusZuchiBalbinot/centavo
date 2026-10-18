@@ -313,6 +313,8 @@ func incomingFacts(ctx context.Context, stores Stores, entry StatementEntry, fac
 
 	accountID, err := ledger.ParseAccountID(entry.AccountID)
 	if err != nil {
+		// A destination the bank cannot even parse is an account it does not
+		// have: the entry goes to suspense like any unknown destination (BR15).
 		return facts, nil
 	}
 
