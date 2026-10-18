@@ -66,7 +66,10 @@ var (
 // RequestHash binds a key to the exact request it was first used with.
 type RequestHash [sha256.Size]byte
 
-// HashRequest hashes the endpoint and the raw body; a retry sends the same bytes.
+// HashRequest hashes the endpoint and the raw body; a retry sends the same
+// bytes. A NUL separates the two, which is unambiguous because endpoints are
+// the server's own paths and never contain one; the client only controls the
+// body.
 func HashRequest(endpoint string, body []byte) RequestHash {
 	hasher := sha256.New()
 
