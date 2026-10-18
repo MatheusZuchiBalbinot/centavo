@@ -367,13 +367,7 @@ func validate(name string, raw rawScenario) (Scenario, error) {
 	}
 
 	scenario := Scenario{
-		Name:             raw.Name,
-		Description:      raw.Description,
-		Duration:         duration,
-		HealTimeout:      healTimeout,
-		LivenessDeadline: liveness,
-		Workload:         workload,
-		Faults:           faults,
+		Name: raw.Name, Description: raw.Description, Duration: duration, HealTimeout: healTimeout, LivenessDeadline: liveness, Workload: workload, Faults: faults,
 	}
 
 	return scenario, nil
@@ -570,12 +564,8 @@ func validateWorkload(raw rawWorkload) (Workload, error) {
 	}
 
 	workload := Workload{
-		Profile:           raw.Profile,
-		Clients:           raw.Clients,
-		RatePerSecond:     raw.RatePerSecond,
-		Accounts:          raw.Accounts,
-		ExclusiveAccounts: raw.ExclusiveAccounts,
-		ClientMix:         maps.Clone(raw.ClientMix),
+		Profile: raw.Profile, Clients: raw.Clients, RatePerSecond: raw.RatePerSecond, Accounts: raw.Accounts,
+		ExclusiveAccounts: raw.ExclusiveAccounts, ClientMix: maps.Clone(raw.ClientMix),
 	}
 
 	return workload, nil

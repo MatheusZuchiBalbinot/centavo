@@ -29,12 +29,8 @@ func newTestNemesis(t *testing.T, eventsDir string) (*Nemesis, string) {
 
 	fault := scenarios.Fault{ID: "fp", Kind: scenarios.FaultFailpoint, Targets: []string{"bank-api"}, Failpoint: "transfer.after_debit_before_credit", Action: "kill", Probability: 0.1, MaxFires: 3}
 	config := Config{
-		Round:     "r0042",
-		Seed:      seed.Seed(0x5eed),
-		Scenario:  scenarios.Scenario{Faults: []scenarios.Fault{fault}},
-		History:   writer,
-		EventsDir: eventsDir,
-		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Round: "r0042", Seed: seed.Seed(0x5eed), Scenario: scenarios.Scenario{Faults: []scenarios.Fault{fault}},
+		History: writer, EventsDir: eventsDir, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 
 	return New(config), historyPath

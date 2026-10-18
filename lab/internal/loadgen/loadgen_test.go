@@ -21,11 +21,7 @@ import (
 
 // fastPolicy keeps retry tests short.
 var fastPolicy = retryPolicy{
-	attemptTimeout: 500 * time.Millisecond,
-	maxRetries:     2,
-	backoffBase:    time.Millisecond,
-	backoffCap:     2 * time.Millisecond,
-	deadline:       2 * time.Second,
+	attemptTimeout: 500 * time.Millisecond, maxRetries: 2, backoffBase: time.Millisecond, backoffCap: 2 * time.Millisecond, deadline: 2 * time.Second,
 }
 
 func TestClassify(t *testing.T) {
@@ -270,6 +266,7 @@ func runRound(t *testing.T, bankURL string, workload scenarios.Workload, policy 
 	if workload.ClientMix == nil {
 		workload.ClientMix = map[scenarios.ClientProfile]float64{scenarios.ClientPolite: 1}
 	}
+
 	path := filepath.Join(t.TempDir(), "history.jsonl")
 
 	writer, err := history.Create(path, "r0001")
@@ -278,13 +275,8 @@ func runRound(t *testing.T, bankURL string, workload scenarios.Workload, policy 
 	}
 
 	config := Config{
-		Round:    "r0001",
-		Seed:     seed.Seed(0x5eed),
-		Workload: workload,
-		Duration: 300 * time.Millisecond,
-		BankURL:  bankURL,
-		History:  writer,
-		Logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Round: "r0001", Seed: seed.Seed(0x5eed), Workload: workload, Duration: 300 * time.Millisecond, BankURL: bankURL,
+		History: writer, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 
 	_, err = runWith(t.Context(), config, policy)

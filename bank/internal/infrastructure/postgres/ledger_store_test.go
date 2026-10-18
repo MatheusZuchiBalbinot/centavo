@@ -35,12 +35,9 @@ func newBank(t *testing.T) bank {
 	moneyDependencies := application.MoneyDependencies{UnitOfWork: postgres.NewUnitOfWork(pool), Locker: application.RowLocker{}}
 
 	return bank{
-		pool:         pool,
-		openAccount:  application.NewOpenAccount(store),
-		getAccount:   application.NewGetAccount(store),
-		getStatement: application.NewGetStatement(store, store),
-		deposit:      application.NewDeposit(moneyDependencies),
-		transfer:     application.NewTransferInternal(moneyDependencies),
+		pool: pool, openAccount: application.NewOpenAccount(store), getAccount: application.NewGetAccount(store),
+		getStatement: application.NewGetStatement(store, store), deposit: application.NewDeposit(moneyDependencies),
+		transfer: application.NewTransferInternal(moneyDependencies),
 	}
 }
 

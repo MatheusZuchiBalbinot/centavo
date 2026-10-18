@@ -136,14 +136,8 @@ type OutboxRelayConfig struct {
 // NewOutboxRelay builds the relay.
 func NewOutboxRelay(config OutboxRelayConfig) OutboxRelay {
 	return OutboxRelay{
-		unitOfWork: config.UnitOfWork,
-		partner:    config.Partner,
-		endToEnd:   config.EndToEnd,
-		machine:    config.Machine,
-		doubt:      config.Doubt,
-		owner:      config.Owner,
-		leaseTTL:   config.LeaseTTL,
-		logger:     config.Logger,
+		unitOfWork: config.UnitOfWork, partner: config.Partner, endToEnd: config.EndToEnd, machine: config.Machine,
+		doubt: config.Doubt, owner: config.Owner, leaseTTL: config.LeaseTTL, logger: config.Logger,
 	}
 }
 
@@ -216,10 +210,7 @@ func (r OutboxRelay) deliver(ctx context.Context, claim OutboxClaim) error {
 	}
 
 	submission := PartnerSubmission{
-		EndToEndID:     external.EndToEndID,
-		AmountCents:    external.Amount.Cents(),
-		DestinationKey: external.DestinationKey,
-		CorrelationID:  claim.CorrelationID,
+		EndToEndID: external.EndToEndID, AmountCents: external.Amount.Cents(), DestinationKey: external.DestinationKey, CorrelationID: claim.CorrelationID,
 	}
 	answer := r.partner.Submit(ctx, submission)
 

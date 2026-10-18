@@ -44,10 +44,7 @@ func newMemoryLedger() *memoryLedger {
 
 func (m *memoryLedger) clone() *memoryLedger {
 	return &memoryLedger{
-		positions:    maps.Clone(m.positions),
-		isCustomer:   maps.Clone(m.isCustomer),
-		transactions: slices.Clone(m.transactions),
-		entries:      slices.Clone(m.entries),
+		positions: maps.Clone(m.positions), isCustomer: maps.Clone(m.isCustomer), transactions: slices.Clone(m.transactions), entries: slices.Clone(m.entries),
 	}
 }
 

@@ -89,12 +89,8 @@ func (e *evaluation) checkZeroSum() {
 		}
 
 		e.add(Violation{
-			Invariant:     InvariantI1,
-			Rule:          RuleI1aZeroSum,
-			TimeNS:        e.ops.timeOf(transaction.ClientRef),
-			Op:            transaction.ClientRef,
-			TransactionID: id,
-			Message:       fmt.Sprintf("transação %s (%s) tem %d lançamentos que somam %d centavos", id, transaction.Kind, len(entries), sum),
+			Invariant: InvariantI1, Rule: RuleI1aZeroSum, TimeNS: e.ops.timeOf(transaction.ClientRef), Op: transaction.ClientRef, TransactionID: id,
+			Message: fmt.Sprintf("transação %s (%s) tem %d lançamentos que somam %d centavos", id, transaction.Kind, len(entries), sum),
 		})
 	}
 }
@@ -208,11 +204,8 @@ func (e *evaluation) checkMaterialized(accountID string, entries []snapshot.Entr
 	balance, hasBalance := e.ledger.balances[accountID]
 	if !hasBalance {
 		violation := Violation{
-			Invariant: InvariantI1,
-			Rule:      RuleI1bMaterialized,
-			TimeNS:    unknownTime,
-			AccountID: accountID,
-			Message:   fmt.Sprintf("conta %s não tem linha em account_balances", accountID),
+			Invariant: InvariantI1, Rule: RuleI1bMaterialized, TimeNS: unknownTime, AccountID: accountID,
+			Message: fmt.Sprintf("conta %s não tem linha em account_balances", accountID),
 		}
 
 		e.add(violation)
@@ -231,10 +224,7 @@ func (e *evaluation) checkMaterialized(accountID string, entries []snapshot.Entr
 	}
 
 	e.add(Violation{
-		Invariant: InvariantI1,
-		Rule:      RuleI1bMaterialized,
-		TimeNS:    e.lastEntryTime(entries),
-		AccountID: accountID,
+		Invariant: InvariantI1, Rule: RuleI1bMaterialized, TimeNS: e.lastEntryTime(entries), AccountID: accountID,
 		Message: fmt.Sprintf(
 			"conta %s: saldo materializado %d (última posição %d), mas os %d lançamentos somam %d",
 			accountID, balance.BalanceCents, balance.LastEntrySeq, len(entries), sum,
@@ -288,11 +278,8 @@ func (e *evaluation) checkNeverNegative(accountID string, entries []snapshot.Ent
 	isMaterializedNegative := hasBalance && balance.BalanceCents < 0
 	if isMaterializedNegative {
 		violation := Violation{
-			Invariant: InvariantI4,
-			Rule:      RuleI4Materialized,
-			TimeNS:    e.lastEntryTime(entries),
-			AccountID: accountID,
-			Message:   fmt.Sprintf("conta %s: saldo materializado negativo, %d", accountID, balance.BalanceCents),
+			Invariant: InvariantI4, Rule: RuleI4Materialized, TimeNS: e.lastEntryTime(entries), AccountID: accountID,
+			Message: fmt.Sprintf("conta %s: saldo materializado negativo, %d", accountID, balance.BalanceCents),
 		}
 
 		e.add(violation)
@@ -343,10 +330,7 @@ func (e *evaluation) checkDepositTerm() {
 	}
 
 	e.add(Violation{
-		Invariant: InvariantI1,
-		Rule:      RuleI1cDeposits,
-		TimeNS:    e.ops.lastT,
-		AccountID: e.ledger.externalCashID,
+		Invariant: InvariantI1, Rule: RuleI1cDeposits, TimeNS: e.ops.lastT, AccountID: e.ledger.externalCashID,
 		Message: fmt.Sprintf(
 			"termo D: sys_external_cash registra %d centavos depositados na rodada, o histórico admite entre %d (ok) e %d (ok mais info)",
 			inLedger, confirmed, confirmed+uncertain,
@@ -557,11 +541,8 @@ func (e *evaluation) checkPhantoms() {
 		}
 
 		e.add(Violation{
-			Invariant:     InvariantI2,
-			Rule:          RuleI2Phantom,
-			TimeNS:        e.ops.timeOf(transaction.ClientRef),
-			Op:            transaction.ClientRef,
-			TransactionID: id,
+			Invariant: InvariantI2, Rule: RuleI2Phantom, TimeNS: e.ops.timeOf(transaction.ClientRef),
+			Op: transaction.ClientRef, TransactionID: id,
 			Message: fmt.Sprintf(
 				"transação %s (%s) com client_ref %q não corresponde a nenhuma operação desse tipo no histórico",
 				id, transaction.Kind, transaction.ClientRef,
@@ -666,13 +647,8 @@ func (e *evaluation) entryViolationOf(invariant Invariant, entry snapshot.Entry,
 	clientRef := e.ledger.transactions[entry.TransactionID].ClientRef
 
 	return Violation{
-		Invariant:     invariant,
-		Rule:          rule,
-		TimeNS:        e.ops.timeOf(clientRef),
-		Op:            clientRef,
-		AccountID:     entry.AccountID,
-		TransactionID: entry.TransactionID,
-		Message:       message,
+		Invariant: invariant, Rule: rule, TimeNS: e.ops.timeOf(clientRef), Op: clientRef, AccountID: entry.AccountID,
+		TransactionID: entry.TransactionID, Message: message,
 	}
 }
 

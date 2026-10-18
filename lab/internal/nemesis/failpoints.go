@@ -102,12 +102,7 @@ func (c *failpointController) arm(ctx context.Context) error {
 	for _, armed := range c.faults {
 		fault := armed.fault
 		value := armRecord{
-			Fault:       fault.ID,
-			Failpoint:   fault.Failpoint,
-			Targets:     fault.Targets,
-			Action:      fault.Action,
-			Probability: fault.Probability,
-			MaxFires:    fault.MaxFires,
+			Fault: fault.ID, Failpoint: fault.Failpoint, Targets: fault.Targets, Action: fault.Action, Probability: fault.Probability, MaxFires: fault.MaxFires,
 		}
 
 		err := c.n.record(history.FunctionArmFailpoint, value)
@@ -181,12 +176,8 @@ func (c *failpointController) ruleFor(armed armedFault, service string, restartC
 	stream := fmt.Sprintf("failpoints.%s#%d/%s", service, restartCount, fault.ID)
 
 	rule := failpointRule{
-		Action:      fault.Action,
-		Arg:         fault.Arg,
-		Probability: fault.Probability,
-		Match:       failpointMatch{CorrelationPrefix: c.n.config.Round + "-"},
-		TTL:         ruleTTL,
-		Seed:        c.n.config.Seed.Stream(stream).Uint64(),
+		Action: fault.Action, Arg: fault.Arg, Probability: fault.Probability, Match: failpointMatch{CorrelationPrefix: c.n.config.Round + "-"}, TTL: ruleTTL,
+		Seed: c.n.config.Seed.Stream(stream).Uint64(),
 	}
 
 	if fault.MaxFires == 0 {
@@ -249,6 +240,7 @@ func (c *failpointController) handleEvent(line []byte) {
 			armed.fired++
 		}
 	}
+
 	c.mu.Unlock()
 
 	err = c.n.record(history.FunctionFailpointFired, event)

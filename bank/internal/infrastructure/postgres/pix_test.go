@@ -33,13 +33,11 @@ func newPixBank(t *testing.T) pixBank {
 
 	w := newWrites(t)
 	unitOfWork := postgres.NewUnitOfWork(w.bank.pool)
+	publication := application.NewNotifyAfterCommit(postgres.NewNotifyPublisher(w.bank.pool))
 
 	return pixBank{
-		writes:     w,
-		unitOfWork: unitOfWork,
-		create:     application.NewCreatePixOut(application.RowLocker{}, application.NewNotifyAfterCommit(postgres.NewNotifyPublisher(w.bank.pool))),
-		webhook:    application.NewNaiveWebhook(unitOfWork, application.OverwriteTransitions{}),
-		get:        application.NewGetExternalTransfer(postgres.NewLedgerStore(w.bank.pool)),
+		writes: w, unitOfWork: unitOfWork, create: application.NewCreatePixOut(application.RowLocker{}, publication),
+		webhook: application.NewNaiveWebhook(unitOfWork, application.OverwriteTransitions{}), get: application.NewGetExternalTransfer(postgres.NewLedgerStore(w.bank.pool)),
 	}
 }
 

@@ -33,59 +33,48 @@ func TestClassify(t *testing.T) {
 		want  verdict
 	}{
 		{
-			name: "settlement of a confirmed transfer", entry: settlement,
-			facts: entryFacts{hasTransfer: true, transfer: transferIn(t, transfer.StatusConfirmed, 500)},
-			want:  verdict{divergence: DivergenceMatched, action: actionNone},
+			name: "settlement of a confirmed transfer", entry: settlement, facts: entryFacts{hasTransfer: true, transfer: transferIn(t, transfer.StatusConfirmed, 500)},
+			want: verdict{divergence: DivergenceMatched, action: actionNone},
 		},
 		{
-			name: "settlement whose webhook was lost", entry: settlement,
-			facts: entryFacts{hasTransfer: true, transfer: transferIn(t, transfer.StatusSent, 500)},
-			want:  verdict{divergence: DivergenceMissingSettlement, action: actionWalk, walkTo: transfer.PartnerSettled},
+			name: "settlement whose webhook was lost", entry: settlement, facts: entryFacts{hasTransfer: true, transfer: transferIn(t, transfer.StatusSent, 500)},
+			want: verdict{divergence: DivergenceMissingSettlement, action: actionWalk, walkTo: transfer.PartnerSettled},
 		},
 		{
-			name: "second settlement of the same PIX", entry: settlement,
+			name: "second settlement of the same PIX", entry: settlement, want: verdict{divergence: DivergenceDuplicate, action: actionSuspense, suspenseCents: 500},
 			facts: entryFacts{hasTransfer: true, transfer: transferIn(t, transfer.StatusConfirmed, 500), priorItems: 1},
-			want:  verdict{divergence: DivergenceDuplicate, action: actionSuspense, suspenseCents: 500},
 		},
 		{
-			name: "settlement the bank refunded", entry: settlement,
-			facts: entryFacts{hasTransfer: true, transfer: transferIn(t, transfer.StatusFailed, 500)},
-			want:  verdict{divergence: DivergenceMissingSettlement, action: actionSuspense, suspenseCents: 500},
+			name: "settlement the bank refunded", entry: settlement, facts: entryFacts{hasTransfer: true, transfer: transferIn(t, transfer.StatusFailed, 500)},
+			want: verdict{divergence: DivergenceMissingSettlement, action: actionSuspense, suspenseCents: 500},
 		},
 		{
-			name: "settlement of an unknown PIX", entry: settlement,
-			facts: entryFacts{},
-			want:  verdict{divergence: DivergenceUnknownEntry, action: actionSuspense, suspenseCents: 500},
+			name: "settlement of an unknown PIX", entry: settlement, facts: entryFacts{},
+			want: verdict{divergence: DivergenceUnknownEntry, action: actionSuspense, suspenseCents: 500},
 		},
 		{
-			name: "settlement of another amount", entry: settlement,
-			facts: entryFacts{hasTransfer: true, transfer: transferIn(t, transfer.StatusSent, 450)},
-			want:  verdict{divergence: DivergenceAmountMismatch, action: actionWalkAndSuspense, walkTo: transfer.PartnerSettled, suspenseCents: 50},
+			name: "settlement of another amount", entry: settlement, facts: entryFacts{hasTransfer: true, transfer: transferIn(t, transfer.StatusSent, 450)},
+			want: verdict{divergence: DivergenceAmountMismatch, action: actionWalkAndSuspense, walkTo: transfer.PartnerSettled, suspenseCents: 50},
 		},
 		{
-			name: "return the bank missed", entry: returned,
-			facts: entryFacts{hasTransfer: true, transfer: transferIn(t, transfer.StatusConfirmed, 500)},
-			want:  verdict{divergence: DivergenceMissingReturn, action: actionWalk, walkTo: transfer.PartnerReturned},
+			name: "return the bank missed", entry: returned, facts: entryFacts{hasTransfer: true, transfer: transferIn(t, transfer.StatusConfirmed, 500)},
+			want: verdict{divergence: DivergenceMissingReturn, action: actionWalk, walkTo: transfer.PartnerReturned},
 		},
 		{
-			name: "return already booked", entry: returned,
-			facts: entryFacts{hasTransfer: true, transfer: transferIn(t, transfer.StatusReversed, 500)},
-			want:  verdict{divergence: DivergenceMatched, action: actionNone},
+			name: "return already booked", entry: returned, facts: entryFacts{hasTransfer: true, transfer: transferIn(t, transfer.StatusReversed, 500)},
+			want: verdict{divergence: DivergenceMatched, action: actionNone},
 		},
 		{
-			name: "incoming never credited", entry: incoming,
-			facts: entryFacts{isAccountKnown: true},
-			want:  verdict{divergence: DivergenceMissingIncoming, action: actionCredit},
+			name: "incoming never credited", entry: incoming, facts: entryFacts{isAccountKnown: true},
+			want: verdict{divergence: DivergenceMissingIncoming, action: actionCredit},
 		},
 		{
-			name: "incoming for an unknown account", entry: incoming,
-			facts: entryFacts{},
-			want:  verdict{divergence: DivergenceUnknownEntry, action: actionSuspense, suspenseCents: -300},
+			name: "incoming for an unknown account", entry: incoming, facts: entryFacts{},
+			want: verdict{divergence: DivergenceUnknownEntry, action: actionSuspense, suspenseCents: -300},
 		},
 		{
-			name: "incoming already credited", entry: incoming,
-			facts: entryFacts{isCredited: true, isAccountKnown: true},
-			want:  verdict{divergence: DivergenceMatched, action: actionNone},
+			name: "incoming already credited", entry: incoming, facts: entryFacts{isCredited: true, isAccountKnown: true},
+			want: verdict{divergence: DivergenceMatched, action: actionNone},
 		},
 	}
 

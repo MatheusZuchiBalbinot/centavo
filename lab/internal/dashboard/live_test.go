@@ -26,8 +26,7 @@ func writeLiveRound(t *testing.T, roundsDir, round, report string) {
 	dir := filepath.Join(roundsDir, round)
 
 	files := map[string]string{
-		"round.json":    `{"round":"` + round + `","scenario":"smoke","seed":"0x5eed"}`,
-		"history.jsonl": strings.ReplaceAll(historyLines, "r0001", round),
+		"round.json": `{"round":"` + round + `","scenario":"smoke","seed":"0x5eed"}`, "history.jsonl": strings.ReplaceAll(historyLines, "r0001", round),
 	}
 
 	for name, content := range files {

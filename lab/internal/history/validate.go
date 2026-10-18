@@ -56,10 +56,7 @@ type validator struct {
 // Validate reads a whole history and checks its well-formedness.
 func Validate(reader io.Reader) (Report, error) {
 	v := validator{
-		open:           map[string]openOperation{},
-		closed:         map[string]bool{},
-		busyProcesses:  map[Process]string{},
-		retiredProcess: map[Process]bool{},
+		open: map[string]openOperation{}, closed: map[string]bool{}, busyProcesses: map[Process]string{}, retiredProcess: map[Process]bool{},
 	}
 
 	scanner := bufio.NewScanner(reader)

@@ -65,12 +65,8 @@ func New(config Config) *Engine {
 	}
 
 	return &Engine{
-		store:        config.Store,
-		modes:        config.Modes,
-		participants: participants,
-		secret:       config.Secret,
-		http:         &http.Client{Timeout: deliveryTimeout},
-		logger:       config.Logger,
+		store: config.Store, modes: config.Modes, participants: participants, secret: config.Secret,
+		http: &http.Client{Timeout: deliveryTimeout}, logger: config.Logger,
 	}
 }
 
@@ -133,11 +129,7 @@ func (e *Engine) decide(ctx context.Context, transfer truth.Transfer, now time.T
 	}
 
 	settleCommand := truth.SettleCommand{
-		EndToEndID: transfer.EndToEndID,
-		Now:        now,
-		ReturnAt:   decider.ReturnAfterSettle(),
-		EventID:    NewEventID(),
-		Planner:    decider.Plan,
+		EndToEndID: transfer.EndToEndID, Now: now, ReturnAt: decider.ReturnAfterSettle(), EventID: NewEventID(), Planner: decider.Plan,
 	}
 
 	return e.store.Settle(ctx, settleCommand)

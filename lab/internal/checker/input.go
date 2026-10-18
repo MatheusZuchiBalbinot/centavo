@@ -247,16 +247,10 @@ func (l ledger) systemID(code string) string {
 
 func indexLedger(s snapshot.Snapshot) ledger {
 	l := ledger{
-		accounts:      map[string]snapshot.Account{},
-		balances:      map[string]snapshot.Balance{},
-		transactions:  map[string]snapshot.Transaction{},
-		byClientRef:   map[string][]snapshot.Transaction{},
-		systemIDs:     map[string]string{},
-		transfers:     s.Transfers,
-		transitions:   map[string][]snapshot.Transition{},
-		byTransfer:    map[string][]snapshot.Transaction{},
-		byIncoming:    map[string][]snapshot.Transaction{},
-		incomingByE2E: map[string][]snapshot.Incoming{},
+		accounts: map[string]snapshot.Account{}, balances: map[string]snapshot.Balance{},
+		transactions: map[string]snapshot.Transaction{}, byClientRef: map[string][]snapshot.Transaction{},
+		systemIDs: map[string]string{}, transfers: s.Transfers, transitions: map[string][]snapshot.Transition{},
+		byTransfer: map[string][]snapshot.Transaction{}, byIncoming: map[string][]snapshot.Transaction{}, incomingByE2E: map[string][]snapshot.Incoming{},
 	}
 
 	for _, transition := range s.Transitions {

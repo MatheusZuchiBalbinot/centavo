@@ -70,19 +70,10 @@ func newReport(meta roundMeta, result Result, events chaosEvents, histories oper
 	reported := result.Violations[:min(len(result.Violations), maxReportedViolations)]
 
 	report := Report{
-		Round:            meta.Round,
-		Scenario:         meta.Scenario,
-		Seed:             meta.Seed,
-		Duration:         meta.Duration,
-		Verdict:          result.Verdict,
-		CheckerVersion:   Version,
-		Operations:       result.Operations,
-		Invariants:       result.Invariants,
-		ViolationCount:   len(result.Violations),
-		Unresolved:       append([]string{}, result.Unresolved...),
-		ViolationsByRule: byRule,
-		ExampleByRule:    examples,
-		Violations:       slices.Clone(reported),
+		Round: meta.Round, Scenario: meta.Scenario, Seed: meta.Seed, Duration: meta.Duration, Verdict: result.Verdict,
+		CheckerVersion: Version, Operations: result.Operations, Invariants: result.Invariants,
+		ViolationCount: len(result.Violations), Unresolved: append([]string{}, result.Unresolved...),
+		ViolationsByRule: byRule, ExampleByRule: examples, Violations: slices.Clone(reported),
 	}
 
 	for _, v := range storiedViolations(result) {

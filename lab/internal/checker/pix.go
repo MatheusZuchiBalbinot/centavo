@@ -121,10 +121,7 @@ func fixedEndToEnd(transferID string) string {
 
 func indexTruth(truth *PartnerTruth, l ledger) truthIndex {
 	index := truthIndex{
-		statusByE2E:   map[string]string{},
-		settlements:   map[string][]truthEntry{},
-		returns:       map[string][]truthEntry{},
-		incomingByE2E: map[string]truthIncoming{},
+		statusByE2E: map[string]string{}, settlements: map[string][]truthEntry{}, returns: map[string][]truthEntry{}, incomingByE2E: map[string]truthIncoming{},
 	}
 
 	roundTransfers := map[string]bool{}
@@ -332,11 +329,8 @@ func (e *evaluation) checkTransit() {
 
 	if inTransit != 0 {
 		violation := Violation{
-			Invariant: InvariantI5,
-			Rule:      RuleI5Transit,
-			TimeNS:    e.ops.lastT,
-			AccountID: transitID,
-			Message:   fmt.Sprintf("sys_pix_out_transit guarda %d centavos da rodada depois da quiescência", inTransit),
+			Invariant: InvariantI5, Rule: RuleI5Transit, TimeNS: e.ops.lastT, AccountID: transitID,
+			Message: fmt.Sprintf("sys_pix_out_transit guarda %d centavos da rodada depois da quiescência", inTransit),
 		}
 
 		e.add(violation)
@@ -405,10 +399,8 @@ func (e *evaluation) checkIncoming(index truthIndex) {
 		credits := e.creditsOf(e2e)
 		if credits != 1 {
 			violation := Violation{
-				Invariant: InvariantI6,
-				Rule:      RuleI6Incoming,
-				TimeNS:    e.ops.lastT,
-				Message:   fmt.Sprintf("o parceiro creditou o PIX de entrada %s, o ledger tem %d crédito(s)", e2e, credits),
+				Invariant: InvariantI6, Rule: RuleI6Incoming, TimeNS: e.ops.lastT,
+				Message: fmt.Sprintf("o parceiro creditou o PIX de entrada %s, o ledger tem %d crédito(s)", e2e, credits),
 			}
 
 			e.add(violation)
@@ -418,10 +410,8 @@ func (e *evaluation) checkIncoming(index truthIndex) {
 	for e2e := range e.ledger.incomingByE2E {
 		if _, isInTruth := index.incomingByE2E[e2e]; !isInTruth {
 			violation := Violation{
-				Invariant: InvariantI6,
-				Rule:      RuleI6Incoming,
-				TimeNS:    e.ops.lastT,
-				Message:   fmt.Sprintf("o ledger creditou o PIX de entrada %s, que o parceiro não registra", e2e),
+				Invariant: InvariantI6, Rule: RuleI6Incoming, TimeNS: e.ops.lastT,
+				Message: fmt.Sprintf("o ledger creditou o PIX de entrada %s, que o parceiro não registra", e2e),
 			}
 
 			e.add(violation)
@@ -472,11 +462,8 @@ func (e *evaluation) checkReserveTerms(index truthIndex) {
 	mirrored := -e.roundSum(settlementID)
 	if mirrored != index.reserveCents {
 		violation := Violation{
-			Invariant: InvariantI1,
-			Rule:      RuleI1cPartnerReserve,
-			TimeNS:    e.ops.lastT,
-			AccountID: settlementID,
-			Message:   fmt.Sprintf("termo R: sys_partner_settlement espelha %d centavos da rodada, a verdade do parceiro diz %d", mirrored, index.reserveCents),
+			Invariant: InvariantI1, Rule: RuleI1cPartnerReserve, TimeNS: e.ops.lastT, AccountID: settlementID,
+			Message: fmt.Sprintf("termo R: sys_partner_settlement espelha %d centavos da rodada, a verdade do parceiro diz %d", mirrored, index.reserveCents),
 		}
 
 		e.add(violation)
@@ -485,11 +472,8 @@ func (e *evaluation) checkReserveTerms(index truthIndex) {
 	owed := -e.roundSum(suspenseID)
 	if owed != index.doubleCents {
 		violation := Violation{
-			Invariant: InvariantI1,
-			Rule:      RuleI1cDoubleProcess,
-			TimeNS:    e.ops.lastT,
-			AccountID: suspenseID,
-			Message:   fmt.Sprintf("termo S: o parceiro processou %d centavos em dobro, a suspense guarda %d", index.doubleCents, owed),
+			Invariant: InvariantI1, Rule: RuleI1cDoubleProcess, TimeNS: e.ops.lastT, AccountID: suspenseID,
+			Message: fmt.Sprintf("termo S: o parceiro processou %d centavos em dobro, a suspense guarda %d", index.doubleCents, owed),
 		}
 
 		e.add(violation)
@@ -512,12 +496,7 @@ func (e *evaluation) roundSum(accountID string) int64 {
 
 func (e *evaluation) transferViolation(transfer snapshot.ExternalTransfer, invariant Invariant, rule Rule, message string) Violation {
 	return Violation{
-		Invariant: invariant,
-		Rule:      rule,
-		TimeNS:    e.ops.timeOf(transfer.ClientRef),
-		Op:        transfer.ClientRef,
-		AccountID: transfer.AccountID,
-		Message:   message,
+		Invariant: invariant, Rule: rule, TimeNS: e.ops.timeOf(transfer.ClientRef), Op: transfer.ClientRef, AccountID: transfer.AccountID, Message: message,
 	}
 }
 

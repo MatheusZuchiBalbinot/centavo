@@ -148,11 +148,7 @@ func (c Client) Inspect(ctx context.Context, id string) (Container, error) {
 	}
 
 	container := Container{
-		ID:           details.ID,
-		Service:      labels[serviceLabel],
-		IsRunning:    details.State.Running,
-		IsPaused:     details.State.Paused,
-		RestartCount: details.RestartCount,
+		ID: details.ID, Service: labels[serviceLabel], IsRunning: details.State.Running, IsPaused: details.State.Paused, RestartCount: details.RestartCount,
 	}
 
 	if details.State.Health != nil {

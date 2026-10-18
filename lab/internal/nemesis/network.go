@@ -137,21 +137,13 @@ func (n *Nemesis) applyToxic(ctx context.Context, proxy string, fault scenarios.
 		}
 
 		downstream := toxicBody{
-			Name:       fault.ID + "-down",
-			Type:       timeoutToxic,
-			Stream:     "downstream",
-			Toxicity:   toxic.Toxicity,
-			Attributes: map[string]int64{timeoutToxic: 0},
+			Name: fault.ID + "-down", Type: timeoutToxic, Stream: "downstream", Toxicity: toxic.Toxicity, Attributes: map[string]int64{timeoutToxic: 0},
 		}
 
 		return n.addToxic(ctx, proxy, downstream)
 	case scenarios.ToxicOneWay:
 		downstream := toxicBody{
-			Name:       fault.ID + "-down",
-			Type:       timeoutToxic,
-			Stream:     "downstream",
-			Toxicity:   toxic.Toxicity,
-			Attributes: map[string]int64{timeoutToxic: 0},
+			Name: fault.ID + "-down", Type: timeoutToxic, Stream: "downstream", Toxicity: toxic.Toxicity, Attributes: map[string]int64{timeoutToxic: 0},
 		}
 
 		return n.addToxic(ctx, proxy, downstream)

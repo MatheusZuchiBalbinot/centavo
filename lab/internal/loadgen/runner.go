@@ -33,19 +33,13 @@ type retryPolicy struct {
 
 // politePolicy is the polite client of docs/architecture.md, section 7.
 var politePolicy = retryPolicy{
-	attemptTimeout: 2 * time.Second,
-	maxRetries:     8,
-	backoffBase:    100 * time.Millisecond,
-	backoffCap:     5 * time.Second,
-	deadline:       30 * time.Second,
+	attemptTimeout: 2 * time.Second, maxRetries: 8, backoffBase: 100 * time.Millisecond, backoffCap: 5 * time.Second, deadline: 30 * time.Second,
 }
 
 // aggressivePolicy retries at once, up to 20 times, with the same key
 // (docs/chaos-bot.md, section 11).
 var aggressivePolicy = retryPolicy{
-	attemptTimeout: 2 * time.Second,
-	maxRetries:     20,
-	deadline:       30 * time.Second,
+	attemptTimeout: 2 * time.Second, maxRetries: 20, deadline: 30 * time.Second,
 }
 
 // Result is what the load leaves for the cure: the writes whose outcome is
@@ -165,11 +159,8 @@ func Run(ctx context.Context, config Config) (Result, error) {
 
 func runWith(ctx context.Context, config Config, policy retryPolicy) (Result, error) {
 	r := &run{
-		config:   config,
-		policy:   policy,
-		bank:     newBankClient(config.BankURL, config.Workload.Clients),
-		partner:  newBankClient(config.PartnerURL, config.Workload.Clients),
-		accounts: make([]accountID, config.Workload.Accounts),
+		config: config, policy: policy, bank: newBankClient(config.BankURL, config.Workload.Clients),
+		partner: newBankClient(config.PartnerURL, config.Workload.Clients), accounts: make([]accountID, config.Workload.Accounts),
 	}
 	r.nextProcess.Store(int64(config.Workload.Clients))
 
@@ -297,16 +288,9 @@ func (r *run) newClient(index int) *client {
 	profile := pickProfile(stream("workload.profiles"), r.config.Workload.ClientMix)
 
 	return &client{
-		run:      r,
-		index:    index,
-		process:  index + 1,
-		profile:  profile,
-		policy:   r.policyOf(profile),
-		ops:      stream("workload.ops"),
-		amounts:  stream("workload.amounts"),
-		picks:    stream("workload.accounts"),
-		jitter:   stream("workload.clients"),
-		accounts: r.ownedAccounts(index),
+		run: r, index: index, process: index + 1, profile: profile, policy: r.policyOf(profile),
+		ops: stream("workload.ops"), amounts: stream("workload.amounts"), picks: stream("workload.accounts"),
+		jitter: stream("workload.clients"), accounts: r.ownedAccounts(index),
 	}
 }
 

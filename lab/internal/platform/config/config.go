@@ -149,14 +149,8 @@ func LoadRun(lookup LookupFunc) (Run, error) {
 	}
 
 	run := Run{
-		Serve:         serve,
-		BankURL:       bankURL,
-		ControlURL:    controlURL,
-		ChaosToken:    chaosToken,
-		DockerHost:    dockerHost,
-		Project:       project,
-		PartnerURL:    partnerURL,
-		ParticipantID: participant,
+		Serve: serve, BankURL: bankURL, ControlURL: controlURL, ChaosToken: chaosToken, DockerHost: dockerHost,
+		Project: project, PartnerURL: partnerURL, ParticipantID: participant,
 	}
 
 	return run, nil

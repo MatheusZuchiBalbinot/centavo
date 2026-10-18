@@ -74,12 +74,7 @@ type SweeperConfig struct {
 // NewSweeper builds the sweeper.
 func NewSweeper(config SweeperConfig) Sweeper {
 	return Sweeper{
-		unitOfWork: config.UnitOfWork,
-		lease:      config.Lease,
-		machine:    config.Machine,
-		partner:    config.Partner,
-		owner:      config.Owner,
-		logger:     config.Logger,
+		unitOfWork: config.UnitOfWork, lease: config.Lease, machine: config.Machine, partner: config.Partner, owner: config.Owner, logger: config.Logger,
 	}
 }
 

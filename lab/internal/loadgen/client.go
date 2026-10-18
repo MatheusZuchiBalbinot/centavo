@@ -48,15 +48,8 @@ const maxResponseBytes = 1 << 20
 // (docs/domain.md, section 12). The lab keeps its own list: it never imports
 // the bank.
 var definitiveCodes = map[string]bool{
-	"VALIDATION_FAILED":        true,
-	"IDEMPOTENCY_KEY_MISSING":  true,
-	"ACCOUNT_NOT_FOUND":        true,
-	"TRANSFER_NOT_FOUND":       true,
-	"SAME_ACCOUNT_TRANSFER":    true,
-	"INSUFFICIENT_FUNDS":       true,
-	"AMOUNT_ABOVE_LIMIT":       true,
-	"IDEMPOTENCY_KEY_MISMATCH": true,
-	"OPERATION_VOIDED":         true,
+	"VALIDATION_FAILED": true, "IDEMPOTENCY_KEY_MISSING": true, "ACCOUNT_NOT_FOUND": true, "TRANSFER_NOT_FOUND": true,
+	"SAME_ACCOUNT_TRANSFER": true, "INSUFFICIENT_FUNDS": true, "AMOUNT_ABOVE_LIMIT": true, "IDEMPOTENCY_KEY_MISMATCH": true, "OPERATION_VOIDED": true,
 }
 
 const requestInProgressCode = "REQUEST_IN_PROGRESS"

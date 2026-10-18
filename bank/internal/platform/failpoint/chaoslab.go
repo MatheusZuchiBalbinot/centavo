@@ -340,16 +340,8 @@ func record(ctx context.Context, f firing) error {
 	}
 
 	line, err := json.Marshal(event{
-		TS:            time.Now().UTC(),
-		Service:       events.config.Service,
-		Instance:      events.config.Instance,
-		PID:           os.Getpid(),
-		Failpoint:     f.name,
-		Action:        f.rule.Action,
-		Arg:           f.rule.Arg,
-		CorrelationID: correlation.From(ctx),
-		Hit:           f.hit,
-		Fire:          f.fire,
+		TS: time.Now().UTC(), Service: events.config.Service, Instance: events.config.Instance, PID: os.Getpid(),
+		Failpoint: f.name, Action: f.rule.Action, Arg: f.rule.Arg, CorrelationID: correlation.From(ctx), Hit: f.hit, Fire: f.fire,
 	})
 	if err != nil {
 		return err

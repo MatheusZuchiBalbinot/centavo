@@ -19,10 +19,7 @@ const (
 // New builds a server with the timeouts of docs/architecture.md, section 7.
 func New(addr string, handler http.Handler) *http.Server {
 	return &http.Server{
-		Addr:              addr,
-		Handler:           handler,
-		ReadHeaderTimeout: readHeaderTimeout,
-		WriteTimeout:      writeTimeout,
+		Addr: addr, Handler: handler, ReadHeaderTimeout: readHeaderTimeout, WriteTimeout: writeTimeout,
 	}
 }
 

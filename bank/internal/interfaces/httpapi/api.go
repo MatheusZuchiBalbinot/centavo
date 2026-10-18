@@ -173,10 +173,7 @@ func intParam(raw string, fallback int) (int, error) {
 
 func newAccountResponse(view application.AccountView) accountResponse {
 	return accountResponse{
-		AccountID:    view.Account.ID.String(),
-		HolderName:   view.Account.HolderName,
-		BalanceCents: int64(view.Balance.Cents()),
-		CreatedAt:    view.Account.CreatedAt.UTC(),
+		AccountID: view.Account.ID.String(), HolderName: view.Account.HolderName, BalanceCents: int64(view.Balance.Cents()), CreatedAt: view.Account.CreatedAt.UTC(),
 	}
 }
 
@@ -199,11 +196,7 @@ func newStatementResponse(accountID ledger.AccountID, page application.Statement
 
 func newStatementLineResponse(line ledger.StatementLine) statementLineResponse {
 	return statementLineResponse{
-		AccountSeq:        int64(line.Seq),
-		TransactionID:     line.TransactionID.String(),
-		Kind:              string(line.TransactionKind),
-		AmountCents:       int64(line.Amount),
-		BalanceAfterCents: int64(line.BalanceAfter.Cents()),
-		CreatedAt:         line.CreatedAt.UTC(),
+		AccountSeq: int64(line.Seq), TransactionID: line.TransactionID.String(), Kind: string(line.TransactionKind),
+		AmountCents: int64(line.Amount), BalanceAfterCents: int64(line.BalanceAfter.Cents()), CreatedAt: line.CreatedAt.UTC(),
 	}
 }

@@ -63,12 +63,8 @@ func (c Client) Statement(ctx context.Context, afterSeq int64, limit int) ([]app
 
 	for _, line := range page.Entries {
 		entry := application.StatementEntry{
-			Seq:           line.Seq,
-			Kind:          application.StatementKind(line.Kind),
-			EndToEndID:    line.EndToEndID,
-			AmountCents:   money.Cents(line.AmountCents),
-			AccountID:     line.DestinationAccountID,
-			CorrelationID: line.CorrelationID,
+			Seq: line.Seq, Kind: application.StatementKind(line.Kind), EndToEndID: line.EndToEndID,
+			AmountCents: money.Cents(line.AmountCents), AccountID: line.DestinationAccountID, CorrelationID: line.CorrelationID,
 		}
 		entries = append(entries, entry)
 	}

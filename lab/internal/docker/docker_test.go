@@ -30,9 +30,8 @@ func newFakeEngine() *fakeEngine {
 
 	return &fakeEngine{
 		labels: map[string]map[string]string{
-			"api":   target("bank-api"),
-			"other": {"centavo.chaos.target": "true", "com.docker.compose.project": "elsewhere", "com.docker.compose.service": "bank-api"},
-			"lab":   {"com.docker.compose.project": "centavo", "com.docker.compose.service": "lab"},
+			"api": target("bank-api"), "other": {"centavo.chaos.target": "true", "com.docker.compose.project": "elsewhere", "com.docker.compose.service": "bank-api"},
+			"lab": {"com.docker.compose.project": "centavo", "com.docker.compose.service": "lab"},
 		},
 		paused: map[string]bool{"api": true},
 	}

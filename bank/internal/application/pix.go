@@ -159,12 +159,7 @@ func (c CreatePixOut) Apply(ctx context.Context, stores Stores, operationID ledg
 	}
 
 	first := TransitionRecord{
-		TransferID:          external.ID,
-		Seq:                 1,
-		To:                  transfer.StatusCreated,
-		Cause:               causeAPI,
-		LedgerTransactionID: &transactionID,
-		CorrelationID:       input.Write.CorrelationID,
+		TransferID: external.ID, Seq: 1, To: transfer.StatusCreated, Cause: causeAPI, LedgerTransactionID: &transactionID, CorrelationID: input.Write.CorrelationID,
 	}
 
 	err = stores.InsertTransition(ctx, first)
@@ -206,15 +201,8 @@ func recordTransfer(ctx context.Context, stores Stores, operationID ledger.Opera
 	}
 
 	external := ExternalTransfer{
-		ID:             id,
-		EndToEndID:     id.EndToEndID(),
-		OperationID:    operationID,
-		ClientRef:      string(input.Write.Key),
-		AccountID:      input.AccountID,
-		Amount:         input.Amount,
-		DestinationKey: input.DestinationKey,
-		Status:         transfer.StatusCreated,
-		StatusSeq:      1,
+		ID: id, EndToEndID: id.EndToEndID(), OperationID: operationID, ClientRef: string(input.Write.Key),
+		AccountID: input.AccountID, Amount: input.Amount, DestinationKey: input.DestinationKey, Status: transfer.StatusCreated, StatusSeq: 1,
 	}
 
 	createdAt, err := stores.InsertExternalTransfer(ctx, external)
@@ -383,10 +371,7 @@ func (r NaiveRelay) Relay(ctx context.Context, id transfer.ID) error {
 	}
 
 	submission := PartnerSubmission{
-		EndToEndID:     attemptID,
-		AmountCents:    external.Amount.Cents(),
-		DestinationKey: external.DestinationKey,
-		CorrelationID:  external.ClientRef,
+		EndToEndID: attemptID, AmountCents: external.Amount.Cents(), DestinationKey: external.DestinationKey, CorrelationID: external.ClientRef,
 	}
 	answer := r.partner.Submit(ctx, submission)
 

@@ -107,11 +107,7 @@ type InboxProcessorConfig struct {
 // NewInboxProcessor builds the processor.
 func NewInboxProcessor(config InboxProcessorConfig) InboxProcessor {
 	return InboxProcessor{
-		unitOfWork: config.UnitOfWork,
-		events:     eventApplier{machine: config.Machine},
-		machine:    config.Machine,
-		partner:    config.Partner,
-		logger:     config.Logger,
+		unitOfWork: config.UnitOfWork, events: eventApplier{machine: config.Machine}, machine: config.Machine, partner: config.Partner, logger: config.Logger,
 	}
 }
 

@@ -290,9 +290,7 @@ func sagaOptions(pool *pgxpool.Pool, runConfig config.Run) round.SagaOptions {
 		Unreconciled: func(ctx context.Context) (int64, error) {
 			return unreconciled(ctx, pool, partnerClient)
 		},
-		Truth:         partnerClient.Truth,
-		PartnerURL:    runConfig.PartnerURL,
-		ParticipantID: runConfig.ParticipantID,
+		Truth: partnerClient.Truth, PartnerURL: runConfig.PartnerURL, ParticipantID: runConfig.ParticipantID,
 	}
 }
 
@@ -411,13 +409,8 @@ func roundOptions(flags runFlags, runConfig config.Run) (round.Options, error) {
 	}
 
 	options := round.Options{
-		Scenario:   scenario,
-		Seed:       roundSeed,
-		BankURL:    runConfig.BankURL,
-		ControlURL: runConfig.ControlURL,
-		RoundsDir:  runConfig.RoundsDir,
-		LabVersion: buildinfo.Version(),
-		Logger:     newLogger(),
+		Scenario: scenario, Seed: roundSeed, BankURL: runConfig.BankURL, ControlURL: runConfig.ControlURL,
+		RoundsDir: runConfig.RoundsDir, LabVersion: buildinfo.Version(), Logger: newLogger(),
 	}
 
 	return options, nil

@@ -81,10 +81,7 @@ func runTests(m *testing.M) int {
 
 func startPostgres(ctx context.Context) (*tcpostgres.PostgresContainer, error) {
 	passwords := map[string]string{
-		"BANK_MIGRATOR_PASSWORD": testPassword,
-		"BANK_APP_PASSWORD":      testPassword,
-		"BANK_AUDITOR_PASSWORD":  testPassword,
-		"REPLICATOR_PASSWORD":    testPassword,
+		"BANK_MIGRATOR_PASSWORD": testPassword, "BANK_APP_PASSWORD": testPassword, "BANK_AUDITOR_PASSWORD": testPassword, "REPLICATOR_PASSWORD": testPassword,
 	}
 
 	container, err := tcpostgres.Run(ctx, postgresImage, tcpostgres.WithPassword(testPassword), tcpostgres.WithInitScripts(rolesScript), testcontainers.WithEnv(passwords), tcpostgres.BasicWaitStrategies())
@@ -113,11 +110,7 @@ func databaseURLs(ctx context.Context, container *tcpostgres.PostgresContainer) 
 
 func roleURL(role, address string) string {
 	databaseURL := url.URL{
-		Scheme:   "postgres",
-		User:     url.UserPassword(role, testPassword),
-		Host:     address,
-		Path:     bankDatabase,
-		RawQuery: "sslmode=disable",
+		Scheme: "postgres", User: url.UserPassword(role, testPassword), Host: address, Path: bankDatabase, RawQuery: "sslmode=disable",
 	}
 
 	return databaseURL.String()

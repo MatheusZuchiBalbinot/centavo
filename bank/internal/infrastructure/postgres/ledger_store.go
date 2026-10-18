@@ -267,12 +267,8 @@ func scanStatementLine(row pgx.CollectableRow) (ledger.StatementLine, error) {
 	}
 
 	line := ledger.StatementLine{
-		Seq:             ledger.Seq(seq),
-		TransactionID:   ledger.TransactionID(transactionID),
-		TransactionKind: ledger.TransactionKind(kind),
-		Amount:          money.Cents(amountCents),
-		BalanceAfter:    money.NewBalance(money.Cents(balanceAfterCents)),
-		CreatedAt:       createdAt,
+		Seq: ledger.Seq(seq), TransactionID: ledger.TransactionID(transactionID), TransactionKind: ledger.TransactionKind(kind), Amount: money.Cents(amountCents),
+		BalanceAfter: money.NewBalance(money.Cents(balanceAfterCents)), CreatedAt: createdAt,
 	}
 
 	return line, nil

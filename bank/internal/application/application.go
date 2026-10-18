@@ -130,11 +130,7 @@ func newTransaction(kind ledger.TransactionKind, write WriteContext, operationID
 	}
 
 	transaction := ledger.Transaction{
-		ID:            transactionID,
-		Kind:          kind,
-		OperationID:   &operationID,
-		ClientRef:     string(write.Key),
-		CorrelationID: write.CorrelationID,
+		ID: transactionID, Kind: kind, OperationID: &operationID, ClientRef: string(write.Key), CorrelationID: write.CorrelationID,
 	}
 
 	return transaction, nil
@@ -215,11 +211,7 @@ func (p poster) debit(ctx context.Context, transactionID ledger.TransactionID, l
 	}
 
 	entry := ledger.Entry{
-		TransactionID: transactionID,
-		AccountID:     line.account,
-		Amount:        line.amount.Negated(),
-		Seq:           line.debited.LastSeq,
-		BalanceAfter:  line.debited.Balance,
+		TransactionID: transactionID, AccountID: line.account, Amount: line.amount.Negated(), Seq: line.debited.LastSeq, BalanceAfter: line.debited.Balance,
 	}
 
 	return p.entries.InsertEntry(ctx, entry)

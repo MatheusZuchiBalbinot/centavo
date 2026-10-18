@@ -118,10 +118,8 @@ func (a apiHandlers) applyDeposit(input application.DepositInput) applyFunc {
 		}
 
 		response := depositResponse{
-			TransactionID: result.TransactionID.String(),
-			AccountID:     input.AccountID.String(),
-			BalanceCents:  int64(result.Balance.Cents()),
-			CreatedAt:     result.CreatedAt.UTC(),
+			TransactionID: result.TransactionID.String(), AccountID: input.AccountID.String(),
+			BalanceCents: int64(result.Balance.Cents()), CreatedAt: result.CreatedAt.UTC(),
 		}
 
 		return storedJSON(http.StatusCreated, response)
@@ -154,9 +152,7 @@ func (a apiHandlers) applyTransfer(input application.TransferInput) applyFunc {
 		}
 
 		response := transferResponse{
-			TransactionID:    result.TransactionID.String(),
-			FromBalanceCents: int64(result.FromBalance.Cents()),
-			CreatedAt:        result.CreatedAt.UTC(),
+			TransactionID: result.TransactionID.String(), FromBalanceCents: int64(result.FromBalance.Cents()), CreatedAt: result.CreatedAt.UTC(),
 		}
 
 		return storedJSON(http.StatusCreated, response)

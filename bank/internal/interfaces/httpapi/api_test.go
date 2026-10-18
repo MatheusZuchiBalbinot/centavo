@@ -117,13 +117,8 @@ func newFixture(depositErr error) apiFixture {
 	statement := &fakeStatement{}
 	writer := &fakeWriter{}
 	useCases := httpapi.UseCases{
-		Writer:       writer,
-		Resolver:     fakeResolver{},
-		OpenAccount:  fakeOpenAccount{},
-		GetAccount:   unusedAccounts{},
-		GetStatement: statement,
-		Deposit:      fakeDeposit{err: depositErr},
-		Transfer:     transfer,
+		Writer: writer, Resolver: fakeResolver{}, OpenAccount: fakeOpenAccount{}, GetAccount: unusedAccounts{},
+		GetStatement: statement, Deposit: fakeDeposit{err: depositErr}, Transfer: transfer,
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 

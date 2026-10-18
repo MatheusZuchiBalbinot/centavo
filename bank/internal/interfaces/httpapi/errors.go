@@ -35,8 +35,9 @@ const (
 )
 
 const (
-	unavailableMessage = "the bank could not finish the request in time; its outcome is unknown"
-	internalMessage    = "internal error; the outcome of the request is unknown"
+	unavailableMessage    = "the bank could not finish the request in time; its outcome is unknown"
+	outcomeUnknownMessage = "the bank could not confirm whether the write was applied; resolve the operation or retry with the same key"
+	internalMessage       = "internal error; the outcome of the request is unknown"
 )
 
 // errValidation marks malformed input; the wrapped text tells the client what.
@@ -73,8 +74,7 @@ var errorMappings = []errorMapping{
 // fixedMessages replace the error text of 5xx codes: their causes are
 // internal and never reach the client.
 var fixedMessages = map[errorCode]string{
-	codeOutcomeUnknown:         "the bank could not confirm whether the write was applied; resolve the operation or retry with the same key",
-	codeTemporarilyUnavailable: unavailableMessage,
+	codeOutcomeUnknown: outcomeUnknownMessage, codeTemporarilyUnavailable: unavailableMessage,
 }
 
 type errorBody struct {

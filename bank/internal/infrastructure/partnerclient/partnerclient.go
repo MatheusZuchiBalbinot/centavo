@@ -44,10 +44,7 @@ type submitRequest struct {
 // the partner may have processed it.
 func (c Client) Submit(ctx context.Context, submission application.PartnerSubmission) application.PartnerAnswer {
 	payload := submitRequest{
-		EndToEndID:     submission.EndToEndID,
-		ParticipantID:  c.participantID,
-		AmountCents:    int64(submission.AmountCents),
-		DestinationKey: submission.DestinationKey,
+		EndToEndID: submission.EndToEndID, ParticipantID: c.participantID, AmountCents: int64(submission.AmountCents), DestinationKey: submission.DestinationKey,
 	}
 
 	body, err := json.Marshal(payload)

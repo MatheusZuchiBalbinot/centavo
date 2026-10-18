@@ -47,13 +47,7 @@ func Create(path, round string) (*Writer, error) {
 	}
 
 	writer := &Writer{
-		round:     round,
-		started:   time.Now(),
-		file:      file,
-		buffer:    bufio.NewWriter(file),
-		nextIndex: 1,
-		stop:      make(chan struct{}),
-		stopped:   make(chan struct{}),
+		round: round, started: time.Now(), file: file, buffer: bufio.NewWriter(file), nextIndex: 1, stop: make(chan struct{}), stopped: make(chan struct{}),
 	}
 	writer.synced = sync.NewCond(&writer.mu)
 

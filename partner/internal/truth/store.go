@@ -459,11 +459,7 @@ func (s *Store) Settle(ctx context.Context, command SettleCommand) error {
 
 		for range settlements {
 			statementEntry := StatementEntry{
-				ParticipantID: transfer.ParticipantID,
-				Kind:          EntrySettlement,
-				EndToEndID:    transfer.EndToEndID,
-				AmountCents:   transfer.AmountCents,
-				CreatedAt:     command.Now,
+				ParticipantID: transfer.ParticipantID, Kind: EntrySettlement, EndToEndID: transfer.EndToEndID, AmountCents: transfer.AmountCents, CreatedAt: command.Now,
 			}
 
 			err = addEntry(ctx, tx, statementEntry)
@@ -473,13 +469,8 @@ func (s *Store) Settle(ctx context.Context, command SettleCommand) error {
 		}
 
 		event := Event{
-			ID:            command.EventID,
-			Type:          EventSettled,
-			EndToEndID:    transfer.EndToEndID,
-			AmountCents:   transfer.AmountCents,
-			OccurredAt:    command.Now,
-			ParticipantID: transfer.ParticipantID,
-			CorrelationID: transfer.CorrelationID,
+			ID: command.EventID, Type: EventSettled, EndToEndID: transfer.EndToEndID, AmountCents: transfer.AmountCents,
+			OccurredAt: command.Now, ParticipantID: transfer.ParticipantID, CorrelationID: transfer.CorrelationID,
 		}
 
 		return enqueue(ctx, tx, event, command.Planner)
@@ -513,14 +504,9 @@ func (s *Store) Reject(ctx context.Context, command RejectCommand) error {
 		}
 
 		event := Event{
-			ID:            command.EventID,
-			Type:          EventRejected,
-			EndToEndID:    transfer.EndToEndID,
-			AmountCents:   transfer.AmountCents,
-			OccurredAt:    command.Now,
-			Reason:        command.Reason,
-			ParticipantID: transfer.ParticipantID,
-			CorrelationID: transfer.CorrelationID,
+			ID: command.EventID, Type: EventRejected, EndToEndID: transfer.EndToEndID,
+			AmountCents: transfer.AmountCents, OccurredAt: command.Now, Reason: command.Reason,
+			ParticipantID: transfer.ParticipantID, CorrelationID: transfer.CorrelationID,
 		}
 
 		return enqueue(ctx, tx, event, command.Planner)
@@ -553,11 +539,7 @@ func (s *Store) Return(ctx context.Context, command ReturnCommand) error {
 		}
 
 		statementEntry := StatementEntry{
-			ParticipantID: transfer.ParticipantID,
-			Kind:          EntryReturn,
-			EndToEndID:    transfer.EndToEndID,
-			AmountCents:   transfer.AmountCents,
-			CreatedAt:     command.Now,
+			ParticipantID: transfer.ParticipantID, Kind: EntryReturn, EndToEndID: transfer.EndToEndID, AmountCents: transfer.AmountCents, CreatedAt: command.Now,
 		}
 
 		err = addEntry(ctx, tx, statementEntry)
@@ -566,13 +548,8 @@ func (s *Store) Return(ctx context.Context, command ReturnCommand) error {
 		}
 
 		event := Event{
-			ID:            command.EventID,
-			Type:          EventReturned,
-			EndToEndID:    transfer.EndToEndID,
-			AmountCents:   transfer.AmountCents,
-			OccurredAt:    command.Now,
-			ParticipantID: transfer.ParticipantID,
-			CorrelationID: transfer.CorrelationID,
+			ID: command.EventID, Type: EventReturned, EndToEndID: transfer.EndToEndID,
+			AmountCents: transfer.AmountCents, OccurredAt: command.Now, ParticipantID: transfer.ParticipantID, CorrelationID: transfer.CorrelationID,
 		}
 
 		return enqueue(ctx, tx, event, command.Planner)
@@ -613,11 +590,8 @@ func (s *Store) AddIncoming(ctx context.Context, command IncomingCommand) (bool,
 		isNew = true
 
 		statementEntry := StatementEntry{
-			ParticipantID: incoming.ParticipantID,
-			Kind:          EntryIncoming,
-			EndToEndID:    incoming.EndToEndID,
-			AmountCents:   incoming.AmountCents,
-			CreatedAt:     incoming.CreatedAt,
+			ParticipantID: incoming.ParticipantID, Kind: EntryIncoming, EndToEndID: incoming.EndToEndID,
+			AmountCents: incoming.AmountCents, CreatedAt: incoming.CreatedAt,
 		}
 
 		err = addEntry(ctx, tx, statementEntry)
@@ -626,14 +600,9 @@ func (s *Store) AddIncoming(ctx context.Context, command IncomingCommand) (bool,
 		}
 
 		event := Event{
-			ID:            command.EventID,
-			Type:          EventIncoming,
-			EndToEndID:    incoming.EndToEndID,
-			AmountCents:   incoming.AmountCents,
-			OccurredAt:    incoming.CreatedAt,
-			AccountID:     incoming.AccountID,
-			ParticipantID: incoming.ParticipantID,
-			CorrelationID: incoming.CorrelationID,
+			ID: command.EventID, Type: EventIncoming, EndToEndID: incoming.EndToEndID,
+			AmountCents: incoming.AmountCents, OccurredAt: incoming.CreatedAt, AccountID: incoming.AccountID,
+			ParticipantID: incoming.ParticipantID, CorrelationID: incoming.CorrelationID,
 		}
 
 		return enqueue(ctx, tx, event, command.Planner)

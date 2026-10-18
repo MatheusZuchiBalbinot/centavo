@@ -10,12 +10,11 @@ import (
 )
 
 func validVars() map[string]string {
+	participants := "centavo-robust=http://toxiproxy:18080/webhooks/partner, centavo-naive=http://toxiproxy:18083/webhooks/partner"
+
 	return map[string]string{
-		"CENTAVO_ENV":            "chaoslab",
-		"PARTNER_DB_PATH":        "/data/truth.db",
-		"PARTNER_PARTICIPANTS":   "centavo-robust=http://toxiproxy:18080/webhooks/partner, centavo-naive=http://toxiproxy:18083/webhooks/partner",
-		"PARTNER_WEBHOOK_SECRET": strings.Repeat("s", 64),
-		"CENTAVO_CHAOS_TOKEN":    strings.Repeat("t", 64),
+		"CENTAVO_ENV": "chaoslab", "PARTNER_DB_PATH": "/data/truth.db", "PARTNER_PARTICIPANTS": participants,
+		"PARTNER_WEBHOOK_SECRET": strings.Repeat("s", 64), "CENTAVO_CHAOS_TOKEN": strings.Repeat("t", 64),
 	}
 }
 

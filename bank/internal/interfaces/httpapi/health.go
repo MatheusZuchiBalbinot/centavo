@@ -93,13 +93,7 @@ func (h healthHandler) report(pingErr error) (int, healthResponse) {
 
 func (h healthHandler) response(status healthStatus, databaseResult checkResult) healthResponse {
 	return healthResponse{
-		Service:    h.info.Service,
-		Version:    h.info.Version,
-		ChaosBuild: h.info.ChaosBuild,
-		Env:        h.info.Env,
-		Defenses:   h.info.Defenses,
-		Notes:      h.info.DefenseNotes,
-		Status:     status,
-		Checks:     map[string]checkResult{"database": databaseResult},
+		Service: h.info.Service, Version: h.info.Version, ChaosBuild: h.info.ChaosBuild, Env: h.info.Env,
+		Defenses: h.info.Defenses, Notes: h.info.DefenseNotes, Status: status, Checks: map[string]checkResult{"database": databaseResult},
 	}
 }

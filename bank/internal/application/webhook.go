@@ -60,9 +60,7 @@ type eventApplier struct {
 // section 8.3). Reaching another status, created to confirmed for one, needs
 // the partner's authoritative status, never just the webhook.
 var expectedFrom = map[string]transfer.Status{
-	EventSettled:  transfer.StatusSent,
-	EventRejected: transfer.StatusSent,
-	EventReturned: transfer.StatusConfirmed,
+	EventSettled: transfer.StatusSent, EventRejected: transfer.StatusSent, EventReturned: transfer.StatusConfirmed,
 }
 
 func (a eventApplier) apply(ctx context.Context, stores Stores, event PartnerEvent) error {

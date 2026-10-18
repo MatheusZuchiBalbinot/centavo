@@ -192,14 +192,9 @@ func newExternalTransferResponse(view application.ExternalTransferView) external
 	}
 
 	return externalTransferResponse{
-		TransferID:  external.ID.String(),
-		EndToEndID:  external.EndToEndID,
-		AccountID:   external.AccountID.String(),
-		AmountCents: int64(external.Amount.Cents()),
-		Status:      external.Status,
-		StatusSeq:   external.StatusSeq,
-		FailureCode: external.FailureCode,
-		Transitions: transitions,
+		TransferID: external.ID.String(), EndToEndID: external.EndToEndID, AccountID: external.AccountID.String(),
+		AmountCents: int64(external.Amount.Cents()), Status: external.Status, StatusSeq: external.StatusSeq,
+		FailureCode: external.FailureCode, Transitions: transitions,
 	}
 }
 
@@ -241,13 +236,8 @@ func (a apiHandlers) webhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	partnerEvent := application.PartnerEvent{
-		ID:          event.EventID,
-		Type:        event.Type,
-		EndToEndID:  event.EndToEndID,
-		AmountCents: money.Cents(event.AmountCents),
-		Sequence:    event.Sequence,
-		Reason:      event.Reason,
-		AccountID:   event.AccountID,
+		ID: event.EventID, Type: event.Type, EndToEndID: event.EndToEndID, AmountCents: money.Cents(event.AmountCents),
+		Sequence: event.Sequence, Reason: event.Reason, AccountID: event.AccountID,
 	}
 
 	err = a.useCases.Pix.Webhook.Apply(r.Context(), partnerEvent)

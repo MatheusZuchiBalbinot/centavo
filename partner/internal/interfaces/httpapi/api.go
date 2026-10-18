@@ -159,13 +159,8 @@ func (a API) answerSubmit(ctx context.Context, w http.ResponseWriter, result tru
 // unknown key and whether the partner's double-processing bug will hit it.
 func newTransfer(request submitRequest, decider modes.Decider, now time.Time) truth.Transfer {
 	transfer := truth.Transfer{
-		EndToEndID:     request.EndToEndID,
-		ParticipantID:  request.ParticipantID,
-		AmountCents:    request.AmountCents,
-		DestinationKey: request.DestinationKey,
-		Status:         truth.StatusProcessing,
-		SettleAt:       now.Add(decider.SettleDelay()),
-		CreatedAt:      now,
+		EndToEndID: request.EndToEndID, ParticipantID: request.ParticipantID, AmountCents: request.AmountCents,
+		DestinationKey: request.DestinationKey, Status: truth.StatusProcessing, SettleAt: now.Add(decider.SettleDelay()), CreatedAt: now,
 	}
 
 	if strings.HasPrefix(request.DestinationKey, invalidKeyPrefix) {
@@ -270,12 +265,8 @@ func (a API) incoming(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now().UTC()
 	incoming := truth.Incoming{
-		EndToEndID:    request.EndToEndID,
-		ParticipantID: request.ParticipantID,
-		AccountID:     request.AccountID,
-		AmountCents:   request.AmountCents,
-		CreatedAt:     now,
-		CorrelationID: correlationOf(r),
+		EndToEndID: request.EndToEndID, ParticipantID: request.ParticipantID, AccountID: request.AccountID,
+		AmountCents: request.AmountCents, CreatedAt: now, CorrelationID: correlationOf(r),
 	}
 	decider := a.modes.For(request.ParticipantID, now)
 

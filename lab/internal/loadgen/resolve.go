@@ -54,17 +54,12 @@ type resolveResult struct {
 // next free process number.
 func Resolve(ctx context.Context, config ResolveConfig) (int, error) {
 	r := &run{
-		config: Config{Round: config.Round, History: config.History, Logger: config.Logger},
-		policy: politePolicy,
-		bank:   newBankClient(config.ControlURL, 1),
+		config: Config{Round: config.Round, History: config.History, Logger: config.Logger}, policy: politePolicy, bank: newBankClient(config.ControlURL, 1),
 	}
 	r.nextProcess.Store(int64(config.FirstProcess))
 
 	resolver := &client{
-		run:     r,
-		process: config.FirstProcess,
-		policy:  politePolicy,
-		jitter:  config.Seed.Stream("cure.retries"),
+		run: r, process: config.FirstProcess, policy: politePolicy, jitter: config.Seed.Stream("cure.retries"),
 	}
 	sample := config.Seed.Stream("cure.sample")
 
@@ -97,9 +92,7 @@ func Resolve(ctx context.Context, config ResolveConfig) (int, error) {
 // the quiescence (read_pix_out of docs/invariants-and-checker.md, section 3).
 func ReadPixOuts(ctx context.Context, config ResolveConfig, transferIDs []string) error {
 	r := &run{
-		config: Config{Round: config.Round, History: config.History, Logger: config.Logger},
-		policy: politePolicy,
-		bank:   newBankClient(config.ControlURL, 1),
+		config: Config{Round: config.Round, History: config.History, Logger: config.Logger}, policy: politePolicy, bank: newBankClient(config.ControlURL, 1),
 	}
 	r.nextProcess.Store(int64(config.FirstProcess))
 

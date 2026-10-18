@@ -184,24 +184,17 @@ func newUseCases(pool *pgxpool.Pool, cfg config.Config) (httpapi.UseCases, error
 
 	publication := newPublication(pool, profile)
 	writerDependencies := application.WriterDependencies{
-		UnitOfWork: moneyDependencies.UnitOfWork,
-		Keys:       idempotencyStrategy.Keys,
-		Retries:    idempotencyStrategy.Retries,
+		UnitOfWork: moneyDependencies.UnitOfWork, Keys: idempotencyStrategy.Keys, Retries: idempotencyStrategy.Retries,
 	}
 
 	useCases := httpapi.UseCases{
-		Writer:       application.NewWriter(writerDependencies),
-		Resolver:     idempotencyStrategy.Resolver,
-		OpenAccount:  application.NewOpenAccount(store),
-		GetAccount:   application.NewGetAccount(store),
-		GetStatement: application.NewGetStatement(store, store),
-		Deposit:      application.NewDeposit(moneyDependencies),
-		Transfer:     application.NewTransferInternal(moneyDependencies),
+		Writer: application.NewWriter(writerDependencies), Resolver: idempotencyStrategy.Resolver,
+		OpenAccount: application.NewOpenAccount(store), GetAccount: application.NewGetAccount(store),
+		GetStatement: application.NewGetStatement(store, store), Deposit: application.NewDeposit(moneyDependencies),
+		Transfer: application.NewTransferInternal(moneyDependencies),
 		Pix: httpapi.PixUseCases{
-			Create:        application.NewCreatePixOut(moneyDependencies.Locker, publication),
-			Publisher:     publication,
-			Get:           application.NewGetExternalTransfer(store),
-			Webhook:       newWebhook(profile, moneyDependencies.UnitOfWork, newStateMachine(profile)),
+			Create: application.NewCreatePixOut(moneyDependencies.Locker, publication), Publisher: publication,
+			Get: application.NewGetExternalTransfer(store), Webhook: newWebhook(profile, moneyDependencies.UnitOfWork, newStateMachine(profile)),
 			WebhookSecret: []byte(cfg.Partner.WebhookSecret),
 		},
 	}
@@ -355,11 +348,8 @@ func startSaga(ctx context.Context, pool *pgxpool.Pool, cfg config.Config, logge
 	}
 
 	saga := sagaDependencies{
-		unitOfWork: moneyDependencies.UnitOfWork,
-		machine:    newStateMachine(cfg.Defenses),
-		partner:    newPartner(cfg),
-		owner:      cmp.Or(cfg.Chaos.Instance, instanceName()),
-		logger:     logger,
+		unitOfWork: moneyDependencies.UnitOfWork, machine: newStateMachine(cfg.Defenses), partner: newPartner(cfg),
+		owner: cmp.Or(cfg.Chaos.Instance, instanceName()), logger: logger,
 	}
 
 	startRelay(ctx, pool, cfg.Defenses, saga)
@@ -371,24 +361,14 @@ func startSaga(ctx context.Context, pool *pgxpool.Pool, cfg config.Config, logge
 
 	if cfg.Defenses.IsEnabled(defenses.Recovery) {
 		sweeperConfig := application.SweeperConfig{
-			UnitOfWork: saga.unitOfWork,
-			Lease:      newLeasePolicy(cfg.Defenses),
-			Machine:    saga.machine,
-			Partner:    saga.partner,
-			Owner:      saga.owner,
-			Logger:     logger,
+			UnitOfWork: saga.unitOfWork, Lease: newLeasePolicy(cfg.Defenses), Machine: saga.machine, Partner: saga.partner, Owner: saga.owner, Logger: logger,
 		}
 		go application.NewSweeper(sweeperConfig).Run(ctx)
 	}
 
 	reconcilerConfig := application.ReconcilerConfig{
-		UnitOfWork: saga.unitOfWork,
-		Lease:      newLeasePolicy(cfg.Defenses),
-		Machine:    saga.machine,
-		Statement:  saga.partner,
-		Policy:     newBatchPolicy(cfg.Defenses),
-		Owner:      saga.owner,
-		Logger:     logger,
+		UnitOfWork: saga.unitOfWork, Lease: newLeasePolicy(cfg.Defenses), Machine: saga.machine,
+		Statement: saga.partner, Policy: newBatchPolicy(cfg.Defenses), Owner: saga.owner, Logger: logger,
 	}
 	go application.NewReconciler(reconcilerConfig).Run(ctx, application.ReconcileInterval)
 
@@ -431,14 +411,8 @@ func newPartner(cfg config.Config) partner {
 func startRelay(ctx context.Context, pool *pgxpool.Pool, profile defenses.Profile, saga sagaDependencies) {
 	if profile.IsEnabled(defenses.Outbox) {
 		relayConfig := application.OutboxRelayConfig{
-			UnitOfWork: saga.unitOfWork,
-			Partner:    saga.partner,
-			EndToEnd:   newEndToEnd(profile),
-			Machine:    saga.machine,
-			Doubt:      newDoubt(profile, saga.machine),
-			Owner:      saga.owner,
-			LeaseTTL:   application.OutboxLeaseTTL,
-			Logger:     saga.logger,
+			UnitOfWork: saga.unitOfWork, Partner: saga.partner, EndToEnd: newEndToEnd(profile), Machine: saga.machine,
+			Doubt: newDoubt(profile, saga.machine), Owner: saga.owner, LeaseTTL: application.OutboxLeaseTTL, Logger: saga.logger,
 		}
 		go application.NewOutboxRelay(relayConfig).Run(ctx)
 
@@ -481,11 +455,8 @@ func relayPendingOnBoot(ctx context.Context, relay application.NaiveRelay, logge
 // build gets back exactly the servers it passed in.
 func withChaos(selectedRole role, cfg config.Config, servers ...*http.Server) ([]*http.Server, error) {
 	chaosConfig := chaos.Config{
-		Token:         cfg.Chaos.Token,
-		FailpointSpec: cfg.Chaos.FailpointSpec,
-		Seed:          cfg.Chaos.Seed,
-		Service:       "bank-" + string(selectedRole),
-		Instance:      cmp.Or(cfg.Chaos.Instance, instanceName()),
+		Token: cfg.Chaos.Token, FailpointSpec: cfg.Chaos.FailpointSpec, Seed: cfg.Chaos.Seed,
+		Service: "bank-" + string(selectedRole), Instance: cmp.Or(cfg.Chaos.Instance, instanceName()),
 	}
 
 	err := chaos.Setup(chaosConfig)
@@ -612,11 +583,8 @@ func probeHealth(ctx context.Context) error {
 
 func newBuildInfo(selectedRole role, cfg config.Config) httpapi.BuildInfo {
 	return httpapi.BuildInfo{
-		Service:    "bank-" + string(selectedRole),
-		Version:    buildinfo.Version(),
-		ChaosBuild: chaosbuild.IsEnabled(),
-		Env:        string(cfg.Env),
-		Defenses:   cfg.Defenses.String(),
+		Service: "bank-" + string(selectedRole), Version: buildinfo.Version(), ChaosBuild: chaosbuild.IsEnabled(),
+		Env: string(cfg.Env), Defenses: cfg.Defenses.String(),
 		// Notes explain combinations that weaken another defense.
 		DefenseNotes: cfg.Defenses.Notes(),
 	}

@@ -161,17 +161,10 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	options.Logger.InfoContext(ctx, "round started", "round", id, "scenario", options.Scenario.Name, "seed", options.Seed.String(), "dir", dir)
 
 	bot := nemesis.New(nemesis.Config{
-		Round:      id,
-		Seed:       options.Seed,
-		Scenario:   options.Scenario,
-		History:    writer,
-		Docker:     options.Chaos.Docker,
-		ChaosToken: options.Chaos.Token,
-		EventsDir:  options.Chaos.EventsDir,
-		Logger:     options.Logger,
+		Round: id, Seed: options.Seed, Scenario: options.Scenario, History: writer, Docker: options.Chaos.Docker,
+		ChaosToken: options.Chaos.Token, EventsDir: options.Chaos.EventsDir, Logger: options.Logger,
 
-		PartnerAdminURL: options.Saga.PartnerURL,
-		ParticipantID:   options.Saga.ParticipantID,
+		PartnerAdminURL: options.Saga.PartnerURL, ParticipantID: options.Saga.ParticipantID,
 	})
 
 	// Written now so the panel can follow the round as it runs; the end of
@@ -195,6 +188,7 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	if healErr == nil {
 		healErr = cure(ctx, options, cureState{round: id, writer: writer, load: load})
 	}
+
 	closeErr := writer.Close()
 	eventsErr := writeEvents(dir, bot.Events())
 	runErr := errors.Join(loadErr, healErr, closeErr, eventsErr)
@@ -235,13 +229,8 @@ type cureState struct {
 // settle until t_h + Δ, then read every PIX out once.
 func cure(ctx context.Context, options Options, state cureState) error {
 	resolveConfig := loadgen.ResolveConfig{
-		Round:        state.round,
-		Seed:         options.Seed,
-		ControlURL:   options.ControlURL,
-		History:      state.writer,
-		Logger:       options.Logger,
-		Writes:       state.load.Indeterminate,
-		FirstProcess: state.load.NextProcess,
+		Round: state.round, Seed: options.Seed, ControlURL: options.ControlURL, History: state.writer,
+		Logger: options.Logger, Writes: state.load.Indeterminate, FirstProcess: state.load.NextProcess,
 	}
 
 	next, err := loadgen.Resolve(ctx, resolveConfig)
@@ -310,16 +299,9 @@ func waitQuiescence(ctx context.Context, options Options, round string) error {
 // newLoadConfig is the workload of the round, started once the nemesis is.
 func newLoadConfig(options Options, id string, writer *history.Writer, bot *nemesis.Nemesis) loadgen.Config {
 	return loadgen.Config{
-		Round:         id,
-		Seed:          options.Seed,
-		Workload:      options.Scenario.Workload,
-		Duration:      options.Scenario.Duration,
-		BankURL:       options.BankURL,
-		History:       writer,
-		Logger:        options.Logger,
-		BeforeLoad:    bot.Start,
-		PartnerURL:    options.Saga.PartnerURL,
-		ParticipantID: options.Saga.ParticipantID,
+		Round: id, Seed: options.Seed, Workload: options.Scenario.Workload, Duration: options.Scenario.Duration,
+		BankURL: options.BankURL, History: writer, Logger: options.Logger, BeforeLoad: bot.Start,
+		PartnerURL: options.Saga.PartnerURL, ParticipantID: options.Saga.ParticipantID,
 	}
 }
 
@@ -527,30 +509,16 @@ func newManifest(options Options, result Result, startedAt time.Time, runErr err
 	workload := options.Scenario.Workload
 
 	roundManifest := manifest{
-		Round:          result.ID,
-		Scenario:       options.Scenario.Name,
-		ScenarioSHA256: options.Scenario.SHA256,
-		Seed:           options.Seed.String(),
-		Duration:       options.Scenario.Duration.String(),
-		LabVersion:     options.LabVersion,
-		StartedAt:      startedAt,
-		FinishedAt:     time.Now().UTC(),
-		Verdict:        result.Verdict,
+		Round: result.ID, Scenario: options.Scenario.Name, ScenarioSHA256: options.Scenario.SHA256,
+		Seed: options.Seed.String(), Duration: options.Scenario.Duration.String(), LabVersion: options.LabVersion,
+		StartedAt: startedAt, FinishedAt: time.Now().UTC(), Verdict: result.Verdict,
 		History: historySummary{
-			Records:      report.Records,
-			Invocations:  report.Invocations,
-			OK:           report.OK,
-			Fail:         report.Fail,
-			Info:         report.Info,
-			Open:         len(report.Open),
-			IsWellFormed: report.IsWellFormed(),
+			Records: report.Records, Invocations: report.Invocations, OK: report.OK, Fail: report.Fail,
+			Info: report.Info, Open: len(report.Open), IsWellFormed: report.IsWellFormed(),
 		},
 		Workload: workloadSummary{
-			Profile:           string(workload.Profile),
-			Clients:           workload.Clients,
-			RatePerSecond:     workload.RatePerSecond,
-			Accounts:          workload.Accounts,
-			ExclusiveAccounts: workload.ExclusiveAccounts,
+			Profile: string(workload.Profile), Clients: workload.Clients, RatePerSecond: workload.RatePerSecond,
+			Accounts: workload.Accounts, ExclusiveAccounts: workload.ExclusiveAccounts,
 		},
 	}
 
