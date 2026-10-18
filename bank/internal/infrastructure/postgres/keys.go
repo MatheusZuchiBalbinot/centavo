@@ -44,10 +44,15 @@ WHERE key = $1 AND status = 'pending'`
 
 var errKeyNotPending = errors.New("completing an idempotency key that this unit of work does not own")
 
+// keyStore keeps idempotency keys.
+type keyStore struct {
+	db querier
+}
+
 // ClaimKey inserts the key as pending. If another request holds it, the
 // INSERT waits on the primary key until that request commits; then the key
 // exists and the stored record comes back instead.
-func (s LedgerStore) ClaimKey(ctx context.Context, claim application.KeyClaim) (idempotency.Record, bool, error) {
+func (s keyStore) ClaimKey(ctx context.Context, claim application.KeyClaim) (idempotency.Record, bool, error) {
 	var inserted string
 
 	err := s.db.QueryRow(ctx, claimKeySQL, string(claim.Key), claim.Endpoint, claim.RequestHash[:]).Scan(&inserted)
@@ -67,7 +72,7 @@ func (s LedgerStore) ClaimKey(ctx context.Context, claim application.KeyClaim) (
 const touchKeySQL = `UPDATE idempotency_keys SET expires_at = expires_at WHERE key = $1`
 
 // TouchKey writes a new version of the key's row with the same values.
-func (s LedgerStore) TouchKey(ctx context.Context, key idempotency.Key) error {
+func (s keyStore) TouchKey(ctx context.Context, key idempotency.Key) error {
 	_, err := s.db.Exec(ctx, touchKeySQL, string(key))
 	if err != nil {
 		return keyError(err, "touching idempotency key")
@@ -77,7 +82,7 @@ func (s LedgerStore) TouchKey(ctx context.Context, key idempotency.Key) error {
 }
 
 // VoidKey leaves a tombstone, or returns the record that is already there.
-func (s LedgerStore) VoidKey(ctx context.Context, key idempotency.Key) (idempotency.Record, bool, error) {
+func (s keyStore) VoidKey(ctx context.Context, key idempotency.Key) (idempotency.Record, bool, error) {
 	var inserted string
 
 	err := s.db.QueryRow(ctx, voidKeySQL, string(key)).Scan(&inserted)
@@ -95,7 +100,7 @@ func (s LedgerStore) VoidKey(ctx context.Context, key idempotency.Key) (idempote
 }
 
 // CompleteKey stores the answer in the same transaction as the effect.
-func (s LedgerStore) CompleteKey(ctx context.Context, key idempotency.Key, operationID ledger.OperationID, response idempotency.StoredResponse) error {
+func (s keyStore) CompleteKey(ctx context.Context, key idempotency.Key, operationID ledger.OperationID, response idempotency.StoredResponse) error {
 	tag, err := s.db.Exec(ctx, completeKeySQL, string(key), uuid.UUID(operationID), response.Status, response.Body)
 	if err != nil {
 		return fmt.Errorf("completing idempotency key: %w", err)
@@ -108,7 +113,7 @@ func (s LedgerStore) CompleteKey(ctx context.Context, key idempotency.Key, opera
 	return nil
 }
 
-func (s LedgerStore) readKey(ctx context.Context, key idempotency.Key) (idempotency.Record, error) {
+func (s keyStore) readKey(ctx context.Context, key idempotency.Key) (idempotency.Record, error) {
 	record := idempotency.Record{Key: key}
 
 	var (
@@ -144,7 +149,7 @@ const clientRefAppliedSQL = `SELECT EXISTS (SELECT 1 FROM ledger_transactions WH
 
 // IsClientRefApplied tells whether any ledger transaction carries the key.
 // The naive resolve answers with it, with no tombstone to stop a late request.
-func (s LedgerStore) IsClientRefApplied(ctx context.Context, key idempotency.Key) (bool, error) {
+func (s keyStore) IsClientRefApplied(ctx context.Context, key idempotency.Key) (bool, error) {
 	var isApplied bool
 
 	err := s.db.QueryRow(ctx, clientRefAppliedSQL, string(key)).Scan(&isApplied)
@@ -169,7 +174,7 @@ WHERE key IN (
 )`
 
 // DeleteExpiredKeys removes one batch of expired keys and reports how many.
-func (s LedgerStore) DeleteExpiredKeys(ctx context.Context, batch int) (int64, error) {
+func (s keyStore) DeleteExpiredKeys(ctx context.Context, batch int) (int64, error) {
 	tag, err := s.db.Exec(ctx, deleteExpiredKeysSQL, batch)
 	if err != nil {
 		return 0, fmt.Errorf("deleting expired idempotency keys: %w", err)

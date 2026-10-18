@@ -19,8 +19,13 @@ const enqueueOutboxSQL = `
 INSERT INTO outbox_messages (topic, aggregate_id, payload, correlation_id)
 VALUES ($1, $2, $3, $4)`
 
+// outboxStore keeps the outbox and the inbox.
+type outboxStore struct {
+	db querier
+}
+
 // EnqueueOutbox writes the message in the caller's transaction.
-func (s LedgerStore) EnqueueOutbox(ctx context.Context, message application.OutboxMessage) error {
+func (s outboxStore) EnqueueOutbox(ctx context.Context, message application.OutboxMessage) error {
 	_, err := s.db.Exec(ctx, enqueueOutboxSQL, message.Topic, message.AggregateID, message.Payload, message.CorrelationID)
 	if err != nil {
 		return fmt.Errorf("enqueueing outbox message: %w", err)
@@ -49,7 +54,7 @@ WHERE id IN (
 RETURNING id, aggregate_id, lease_token, attempts, correlation_id`
 
 // ClaimOutbox leases up to limit messages.
-func (s LedgerStore) ClaimOutbox(ctx context.Context, owner string, ttl time.Duration, limit int) ([]application.OutboxClaim, error) {
+func (s outboxStore) ClaimOutbox(ctx context.Context, owner string, ttl time.Duration, limit int) ([]application.OutboxClaim, error) {
 	rows, err := s.db.Query(ctx, claimOutboxSQL, owner, ttl.Milliseconds(), limit)
 	if err != nil {
 		return nil, fmt.Errorf("claiming outbox messages: %w", err)
@@ -74,7 +79,7 @@ SET status = 'delivered', delivered_at = now(), lease_owner = NULL, lease_expire
 WHERE id = $1 AND lease_token = $2 AND status = 'pending'`
 
 // FinishOutbox marks the message delivered if the token still owns it.
-func (s LedgerStore) FinishOutbox(ctx context.Context, id, token int64) (bool, error) {
+func (s outboxStore) FinishOutbox(ctx context.Context, id, token int64) (bool, error) {
 	tag, err := s.db.Exec(ctx, finishOutboxSQL, id, token)
 	if err != nil {
 		return false, fmt.Errorf("finishing outbox message: %w", err)
@@ -85,7 +90,7 @@ func (s LedgerStore) FinishOutbox(ctx context.Context, id, token int64) (bool, e
 
 // LockExternalTransfer locks the transfer until the transaction ends and
 // returns it.
-func (s LedgerStore) LockExternalTransfer(ctx context.Context, id transfer.ID) (application.ExternalTransfer, error) {
+func (s outboxStore) LockExternalTransfer(ctx context.Context, id transfer.ID) (application.ExternalTransfer, error) {
 	row := s.db.QueryRow(ctx, `SELECT `+externalTransferColumns+` FROM external_transfers WHERE id = $1 FOR UPDATE`, uuid.UUID(id))
 
 	return scanExternalTransfer(row)
@@ -105,7 +110,7 @@ WHERE id = $1 AND status_seq = $4`
 var errStaleStatus = errors.New("transfer status changed since it was read")
 
 // AdvanceStatus changes the status if the sequence is still the one seen.
-func (s LedgerStore) AdvanceStatus(ctx context.Context, change application.StatusChange, seenSeq int) error {
+func (s outboxStore) AdvanceStatus(ctx context.Context, change application.StatusChange, seenSeq int) error {
 	tag, err := s.db.Exec(ctx, advanceStatusSQL, uuid.UUID(change.TransferID), string(change.To), change.FailureCode, seenSeq)
 	if err != nil {
 		return fmt.Errorf("advancing status: %w", err)
@@ -127,7 +132,7 @@ SET next_attempt_at = now() + $3::bigint * interval '1 millisecond', last_error 
 WHERE id = $1 AND lease_token = $2 AND status = 'pending'`
 
 // DeferOutbox reschedules the message if the token still owns it.
-func (s LedgerStore) DeferOutbox(ctx context.Context, claim application.OutboxClaim, delay time.Duration, reason string) (bool, error) {
+func (s outboxStore) DeferOutbox(ctx context.Context, claim application.OutboxClaim, delay time.Duration, reason string) (bool, error) {
 	tag, err := s.db.Exec(ctx, deferOutboxSQL, claim.ID, claim.Token, delay.Milliseconds(), reason)
 	if err != nil {
 		return false, fmt.Errorf("deferring outbox message: %w", err)
@@ -151,7 +156,7 @@ type inboxPayload struct {
 }
 
 // InsertInbox records the event unless it is already there.
-func (s LedgerStore) InsertInbox(ctx context.Context, event application.PartnerEvent, correlationID string) (bool, error) {
+func (s outboxStore) InsertInbox(ctx context.Context, event application.PartnerEvent, correlationID string) (bool, error) {
 	payload, err := json.Marshal(inboxPayload{AmountCents: int64(event.AmountCents), Sequence: event.Sequence, Reason: event.Reason, AccountID: event.AccountID})
 	if err != nil {
 		return false, err
@@ -183,7 +188,7 @@ RETURNING id, event_id, event_type, end_to_end_id, payload, correlation_id`
 const reclaimInboxSQL = `SELECT id FROM inbox_events WHERE id = $1 AND status = 'pending' FOR UPDATE SKIP LOCKED`
 
 // ReclaimInbox locks a pending event no other transaction holds.
-func (s LedgerStore) ReclaimInbox(ctx context.Context, id int64) (bool, error) {
+func (s outboxStore) ReclaimInbox(ctx context.Context, id int64) (bool, error) {
 	var locked int64
 
 	err := s.db.QueryRow(ctx, reclaimInboxSQL, id).Scan(&locked)
@@ -199,7 +204,7 @@ func (s LedgerStore) ReclaimInbox(ctx context.Context, id int64) (bool, error) {
 }
 
 // ClaimInbox returns the next event to apply, or false when none is ready.
-func (s LedgerStore) ClaimInbox(ctx context.Context) (application.InboxEvent, bool, error) {
+func (s outboxStore) ClaimInbox(ctx context.Context) (application.InboxEvent, bool, error) {
 	var (
 		event   application.InboxEvent
 		payload []byte
@@ -235,7 +240,7 @@ SET status = $2::inbox_status, outcome = $3, processed_at = now()
 WHERE id = $1 AND status = 'pending'`
 
 // FinishInbox closes the event with its outcome.
-func (s LedgerStore) FinishInbox(ctx context.Context, id int64, status application.InboxStatus, outcome string) error {
+func (s outboxStore) FinishInbox(ctx context.Context, id int64, status application.InboxStatus, outcome string) error {
 	_, err := s.db.Exec(ctx, finishInboxSQL, id, string(status), outcome)
 	if err != nil {
 		return fmt.Errorf("finishing inbox event: %w", err)
@@ -250,7 +255,7 @@ SET next_attempt_at = now() + $2::bigint * interval '1 millisecond', outcome = $
 WHERE id = $1 AND status = 'pending'`
 
 // DeferInbox puts the event back for a later attempt.
-func (s LedgerStore) DeferInbox(ctx context.Context, id int64, delay time.Duration, reason string) error {
+func (s outboxStore) DeferInbox(ctx context.Context, id int64, delay time.Duration, reason string) error {
 	_, err := s.db.Exec(ctx, deferInboxSQL, id, delay.Milliseconds(), reason)
 	if err != nil {
 		return fmt.Errorf("deferring inbox event: %w", err)

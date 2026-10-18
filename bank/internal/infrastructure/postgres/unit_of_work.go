@@ -29,7 +29,7 @@ func (u UnitOfWork) Run(ctx context.Context, fn func(ctx context.Context, stores
 	options := pgx.TxOptions{IsoLevel: pgx.ReadCommitted}
 
 	err := pgx.BeginTxFunc(ctx, u.pool, options, func(tx pgx.Tx) error {
-		return fn(ctx, LedgerStore{db: tx})
+		return fn(ctx, storesOn(tx))
 	})
 
 	return classify(err)

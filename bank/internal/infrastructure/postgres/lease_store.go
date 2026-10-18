@@ -24,8 +24,13 @@ WHERE resource = $1
   AND (holder IS NULL OR expires_at <= now() OR holder = $2)
 RETURNING token`
 
+// leaseStore keeps the leases of the singleton loops.
+type leaseStore struct {
+	db querier
+}
+
 // AcquireLease takes or renews the lease.
-func (s LedgerStore) AcquireLease(ctx context.Context, lease application.Lease, ttl time.Duration) (int64, bool, error) {
+func (s leaseStore) AcquireLease(ctx context.Context, lease application.Lease, ttl time.Duration) (int64, bool, error) {
 	var token int64
 
 	err := s.db.QueryRow(ctx, acquireLeaseSQL, lease.Resource, lease.Holder, ttl.Milliseconds()).Scan(&token)
@@ -52,7 +57,7 @@ WHERE resource = $1
 RETURNING token`
 
 // AcquireLeaseAt takes or renews the lease by the caller's clock.
-func (s LedgerStore) AcquireLeaseAt(ctx context.Context, lease application.Lease, now time.Time, ttl time.Duration) (int64, bool, error) {
+func (s leaseStore) AcquireLeaseAt(ctx context.Context, lease application.Lease, now time.Time, ttl time.Duration) (int64, bool, error) {
 	var token int64
 
 	err := s.db.QueryRow(ctx, acquireLeaseAtSQL, lease.Resource, lease.Holder, now, ttl.Milliseconds()).Scan(&token)
@@ -75,7 +80,7 @@ WHERE resource = $1 AND holder = $2 AND token = $3 AND expires_at > now()
 FOR SHARE`
 
 // HoldsLease checks the lease within the caller's transaction.
-func (s LedgerStore) HoldsLease(ctx context.Context, lease application.Lease, token int64) (bool, error) {
+func (s leaseStore) HoldsLease(ctx context.Context, lease application.Lease, token int64) (bool, error) {
 	var one int
 
 	err := s.db.QueryRow(ctx, holdsLeaseSQL, lease.Resource, lease.Holder, token).Scan(&one)
@@ -100,7 +105,7 @@ ORDER BY updated_at
 LIMIT $2`
 
 // ListStuck returns the transfers that sat in created or sent for too long.
-func (s LedgerStore) ListStuck(ctx context.Context, olderThan time.Duration, limit int) ([]application.StuckTransfer, error) {
+func (s leaseStore) ListStuck(ctx context.Context, olderThan time.Duration, limit int) ([]application.StuckTransfer, error) {
 	rows, err := s.db.Query(ctx, listStuckSQL, olderThan.Milliseconds(), limit)
 	if err != nil {
 		return nil, fmt.Errorf("listing stuck transfers: %w", err)

@@ -9,8 +9,13 @@ import (
 	"centavo/bank/internal/domain/transfer"
 )
 
+// reconciliationStore keeps reconciliation runs, items and the cursor.
+type reconciliationStore struct {
+	db querier
+}
+
 // ReadCursor returns the last statement entry reconciled.
-func (s LedgerStore) ReadCursor(ctx context.Context) (int64, error) {
+func (s reconciliationStore) ReadCursor(ctx context.Context) (int64, error) {
 	var seq int64
 
 	err := s.db.QueryRow(ctx, `SELECT last_partner_seq FROM reconciliation_cursor`).Scan(&seq)
@@ -23,7 +28,7 @@ func (s LedgerStore) ReadCursor(ctx context.Context) (int64, error) {
 
 // AdvanceCursor moves the cursor from where the batch started; zero rows
 // means another reconciler booked it first.
-func (s LedgerStore) AdvanceCursor(ctx context.Context, from, to int64) (bool, error) {
+func (s reconciliationStore) AdvanceCursor(ctx context.Context, from, to int64) (bool, error) {
 	tag, err := s.db.Exec(ctx, `UPDATE reconciliation_cursor SET last_partner_seq = $2 WHERE last_partner_seq = $1`, from, to)
 	if err != nil {
 		return false, fmt.Errorf("advancing the reconciliation cursor: %w", err)
@@ -33,7 +38,7 @@ func (s LedgerStore) AdvanceCursor(ctx context.Context, from, to int64) (bool, e
 }
 
 // SaveCursor writes the cursor without looking at where it was.
-func (s LedgerStore) SaveCursor(ctx context.Context, to int64) error {
+func (s reconciliationStore) SaveCursor(ctx context.Context, to int64) error {
 	_, err := s.db.Exec(ctx, `UPDATE reconciliation_cursor SET last_partner_seq = $1`, to)
 	if err != nil {
 		return fmt.Errorf("saving the reconciliation cursor: %w", err)
@@ -48,7 +53,7 @@ VALUES ($1, $2, $3)
 RETURNING id`
 
 // StartRun records a batch.
-func (s LedgerStore) StartRun(ctx context.Context, from, to, token int64) (int64, error) {
+func (s reconciliationStore) StartRun(ctx context.Context, from, to, token int64) (int64, error) {
 	var id int64
 
 	row := s.db.QueryRow(ctx, startRunSQL, from, to, token)
@@ -62,7 +67,7 @@ func (s LedgerStore) StartRun(ctx context.Context, from, to, token int64) (int64
 }
 
 // FinishRun marks the batch booked.
-func (s LedgerStore) FinishRun(ctx context.Context, runID int64) error {
+func (s reconciliationStore) FinishRun(ctx context.Context, runID int64) error {
 	_, err := s.db.Exec(ctx, `UPDATE reconciliation_runs SET finished_at = now() WHERE id = $1`, runID)
 	if err != nil {
 		return fmt.Errorf("finishing a reconciliation run: %w", err)
@@ -77,7 +82,7 @@ VALUES ($1, $2, $3, $4, $5, $6::divergence_kind, $7)
 RETURNING id`
 
 // InsertItem records how one entry was reconciled.
-func (s LedgerStore) InsertItem(ctx context.Context, item application.ReconciliationItem) (int64, error) {
+func (s reconciliationStore) InsertItem(ctx context.Context, item application.ReconciliationItem) (int64, error) {
 	var id int64
 
 	row := s.db.QueryRow(
@@ -101,7 +106,7 @@ func (s LedgerStore) InsertItem(ctx context.Context, item application.Reconcilia
 }
 
 // CountItems counts the entries of a kind already reconciled for an end_to_end_id.
-func (s LedgerStore) CountItems(ctx context.Context, endToEndID transfer.EndToEndID, kind application.StatementKind) (int, error) {
+func (s reconciliationStore) CountItems(ctx context.Context, endToEndID transfer.EndToEndID, kind application.StatementKind) (int, error) {
 	var count int
 
 	row := s.db.QueryRow(
@@ -120,7 +125,7 @@ func (s LedgerStore) CountItems(ctx context.Context, endToEndID transfer.EndToEn
 }
 
 // IsIncomingCredited reports a PIX in already in incoming_transfers.
-func (s LedgerStore) IsIncomingCredited(ctx context.Context, endToEndID transfer.EndToEndID) (bool, error) {
+func (s reconciliationStore) IsIncomingCredited(ctx context.Context, endToEndID transfer.EndToEndID) (bool, error) {
 	var isCredited bool
 
 	err := s.db.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM incoming_transfers WHERE end_to_end_id = $1)`, endToEndID).Scan(&isCredited)
