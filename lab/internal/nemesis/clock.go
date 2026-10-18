@@ -86,7 +86,7 @@ func (n *Nemesis) pushSkew(ctx context.Context, fault scenarios.Fault) {
 			continue
 		}
 
-		err := n.chaosCall(ctx, http.MethodPut, t.chaosURL+"/chaos/clock", body)
+		err := n.chaosCall(ctx, http.MethodPut, t.chaosURL+clockPath, body)
 		if err != nil {
 			// A target that is down gets the skew on the next renewal.
 			n.config.Logger.DebugContext(ctx, "skewing a clock", "target", service, "error", err)
@@ -102,7 +102,7 @@ func (n *Nemesis) clearClocks(ctx context.Context) {
 			continue
 		}
 
-		err := n.chaosCall(ctx, http.MethodDelete, t.chaosURL+"/chaos/clock", nil)
+		err := n.chaosCall(ctx, http.MethodDelete, t.chaosURL+clockPath, nil)
 		if err != nil {
 			n.config.Logger.WarnContext(ctx, "clearing a clock skew", "target", t.service, "error", err)
 		}

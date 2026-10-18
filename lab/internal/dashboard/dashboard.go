@@ -60,11 +60,11 @@ func NewHandler(config Config) http.Handler {
 
 	mux := http.NewServeMux()
 	mux.Handle("GET "+HealthPath, healthHandler{response: healthResponse{Service: "lab", Version: config.Version, Status: "ok"}})
-	mux.HandleFunc("GET /api/status", panel.status)
-	mux.HandleFunc("GET /api/live", panel.live)
-	mux.HandleFunc("GET /api/replay/{round}", panel.replay)
-	mux.HandleFunc("GET /rounds/{round}/report.md", panel.report)
-	mux.Handle("GET /", http.FileServerFS(static))
+	mux.HandleFunc("GET "+statusRoute, panel.status)
+	mux.HandleFunc("GET "+liveRoute, panel.live)
+	mux.HandleFunc("GET "+replayRoute, panel.replay)
+	mux.HandleFunc("GET "+reportRoute, panel.report)
+	mux.Handle("GET "+staticRoute, http.FileServerFS(static))
 
 	return withSecurityHeaders(mux)
 }

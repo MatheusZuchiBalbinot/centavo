@@ -12,6 +12,9 @@ import (
 	"centavo/partner/internal/platform/chaosbuild"
 )
 
+// modesRoute is where the lab sets and clears the partner's lies.
+const modesRoute = "/chaos/modes"
+
 const (
 	tokenHeader  = "X-Chaos-Token" //nolint:gosec // G101: a header name, not a secret.
 	maxModeBytes = 8 << 10
@@ -22,8 +25,8 @@ func Handler(token string, registry *modes.Registry) http.Handler {
 	controls := controls{registry: registry}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("PUT /chaos/modes", controls.set)
-	mux.HandleFunc("DELETE /chaos/modes", controls.clear)
+	mux.HandleFunc("PUT "+modesRoute, controls.set)
+	mux.HandleFunc("DELETE "+modesRoute, controls.clear)
 
 	return requireToken(token, mux)
 }

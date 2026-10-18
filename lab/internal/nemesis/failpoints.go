@@ -161,7 +161,7 @@ func (c *failpointController) pushTo(ctx context.Context, armed armedFault, serv
 		return
 	}
 
-	err = c.n.chaosCall(ctx, http.MethodPut, t.chaosURL+"/chaos/failpoints/"+armed.fault.Failpoint, body)
+	err = c.n.chaosCall(ctx, http.MethodPut, t.chaosURL+failpointsPath+"/"+armed.fault.Failpoint, body)
 	if err != nil {
 		// A target that is down gets the rule on the next renewal.
 		c.n.config.Logger.DebugContext(ctx, "arming a failpoint", "target", service, "error", err)

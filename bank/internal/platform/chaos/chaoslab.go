@@ -21,6 +21,13 @@ import (
 	"centavo/bank/internal/platform/httpserver"
 )
 
+// Routes of the chaos server.
+const (
+	failpointsRoute = "/chaos/failpoints"
+	failpointRoute  = "/chaos/failpoints/{name}"
+	clockRoute      = "/chaos/clock"
+)
+
 const (
 	tokenHeader  = "X-Chaos-Token" //nolint:gosec // G101: a header name, not a secret.
 	maxRuleBytes = 4 << 10
@@ -45,11 +52,11 @@ func Setup(config Config) error {
 // Server is the chaos control server.
 func Server(config Config) *http.Server {
 	mux := http.NewServeMux()
-	mux.HandleFunc("PUT /chaos/failpoints/{name}", armFailpoint)
-	mux.HandleFunc("GET /chaos/failpoints", listFailpoints)
-	mux.HandleFunc("DELETE /chaos/failpoints", clearFailpoints)
-	mux.HandleFunc("PUT /chaos/clock", setClock)
-	mux.HandleFunc("DELETE /chaos/clock", clearClock)
+	mux.HandleFunc("PUT "+failpointRoute, armFailpoint)
+	mux.HandleFunc("GET "+failpointsRoute, listFailpoints)
+	mux.HandleFunc("DELETE "+failpointsRoute, clearFailpoints)
+	mux.HandleFunc("PUT "+clockRoute, setClock)
+	mux.HandleFunc("DELETE "+clockRoute, clearClock)
 
 	return httpserver.New(Addr, requireToken(config.Token, mux))
 }

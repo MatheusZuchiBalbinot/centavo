@@ -277,7 +277,7 @@ func (n *Nemesis) clearFailpoints(ctx context.Context) {
 			continue
 		}
 
-		err := n.chaosCall(ctx, http.MethodDelete, t.chaosURL+"/chaos/failpoints", nil)
+		err := n.chaosCall(ctx, http.MethodDelete, t.chaosURL+failpointsPath, nil)
 		if err != nil {
 			n.config.Logger.WarnContext(ctx, "clearing failpoints", "target", t.service, "error", err)
 		}

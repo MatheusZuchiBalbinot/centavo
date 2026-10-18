@@ -35,7 +35,7 @@ func New(baseURL, participantID string) Client {
 func (c Client) Truth(ctx context.Context, since time.Time) ([]byte, error) {
 	query := url.Values{"participant_id": {c.participantID}, "since": {since.UTC().Format(time.RFC3339Nano)}}
 
-	return c.get(ctx, "/internal/truth?"+query.Encode())
+	return c.get(ctx, truthPath+"?"+query.Encode())
 }
 
 // Pending is what the partner has not finished for the participant.
@@ -47,7 +47,7 @@ type Pending struct {
 
 // Pending reads the partner's unfinished work.
 func (c Client) Pending(ctx context.Context) (Pending, error) {
-	body, err := c.get(ctx, "/internal/pending?participant_id="+url.QueryEscape(c.participantID))
+	body, err := c.get(ctx, pendingPath+"?participant_id="+url.QueryEscape(c.participantID))
 	if err != nil {
 		return Pending{}, err
 	}

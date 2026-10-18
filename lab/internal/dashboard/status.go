@@ -145,7 +145,7 @@ func latestRound(roundsDir string) (*lastRound, error) {
 			return nil, fmt.Errorf("reading %s/%s: %w", id, reportJSONFile, err)
 		}
 
-		round.ReportURL = "/rounds/" + id + "/report.md"
+		round.ReportURL = reportURLOf(id)
 
 		return &round, nil
 	}

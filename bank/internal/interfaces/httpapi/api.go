@@ -62,14 +62,14 @@ func NewAPIHandler(useCases UseCases, logger *slog.Logger) http.Handler {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST "+accountsEndpoint, api.openAccount)
-	mux.HandleFunc("GET /v1/accounts/{id}", api.getAccount)
-	mux.HandleFunc("GET /v1/accounts/{id}/statement", api.getStatement)
+	mux.HandleFunc("GET "+accountEndpoint, api.getAccount)
+	mux.HandleFunc("GET "+statementEndpoint, api.getStatement)
 	mux.HandleFunc("POST "+depositsEndpoint, api.deposit)
 	mux.HandleFunc("POST "+transfersEndpoint, api.transfer)
-	mux.HandleFunc("POST /v1/operations/{key}/resolve", api.resolve)
+	mux.HandleFunc("POST "+resolveEndpoint, api.resolve)
 	mux.HandleFunc("POST "+pixOutEndpoint, api.pixOut)
-	mux.HandleFunc("GET /v1/external-transfers/{id}", api.getPixOut)
-	mux.HandleFunc("POST /webhooks/partner", api.webhook)
+	mux.HandleFunc("GET "+externalTransferEndpoint, api.getPixOut)
+	mux.HandleFunc("POST "+partnerWebhookEndpoint, api.webhook)
 
 	return withSecurityHeaders(withRequestContext(mux, logger))
 }

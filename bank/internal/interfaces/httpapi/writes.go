@@ -22,13 +22,6 @@ const (
 	maxBodyBytes = 16 << 10
 )
 
-// Endpoints of the writes; each key is bound to one.
-const (
-	accountsEndpoint  = "/v1/accounts"
-	depositsEndpoint  = "/v1/deposits"
-	transfersEndpoint = "/v1/transfers"
-)
-
 type openAccountRequest struct {
 	HolderName string `json:"holder_name"`
 }

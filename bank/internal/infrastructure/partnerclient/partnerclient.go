@@ -52,7 +52,7 @@ func (c Client) Submit(ctx context.Context, submission application.PartnerSubmis
 		return application.PartnerUnknown
 	}
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/transfers", bytes.NewReader(body))
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+transfersPath, bytes.NewReader(body))
 	if err != nil {
 		return application.PartnerUnknown
 	}

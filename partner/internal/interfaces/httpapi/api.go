@@ -66,9 +66,9 @@ func NewAPI(config APIConfig) API {
 // Handler serves POST /v1/transfers, GET /v1/transfers/{e2e} and GET /v1/statements.
 func (a API) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /v1/transfers", a.submit)
-	mux.HandleFunc("GET /v1/transfers/{e2e}", a.status)
-	mux.HandleFunc("GET /v1/statements", a.statement)
+	mux.HandleFunc("POST "+transfersRoute, a.submit)
+	mux.HandleFunc("GET "+transferRoute, a.status)
+	mux.HandleFunc("GET "+statementsRoute, a.statement)
 
 	return withSecurityHeaders(mux)
 }

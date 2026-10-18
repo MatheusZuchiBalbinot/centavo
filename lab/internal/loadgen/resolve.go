@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
-	"net/url"
 
 	"centavo/lab/internal/history"
 	"centavo/lab/internal/seed"
@@ -119,7 +118,7 @@ func resolveOperation(write IndeterminateWrite) (operation, error) {
 		return operation{}, err
 	}
 
-	resolveRequest := request{method: http.MethodPost, path: "/v1/operations/" + url.PathEscape(write.Key) + "/resolve", body: body}
+	resolveRequest := request{method: http.MethodPost, path: resolvePath(write.Key), body: body}
 
 	op, err := newOperation(history.FunctionResolve, resolveRequest, resolveArgs{Key: write.Key, Op: cmp.Or(write.Op, write.Key)}, parseResolve)
 	op.hasNoKey = true

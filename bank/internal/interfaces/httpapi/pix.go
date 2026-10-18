@@ -23,7 +23,6 @@ import (
 )
 
 const (
-	pixOutEndpoint  = "/v1/external-transfers"
 	signatureHeader = "X-Partner-Signature"
 	// signatureTolerance bounds how old a signed webhook may be.
 	signatureTolerance = 5 * time.Minute

@@ -33,12 +33,12 @@ func NewAdminHandler(info BuildInfo, api API, chaos http.Handler) http.Handler {
 
 	mux := http.NewServeMux()
 	mux.Handle("GET "+HealthPath, healthHandler{response: response})
-	mux.HandleFunc("POST /internal/incoming", api.incoming)
-	mux.HandleFunc("GET /internal/truth", api.truthExport)
-	mux.HandleFunc("GET /internal/pending", api.pending)
+	mux.HandleFunc("POST "+incomingRoute, api.incoming)
+	mux.HandleFunc("GET "+truthRoute, api.truthExport)
+	mux.HandleFunc("GET "+pendingRoute, api.pending)
 
 	if chaos != nil {
-		mux.Handle("/chaos/", chaos)
+		mux.Handle(chaosPrefix, chaos)
 	}
 
 	return withSecurityHeaders(mux)

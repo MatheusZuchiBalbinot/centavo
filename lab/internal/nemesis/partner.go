@@ -56,7 +56,7 @@ func (n *Nemesis) pushPartner(ctx context.Context) {
 			continue
 		}
 
-		err = n.chaosCall(ctx, http.MethodPut, n.config.PartnerAdminURL+"/chaos/modes", body)
+		err = n.chaosCall(ctx, http.MethodPut, n.config.PartnerAdminURL+modesPath, body)
 		if err != nil {
 			n.config.Logger.WarnContext(ctx, "setting partner modes", "fault", fault.ID, "error", err)
 		}
@@ -86,7 +86,7 @@ func (n *Nemesis) clearPartner(ctx context.Context) {
 		return
 	}
 
-	err := n.chaosCall(ctx, http.MethodDelete, n.config.PartnerAdminURL+"/chaos/modes", nil)
+	err := n.chaosCall(ctx, http.MethodDelete, n.config.PartnerAdminURL+modesPath, nil)
 	if err != nil {
 		n.config.Logger.WarnContext(ctx, "making the partner honest", "error", err)
 	}
