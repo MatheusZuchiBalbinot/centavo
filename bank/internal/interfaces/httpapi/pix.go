@@ -260,8 +260,11 @@ func (a apiHandlers) webhook(w http.ResponseWriter, r *http.Request) {
 // verifySignature checks t=<unix>,v1=<hex HMAC-SHA256(secret, t + "." + body)>
 // in constant time, refusing signatures older than the tolerance.
 func verifySignature(header string, body, secret []byte, now time.Time) bool {
-	timestampText, signature, isFound := strings.Cut(strings.TrimPrefix(header, "t="), ",v1=")
-	if !isFound || len(secret) == 0 {
+	fields, hasTimestamp := strings.CutPrefix(header, "t=")
+	timestampText, signature, hasSignature := strings.Cut(fields, ",v1=")
+
+	isWellFormed := hasTimestamp && hasSignature && len(secret) > 0
+	if !isWellFormed {
 		return false
 	}
 
@@ -271,7 +274,9 @@ func verifySignature(header string, body, secret []byte, now time.Time) bool {
 	}
 
 	age := now.Sub(time.Unix(timestamp, 0))
-	if age > signatureTolerance || age < -signatureTolerance {
+
+	isOutsideTolerance := age > signatureTolerance || age < -signatureTolerance
+	if isOutsideTolerance {
 		return false
 	}
 
