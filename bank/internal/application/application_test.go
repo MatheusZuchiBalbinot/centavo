@@ -37,6 +37,8 @@ func (w *recordingWriter) InsertEntry(context.Context, ledger.Entry) error {
 // does not matter, the balances move system accounts first, as every writer
 // takes them.
 func TestPostAll_PostsInAccountOrder(t *testing.T) {
+	t.Parallel()
+
 	customer, err := ledger.NewAccountID()
 	if err != nil {
 		t.Fatal(err)

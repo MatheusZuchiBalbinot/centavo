@@ -7,6 +7,8 @@ import (
 )
 
 func TestImmutability(t *testing.T) {
+	t.Parallel()
+
 	before := snapshot.LedgerState{FirstTransactionID: "tx-first", Bands: []snapshot.Band{
 		{Band: 0, Count: 100_000, SumCents: 0, Hash: 42},
 		{Band: 1, Count: 1_200, SumCents: 0, Hash: 7},
@@ -26,6 +28,8 @@ func TestImmutability(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			b := newRoundBuilder(t)
 			s := b.snapshot()
 			s.Bands = tc.bands

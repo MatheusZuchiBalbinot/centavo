@@ -3,6 +3,8 @@ package dashboard
 import "testing"
 
 func TestFormatCents(t *testing.T) {
+	t.Parallel()
+
 	cases := map[int64]string{
 		0:          "R$ 0,00",
 		5:          "R$ 0,05",

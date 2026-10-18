@@ -9,6 +9,8 @@ import (
 )
 
 func TestPostingOf_FollowsTheStateMachine(t *testing.T) {
+	t.Parallel()
+
 	allowed := map[[2]transfer.Status]transfer.Posting{
 		{transfer.StatusCreated, transfer.StatusSent}:       transfer.PostingNone,
 		{transfer.StatusCreated, transfer.StatusConfirmed}:  transfer.PostingSettle,
@@ -37,6 +39,8 @@ func TestPostingOf_FollowsTheStateMachine(t *testing.T) {
 }
 
 func TestEndToEndIDs(t *testing.T) {
+	t.Parallel()
+
 	id, err := transfer.NewID()
 	if err != nil {
 		t.Fatal(err)
@@ -54,6 +58,8 @@ func TestEndToEndIDs(t *testing.T) {
 }
 
 func TestParseDestinationKey(t *testing.T) {
+	t.Parallel()
+
 	for _, key := range []string{"dest-0031", "ana@example.com", "+5511999990000"} {
 		if _, err := transfer.ParseDestinationKey(key); err != nil {
 			t.Errorf("%q refused: %v", key, err)

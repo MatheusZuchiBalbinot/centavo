@@ -44,6 +44,8 @@ func submit(t *testing.T, store *truth.Store, e2e string, isDouble bool) truth.S
 }
 
 func TestSubmit_IsIdempotentByEndToEndID(t *testing.T) {
+	t.Parallel()
+
 	store := openStore(t)
 
 	first := submit(t, store, "E1", false)
@@ -55,6 +57,8 @@ func TestSubmit_IsIdempotentByEndToEndID(t *testing.T) {
 }
 
 func TestSettle_WritesTheStatementOnceOrTwiceWhenTheBugHits(t *testing.T) {
+	t.Parallel()
+
 	store := openStore(t)
 	submit(t, store, "E-once", false)
 	submit(t, store, "E-twice", true)
@@ -87,6 +91,8 @@ func TestSettle_WritesTheStatementOnceOrTwiceWhenTheBugHits(t *testing.T) {
 }
 
 func TestRejectAndReturn_FollowTheStatusMachine(t *testing.T) {
+	t.Parallel()
+
 	store := openStore(t)
 	submit(t, store, "E-rejected", false)
 	submit(t, store, "E-returned", false)
@@ -123,6 +129,8 @@ func TestRejectAndReturn_FollowTheStatusMachine(t *testing.T) {
 }
 
 func TestAddIncoming_CreditsOncePerEndToEndID(t *testing.T) {
+	t.Parallel()
+
 	store := openStore(t)
 	incoming := truth.Incoming{EndToEndID: "E-in", ParticipantID: "centavo-robust", AccountID: "acc-1", AmountCents: 900, CreatedAt: epoch}
 
@@ -154,6 +162,8 @@ func TestAddIncoming_CreditsOncePerEndToEndID(t *testing.T) {
 }
 
 func TestDeliveries_CanBeDroppedRescheduledAndAbandoned(t *testing.T) {
+	t.Parallel()
+
 	store := openStore(t)
 	submit(t, store, "E1", false)
 	submit(t, store, "E2", false)
@@ -198,6 +208,8 @@ func TestDeliveries_CanBeDroppedRescheduledAndAbandoned(t *testing.T) {
 // TestOpen_AddsTheColumnsOfANewerSchema guards the partner's volume across
 // upgrades: a truth created before a column existed gets it on open.
 func TestOpen_AddsTheColumnsOfANewerSchema(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join(t.TempDir(), "truth.db")
 
 	old, err := sql.Open("sqlite", "file:"+path)
@@ -238,6 +250,8 @@ func TestOpen_AddsTheColumnsOfANewerSchema(t *testing.T) {
 // TestTruth_ExportsOnlyWhatCameAfterSince guards the partner's memory: a
 // round exports its own part of a truth that keeps every round.
 func TestTruth_ExportsOnlyWhatCameAfterSince(t *testing.T) {
+	t.Parallel()
+
 	store := openStore(t)
 	submit(t, store, "E-before", false)
 
@@ -273,6 +287,8 @@ func TestTruth_ExportsOnlyWhatCameAfterSince(t *testing.T) {
 // the bank's reconciler: they match the PIX's correlation id, and the
 // statement is all the reconciler reads.
 func TestStatement_CarriesTheCorrelationOfEachPix(t *testing.T) {
+	t.Parallel()
+
 	store := openStore(t)
 	transfer := truth.Transfer{EndToEndID: "E-out", ParticipantID: "centavo-robust", AmountCents: 4_500, DestinationKey: "dest-0001", Status: truth.StatusProcessing, SettleAt: epoch, CreatedAt: epoch, CorrelationID: "r0001-p01-000001"}
 

@@ -96,6 +96,8 @@ func generateTransfer(t *rapid.T, b *roundBuilder, accounts []string, from strin
 }
 
 func TestModel_CorrectRoundsAlwaysPass(t *testing.T) {
+	t.Parallel()
+
 	rapid.Check(t, func(t *rapid.T) {
 		result := generateRound(t).evaluate()
 
@@ -106,8 +108,12 @@ func TestModel_CorrectRoundsAlwaysPass(t *testing.T) {
 }
 
 func TestMutations_AreAllDetectedByTheExpectedRule(t *testing.T) {
+	t.Parallel()
+
 	for _, m := range mutations {
 		t.Run(m.name, func(t *testing.T) {
+			t.Parallel()
+
 			rapid.Check(t, func(t *rapid.T) {
 				b := generateRound(t)
 

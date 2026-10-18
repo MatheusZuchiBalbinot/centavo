@@ -20,6 +20,8 @@ func transferIn(t *testing.T, status transfer.Status, cents money.Cents) Externa
 }
 
 func TestClassify(t *testing.T) {
+	t.Parallel()
+
 	settlement := StatementEntry{Seq: 7, Kind: StatementSettlement, EndToEndID: "E1", AmountCents: 500}
 	returned := StatementEntry{Seq: 8, Kind: StatementReturn, EndToEndID: "E1", AmountCents: 500}
 	incoming := StatementEntry{Seq: 9, Kind: StatementIncoming, EndToEndID: "E2", AmountCents: 300, AccountID: "acc"}
@@ -89,6 +91,8 @@ func TestClassify(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			got, err := classify(tc.entry, tc.facts)
 			if err != nil || got != tc.want {
 				t.Fatalf("got %+v (%v), want %+v", got, err, tc.want)
@@ -100,6 +104,8 @@ func TestClassify(t *testing.T) {
 // TestClassify_RefusesAnUnknownTransferStatus: a status the reconciliation
 // has no rule for stops the batch instead of moving money to suspense.
 func TestClassify_RefusesAnUnknownTransferStatus(t *testing.T) {
+	t.Parallel()
+
 	unknown := entryFacts{hasTransfer: true, transfer: transferIn(t, transfer.Status("on_hold"), 500)}
 
 	for _, kind := range []StatementKind{StatementSettlement, StatementReturn} {

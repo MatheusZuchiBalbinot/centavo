@@ -11,6 +11,8 @@ import (
 func at(d time.Duration) int64 { return int64(d) }
 
 func TestBuilder_CountsSecondsLatencyAndChaos(t *testing.T) {
+	t.Parallel()
+
 	b := NewBuilder("r0007", "smoke", "0x5eed")
 	client := history.Client(1)
 
@@ -41,6 +43,8 @@ func TestBuilder_CountsSecondsLatencyAndChaos(t *testing.T) {
 }
 
 func TestPercentile_NearestRank(t *testing.T) {
+	t.Parallel()
+
 	sorted := []float64{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
 
 	if p := percentile(sorted, 50); p != 50 {

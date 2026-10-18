@@ -8,6 +8,8 @@ import (
 )
 
 func TestParse(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		raw  string
 		want seed.Seed
@@ -31,6 +33,8 @@ func TestParse(t *testing.T) {
 }
 
 func TestString_RoundTrips(t *testing.T) {
+	t.Parallel()
+
 	original := seed.Seed(0x5eed0142)
 
 	parsed, err := seed.Parse(original.String())
@@ -40,6 +44,8 @@ func TestString_RoundTrips(t *testing.T) {
 }
 
 func TestStream_IsReproducibleAndIndependent(t *testing.T) {
+	t.Parallel()
+
 	round := seed.Seed(0x5eed0142)
 
 	first := sample(round, "workload.ops/1")

@@ -21,6 +21,8 @@ type healthBody struct {
 }
 
 func TestHealth_ReportsVersion(t *testing.T) {
+	t.Parallel()
+
 	handler := dashboard.NewHandler(dashboard.Config{Version: "test"})
 	request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, dashboard.HealthPath, nil)
 	recorder := httptest.NewRecorder()
@@ -45,6 +47,8 @@ func TestHealth_ReportsVersion(t *testing.T) {
 }
 
 func TestStatus_PaintsTheLiveChecks(t *testing.T) {
+	t.Parallel()
+
 	negative := int64(-2_000)
 	zero := int64(0)
 
@@ -62,6 +66,8 @@ func TestStatus_PaintsTheLiveChecks(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			live := func() (audit.Reading, bool) { return tc.reading, tc.hasReading }
 			status := getStatus(t, dashboard.Config{Live: live, RoundsDir: t.TempDir()})
 
@@ -74,6 +80,8 @@ func TestStatus_PaintsTheLiveChecks(t *testing.T) {
 }
 
 func TestStatus_ShowsTheNewestVerifiedRound(t *testing.T) {
+	t.Parallel()
+
 	roundsDir := t.TempDir()
 	writeRound(t, roundsDir, "r0009", `{"round": "r0009", "verdict": "pass"}`)
 	writeRound(t, roundsDir, "r0010", `{"round": "r0010", "verdict": "fail"}`)
@@ -88,6 +96,8 @@ func TestStatus_ShowsTheNewestVerifiedRound(t *testing.T) {
 }
 
 func TestReport_ServesOnlyRoundDirectories(t *testing.T) {
+	t.Parallel()
+
 	roundsDir := t.TempDir()
 	writeRound(t, roundsDir, "r0001", `{}`)
 	handler := dashboard.NewHandler(dashboard.Config{Live: noReading, RoundsDir: roundsDir})
@@ -113,6 +123,8 @@ func TestReport_ServesOnlyRoundDirectories(t *testing.T) {
 }
 
 func TestPanel_SendsSecurityHeadersAndThePage(t *testing.T) {
+	t.Parallel()
+
 	handler := dashboard.NewHandler(dashboard.Config{Live: noReading, RoundsDir: t.TempDir()})
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil))

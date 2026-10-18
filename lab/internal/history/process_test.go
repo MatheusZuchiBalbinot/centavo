@@ -9,6 +9,8 @@ import (
 )
 
 func TestProcess_RoundTripsBothForms(t *testing.T) {
+	t.Parallel()
+
 	for _, process := range []history.Process{history.Client(7), history.Nemesis()} {
 		encoded, err := json.Marshal(process)
 		if err != nil {
@@ -30,6 +32,8 @@ func TestProcess_RoundTripsBothForms(t *testing.T) {
 }
 
 func TestValidate_NemesisRecords(t *testing.T) {
+	t.Parallel()
+
 	valid := []string{
 		`{"index":1,"round":"r1","process":"nemesis","type":"info","f":"kill","value":{"target":"bank-api"}}`,
 		`{"index":2,"round":"r1","process":1,"type":"invoke","f":"deposit","op":"a"}`,

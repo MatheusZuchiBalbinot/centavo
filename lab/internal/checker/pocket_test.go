@@ -11,6 +11,8 @@ import (
 // round per bug pattern, written by hand.
 
 func TestPocket_CorrectRoundPasses(t *testing.T) {
+	t.Parallel()
+
 	b := newRoundBuilder(t)
 	alice, bob := b.createAccount(), b.createAccount()
 	b.deposit(alice, 10_000)
@@ -24,6 +26,8 @@ func TestPocket_CorrectRoundPasses(t *testing.T) {
 // TestPocket_LostUpdateOverdraws is PM-001: two debits of 60 read the same
 // balance of 100, both pass the check and both write 40.
 func TestPocket_LostUpdateOverdraws(t *testing.T) {
+	t.Parallel()
+
 	b := newRoundBuilder(t)
 	alice, bob := b.createAccount(), b.createAccount()
 	b.deposit(alice, 100)
@@ -54,6 +58,8 @@ func TestPocket_LostUpdateOverdraws(t *testing.T) {
 
 // TestPocket_DebitWithoutCredit is FC01: the process died between the two entries.
 func TestPocket_DebitWithoutCredit(t *testing.T) {
+	t.Parallel()
+
 	b := newRoundBuilder(t)
 	alice, bob := b.createAccount(), b.createAccount()
 	b.deposit(alice, 1_000)
@@ -70,6 +76,8 @@ func TestPocket_DebitWithoutCredit(t *testing.T) {
 
 // TestPocket_RetryAppliedTwice is FC02: the response was lost, the retry ran again.
 func TestPocket_RetryAppliedTwice(t *testing.T) {
+	t.Parallel()
+
 	b := newRoundBuilder(t)
 	alice := b.createAccount()
 	op := b.deposit(alice, 1_000)
@@ -81,6 +89,8 @@ func TestPocket_RetryAppliedTwice(t *testing.T) {
 }
 
 func TestPocket_IndeterminateAppliedTwice(t *testing.T) {
+	t.Parallel()
+
 	b := newRoundBuilder(t)
 	alice := b.createAccount()
 	op := b.operation(history.FunctionDeposit, depositArgs{AccountID: alice, AmountCents: 500}, history.TypeInfo, nil)
@@ -95,6 +105,8 @@ func TestPocket_IndeterminateAppliedTwice(t *testing.T) {
 }
 
 func TestPocket_ResolveMustMatchTheLedger(t *testing.T) {
+	t.Parallel()
+
 	b := newRoundBuilder(t)
 	alice := b.createAccount()
 	voidedButApplied := b.operation(history.FunctionDeposit, depositArgs{AccountID: alice, AmountCents: 500}, history.TypeInfo, nil)
@@ -108,6 +120,8 @@ func TestPocket_ResolveMustMatchTheLedger(t *testing.T) {
 // it reused the key of a write that never applied, so its own deposit took
 // the key. The deposit is the reuser's, and the first write never applied.
 func TestPocket_ReusedIdleKeyBelongsToItsSender(t *testing.T) {
+	t.Parallel()
+
 	b := newRoundBuilder(t)
 	alice := b.createAccount()
 	owner := b.operation(history.FunctionDeposit, depositArgs{AccountID: alice, AmountCents: 500}, history.TypeInfo, nil)
@@ -122,6 +136,8 @@ func TestPocket_ReusedIdleKeyBelongsToItsSender(t *testing.T) {
 // TestPocket_IndeterminateReuseIsResolvedForItself: the buggy write that
 // reused a key timed out too; resolve answers for its own request.
 func TestPocket_IndeterminateReuseIsResolvedForItself(t *testing.T) {
+	t.Parallel()
+
 	b := newRoundBuilder(t)
 	alice := b.createAccount()
 	owner := b.deposit(alice, 500)
@@ -142,6 +158,8 @@ func TestPocket_IndeterminateReuseIsResolvedForItself(t *testing.T) {
 // same body under the reused key, so the bank answered with the stored
 // response. The two operations are one deposit, counted once.
 func TestPocket_ReusedKeyWithTheSameRequestIsAReplay(t *testing.T) {
+	t.Parallel()
+
 	b := newRoundBuilder(t)
 	alice := b.createAccount()
 	owner := b.deposit(alice, 500)
@@ -156,6 +174,8 @@ func TestPocket_ReusedKeyWithTheSameRequestIsAReplay(t *testing.T) {
 // the first write with the reuser's response, as it did before resolve
 // compared the request.
 func TestPocket_ResolveOfASupersededKeyMustNotSayApplied(t *testing.T) {
+	t.Parallel()
+
 	b := newRoundBuilder(t)
 	alice := b.createAccount()
 	owner := b.operation(history.FunctionDeposit, depositArgs{AccountID: alice, AmountCents: 500}, history.TypeInfo, nil)
@@ -168,6 +188,8 @@ func TestPocket_ResolveOfASupersededKeyMustNotSayApplied(t *testing.T) {
 }
 
 func TestPocket_ResolveMustNotChangeItsMind(t *testing.T) {
+	t.Parallel()
+
 	b := newRoundBuilder(t)
 	alice := b.createAccount()
 	op := b.operation(history.FunctionDeposit, depositArgs{AccountID: alice, AmountCents: 500}, history.TypeInfo, nil)
@@ -178,6 +200,8 @@ func TestPocket_ResolveMustNotChangeItsMind(t *testing.T) {
 }
 
 func TestPocket_UnresolvedMakesTheRoundInconclusive(t *testing.T) {
+	t.Parallel()
+
 	b := newRoundBuilder(t)
 	alice := b.createAccount()
 	b.operation(history.FunctionDeposit, depositArgs{AccountID: alice, AmountCents: 500}, history.TypeInfo, nil)
@@ -193,6 +217,8 @@ func TestPocket_UnresolvedMakesTheRoundInconclusive(t *testing.T) {
 }
 
 func TestPocket_ResolvedDepositsCloseTheDepositTermExactly(t *testing.T) {
+	t.Parallel()
+
 	b := newRoundBuilder(t)
 	alice := b.createAccount()
 	op := b.operation(history.FunctionDeposit, depositArgs{AccountID: alice, AmountCents: 500}, history.TypeInfo, nil)
@@ -213,6 +239,8 @@ func TestPocket_ResolvedDepositsCloseTheDepositTermExactly(t *testing.T) {
 }
 
 func TestPocket_FailThatWasApplied(t *testing.T) {
+	t.Parallel()
+
 	b := newRoundBuilder(t)
 	alice, bob := b.createAccount(), b.createAccount()
 	b.deposit(alice, 1_000)
@@ -223,6 +251,8 @@ func TestPocket_FailThatWasApplied(t *testing.T) {
 }
 
 func TestPocket_PhantomWrite(t *testing.T) {
+	t.Parallel()
+
 	b := newRoundBuilder(t)
 	alice, bob := b.createAccount(), b.createAccount()
 	b.deposit(alice, 1_000)
@@ -232,6 +262,8 @@ func TestPocket_PhantomWrite(t *testing.T) {
 }
 
 func TestPocket_NegativeReadsAndPages(t *testing.T) {
+	t.Parallel()
+
 	b := newRoundBuilder(t)
 	alice := b.createAccount()
 	b.deposit(alice, 1_000)
@@ -247,6 +279,8 @@ func TestPocket_NegativeReadsAndPages(t *testing.T) {
 }
 
 func TestPocket_AccountTheClientWasToldAboutIsMissing(t *testing.T) {
+	t.Parallel()
+
 	b := newRoundBuilder(t)
 	b.operation(history.FunctionCreateAccount, map[string]string{"holder_name": "ghost"}, history.TypeOK, createAccountValue{AccountID: "acc-ghost"})
 

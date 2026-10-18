@@ -11,6 +11,8 @@ import (
 )
 
 func TestNewAmount_AcceptsExactlyTheValidRange(t *testing.T) {
+	t.Parallel()
+
 	rapid.Check(t, func(t *rapid.T) {
 		cents := money.Cents(rapid.Int64().Draw(t, "cents"))
 
@@ -36,6 +38,8 @@ func TestNewAmount_AcceptsExactlyTheValidRange(t *testing.T) {
 }
 
 func TestNewAmount_ReportsWhichRuleFailed(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name  string
 		cents money.Cents
@@ -48,6 +52,8 @@ func TestNewAmount_ReportsWhichRuleFailed(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			_, err := money.NewAmount(tc.cents)
 			if !errors.Is(err, tc.want) {
 				t.Fatalf("got %v, want %v", err, tc.want)
@@ -57,6 +63,8 @@ func TestNewAmount_ReportsWhichRuleFailed(t *testing.T) {
 }
 
 func TestBalanceAdd_DetectsEveryOverflow(t *testing.T) {
+	t.Parallel()
+
 	rapid.Check(t, func(t *rapid.T) {
 		start := rapid.Int64().Draw(t, "start")
 		delta := rapid.Int64().Draw(t, "delta")
@@ -83,6 +91,8 @@ func TestBalanceAdd_DetectsEveryOverflow(t *testing.T) {
 }
 
 func TestBalanceCovers_ComparesWithTheAmount(t *testing.T) {
+	t.Parallel()
+
 	amount, err := money.NewAmount(100)
 	if err != nil {
 		t.Fatal(err)

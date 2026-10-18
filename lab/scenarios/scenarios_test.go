@@ -10,6 +10,8 @@ import (
 )
 
 func TestEveryEmbeddedScenarioLoads(t *testing.T) {
+	t.Parallel()
+
 	names := scenarios.Names()
 	if len(names) == 0 {
 		t.Fatal("no scenario embedded")
@@ -24,6 +26,8 @@ func TestEveryEmbeddedScenarioLoads(t *testing.T) {
 }
 
 func TestLoad_Smoke(t *testing.T) {
+	t.Parallel()
+
 	smoke, err := scenarios.Load("smoke")
 	if err != nil {
 		t.Fatal(err)
@@ -39,6 +43,8 @@ func TestLoad_Smoke(t *testing.T) {
 }
 
 func TestLoad_RejectsUnknownNamesAndPathTricks(t *testing.T) {
+	t.Parallel()
+
 	for _, name := range []string{"does-not-exist", "../smoke", "smoke.yaml", ""} {
 		_, err := scenarios.Load(name)
 		if !errors.Is(err, scenarios.ErrUnknownScenario) {
@@ -48,6 +54,8 @@ func TestLoad_RejectsUnknownNamesAndPathTricks(t *testing.T) {
 }
 
 func TestParse_RejectsInvalidScenarios(t *testing.T) {
+	t.Parallel()
+
 	const valid = `name: demo
 duration: 1m
 workload:
@@ -91,6 +99,8 @@ workload:
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			content := strings.Replace(valid, tc.from, tc.to, 1)
 
 			_, err := scenarios.Parse("demo", []byte(content))

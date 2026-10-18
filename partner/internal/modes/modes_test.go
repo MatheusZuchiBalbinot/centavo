@@ -30,6 +30,8 @@ func lying(t *testing.T, config modes.Config) *modes.Registry {
 }
 
 func TestHonestByDefault(t *testing.T) {
+	t.Parallel()
+
 	decider := modes.NewRegistry().For("centavo-robust", now)
 
 	_, isDown := decider.Outage()
@@ -45,6 +47,8 @@ func TestHonestByDefault(t *testing.T) {
 }
 
 func TestSameSeedReplaysTheSameLies(t *testing.T) {
+	t.Parallel()
+
 	config := modes.Config{Seed: "0x5eed", RejectRate: 0.5}
 
 	draw := func() [32]bool {
@@ -65,6 +69,8 @@ func TestSameSeedReplaysTheSameLies(t *testing.T) {
 }
 
 func TestModesExpireWithTheirTTL(t *testing.T) {
+	t.Parallel()
+
 	registry := lying(t, modes.Config{RejectRate: 1, TTL: "10s"})
 
 	if !registry.For("centavo-robust", now).Reject() {
@@ -77,6 +83,8 @@ func TestModesExpireWithTheirTTL(t *testing.T) {
 }
 
 func TestPlanDropsDuplicatesAndDelays(t *testing.T) {
+	t.Parallel()
+
 	registry := lying(t, modes.Config{WebhookDrop: 1, WebhookDuplicate: 1, WebhookDuplicateNewID: 1, WebhookDelayMax: "30s"})
 
 	planned := registry.For("centavo-robust", now).Plan(truth.Event{ID: "evt"}, now)
@@ -95,6 +103,8 @@ func TestPlanDropsDuplicatesAndDelays(t *testing.T) {
 }
 
 func TestSet_RejectsInvalidModes(t *testing.T) {
+	t.Parallel()
+
 	cases := []modes.Config{
 		{ParticipantID: "", TTL: "1m"},
 		{ParticipantID: "centavo-robust", TTL: "2h"},
@@ -112,6 +122,8 @@ func TestSet_RejectsInvalidModes(t *testing.T) {
 }
 
 func TestSet_RenewingKeepsTheOutageWindowAndTheLies(t *testing.T) {
+	t.Parallel()
+
 	registry := modes.NewRegistry()
 	config := modes.Config{ParticipantID: "centavo-robust", TTL: "30s", Seed: "0x1", RejectRate: 0.5, Outage: &modes.OutageConfig{Until: "+10s", Mode: modes.OutageServiceUnavailable}}
 
@@ -145,6 +157,8 @@ func TestSet_RenewingKeepsTheOutageWindowAndTheLies(t *testing.T) {
 // TestOutage_WithAModeThatDeclaresNone is a regression test: an active mode
 // without an outage used to dereference a nil pointer on every request.
 func TestOutage_WithAModeThatDeclaresNone(t *testing.T) {
+	t.Parallel()
+
 	registry := lying(t, modes.Config{TimeoutAfterProcess: 0.1})
 
 	_, isDown := registry.For("centavo-robust", now).Outage()

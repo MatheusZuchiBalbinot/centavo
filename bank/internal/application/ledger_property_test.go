@@ -139,6 +139,8 @@ func (m *memoryLedger) openAccount() ledger.AccountID {
 }
 
 func TestLedger_AnySequenceOfOperationsKeepsTheInvariants(t *testing.T) {
+	t.Parallel()
+
 	rapid.Check(t, func(t *rapid.T) {
 		bank := newMemoryLedger()
 		deps := application.MoneyDependencies{UnitOfWork: bank, Locker: application.RowLocker{}}

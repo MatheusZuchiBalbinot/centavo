@@ -14,6 +14,8 @@ import (
 )
 
 func TestWriter_ConcurrentAppendsKeepIndexAndTimeInFileOrder(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join(t.TempDir(), "history.jsonl")
 
 	writer, err := history.Create(path, "r0001")
@@ -61,6 +63,8 @@ func TestWriter_ConcurrentAppendsKeepIndexAndTimeInFileOrder(t *testing.T) {
 }
 
 func TestWriter_DurableAppendIsOnDiskWhenItReturns(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join(t.TempDir(), "history.jsonl")
 
 	writer, err := history.Create(path, "r0001")
@@ -83,6 +87,8 @@ func TestWriter_DurableAppendIsOnDiskWhenItReturns(t *testing.T) {
 }
 
 func TestWriter_RefusesToOverwriteAndToAppendAfterClose(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join(t.TempDir(), "history.jsonl")
 
 	writer, err := history.Create(path, "r0001")
@@ -104,6 +110,8 @@ func TestWriter_RefusesToOverwriteAndToAppendAfterClose(t *testing.T) {
 }
 
 func TestValidate_AcceptsAWellFormedHistory(t *testing.T) {
+	t.Parallel()
+
 	lines := []string{
 		`{"index":1,"round":"r1","process":1,"type":"invoke","f":"deposit","op":"r1-p01-000001"}`,
 		`{"index":2,"round":"r1","process":2,"type":"invoke","f":"transfer","op":"r1-p02-000001"}`,
@@ -132,6 +140,8 @@ func TestValidate_AcceptsAWellFormedHistory(t *testing.T) {
 }
 
 func TestValidate_FlagsEachBrokenRule(t *testing.T) {
+	t.Parallel()
+
 	invoke := `{"index":1,"round":"r1","process":1,"type":"invoke","f":"deposit","op":"a"}`
 
 	cases := []struct {
@@ -153,6 +163,8 @@ func TestValidate_FlagsEachBrokenRule(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			report := validate(t, tc.lines)
 
 			if report.IsWellFormed() {

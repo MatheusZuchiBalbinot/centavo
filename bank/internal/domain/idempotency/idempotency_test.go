@@ -10,6 +10,8 @@ import (
 )
 
 func TestParseKey(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name string
 		raw  string
@@ -27,6 +29,8 @@ func TestParseKey(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			key, err := idempotency.ParseKey(tc.raw)
 			if !errors.Is(err, tc.want) {
 				t.Fatalf("got %v, want %v", err, tc.want)
@@ -41,6 +45,8 @@ func TestParseKey(t *testing.T) {
 }
 
 func TestReplay(t *testing.T) {
+	t.Parallel()
+
 	hash := idempotency.HashRequest("/v1/transfers", []byte(`{"amount_cents": 10}`))
 	completed := idempotency.Record{Key: "r0001-p01-000001", Endpoint: "/v1/transfers", RequestHash: hash, Status: idempotency.StatusCompleted, Response: idempotency.StoredResponse{Status: 201, Body: []byte(`{"ok":1}`)}}
 
@@ -73,6 +79,8 @@ func TestReplay(t *testing.T) {
 }
 
 func TestHashRequest_SeparatesEndpointFromBody(t *testing.T) {
+	t.Parallel()
+
 	first := idempotency.HashRequest("/v1/a", []byte("b/c"))
 	second := idempotency.HashRequest("/v1/ab", []byte("/c"))
 

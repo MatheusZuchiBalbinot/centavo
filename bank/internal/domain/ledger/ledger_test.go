@@ -12,6 +12,8 @@ import (
 )
 
 func TestPositionDebit_NeverOverdrawsAndAdvancesTheSequence(t *testing.T) {
+	t.Parallel()
+
 	rapid.Check(t, func(t *rapid.T) {
 		balance := money.Cents(rapid.Int64Range(-1_000, 2*int64(money.MaxOperationCents)).Draw(t, "balance"))
 		lastSeq := ledger.Seq(rapid.Int64Range(0, 1_000_000).Draw(t, "lastSeq"))
@@ -47,6 +49,8 @@ func TestPositionDebit_NeverOverdrawsAndAdvancesTheSequence(t *testing.T) {
 }
 
 func TestCheckTransferAccounts_RejectsTheSameAccount(t *testing.T) {
+	t.Parallel()
+
 	first, err := ledger.NewAccountID()
 	if err != nil {
 		t.Fatal(err)
@@ -69,6 +73,8 @@ func TestCheckTransferAccounts_RejectsTheSameAccount(t *testing.T) {
 }
 
 func TestParseHolderName(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name    string
 		raw     string
@@ -86,6 +92,8 @@ func TestParseHolderName(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			got, err := ledger.ParseHolderName(tc.raw)
 
 			if !tc.isValid {
@@ -104,6 +112,8 @@ func TestParseHolderName(t *testing.T) {
 }
 
 func TestParseAccountID_RoundTripsAndRejectsGarbage(t *testing.T) {
+	t.Parallel()
+
 	id, err := ledger.NewAccountID()
 	if err != nil {
 		t.Fatal(err)

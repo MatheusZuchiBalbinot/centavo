@@ -34,6 +34,8 @@ var matches = map[transfer.PartnerStatus][]transfer.Status{
 }
 
 func TestPathTo_EveryStepIsAllowed(t *testing.T) {
+	t.Parallel()
+
 	for _, current := range bankStatuses {
 		for _, authoritative := range partnerStatuses {
 			path, err := transfer.PathTo(current, authoritative)
@@ -56,6 +58,8 @@ func TestPathTo_EveryStepIsAllowed(t *testing.T) {
 }
 
 func TestPathTo_ConflictsAreNeverResolved(t *testing.T) {
+	t.Parallel()
+
 	conflicts := []struct {
 		current       transfer.Status
 		authoritative transfer.PartnerStatus
@@ -84,6 +88,8 @@ func TestPathTo_ConflictsAreNeverResolved(t *testing.T) {
 // its lifecycle, the bank resyncs at arbitrary moments with whatever status
 // it reads, and once the bank reads the final status it agrees with it.
 func TestTransfer_AnyEventOrderWithDuplicates_ConvergesToAuthoritativeState(t *testing.T) {
+	t.Parallel()
+
 	rapid.Check(t, func(t *rapid.T) {
 		partner := transfer.PartnerNotFound
 		bank := transfer.StatusCreated

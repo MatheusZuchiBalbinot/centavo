@@ -15,6 +15,8 @@ import (
 // the history: the index keeps no records, so the report must find them
 // again in the file.
 func TestCheck_FailurePathKeepsTheOperationHistory(t *testing.T) {
+	t.Parallel()
+
 	b := newRoundBuilder(t)
 	alice, bob := b.createAccount(), b.createAccount()
 	b.deposit(alice, 1_000)
@@ -94,6 +96,8 @@ func readReport(t *testing.T, roundDir string) Report {
 // would count as zero in the deposit term and match no ledger entry. The
 // check stops instead of judging the round on that.
 func TestCheck_StopsOnAValueItCannotRead(t *testing.T) {
+	t.Parallel()
+
 	b := newRoundBuilder(t)
 	alice := b.createAccount()
 	b.operation(history.FunctionDeposit, map[string]any{"account_id": alice, "amount_cents": "500"}, history.TypeOK, writeValue{TransactionID: b.upcomingTransaction()})

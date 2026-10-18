@@ -107,6 +107,8 @@ func (p *pixRound) evaluate() Result {
 }
 
 func TestPocketPix_SettledTransferPasses(t *testing.T) {
+	t.Parallel()
+
 	p := newPixRound(t)
 	alice := p.createAccount()
 	p.deposit(alice, 10_000)
@@ -125,6 +127,8 @@ func TestPocketPix_SettledTransferPasses(t *testing.T) {
 
 // TestPocketPix_DuplicateWebhookSettlesTwice is FC24, PM-006.
 func TestPocketPix_DuplicateWebhookSettlesTwice(t *testing.T) {
+	t.Parallel()
+
 	p := newPixRound(t)
 	alice := p.createAccount()
 	p.deposit(alice, 10_000)
@@ -139,6 +143,8 @@ func TestPocketPix_DuplicateWebhookSettlesTwice(t *testing.T) {
 
 // TestPocketPix_LostPublishLeavesTheTransferStuck is FC04, PM-004.
 func TestPocketPix_LostPublishLeavesTheTransferStuck(t *testing.T) {
+	t.Parallel()
+
 	p := newPixRound(t)
 	alice := p.createAccount()
 	p.deposit(alice, 10_000)
@@ -150,6 +156,8 @@ func TestPocketPix_LostPublishLeavesTheTransferStuck(t *testing.T) {
 // TestPocketPix_TimeoutTakenAsFailureCreatesMoney is FC21, PM-008: the
 // partner paid, the bank refunded the customer too.
 func TestPocketPix_TimeoutTakenAsFailureCreatesMoney(t *testing.T) {
+	t.Parallel()
+
 	p := newPixRound(t)
 	alice := p.createAccount()
 	p.deposit(alice, 10_000)
@@ -164,6 +172,8 @@ func TestPocketPix_TimeoutTakenAsFailureCreatesMoney(t *testing.T) {
 // TestPocketPix_RetryWithANewIDPaysTwice is FC05, PM-005: the naive relay
 // sends E<id>-1 and E<id>-2, and the partner pays both.
 func TestPocketPix_RetryWithANewIDPaysTwice(t *testing.T) {
+	t.Parallel()
+
 	p := newPixRound(t)
 	alice := p.createAccount()
 	p.deposit(alice, 10_000)
@@ -184,6 +194,8 @@ func TestPocketPix_RetryWithANewIDPaysTwice(t *testing.T) {
 // TestPocketPix_PartnerDoubleProcessing is FC22, PM-010: the same
 // end_to_end_id settled twice is money the partner owes.
 func TestPocketPix_PartnerDoubleProcessing(t *testing.T) {
+	t.Parallel()
+
 	p := newPixRound(t)
 	alice := p.createAccount()
 	p.deposit(alice, 10_000)
@@ -199,6 +211,8 @@ func TestPocketPix_PartnerDoubleProcessing(t *testing.T) {
 // the second settlement against suspense (D10), so the reserve mirror and
 // what the partner owes both agree with the truth.
 func TestPocketPix_ReconciledDoubleProcessingPasses(t *testing.T) {
+	t.Parallel()
+
 	p := newPixRound(t)
 	alice := p.createAccount()
 	p.deposit(alice, 10_000)
@@ -212,6 +226,8 @@ func TestPocketPix_ReconciledDoubleProcessingPasses(t *testing.T) {
 }
 
 func TestPocketPix_IncomingCreditedOrNot(t *testing.T) {
+	t.Parallel()
+
 	p := newPixRound(t)
 	alice := p.createAccount()
 	e2e := "E00000000000000000000000000000abc"

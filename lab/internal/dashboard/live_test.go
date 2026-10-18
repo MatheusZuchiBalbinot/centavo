@@ -76,6 +76,8 @@ func get(t *testing.T, handler http.Handler, path string, into any) int {
 }
 
 func TestLive_FollowsTheCurrentRoundAndAddsUpTheFinishedOnes(t *testing.T) {
+	t.Parallel()
+
 	roundsDir := t.TempDir()
 	writeLiveRound(t, roundsDir, "r0001", `{"verdict":"fail","invariants":[]}`)
 	writeLiveRound(t, roundsDir, "r0002", "")
@@ -107,6 +109,8 @@ func TestLive_FollowsTheCurrentRoundAndAddsUpTheFinishedOnes(t *testing.T) {
 }
 
 func TestReplay_ServesOnlyRoundDirectories(t *testing.T) {
+	t.Parallel()
+
 	roundsDir := t.TempDir()
 	writeLiveRound(t, roundsDir, "r0003", `{"verdict":"pass","invariants":[{"id":"I1","status":"ok"}]}`)
 	handler := dashboard.NewHandler(dashboard.Config{Live: noReading, RoundsDir: roundsDir})
