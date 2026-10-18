@@ -14,12 +14,12 @@ import (
 	"centavo/bank/internal/application"
 	"centavo/bank/internal/domain/ledger"
 	"centavo/bank/internal/domain/transfer"
+	"centavo/bank/internal/infrastructure/naive"
 	"centavo/bank/internal/infrastructure/postgres"
 	"centavo/bank/internal/platform/clock"
 	"centavo/bank/internal/platform/correlation"
 	"centavo/bank/internal/platform/defenses"
 	"centavo/bank/internal/platform/failpoint"
-	_ "centavo/bank/internal/platform/naive"
 )
 
 // armFP01 makes FP01 fail every transfer of one correlation id. The error
@@ -67,20 +67,13 @@ func naiveMoney(t *testing.T, b bank, profile string) application.MoneyDependenc
 	}
 
 	deps := application.MoneyDependencies{UnitOfWork: postgres.NewUnitOfWork(b.pool), Locker: application.RowLocker{}}
-	variantDeps := defenses.Dependencies{Pool: b.pool}
 
 	if !parsed.IsEnabled(defenses.AtomicLedger) {
-		deps.UnitOfWork, err = defenses.Naive[application.UnitOfWork](defenses.AtomicLedger, variantDeps)
-		if err != nil {
-			t.Fatal(err)
-		}
+		deps.UnitOfWork = naive.NewUnitOfWork(b.pool)
 	}
 
 	if !parsed.IsEnabled(defenses.BalanceLocking) {
-		deps.Locker, err = defenses.Naive[application.Locker](defenses.BalanceLocking, variantDeps)
-		if err != nil {
-			t.Fatal(err)
-		}
+		deps.Locker = naive.NoLocker{}
 	}
 
 	return deps

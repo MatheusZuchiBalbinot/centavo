@@ -41,6 +41,9 @@ var (
 	ErrMissingPrefix     = errors.New("defense modifiers must start with '-'")
 	ErrUnknownDefense    = errors.New("unknown defense")
 	ErrDuplicateDefense  = errors.New("defense disabled more than once")
+	// ErrNoNaiveVariant means the binary has no naive variant of a defense:
+	// the production build never does (lock 1 of docs/chaos-bot.md, section 16).
+	ErrNoNaiveVariant = errors.New("this binary has no naive variant of the defense")
 )
 
 // all lists the defenses in catalog order (D1 to D12); String relies on it

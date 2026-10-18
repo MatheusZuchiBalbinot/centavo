@@ -5,27 +5,26 @@ package naive
 import (
 	"context"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"centavo/bank/internal/application"
 	"centavo/bank/internal/domain/idempotency"
 	"centavo/bank/internal/domain/ledger"
 	"centavo/bank/internal/infrastructure/postgres"
-	"centavo/bank/internal/platform/defenses"
 )
 
-func init() {
-	defenses.RegisterNaive(defenses.AtomicLedger, func(deps defenses.Dependencies) any {
-		return application.UnitOfWork(postgres.NewAutocommit(deps.Pool))
-	})
+// NewUnitOfWork is the naive variant of D1: every statement commits on its
+// own, so a crash between the debit and the credit destroys money (FC01).
+func NewUnitOfWork(pool *pgxpool.Pool) application.UnitOfWork {
+	return postgres.NewAutocommit(pool)
+}
 
-	defenses.RegisterNaive(defenses.BalanceLocking, func(defenses.Dependencies) any {
-		return application.Locker(NoLocker{})
-	})
+// NewIdempotency is the naive variant of D3: keys only recorded, a resolve
+// without tombstones and no retries.
+func NewIdempotency(pool *pgxpool.Pool) application.IdempotencyStrategy {
+	resolver := ClientRefResolver{store: postgres.NewLedgerStore(pool)}
 
-	defenses.RegisterNaive(defenses.Idempotency, func(deps defenses.Dependencies) any {
-		resolver := ClientRefResolver{store: postgres.NewLedgerStore(deps.Pool)}
-
-		return application.IdempotencyStrategy{Keys: IgnoredKeys{}, Resolver: resolver, Retries: application.NoRetries()}
-	})
+	return application.IdempotencyStrategy{Keys: IgnoredKeys{}, Resolver: resolver, Retries: application.NoRetries()}
 }
 
 // IgnoredKeys is the naive variant of D3: the key is recorded as client_ref

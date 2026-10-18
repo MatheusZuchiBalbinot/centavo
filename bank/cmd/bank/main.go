@@ -34,7 +34,6 @@ import (
 	"centavo/bank/internal/platform/httpserver"
 
 	// Registers the naive variants; the package is empty outside chaoslab builds.
-	_ "centavo/bank/internal/platform/naive"
 	"centavo/bank/migrations"
 )
 
@@ -240,36 +239,47 @@ func newIdempotency(pool *pgxpool.Pool, profile defenses.Profile, unitOfWork app
 		return application.RobustIdempotency(unitOfWork), nil
 	}
 
-	return defenses.Naive[application.IdempotencyStrategy](defenses.Idempotency, defenses.Dependencies{Pool: pool})
+	naive, err := newNaiveVariants(pool)
+	if err != nil {
+		return application.IdempotencyStrategy{}, fmt.Errorf("%w: %s", err, defenses.Idempotency)
+	}
+
+	return naive.idempotency, nil
+}
+
+// naiveVariants are the naive strategies of a chaoslab build; the production
+// build has none (naive_production.go).
+type naiveVariants struct {
+	unitOfWork  application.UnitOfWork
+	locker      application.Locker
+	idempotency application.IdempotencyStrategy
 }
 
 // newMoneyDependencies is the composition root of docs/architecture.md,
 // section 8.2: the robust strategy unless the profile turns its defense off,
-// in which case the naive variant registered by platform/naive.
+// in which case the naive variant of the chaoslab build.
 func newMoneyDependencies(pool *pgxpool.Pool, profile defenses.Profile) (application.MoneyDependencies, error) {
-	deps := defenses.Dependencies{Pool: pool}
-	unitOfWork := application.UnitOfWork(postgres.NewUnitOfWork(pool))
-	locker := application.Locker(application.RowLocker{})
+	deps := application.MoneyDependencies{UnitOfWork: postgres.NewUnitOfWork(pool), Locker: application.RowLocker{}}
+
+	isAllRobust := profile.IsEnabled(defenses.AtomicLedger) && profile.IsEnabled(defenses.BalanceLocking)
+	if isAllRobust {
+		return deps, nil
+	}
+
+	naive, err := newNaiveVariants(pool)
+	if err != nil {
+		return application.MoneyDependencies{}, fmt.Errorf("%w: profile %s", err, profile)
+	}
 
 	if !profile.IsEnabled(defenses.AtomicLedger) {
-		naive, err := defenses.Naive[application.UnitOfWork](defenses.AtomicLedger, deps)
-		if err != nil {
-			return application.MoneyDependencies{}, err
-		}
-
-		unitOfWork = naive
+		deps.UnitOfWork = naive.unitOfWork
 	}
 
 	if !profile.IsEnabled(defenses.BalanceLocking) {
-		naive, err := defenses.Naive[application.Locker](defenses.BalanceLocking, deps)
-		if err != nil {
-			return application.MoneyDependencies{}, err
-		}
-
-		locker = naive
+		deps.Locker = naive.locker
 	}
 
-	return application.MoneyDependencies{UnitOfWork: unitOfWork, Locker: locker}, nil
+	return deps, nil
 }
 
 func serveWorker(ctx context.Context, cfg config.Config, logger *slog.Logger) error {

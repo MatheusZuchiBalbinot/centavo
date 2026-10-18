@@ -12,7 +12,7 @@ import (
 
 // Autocommit runs a use case without a transaction: each statement commits
 // on its own. It is the naive variant of D1 (chaoslab builds only); it lives
-// here because it builds the store on the bare pool, and platform/naive wires it.
+// here because it builds the store on the bare pool, and infrastructure/naive wires it.
 type Autocommit struct {
 	pool *pgxpool.Pool
 }
