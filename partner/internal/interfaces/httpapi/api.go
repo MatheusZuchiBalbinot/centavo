@@ -4,7 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"regexp"
@@ -36,8 +36,6 @@ const correlationHeader = "X-Correlation-Id"
 
 // endToEndPattern accepts the bank's ids, E plus hex and an optional attempt.
 var endToEndPattern = regexp.MustCompile(`^E[0-9a-fA-F-]{8,80}$`)
-
-var errInvalidRequest = errors.New("invalid request")
 
 // API serves the partner's client API (8081) and its admin port (9092).
 type API struct {
@@ -100,7 +98,7 @@ func (a API) submit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		writeError(w, r, a.logger, errInvalidRequest)
 
 		return
 	}
@@ -117,8 +115,7 @@ func (a API) submit(w http.ResponseWriter, r *http.Request) {
 
 	result, err := a.store.Submit(r.Context(), transfer)
 	if err != nil {
-		a.logger.ErrorContext(r.Context(), "recording a transfer", "error", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal"})
+		writeError(w, r, a.logger, fmt.Errorf("recording a transfer: %w", err))
 
 		return
 	}
@@ -143,7 +140,7 @@ func (a API) answerSubmit(ctx context.Context, w http.ResponseWriter, result tru
 	}
 
 	if decider.ErrorAfterProcess() {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal"})
+		writeKnownError(w, errAnswerAfterProcess)
 
 		return
 	}
@@ -180,14 +177,8 @@ func (a API) status(w http.ResponseWriter, r *http.Request) {
 	e2e := r.PathValue("e2e")
 
 	transfer, err := a.store.Get(r.Context(), e2e)
-	if errors.Is(err, truth.ErrNotFound) {
-		writeJSON(w, http.StatusNotFound, map[string]string{"status": "not_found"})
-
-		return
-	}
-
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal"})
+		writeError(w, r, a.logger, err)
 
 		return
 	}
@@ -215,7 +206,7 @@ func (a API) statement(w http.ResponseWriter, r *http.Request) {
 
 	isValid := a.participants[participant] && errAfter == nil && errLimit == nil && afterSeq >= 0 && limit > 0 && limit <= maxStatementLimit
 	if !isValid {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "participant_id, after_seq >= 0 and limit in 1..1000"})
+		writeError(w, r, a.logger, errInvalidStatementQuery)
 
 		return
 	}
@@ -226,7 +217,7 @@ func (a API) statement(w http.ResponseWriter, r *http.Request) {
 
 	entries, err := a.store.Statement(r.Context(), participant, afterSeq, limit)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal"})
+		writeError(w, r, a.logger, err)
 
 		return
 	}
@@ -258,7 +249,7 @@ func (a API) incoming(w http.ResponseWriter, r *http.Request) {
 	isKnownSender := err == nil && a.participants[request.ParticipantID] && endToEndPattern.MatchString(request.EndToEndID)
 	isValid := isKnownSender && request.AccountID != "" && request.AmountCents > 0
 	if !isValid {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "participant_id, end_to_end_id, account_id and amount_cents are required"})
+		writeError(w, r, a.logger, errInvalidIncoming)
 
 		return
 	}
@@ -272,7 +263,7 @@ func (a API) incoming(w http.ResponseWriter, r *http.Request) {
 
 	isNew, err := a.store.AddIncoming(r.Context(), truth.IncomingCommand{Incoming: incoming, EventID: engine.NewEventID(), Planner: decider.Plan})
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal"})
+		writeError(w, r, a.logger, err)
 
 		return
 	}
@@ -284,21 +275,21 @@ func (a API) incoming(w http.ResponseWriter, r *http.Request) {
 func (a API) truthExport(w http.ResponseWriter, r *http.Request) {
 	participant := r.URL.Query().Get("participant_id")
 	if !a.participants[participant] {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unknown participant_id"})
+		writeError(w, r, a.logger, errUnknownParticipant)
 
 		return
 	}
 
 	since, err := sinceOf(r)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "since must be RFC 3339"})
+		writeError(w, r, a.logger, errInvalidSince)
 
 		return
 	}
 
 	export, err := a.store.Truth(r.Context(), participant, since)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal"})
+		writeError(w, r, a.logger, err)
 
 		return
 	}
@@ -328,14 +319,14 @@ type pendingResponse struct {
 func (a API) pending(w http.ResponseWriter, r *http.Request) {
 	count, err := a.store.PendingDeliveries(r.Context())
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal"})
+		writeError(w, r, a.logger, err)
 
 		return
 	}
 
 	lastSeq, err := a.store.LastStatementSeq(r.Context(), r.URL.Query().Get("participant_id"))
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal"})
+		writeError(w, r, a.logger, err)
 
 		return
 	}
@@ -376,7 +367,7 @@ func refuseIfDown(w http.ResponseWriter, decider modes.Decider) bool {
 		return true
 	}
 
-	writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "unavailable"})
+	writeKnownError(w, errUnavailable)
 
 	return true
 }

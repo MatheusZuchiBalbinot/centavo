@@ -250,3 +250,45 @@ func TestEngine_EchoesTheCorrelationIDOnWebhooks(t *testing.T) {
 		t.Fatalf("echoed correlation ids: %v", got)
 	}
 }
+
+// TestErrors_AnswerAStableCode: every refusal carries a machine-readable code
+// and the rule the request broke, never the decoder's detail.
+func TestErrors_AnswerAStableCode(t *testing.T) {
+	p := newPartner(t)
+
+	cases := []struct {
+		name       string
+		method     string
+		path       string
+		body       string
+		wantStatus int
+		wantCode   string
+	}{
+		{name: "malformed submit", method: http.MethodPost, path: "/v1/transfers", body: `{"end_to_end_id": 7}`, wantStatus: http.StatusBadRequest, wantCode: "invalid_request"},
+		{name: "unknown transfer", method: http.MethodGet, path: "/v1/transfers/E00000000deadbeef", wantStatus: http.StatusNotFound, wantCode: "not_found"},
+		{name: "bad statement query", method: http.MethodGet, path: "/v1/statements?participant_id=nobody", wantStatus: http.StatusBadRequest, wantCode: "invalid_request"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			recorder := call(t, p.api, tc.method, tc.path, tc.body)
+
+			var body struct {
+				Error struct {
+					Code    string `json:"code"`
+					Message string `json:"message"`
+				} `json:"error"`
+			}
+
+			err := json.Unmarshal(recorder.Body.Bytes(), &body)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			isExpected := recorder.Code == tc.wantStatus && body.Error.Code == tc.wantCode && !strings.Contains(body.Error.Message, "json")
+			if !isExpected {
+				t.Fatalf("got %d %s", recorder.Code, recorder.Body)
+			}
+		})
+	}
+}
