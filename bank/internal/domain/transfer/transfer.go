@@ -113,7 +113,9 @@ func (id ID) EndToEndID() EndToEndID {
 // AttemptEndToEndID is what the naive relay sends: a new id per attempt,
 // E<id>-<attempt>, so the partner sees each retry as another PIX.
 func (id ID) AttemptEndToEndID(attempt int) EndToEndID {
-	return EndToEndID(fmt.Sprintf("%s-%d", id.EndToEndID(), attempt))
+	attemptID := fmt.Sprintf("%s-%d", id.EndToEndID(), attempt)
+
+	return EndToEndID(attemptID)
 }
 
 // ParseDestinationKey validates a PIX key.

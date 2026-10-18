@@ -35,7 +35,9 @@ func KillMain(binary string) error {
 			continue
 		}
 
-		cmdline, err := os.ReadFile(filepath.Join(procDir, entry.Name(), "cmdline"))
+		path := filepath.Join(procDir, entry.Name(), "cmdline")
+
+		cmdline, err := os.ReadFile(path) //nolint:gosec // G304: /proc/<pid>/cmdline of a listed process.
 		if err != nil {
 			continue
 		}

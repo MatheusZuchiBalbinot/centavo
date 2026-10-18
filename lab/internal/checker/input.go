@@ -313,7 +313,9 @@ func accountOfEntry(entry snapshot.Entry) string { return entry.AccountID }
 // grow in insertion order, which is the order the bank wrote them.
 func groupEntries(sorted []snapshot.Entry, keyOf func(snapshot.Entry) string) map[string][]snapshot.Entry {
 	slices.SortFunc(sorted, func(a, b snapshot.Entry) int {
-		return cmp.Or(cmp.Compare(keyOf(a), keyOf(b)), cmp.Compare(a.ID, b.ID))
+		byKey := cmp.Compare(keyOf(a), keyOf(b))
+
+		return cmp.Or(byKey, cmp.Compare(a.ID, b.ID))
 	})
 
 	groups := map[string][]snapshot.Entry{}

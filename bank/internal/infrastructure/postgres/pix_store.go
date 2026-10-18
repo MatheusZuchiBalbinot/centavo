@@ -33,6 +33,8 @@ type pixStore struct {
 func (s pixStore) InsertExternalTransfer(ctx context.Context, external application.ExternalTransfer) (time.Time, error) {
 	var createdAt time.Time
 
+	amountCents := int64(external.Amount.Cents())
+
 	row := s.db.QueryRow(
 		ctx,
 		insertExternalTransferSQL,
@@ -41,7 +43,7 @@ func (s pixStore) InsertExternalTransfer(ctx context.Context, external applicati
 		uuid.UUID(external.OperationID),
 		external.ClientRef,
 		uuid.UUID(external.AccountID),
-		int64(external.Amount.Cents()),
+		amountCents,
 		external.DestinationKey,
 	)
 
@@ -251,13 +253,15 @@ VALUES ($1, $2, $3, $4, $5)`
 // InsertIncoming records a PIX in; a second one for the same end_to_end_id
 // is application.ErrAlreadyCredited.
 func (s pixStore) InsertIncoming(ctx context.Context, incoming application.IncomingRecord) error {
+	amountCents := int64(incoming.Amount.Cents())
+
 	_, err := s.db.Exec(
 		ctx,
 		insertIncomingSQL,
 		incoming.ID,
 		incoming.EndToEndID,
 		uuid.UUID(incoming.AccountID),
-		int64(incoming.Amount.Cents()),
+		amountCents,
 		incoming.SourceEventID,
 	)
 

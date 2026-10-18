@@ -64,7 +64,8 @@ func requireToken(token string, next http.Handler) http.Handler {
 	expected := []byte(token)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		isAuthorized := len(expected) > 0 && subtle.ConstantTimeCompare([]byte(r.Header.Get(tokenHeader)), expected) == 1
+		received := []byte(r.Header.Get(tokenHeader))
+		isAuthorized := len(expected) > 0 && subtle.ConstantTimeCompare(received, expected) == 1
 		if !isAuthorized {
 			http.Error(w, "missing or wrong "+tokenHeader, http.StatusUnauthorized)
 

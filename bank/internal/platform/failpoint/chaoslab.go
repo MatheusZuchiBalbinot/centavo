@@ -458,5 +458,7 @@ func newDecisions(seed uint64, name Name) *mathrand.Rand {
 	_, _ = hasher.Write([]byte(name))
 
 	// Determinism is the point: the same seed must replay the same decisions.
-	return mathrand.New(mathrand.NewPCG(seed, hasher.Sum64())) //nolint:gosec // G404: reproducibility, not secrecy.
+	source := mathrand.NewPCG(seed, hasher.Sum64())
+
+	return mathrand.New(source) //nolint:gosec // G404: reproducibility, not secrecy.
 }

@@ -160,7 +160,9 @@ func writeReports(roundDir string, report Report) error {
 		return fmt.Errorf("writing report.json: %w", err)
 	}
 
-	err = os.WriteFile(filepath.Join(roundDir, reportMDFile), []byte(renderMarkdown(report)), 0o600)
+	markdown := []byte(renderMarkdown(report))
+
+	err = os.WriteFile(filepath.Join(roundDir, reportMDFile), markdown, 0o600)
 	if err != nil {
 		return fmt.Errorf("writing report.md: %w", err)
 	}

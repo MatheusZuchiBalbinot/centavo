@@ -308,7 +308,9 @@ func Load(name string) (Scenario, error) {
 
 	content, err := files.ReadFile(name + fileExtension)
 	if err != nil {
-		return Scenario{}, fmt.Errorf("%w: %q (known: %s)", ErrUnknownScenario, name, strings.Join(Names(), ", "))
+		known := strings.Join(Names(), ", ")
+
+		return Scenario{}, fmt.Errorf("%w: %q (known: %s)", ErrUnknownScenario, name, known)
 	}
 
 	return Parse(name, content)

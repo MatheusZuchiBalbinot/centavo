@@ -108,7 +108,8 @@ func armFailpoint(w http.ResponseWriter, r *http.Request) {
 }
 
 func listFailpoints(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, failpoint.Rules(time.Now()))
+	rules := failpoint.Rules(time.Now())
+	writeJSON(w, rules)
 }
 
 func clearFailpoints(w http.ResponseWriter, _ *http.Request) {
@@ -199,7 +200,9 @@ func KillMain(binary string) error {
 // isMainProcess matches "<binary> api|worker|serve", never healthcheck or
 // another chaos-kill.
 func isMainProcess(pid int, binary string) bool {
-	cmdline, err := os.ReadFile(filepath.Join(procDir, strconv.Itoa(pid), cmdlineFile))
+	path := filepath.Join(procDir, strconv.Itoa(pid), cmdlineFile)
+
+	cmdline, err := os.ReadFile(path) //nolint:gosec // G304: /proc/<pid>/cmdline, built from a pid.
 	if err != nil {
 		return false
 	}

@@ -158,7 +158,8 @@ WHERE account_id = $1`
 
 // OverwritePosition stores a position the caller computed.
 func (s ledgerRows) OverwritePosition(ctx context.Context, id ledger.AccountID, position ledger.Position) error {
-	tag, err := s.db.Exec(ctx, overwritePositionSQL, uuid.UUID(id), int64(position.Balance.Cents()), int64(position.LastSeq))
+	balanceCents := int64(position.Balance.Cents())
+	tag, err := s.db.Exec(ctx, overwritePositionSQL, uuid.UUID(id), balanceCents, int64(position.LastSeq))
 	if err != nil {
 		return fmt.Errorf("overwriting position: %w", err)
 	}
@@ -230,6 +231,8 @@ VALUES ($1, $2, $3, $4, $5)`
 
 // InsertEntry appends one ledger entry.
 func (s ledgerRows) InsertEntry(ctx context.Context, entry ledger.Entry) error {
+	balanceAfterCents := int64(entry.BalanceAfter.Cents())
+
 	_, err := s.db.Exec(
 		ctx,
 		insertEntrySQL,
@@ -237,7 +240,7 @@ func (s ledgerRows) InsertEntry(ctx context.Context, entry ledger.Entry) error {
 		uuid.UUID(entry.AccountID),
 		int64(entry.Amount),
 		int64(entry.Seq),
-		int64(entry.BalanceAfter.Cents()),
+		balanceAfterCents,
 	)
 	if err != nil {
 		return fmt.Errorf("inserting ledger entry: %w", err)

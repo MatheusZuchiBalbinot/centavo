@@ -250,12 +250,8 @@ func (e *evaluation) checkPath(transfer snapshot.ExternalTransfer) {
 		isValidStep := !isFirst && transition.From == previous && allowedTransitions[step] && transition.Seq == int64(k+1)
 
 		if !isValidFirst && !isValidStep {
-			e.add(e.transferViolation(
-				transfer,
-				InvariantI7,
-				RuleI7Path,
-				fmt.Sprintf("transferência %s: passo %d vai de %q para %q depois de %q", transfer.ID, transition.Seq, transition.From, transition.To, previous),
-			))
+			message := fmt.Sprintf("transferência %s: passo %d vai de %q para %q depois de %q", transfer.ID, transition.Seq, transition.From, transition.To, previous)
+			e.add(e.transferViolation(transfer, InvariantI7, RuleI7Path, message))
 
 			return
 		}
@@ -265,19 +261,11 @@ func (e *evaluation) checkPath(transfer snapshot.ExternalTransfer) {
 
 	isCurrent := len(transitions) > 0 && transfer.Status == previous && transfer.StatusSeq == int64(len(transitions))
 	if !isCurrent {
-		e.add(e.transferViolation(
-			transfer,
-			InvariantI7,
-			RuleI7Path,
-			fmt.Sprintf(
-				"transferência %s está em %s (status_seq %d), mas o histórico tem %d passos e termina em %q",
-				transfer.ID,
-				transfer.Status,
-				transfer.StatusSeq,
-				len(transitions),
-				previous,
-			),
-		))
+		message := fmt.Sprintf(
+			"transferência %s está em %s (status_seq %d), mas o histórico tem %d passos e termina em %q",
+			transfer.ID, transfer.Status, transfer.StatusSeq, len(transitions), previous,
+		)
+		e.add(e.transferViolation(transfer, InvariantI7, RuleI7Path, message))
 	}
 }
 
@@ -303,12 +291,8 @@ func (e *evaluation) checkPostings(transfer snapshot.ExternalTransfer) {
 
 	for kind, want := range expected {
 		if counts[kind] != want {
-			e.add(e.transferViolation(
-				transfer,
-				InvariantI7,
-				RuleI7Postings,
-				fmt.Sprintf("transferência %s tem %d transação(ões) %s, o caminho exige %d", transfer.ID, counts[kind], kind, want),
-			))
+			message := fmt.Sprintf("transferência %s tem %d transação(ões) %s, o caminho exige %d", transfer.ID, counts[kind], kind, want)
+			e.add(e.transferViolation(transfer, InvariantI7, RuleI7Postings, message))
 		}
 	}
 }
@@ -319,12 +303,8 @@ func (e *evaluation) checkLiveness(transfer snapshot.ExternalTransfer) {
 		return
 	}
 
-	e.add(e.transferViolation(
-		transfer,
-		InvariantI5,
-		RuleI5NotTerminal,
-		fmt.Sprintf("transferência %s ainda está em %s depois da quiescência", transfer.ID, transfer.Status),
-	))
+	message := fmt.Sprintf("transferência %s ainda está em %s depois da quiescência", transfer.ID, transfer.Status)
+	e.add(e.transferViolation(transfer, InvariantI5, RuleI5NotTerminal, message))
 }
 
 // checkTransit is the transit rule of I5: sys_pix_out_transit holds exactly the
@@ -368,21 +348,19 @@ func (e *evaluation) checkAgreement(transfer snapshot.ExternalTransfer, index tr
 	settled, returned := distinctPixOf(index.settlements[base]), distinctPixOf(index.returns[base])
 
 	if settled != counts[snapshot.TransactionPixOutSettle] {
-		e.add(e.transferViolation(
-			transfer,
-			InvariantI6,
-			RuleI6Settlements,
-			fmt.Sprintf("o parceiro liquidou a transferência %s %d vez(es), o ledger registra %d", transfer.ID, settled, counts[snapshot.TransactionPixOutSettle]),
-		))
+		message := fmt.Sprintf(
+			"o parceiro liquidou a transferência %s %d vez(es), o ledger registra %d",
+			transfer.ID, settled, counts[snapshot.TransactionPixOutSettle],
+		)
+		e.add(e.transferViolation(transfer, InvariantI6, RuleI6Settlements, message))
 	}
 
 	if returned != counts[snapshot.TransactionPixOutReturn] {
-		e.add(e.transferViolation(
-			transfer,
-			InvariantI6,
-			RuleI6Returns,
-			fmt.Sprintf("o parceiro devolveu a transferência %s %d vez(es), o ledger registra %d", transfer.ID, returned, counts[snapshot.TransactionPixOutReturn]),
-		))
+		message := fmt.Sprintf(
+			"o parceiro devolveu a transferência %s %d vez(es), o ledger registra %d",
+			transfer.ID, returned, counts[snapshot.TransactionPixOutReturn],
+		)
+		e.add(e.transferViolation(transfer, InvariantI6, RuleI6Returns, message))
 	}
 }
 
@@ -400,12 +378,11 @@ func (e *evaluation) checkAuthority(transfer snapshot.ExternalTransfer, index tr
 		return
 	}
 
-	e.add(e.transferViolation(
-		transfer,
-		InvariantI7,
-		RuleI7Authority,
-		fmt.Sprintf("transferência %s terminou em %s, mas o parceiro diz %q para %s", transfer.ID, transfer.Status, cmpOrUnknown(actual), transfer.EndToEndID),
-	))
+	message := fmt.Sprintf(
+		"transferência %s terminou em %s, mas o parceiro diz %q para %s",
+		transfer.ID, transfer.Status, cmpOrUnknown(actual), transfer.EndToEndID,
+	)
+	e.add(e.transferViolation(transfer, InvariantI7, RuleI7Authority, message))
 }
 
 // checkIncoming is I6 for PIX in: each one the partner credited is credited
@@ -456,12 +433,8 @@ func (e *evaluation) checkPixIn(o *operation) {
 
 	credits := e.creditsOf(args.EndToEndID)
 	if credits != 1 {
-		e.add(e.opViolation(
-			o,
-			InvariantI2,
-			RuleI2PixInCredit,
-			fmt.Sprintf("PIX de entrada %s aceito pelo parceiro foi creditado %d vez(es)", args.EndToEndID, credits),
-		))
+		message := fmt.Sprintf("PIX de entrada %s aceito pelo parceiro foi creditado %d vez(es)", args.EndToEndID, credits)
+		e.add(e.opViolation(o, InvariantI2, RuleI2PixInCredit, message))
 	}
 }
 

@@ -55,7 +55,9 @@ func (g GiveUpOnDoubt) OnUnknown(ctx context.Context, stores DoubtStores, claim 
 		return errLeaseLost
 	}
 
-	return ignoreMovedOn(g.machine.Move(ctx, stores, answerCommand(external, PartnerUnknown)))
+	command := answerCommand(external, PartnerUnknown)
+
+	return ignoreMovedOn(g.machine.Move(ctx, stores, command))
 }
 
 // RetryOnDoubt is the resilient_client defense: a timeout never becomes a

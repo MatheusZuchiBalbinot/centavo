@@ -21,7 +21,8 @@ var ErrInvalidSeed = errors.New("seed must be a 64-bit number, such as 0x5eed014
 
 // Parse reads a seed in hexadecimal (0x...) or decimal form.
 func Parse(raw string) (Seed, error) {
-	digits, isHex := strings.CutPrefix(strings.ToLower(strings.TrimSpace(raw)), "0x")
+	normalized := strings.ToLower(strings.TrimSpace(raw))
+	digits, isHex := strings.CutPrefix(normalized, "0x")
 
 	base := 10
 	if isHex {
@@ -59,7 +60,9 @@ func (s Seed) Stream(name string) *mathrand.Rand {
 	derived := splitmix64(uint64(s) ^ hashName(name))
 
 	// A deterministic generator is the point: the same seed must replay the same round.
-	return mathrand.New(mathrand.NewPCG(derived, splitmix64(derived))) //nolint:gosec // G404: reproducibility, not secrecy.
+	source := mathrand.NewPCG(derived, splitmix64(derived))
+
+	return mathrand.New(source) //nolint:gosec // G404: reproducibility, not secrecy.
 }
 
 func hashName(name string) uint64 {

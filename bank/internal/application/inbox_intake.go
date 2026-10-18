@@ -24,7 +24,8 @@ func (i InboxIntake) Apply(ctx context.Context, event PartnerEvent) error {
 	return i.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
 		// The partner echoes the PIX's correlation id in the webhook; an
 		// event without one is still traceable by its own id.
-		_, err := stores.InsertInbox(ctx, event, cmp.Or(correlation.From(ctx), event.ID))
+		correlationID := cmp.Or(correlation.From(ctx), event.ID)
+		_, err := stores.InsertInbox(ctx, event, correlationID)
 
 		return err
 	})

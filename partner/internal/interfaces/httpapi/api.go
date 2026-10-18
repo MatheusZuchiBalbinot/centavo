@@ -183,7 +183,8 @@ func (a API) status(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if refuseIfDown(w, a.modes.For(transfer.ParticipantID, time.Now().UTC())) {
+	decider := a.modes.For(transfer.ParticipantID, time.Now().UTC())
+	if refuseIfDown(w, decider) {
 		return
 	}
 
@@ -201,8 +202,11 @@ func (a API) statement(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	participant := query.Get("participant_id")
 
-	afterSeq, errAfter := strconv.ParseInt(cmp.Or(query.Get("after_seq"), "0"), 10, 64)
-	limit, errLimit := strconv.Atoi(cmp.Or(query.Get("limit"), strconv.Itoa(defaultStatementLimit)))
+	afterSeqText := cmp.Or(query.Get("after_seq"), "0")
+	limitText := cmp.Or(query.Get("limit"), strconv.Itoa(defaultStatementLimit))
+
+	afterSeq, errAfter := strconv.ParseInt(afterSeqText, 10, 64)
+	limit, errLimit := strconv.Atoi(limitText)
 
 	isValid := a.participants[participant] && errAfter == nil && errLimit == nil && afterSeq >= 0 && limit > 0 && limit <= maxStatementLimit
 	if !isValid {
@@ -211,7 +215,8 @@ func (a API) statement(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if refuseIfDown(w, a.modes.For(participant, time.Now().UTC())) {
+	decider := a.modes.For(participant, time.Now().UTC())
+	if refuseIfDown(w, decider) {
 		return
 	}
 
