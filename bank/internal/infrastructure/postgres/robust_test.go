@@ -59,7 +59,8 @@ func TestBalance_ConcurrentDebits_NeverOverdraw(t *testing.T) {
 
 	wg.Wait()
 
-	if succeeded != 10 || insufficient != 10 {
+	isUnexpected := succeeded != 10 || insufficient != 10
+	if isUnexpected {
 		t.Fatalf("succeeded %d, insufficient %d; want 10 and 10", succeeded, insufficient)
 	}
 
@@ -121,7 +122,8 @@ func assertChainedAndNeverNegative(t *testing.T, b bank, account ledger.AccountI
 		t.Fatal(err)
 	}
 
-	if int64(view.Balance.Cents()) != running || running != want {
+	isUnexpected := int64(view.Balance.Cents()) != running || running != want
+	if isUnexpected {
 		t.Fatalf("account %s: materialized %d, entries sum %d, want %d", account, view.Balance.Cents(), running, want)
 	}
 }

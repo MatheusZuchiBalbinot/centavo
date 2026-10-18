@@ -83,7 +83,11 @@ func TestClassify(t *testing.T) {
 			t.Parallel()
 
 			got, err := classify(tc.entry, tc.facts)
-			if err != nil || got != tc.want {
+			if err != nil {
+				t.Fatalf("got %+v (%v), want %+v", got, err, tc.want)
+			}
+
+			if got != tc.want {
 				t.Fatalf("got %+v (%v), want %+v", got, err, tc.want)
 			}
 		})

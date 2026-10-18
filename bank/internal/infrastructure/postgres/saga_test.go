@@ -295,7 +295,8 @@ func TestSweeper_StaleStatusAfterPause_DoesNotRegressState(t *testing.T) {
 	}
 
 	view := p.status(t, created.TransferID)
-	if view.Transfer.Status != transfer.StatusConfirmed || p.settlements(t, created.TransferID, "pix_out_settle") != 1 {
+	isUnexpected := view.Transfer.Status != transfer.StatusConfirmed || p.settlements(t, created.TransferID, "pix_out_settle") != 1
+	if isUnexpected {
 		t.Fatalf("status %s after a stale sweep", view.Transfer.Status)
 	}
 }

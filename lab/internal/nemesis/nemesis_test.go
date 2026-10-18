@@ -59,7 +59,8 @@ func TestRuleFor_CountsDownTheFiresAndScopesTheRound(t *testing.T) {
 	sameIncarnation := n.failpoints.ruleFor(armed, "bank-api", 0).Seed
 	nextIncarnation := n.failpoints.ruleFor(armed, "bank-api", 1).Seed
 
-	if sameIncarnation != rule.Seed || sameIncarnation == nextIncarnation {
+	isUnexpected := sameIncarnation != rule.Seed || sameIncarnation == nextIncarnation
+	if isUnexpected {
 		t.Fatal("the seed must repeat for the same incarnation and change after a restart")
 	}
 }
@@ -136,7 +137,10 @@ func TestClockFaults_AreRecordedAndCleared(t *testing.T) {
 	skew := scenarios.Fault{ID: "ahead", Kind: scenarios.FaultClock, Targets: []string{"bank-worker-2"}, Offset: 2 * time.Minute}
 	n.config.Scenario.Faults = append(n.config.Scenario.Faults, skew)
 
-	if faults := n.clockFaults(); len(faults) != 1 || faults[0].ID != "ahead" {
+	faults := n.clockFaults()
+
+	isUnexpected := len(faults) != 1 || faults[0].ID != "ahead"
+	if isUnexpected {
 		t.Fatalf("clock faults: %+v", faults)
 	}
 

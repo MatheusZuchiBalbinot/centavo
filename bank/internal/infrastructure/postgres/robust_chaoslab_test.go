@@ -116,7 +116,8 @@ func TestInternalTransfer_CrashBetweenDebitAndCredit_LeavesNoPartialEntries(t *t
 			partial := b.transactionsWithClientRef(t, write.Key)
 
 			if tc.shouldLeavePartial {
-				if partial != 1 || len(b.statement(t, source)) != 2 || len(b.statement(t, destination)) != 0 {
+				isUnexpected := partial != 1 || len(b.statement(t, source)) != 2 || len(b.statement(t, destination)) != 0
+				if isUnexpected {
 					t.Fatalf("expected a debit without credit, got %d transactions", partial)
 				}
 

@@ -121,7 +121,8 @@ func TestDeposit_CreditsTheCustomerAndDebitsExternalCash(t *testing.T) {
 	}
 
 	sum, count := b.entrySum(t, result.TransactionID)
-	if sum != 0 || count != 2 {
+	isUnexpected := sum != 0 || count != 2
+	if isUnexpected {
 		t.Fatalf("deposit entries: sum %d over %d entries, want 0 over 2", sum, count)
 	}
 
@@ -151,7 +152,8 @@ func TestTransfer_MovesMoneyAndChainsBalances(t *testing.T) {
 	}
 
 	sum, count := b.entrySum(t, result.TransactionID)
-	if sum != 0 || count != 2 {
+	isUnexpected := sum != 0 || count != 2
+	if isUnexpected {
 		t.Fatalf("transfer entries: sum %d over %d entries, want 0 over 2", sum, count)
 	}
 

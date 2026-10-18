@@ -56,7 +56,8 @@ func TestWriter_ConcurrentAppendsKeepIndexAndTimeInFileOrder(t *testing.T) {
 			t.Fatalf("record %d has index %d and time %d after %d", i, record.Index, record.TimeNS, records[max(i-1, 0)].TimeNS)
 		}
 
-		if record.Round != "r0001" || record.Wall == "" {
+		isUnexpected := record.Round != "r0001" || record.Wall == ""
+		if isUnexpected {
 			t.Fatalf("record %d: round %q, wall %q", i, record.Round, record.Wall)
 		}
 	}
@@ -81,7 +82,8 @@ func TestWriter_DurableAppendIsOnDiskWhenItReturns(t *testing.T) {
 	// Read through a separate handle while the writer is still open: the
 	// invoke must already be in the file, as if the lab had crashed right here.
 	records := readRecords(t, path)
-	if len(records) != 1 || records[0].Index != written.Index {
+	isUnexpected := len(records) != 1 || records[0].Index != written.Index
+	if isUnexpected {
 		t.Fatalf("file holds %+v right after the durable append", records)
 	}
 }
@@ -134,7 +136,8 @@ func TestValidate_AcceptsAWellFormedHistory(t *testing.T) {
 		t.Fatalf("report: %+v", report)
 	}
 
-	if len(report.Open) != 1 || report.Open[0] != "r1-p01-000002" {
+	isUnexpected := len(report.Open) != 1 || report.Open[0] != "r1-p01-000002"
+	if isUnexpected {
 		t.Fatalf("open operations: %v", report.Open)
 	}
 }

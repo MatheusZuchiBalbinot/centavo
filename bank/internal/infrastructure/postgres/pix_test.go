@@ -138,7 +138,8 @@ func TestNaiveRelay_RecordsWhatThePartnerAnswered(t *testing.T) {
 			}
 
 			view := p.status(t, created.TransferID)
-			if view.Transfer.Status != tc.want || view.Transfer.FailureCode != tc.wantFailure {
+			isUnexpected := view.Transfer.Status != tc.want || view.Transfer.FailureCode != tc.wantFailure
+			if isUnexpected {
 				t.Fatalf("status %s (%q), want %s (%q)", view.Transfer.Status, view.Transfer.FailureCode, tc.want, tc.wantFailure)
 			}
 
@@ -150,7 +151,11 @@ func TestNaiveRelay_RecordsWhatThePartnerAnswered(t *testing.T) {
 			assertChainedAndNeverNegative(t, p.bank, account, wantBalance)
 
 			err = relay.Relay(t.Context(), created.TransferID)
-			if err != nil || calls.Load() != 1 {
+			if err != nil {
+				t.Fatalf("a transfer past created was sent again (%d calls, %v)", calls.Load(), err)
+			}
+
+			if calls.Load() != 1 {
 				t.Fatalf("a transfer past created was sent again (%d calls, %v)", calls.Load(), err)
 			}
 		})
@@ -174,14 +179,19 @@ func TestNaiveWebhook_AppliesDuplicatesTwice(t *testing.T) {
 	}
 
 	view := p.status(t, created.TransferID)
-	if view.Transfer.Status != transfer.StatusConfirmed || len(view.Transitions) != 3 {
+	isUnexpected := view.Transfer.Status != transfer.StatusConfirmed || len(view.Transitions) != 3
+	if isUnexpected {
 		t.Fatalf("transfer: %s with %d transitions", view.Transfer.Status, len(view.Transitions))
 	}
 
 	var settlements int
 
 	err := p.bank.pool.QueryRow(t.Context(), `SELECT count(*) FROM ledger_transactions WHERE external_transfer_id = $1 AND kind = 'pix_out_settle'`, uuid.UUID(created.TransferID)).Scan(&settlements)
-	if err != nil || settlements != 2 {
+	if err != nil {
+		t.Fatalf("settlements: %d, %v", settlements, err)
+	}
+
+	if settlements != 2 {
 		t.Fatalf("settlements: %d, %v", settlements, err)
 	}
 }

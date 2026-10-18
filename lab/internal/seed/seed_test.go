@@ -26,7 +26,8 @@ func TestParse(t *testing.T) {
 
 	for _, tc := range cases {
 		got, err := seed.Parse(tc.raw)
-		if !errors.Is(err, tc.err) || got != tc.want {
+		isUnexpected := !errors.Is(err, tc.err) || got != tc.want
+		if isUnexpected {
 			t.Errorf("Parse(%q) = %v, %v; want %v, %v", tc.raw, got, err, tc.want, tc.err)
 		}
 	}
@@ -38,7 +39,11 @@ func TestString_RoundTrips(t *testing.T) {
 	original := seed.Seed(0x5eed0142)
 
 	parsed, err := seed.Parse(original.String())
-	if err != nil || parsed != original {
+	if err != nil {
+		t.Fatalf("round trip of %s: %v, %v", original, parsed, err)
+	}
+
+	if parsed != original {
 		t.Fatalf("round trip of %s: %v, %v", original, parsed, err)
 	}
 }
@@ -57,7 +62,8 @@ func TestStream_IsReproducibleAndIndependent(t *testing.T) {
 		t.Fatal("the same seed and stream name gave different sequences")
 	}
 
-	if first == other || first == otherSeed {
+	isUnexpected := first == other || first == otherSeed
+	if isUnexpected {
 		t.Fatal("different streams or seeds gave the same sequence")
 	}
 }

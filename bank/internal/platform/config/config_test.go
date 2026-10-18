@@ -108,7 +108,11 @@ func TestLoad_ReadsTheChaosSeed(t *testing.T) {
 	vars := map[string]string{"CENTAVO_ENV": "chaoslab", "DATABASE_URL": testDatabaseURL, "CENTAVO_CHAOS_SEED": "0x5eed0142"}
 
 	cfg, err := config.Load(lookupFrom(vars))
-	if err != nil || cfg.Chaos.Seed != 0x5eed0142 {
+	if err != nil {
+		t.Fatalf("got %+v, %v", cfg.Chaos, err)
+	}
+
+	if cfg.Chaos.Seed != 0x5eed0142 {
 		t.Fatalf("got %+v, %v", cfg.Chaos, err)
 	}
 

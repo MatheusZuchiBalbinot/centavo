@@ -21,12 +21,17 @@ func TestAllocate_PicksTheNextIDAndIgnoresOtherEntries(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if id != "r0042" || dir != filepath.Join(roundsDir, "r0042") {
+	isUnexpected := id != "r0042" || dir != filepath.Join(roundsDir, "r0042")
+	if isUnexpected {
 		t.Fatalf("got %s in %s, want r0042", id, dir)
 	}
 
 	second, _, err := allocate(roundsDir)
-	if err != nil || second != "r0043" {
+	if err != nil {
+		t.Fatalf("second allocation: %s, %v", second, err)
+	}
+
+	if second != "r0043" {
 		t.Fatalf("second allocation: %s, %v", second, err)
 	}
 }
@@ -35,7 +40,11 @@ func TestAllocate_CreatesTheRoundsDirectory(t *testing.T) {
 	roundsDir := filepath.Join(t.TempDir(), "data", "rounds")
 
 	id, _, err := allocate(roundsDir)
-	if err != nil || id != "r0001" {
+	if err != nil {
+		t.Fatalf("got %s, %v", id, err)
+	}
+
+	if id != "r0001" {
 		t.Fatalf("got %s, %v", id, err)
 	}
 }

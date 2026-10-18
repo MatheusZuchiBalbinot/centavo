@@ -51,7 +51,8 @@ func TestSubmit_IsIdempotentByEndToEndID(t *testing.T) {
 	first := submit(t, store, "E1", false)
 	again := submit(t, store, "E1", false)
 
-	if !first.IsNew || again.IsNew || again.Transfer.Status != truth.StatusProcessing {
+	isUnexpected := !first.IsNew || again.IsNew || again.Transfer.Status != truth.StatusProcessing
+	if isUnexpected {
 		t.Fatalf("first %+v, again %+v", first, again)
 	}
 }
@@ -80,12 +81,17 @@ func TestSettle_WritesTheStatementOnceOrTwiceWhenTheBugHits(t *testing.T) {
 		settlements[entry.EndToEndID]++
 	}
 
-	if settlements["E-once"] != 1 || settlements["E-twice"] != 2 {
+	isUnexpected := settlements["E-once"] != 1 || settlements["E-twice"] != 2
+	if isUnexpected {
 		t.Fatalf("settlements: %v", settlements)
 	}
 
 	deliveries, err := store.DueDeliveries(t.Context(), epoch, 10)
-	if err != nil || len(deliveries) != 2 {
+	if err != nil {
+		t.Fatalf("deliveries: %d, %v (a second settle of the same transfer must not notify)", len(deliveries), err)
+	}
+
+	if len(deliveries) != 2 {
 		t.Fatalf("deliveries: %d, %v (a second settle of the same transfer must not notify)", len(deliveries), err)
 	}
 }
@@ -113,7 +119,8 @@ func TestRejectAndReturn_FollowTheStatusMachine(t *testing.T) {
 	rejected, _ := store.Get(ctx, "E-rejected")
 	returned, _ := store.Get(ctx, "E-returned")
 
-	if rejected.Status != truth.StatusRejected || returned.Status != truth.StatusReturned {
+	isUnexpected := rejected.Status != truth.StatusRejected || returned.Status != truth.StatusReturned
+	if isUnexpected {
 		t.Fatalf("rejected is %s, returned is %s", rejected.Status, returned.Status)
 	}
 
@@ -146,7 +153,8 @@ func TestAddIncoming_CreditsOncePerEndToEndID(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(export.Incoming) != 1 || len(export.Statement) != 1 {
+	isUnexpected := len(export.Incoming) != 1 || len(export.Statement) != 1
+	if isUnexpected {
 		t.Fatalf("incoming %d, statement %d", len(export.Incoming), len(export.Statement))
 	}
 
@@ -185,7 +193,12 @@ func TestDeliveries_CanBeDroppedRescheduledAndAbandoned(t *testing.T) {
 	}
 
 	now, err := store.DueDeliveries(t.Context(), epoch, 10)
-	if err != nil || len(now) != 1 || now[0].EventID != "doubled" {
+	if err != nil {
+		t.Fatalf("due now: %+v, %v", now, err)
+	}
+
+	isUnexpected := len(now) != 1 || now[0].EventID != "doubled"
+	if isUnexpected {
 		t.Fatalf("due now: %+v, %v", now, err)
 	}
 
@@ -195,12 +208,21 @@ func TestDeliveries_CanBeDroppedRescheduledAndAbandoned(t *testing.T) {
 	}
 
 	later, err := store.DueDeliveries(t.Context(), epoch.Add(2*time.Hour), 10)
-	if err != nil || len(later) != 1 || later[0].EventID != "doubled-copy" {
+	if err != nil {
+		t.Fatalf("due later: %+v, %v (the abandoned delivery must not come back)", later, err)
+	}
+
+	isUnexpected = len(later) != 1 || later[0].EventID != "doubled-copy"
+	if isUnexpected {
 		t.Fatalf("due later: %+v, %v (the abandoned delivery must not come back)", later, err)
 	}
 
 	pending, err := store.PendingDeliveries(t.Context())
-	if err != nil || pending != 1 {
+	if err != nil {
+		t.Fatalf("pending: %d, %v", pending, err)
+	}
+
+	if pending != 1 {
 		t.Fatalf("pending: %d, %v", pending, err)
 	}
 }
@@ -242,7 +264,11 @@ func TestOpen_AddsTheColumnsOfANewerSchema(t *testing.T) {
 	}
 
 	stored, err := store.Get(t.Context(), "E-old")
-	if err != nil || stored.CorrelationID != transfer.CorrelationID {
+	if err != nil {
+		t.Fatalf("stored %+v, %v", stored, err)
+	}
+
+	if stored.CorrelationID != transfer.CorrelationID {
 		t.Fatalf("stored %+v, %v", stored, err)
 	}
 }
@@ -319,7 +345,8 @@ func TestStatement_CarriesTheCorrelationOfEachPix(t *testing.T) {
 		correlations[entry.EndToEndID] = entry.CorrelationID
 	}
 
-	if correlations["E-out"] != "r0001-p01-000001" || correlations["E-in"] != "r0001-p02-000001" {
+	isUnexpected := correlations["E-out"] != "r0001-p01-000001" || correlations["E-in"] != "r0001-p02-000001"
+	if isUnexpected {
 		t.Fatalf("statement correlations: %v", correlations)
 	}
 }

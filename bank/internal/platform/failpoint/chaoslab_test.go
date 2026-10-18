@@ -90,7 +90,8 @@ func TestHit_RespectsMatchSkipAndMaxFires(t *testing.T) {
 	}
 
 	states := Rules(time.Now())
-	if len(states) != 1 || states[0].Hits != 5 || states[0].Fires != 2 {
+	isUnexpected := len(states) != 1 || states[0].Hits != 5 || states[0].Fires != 2
+	if isUnexpected {
 		t.Fatalf("rule state: %+v", states)
 	}
 }

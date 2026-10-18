@@ -54,7 +54,8 @@ func TestBreaker_OpensAfterAWindowOfFailuresAndStopsCalling(t *testing.T) {
 	callsWhenOpened := partner.calls.Load()
 
 	answer := breaker.Submit(t.Context(), anySubmission)
-	if answer != application.PartnerUnknown || partner.calls.Load() != callsWhenOpened {
+	isUnexpected := answer != application.PartnerUnknown || partner.calls.Load() != callsWhenOpened
+	if isUnexpected {
 		t.Fatalf("an open breaker called the partner (%d calls, answer %v)", partner.calls.Load(), answer)
 	}
 

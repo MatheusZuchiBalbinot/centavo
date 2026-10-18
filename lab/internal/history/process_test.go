@@ -20,7 +20,11 @@ func TestProcess_RoundTripsBothForms(t *testing.T) {
 		var decoded history.Process
 
 		err = json.Unmarshal(encoded, &decoded)
-		if err != nil || decoded != process {
+		if err != nil {
+			t.Fatalf("%s: encoded %s, decoded %v, %v", process, encoded, decoded, err)
+		}
+
+		if decoded != process {
 			t.Fatalf("%s: encoded %s, decoded %v, %v", process, encoded, decoded, err)
 		}
 	}
@@ -42,7 +46,8 @@ func TestValidate_NemesisRecords(t *testing.T) {
 	}
 
 	report := validate(t, valid)
-	if !report.IsWellFormed() || report.Invocations != 1 {
+	isUnexpected := !report.IsWellFormed() || report.Invocations != 1
+	if isUnexpected {
 		t.Fatalf("report: %+v", report)
 	}
 

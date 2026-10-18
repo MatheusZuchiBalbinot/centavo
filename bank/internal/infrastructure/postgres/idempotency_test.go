@@ -162,7 +162,11 @@ func TestResolve_VoidsUnknownKeysForGood(t *testing.T) {
 	unknown, applied := newKey(), newKey()
 
 	resolution, err := w.resolver.Resolve(t.Context(), resolveOf(w.depositWrite(t, unknown, account, 100)))
-	if err != nil || resolution.Outcome != idempotency.OutcomeVoided {
+	if err != nil {
+		t.Fatalf("unknown key: %+v, %v", resolution, err)
+	}
+
+	if resolution.Outcome != idempotency.OutcomeVoided {
 		t.Fatalf("unknown key: %+v, %v", resolution, err)
 	}
 
@@ -190,7 +194,11 @@ func TestResolve_VoidsUnknownKeysForGood(t *testing.T) {
 	}
 
 	again, err := w.resolver.Resolve(t.Context(), resolveOf(w.depositWrite(t, unknown, account, 100)))
-	if err != nil || again.Outcome != idempotency.OutcomeVoided {
+	if err != nil {
+		t.Fatalf("a second resolve changed its mind: %+v, %v", again, err)
+	}
+
+	if again.Outcome != idempotency.OutcomeVoided {
 		t.Fatalf("a second resolve changed its mind: %+v, %v", again, err)
 	}
 }
@@ -210,7 +218,12 @@ func TestResolve_KeyTakenByAnotherRequest_IsSuperseded(t *testing.T) {
 	}
 
 	resolution, err := w.resolver.Resolve(t.Context(), resolveOf(original))
-	if err != nil || resolution.Outcome != idempotency.OutcomeSuperseded || resolution.Response != nil {
+	if err != nil {
+		t.Fatalf("the original request: %+v, %v", resolution, err)
+	}
+
+	isUnexpected := resolution.Outcome != idempotency.OutcomeSuperseded || resolution.Response != nil
+	if isUnexpected {
 		t.Fatalf("the original request: %+v, %v", resolution, err)
 	}
 
@@ -265,14 +278,22 @@ func TestDeleteExpiredKeys_RemovesOnlyExpiredOnes(t *testing.T) {
 	}
 
 	resolution, err := w.resolver.Resolve(t.Context(), resolveOf(w.depositWrite(t, fresh, account, 10)))
-	if err != nil || resolution.Outcome != idempotency.OutcomeApplied {
+	if err != nil {
+		t.Fatalf("the fresh key was deleted: %+v, %v", resolution, err)
+	}
+
+	if resolution.Outcome != idempotency.OutcomeApplied {
 		t.Fatalf("the fresh key was deleted: %+v, %v", resolution, err)
 	}
 
 	var remaining int
 
 	err = migrator.QueryRow(t.Context(), `SELECT count(*) FROM idempotency_keys WHERE key = $1`, string(expired)).Scan(&remaining)
-	if err != nil || remaining != 0 {
+	if err != nil {
+		t.Fatalf("the expired key is still there (%d, %v)", remaining, err)
+	}
+
+	if remaining != 0 {
 		t.Fatalf("the expired key is still there (%d, %v)", remaining, err)
 	}
 }

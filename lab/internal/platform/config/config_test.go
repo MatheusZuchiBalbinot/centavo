@@ -25,7 +25,8 @@ func TestLoadRun(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got.BankURL != "http://toxiproxy:28080" || got.RoundsDir != "/data/rounds" || got.AuditorURL != valid["AUDITOR_DATABASE_URL"] {
+	isUnexpected := got.BankURL != "http://toxiproxy:28080" || got.RoundsDir != "/data/rounds" || got.AuditorURL != valid["AUDITOR_DATABASE_URL"]
+	if isUnexpected {
 		t.Fatalf("got %+v", got)
 	}
 

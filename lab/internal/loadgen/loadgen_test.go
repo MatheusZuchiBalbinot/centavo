@@ -49,7 +49,8 @@ func TestClassify(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			result := classify(tc.status, []byte(tc.body), parse)
 
-			if result.verdict != tc.wantVerdict || result.outcome.Kind != tc.wantKind {
+			isUnexpected := result.verdict != tc.wantVerdict || result.outcome.Kind != tc.wantKind
+			if isUnexpected {
 				t.Fatalf("got verdict %d kind %q, want %d %q", result.verdict, result.outcome.Kind, tc.wantVerdict, tc.wantKind)
 			}
 		})
@@ -64,7 +65,8 @@ func TestBackoff_StaysWithinTheExponentialCeiling(t *testing.T) {
 
 		for range 50 {
 			wait := politePolicy.backoff(jitter, attempt)
-			if wait < 0 || wait > ceiling {
+			isUnexpected := wait < 0 || wait > ceiling
+			if isUnexpected {
 				t.Fatalf("attempt %d waited %v, ceiling %v", attempt, wait, ceiling)
 			}
 		}
@@ -102,7 +104,8 @@ func TestRun_RetriesWithTheSameKeyAndRetiresTheProcessAfterInfo(t *testing.T) {
 	workload := scenarios.Workload{Profile: scenarios.ProfileLedgerOnly, Clients: 2, RatePerSecond: 200, Accounts: 4, HasExclusiveAccounts: true}
 	report, path := runRound(t, server.URL, workload, fastPolicy)
 
-	if !report.IsWellFormed() || len(report.Open) != 0 {
+	isUnexpected := !report.IsWellFormed() || len(report.Open) != 0
+	if isUnexpected {
 		t.Fatalf("history: %+v", report)
 	}
 
@@ -115,7 +118,8 @@ func TestRun_RetriesWithTheSameKeyAndRetiresTheProcessAfterInfo(t *testing.T) {
 
 	for _, record := range records {
 		isRetried := record.Type == history.TypeOK && record.F == history.FunctionDeposit
-		if isRetried && record.Attempts != 2 {
+		isWronglyRetried := isRetried && record.Attempts != 2
+		if isWronglyRetried {
 			t.Fatalf("deposit %s took %d attempts, want 2 (one 503, then success)", record.Op, record.Attempts)
 		}
 
@@ -149,7 +153,8 @@ func TestRun_DuplicatorSendsEveryWriteTwiceWithTheSameKey(t *testing.T) {
 	workload.ClientMix = map[scenarios.ClientProfile]float64{scenarios.ClientDuplicator: 1}
 	report, path := runRound(t, server.URL, workload, fastPolicy)
 
-	if !report.IsWellFormed() || len(report.Open) != 0 {
+	isUnexpected := !report.IsWellFormed() || len(report.Open) != 0
+	if isUnexpected {
 		t.Fatalf("history: %+v", report)
 	}
 
@@ -164,7 +169,8 @@ func TestRun_DuplicatorSendsEveryWriteTwiceWithTheSameKey(t *testing.T) {
 		loadWrites++
 
 		isWrite := record.F == history.FunctionDeposit || record.F == history.FunctionTransfer
-		if isWrite && bank.attemptsFor(record.Op) != duplicateCopies {
+		hasWrongCopies := isWrite && bank.attemptsFor(record.Op) != duplicateCopies
+		if hasWrongCopies {
 			t.Fatalf("write %s reached the bank %d times", record.Op, bank.attemptsFor(record.Op))
 		}
 	}
@@ -184,27 +190,32 @@ func TestRun_BuggyClientsAlternateKeysAndAggressiveOnesRetryAtOnce(t *testing.T)
 	workload.ClientMix = map[scenarios.ClientProfile]float64{scenarios.ClientBuggy: 1}
 	report, path := runRound(t, server.URL, workload, fastPolicy)
 
-	if !report.IsWellFormed() || len(report.Open) != 0 {
+	isUnexpected := !report.IsWellFormed() || len(report.Open) != 0
+	if isUnexpected {
 		t.Fatalf("history: %+v", report)
 	}
 
 	var reused, refused int
 
 	for _, record := range readHistory(t, path) {
-		if record.Type == history.TypeInvoke && strings.Contains(string(record.Value), "reused_key") {
+		isReusedKeyInvoke := record.Type == history.TypeInvoke && strings.Contains(string(record.Value), "reused_key")
+		if isReusedKeyInvoke {
 			reused++
 		}
 
-		if record.Type == history.TypeFail && strings.Contains(string(record.Error), "IDEMPOTENCY_KEY_MISMATCH") {
+		isRefusedReuse := record.Type == history.TypeFail && strings.Contains(string(record.Error), "IDEMPOTENCY_KEY_MISMATCH")
+		if isRefusedReuse {
 			refused++
 		}
 	}
 
-	if reused == 0 || refused != reused {
+	isUnexpected = reused == 0 || refused != reused
+	if isUnexpected {
 		t.Fatalf("buggy writes: %d reused a key, %d were refused; want every reuse refused", reused, refused)
 	}
 
-	if aggressivePolicy.maxRetries != 20 || aggressivePolicy.backoffCap != 0 {
+	isUnexpected = aggressivePolicy.maxRetries != 20 || aggressivePolicy.backoffCap != 0
+	if isUnexpected {
 		t.Fatalf("aggressive policy: %+v", aggressivePolicy)
 	}
 }
@@ -254,7 +265,8 @@ func TestResolve_RecordsOneResolvePerKeyInItsOwnProcesses(t *testing.T) {
 			t.Fatalf("record outside the resolve processes: %+v", record)
 		}
 
-		if record.Type == history.TypeInvoke && bank.attemptsFor(record.Op) != 0 {
+		isAttemptedInvoke := record.Type == history.TypeInvoke && bank.attemptsFor(record.Op) != 0
+		if isAttemptedInvoke {
 			t.Fatalf("resolve %s carried an Idempotency-Key", record.Op)
 		}
 	}
@@ -316,11 +328,13 @@ func assertEveryWriteReachedTheBankWithItsKey(t *testing.T, path string, bank *f
 		isWrite := record.F == history.FunctionCreateAccount || record.F == history.FunctionDeposit || record.F == history.FunctionTransfer
 		attempts := bank.attemptsFor(record.Op)
 
-		if isWrite && attempts != 1 {
+		hasWrongWriteAttempts := isWrite && attempts != 1
+		if hasWrongWriteAttempts {
 			t.Fatalf("write %s reached the bank %d times with its key", record.Op, attempts)
 		}
 
-		if !isWrite && attempts != 0 {
+		hasReadAttempts := !isWrite && attempts != 0
+		if hasReadAttempts {
 			t.Fatalf("read %s carried an idempotency key", record.Op)
 		}
 
@@ -396,12 +410,14 @@ func (b *fakeBank) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if b.isEnforcingKeys && key != "" {
+	shouldCheckKey := b.isEnforcingKeys && key != ""
+	if shouldCheckKey {
 		body, _ := io.ReadAll(r.Body)
 		r.Body = io.NopCloser(strings.NewReader(string(body)))
 
 		previous, isKnown := b.bodies[key]
-		if isKnown && previous != string(body) {
+		isReusedWithAnotherBody := isKnown && previous != string(body)
+		if isReusedWithAnotherBody {
 			writeFake(w, http.StatusUnprocessableEntity, `{"error": {"code": "IDEMPOTENCY_KEY_MISMATCH"}}`)
 
 			return

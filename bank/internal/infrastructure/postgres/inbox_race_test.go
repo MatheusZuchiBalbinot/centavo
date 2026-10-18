@@ -101,7 +101,11 @@ func TestInbox_ResyncLeavesAnEventAnotherProcessorTook(t *testing.T) {
 	var outcome string
 
 	err = p.bank.pool.QueryRow(t.Context(), `SELECT coalesce(outcome, '') FROM inbox_events WHERE event_id = $1`, again.ID).Scan(&outcome)
-	if err != nil || outcome != "" {
+	if err != nil {
+		t.Fatalf("the event, still the other processor's, was marked %q (%v)", outcome, err)
+	}
+
+	if outcome != "" {
 		t.Fatalf("the event, still the other processor's, was marked %q (%v)", outcome, err)
 	}
 }

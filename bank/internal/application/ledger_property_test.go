@@ -183,7 +183,8 @@ func TestLedger_AnySequenceOfOperationsKeepsTheInvariants(t *testing.T) {
 			err = steps.apply(t, amount, write)
 
 			isExpectedRefusal := errors.Is(err, ledger.ErrInsufficientFunds) || errors.Is(err, ledger.ErrSameAccount)
-			if err != nil && !isExpectedRefusal {
+			isUnexpectedError := err != nil && !isExpectedRefusal
+			if isUnexpectedError {
 				t.Fatalf("step %d: %v", step, err)
 			}
 		}

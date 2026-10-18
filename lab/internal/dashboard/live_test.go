@@ -64,7 +64,8 @@ func get(t *testing.T, handler http.Handler, path string, into any) int {
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil))
 
-	if into != nil && recorder.Code == http.StatusOK {
+	shouldDecode := into != nil && recorder.Code == http.StatusOK
+	if shouldDecode {
 		err := json.Unmarshal(recorder.Body.Bytes(), into)
 		if err != nil {
 			t.Fatalf("%s body %q: %v", path, recorder.Body, err)
@@ -85,7 +86,8 @@ func TestLive_FollowsTheCurrentRoundAndAddsUpTheFinishedOnes(t *testing.T) {
 	var live liveBody
 
 	code := get(t, handler, "/api/live", &live)
-	if code != http.StatusOK || live.Current == nil {
+	isUnexpected := code != http.StatusOK || live.Current == nil
+	if isUnexpected {
 		t.Fatalf("status %d, current %+v", code, live.Current)
 	}
 
@@ -118,7 +120,10 @@ func TestReplay_ServesOnlyRoundDirectories(t *testing.T) {
 		Verdict string `json:"verdict"`
 	}
 
-	if code := get(t, handler, "/api/replay/r0003", &replay); code != http.StatusOK || replay.Verdict != "pass" {
+	code := get(t, handler, "/api/replay/r0003", &replay)
+
+	isUnexpected := code != http.StatusOK || replay.Verdict != "pass"
+	if isUnexpected {
 		t.Fatalf("replay of r0003: %d, %+v", code, replay)
 	}
 

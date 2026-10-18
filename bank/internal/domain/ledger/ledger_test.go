@@ -38,7 +38,8 @@ func TestPositionDebit_NeverOverdrawsAndAdvancesTheSequence(t *testing.T) {
 			t.Fatalf("debit of %d from %d: %v", amount.Cents(), balance, err)
 		}
 
-		if next.Balance.Cents() != balance-amount.Cents() || next.Balance.Cents() < 0 {
+		isUnexpected := next.Balance.Cents() != balance-amount.Cents() || next.Balance.Cents() < 0
+		if isUnexpected {
 			t.Fatalf("debit of %d from %d left %d", amount.Cents(), balance, next.Balance.Cents())
 		}
 
@@ -104,7 +105,11 @@ func TestParseHolderName(t *testing.T) {
 				return
 			}
 
-			if err != nil || got != tc.want {
+			if err != nil {
+				t.Fatalf("got %q, %v; want %q", got, err, tc.want)
+			}
+
+			if got != tc.want {
 				t.Fatalf("got %q, %v; want %q", got, err, tc.want)
 			}
 		})
@@ -120,7 +125,11 @@ func TestParseAccountID_RoundTripsAndRejectsGarbage(t *testing.T) {
 	}
 
 	parsed, err := ledger.ParseAccountID(id.String())
-	if err != nil || parsed != id {
+	if err != nil {
+		t.Fatalf("round trip of %s: got %s, %v", id, parsed, err)
+	}
+
+	if parsed != id {
 		t.Fatalf("round trip of %s: got %s, %v", id, parsed, err)
 	}
 

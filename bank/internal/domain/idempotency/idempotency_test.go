@@ -37,7 +37,8 @@ func TestParseKey(t *testing.T) {
 			}
 
 			isAccepted := tc.want == nil
-			if isAccepted && string(key) != tc.raw {
+			isAltered := isAccepted && string(key) != tc.raw
+			if isAltered {
 				t.Fatalf("key %q came back as %q", tc.raw, key)
 			}
 		})
@@ -51,7 +52,12 @@ func TestReplay(t *testing.T) {
 	completed := idempotency.Record{Key: "r0001-p01-000001", Endpoint: "/v1/transfers", RequestHash: hash, Status: idempotency.StatusCompleted, Response: idempotency.StoredResponse{Status: 201, Body: []byte(`{"ok":1}`)}}
 
 	response, err := completed.Replay("/v1/transfers", hash)
-	if err != nil || response.Status != 201 || string(response.Body) != `{"ok":1}` {
+	if err != nil {
+		t.Fatalf("same request: %+v, %v", response, err)
+	}
+
+	isUnexpected := response.Status != 201 || string(response.Body) != `{"ok":1}`
+	if isUnexpected {
 		t.Fatalf("same request: %+v, %v", response, err)
 	}
 

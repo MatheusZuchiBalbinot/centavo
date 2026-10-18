@@ -74,7 +74,8 @@ func TestSubmit_IsIdempotentByEndToEndID(t *testing.T) {
 	status := call(t, p.api, http.MethodGet, "/v1/transfers/"+e2e, "")
 	missing := call(t, p.api, http.MethodGet, "/v1/transfers/E00000000deadbeef", "")
 
-	if status.Code != http.StatusOK || missing.Code != http.StatusNotFound || !strings.Contains(missing.Body.String(), "not_found") {
+	isUnexpected := status.Code != http.StatusOK || missing.Code != http.StatusNotFound || !strings.Contains(missing.Body.String(), "not_found")
+	if isUnexpected {
 		t.Fatalf("status %d, missing %d %s", status.Code, missing.Code, missing.Body)
 	}
 }
@@ -83,7 +84,8 @@ func TestSubmit_RefusesUnknownDestinationKeys(t *testing.T) {
 	p := newPartner(t)
 
 	refused := call(t, p.api, http.MethodPost, "/v1/transfers", transferBody("E0192f1c5a1b2c3d5", "invalid-0001"))
-	if refused.Code != http.StatusUnprocessableEntity || !strings.Contains(refused.Body.String(), `"status":"rejected"`) {
+	isUnexpected := refused.Code != http.StatusUnprocessableEntity || !strings.Contains(refused.Body.String(), `"status":"rejected"`)
+	if isUnexpected {
 		t.Fatalf("got %d %s", refused.Code, refused.Body)
 	}
 
@@ -130,7 +132,12 @@ func TestIncomingAndTruth_ShowTheStatementTheBankReconcilesAgainst(t *testing.T)
 	var export truth.Export
 
 	err := json.Unmarshal(call(t, p.admin, http.MethodGet, "/internal/truth?participant_id="+participant, "").Body.Bytes(), &export)
-	if err != nil || len(export.Incoming) != 1 || len(export.Statement) != 1 {
+	if err != nil {
+		t.Fatalf("truth: %+v, %v", export, err)
+	}
+
+	isUnexpected := len(export.Incoming) != 1 || len(export.Statement) != 1
+	if isUnexpected {
 		t.Fatalf("truth: %+v, %v", export, err)
 	}
 

@@ -309,7 +309,8 @@ func TestStatement_ParsesQueryParameters(t *testing.T) {
 			}
 
 			received := fixture.statement.received
-			if received.AfterSeq != tc.wantQuery.AfterSeq || received.Limit != tc.wantQuery.Limit {
+			isUnexpected := received.AfterSeq != tc.wantQuery.AfterSeq || received.Limit != tc.wantQuery.Limit
+			if isUnexpected {
 				t.Fatalf("use case received %+v", received)
 			}
 
@@ -346,7 +347,8 @@ func TestWrites_MapIdempotencyOutcomes(t *testing.T) {
 			recorder := fixture.do(t, apiRequest{method: http.MethodPost, path: "/v1/deposits", body: body, headers: headers})
 
 			envelope := decodeError(t, recorder)
-			if recorder.Code != tc.wantStatus || envelope.Error.Code != tc.wantCode {
+			isUnexpected := recorder.Code != tc.wantStatus || envelope.Error.Code != tc.wantCode
+			if isUnexpected {
 				t.Fatalf("got %d %s, want %d %s", recorder.Code, envelope.Error.Code, tc.wantStatus, tc.wantCode)
 			}
 
@@ -376,17 +378,20 @@ func TestResolve_AnswersAppliedOrVoided(t *testing.T) {
 	resolveBody := `{"endpoint":"/v1/deposits","body":` + resolvedDeposit + `}`
 
 	applied := fixture.do(t, apiRequest{method: http.MethodPost, path: "/v1/operations/" + validKey + "/resolve", body: resolveBody})
-	if applied.Code != http.StatusOK || !strings.Contains(applied.Body.String(), `"outcome":"applied"`) || !strings.Contains(applied.Body.String(), `"transaction_id":"t"`) {
+	isUnexpected := applied.Code != http.StatusOK || !strings.Contains(applied.Body.String(), `"outcome":"applied"`) || !strings.Contains(applied.Body.String(), `"transaction_id":"t"`)
+	if isUnexpected {
 		t.Fatalf("applied: %d %s", applied.Code, applied.Body)
 	}
 
 	superseded := fixture.do(t, apiRequest{method: http.MethodPost, path: "/v1/operations/" + validKey + "/resolve", body: `{"endpoint":"/v1/deposits","body":{"account_id":"a","amount_cents":999}}`})
-	if superseded.Code != http.StatusOK || !strings.Contains(superseded.Body.String(), `"outcome":"superseded"`) {
+	isUnexpected = superseded.Code != http.StatusOK || !strings.Contains(superseded.Body.String(), `"outcome":"superseded"`)
+	if isUnexpected {
 		t.Fatalf("another request's key: %d %s", superseded.Code, superseded.Body)
 	}
 
 	voided := fixture.do(t, apiRequest{method: http.MethodPost, path: "/v1/operations/r0001-p01-000404/resolve", body: resolveBody})
-	if voided.Code != http.StatusOK || !strings.Contains(voided.Body.String(), `"outcome":"voided"`) {
+	isUnexpected = voided.Code != http.StatusOK || !strings.Contains(voided.Body.String(), `"outcome":"voided"`)
+	if isUnexpected {
 		t.Fatalf("voided: %d %s", voided.Code, voided.Body)
 	}
 

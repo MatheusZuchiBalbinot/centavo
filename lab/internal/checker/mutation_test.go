@@ -139,7 +139,8 @@ func okTransactions(b *roundBuilder) []snapshot.Transaction {
 
 	for _, transaction := range b.snap.Transactions {
 		o, isKnown := ops.byID[transaction.ClientRef]
-		if isKnown && o.result == history.TypeOK {
+		isSucceeded := isKnown && o.result == history.TypeOK
+		if isSucceeded {
 			applied = append(applied, transaction)
 		}
 	}
@@ -151,7 +152,8 @@ func pickTransaction(t *rapid.T, b *roundBuilder, kind snapshot.TransactionKind)
 	var candidates []snapshot.Transaction
 
 	for _, transaction := range okTransactions(b) {
-		if kind == "" || transaction.Kind == kind {
+		isOfKind := kind == "" || transaction.Kind == kind
+		if isOfKind {
 			candidates = append(candidates, transaction)
 		}
 	}

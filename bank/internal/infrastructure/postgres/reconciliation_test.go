@@ -26,7 +26,8 @@ func (f *fakeStatement) Statement(_ context.Context, afterSeq int64, limit int) 
 	var page []application.StatementEntry
 
 	for _, entry := range f.entries {
-		if entry.Seq > afterSeq && len(page) < limit {
+		isOnPage := entry.Seq > afterSeq && len(page) < limit
+		if isOnPage {
 			page = append(page, entry)
 		}
 	}
@@ -106,7 +107,8 @@ func TestReconciliation_MissingSettlement_ConfirmsTheTransfer(t *testing.T) {
 	p.reconcile(t, statement)
 
 	view := p.status(t, created.TransferID)
-	if view.Transfer.Status != transfer.StatusConfirmed || p.settlements(t, created.TransferID, "pix_out_settle") != 1 {
+	isUnexpected := view.Transfer.Status != transfer.StatusConfirmed || p.settlements(t, created.TransferID, "pix_out_settle") != 1
+	if isUnexpected {
 		t.Fatalf("status %s after reconciling a settlement", view.Transfer.Status)
 	}
 }
@@ -125,7 +127,8 @@ func TestReconciliation_PartnerDoubleSettlement_BooksSuspense(t *testing.T) {
 	p.reconcile(t, statement)
 
 	owed := suspenseBefore - p.systemBalance(t, ledger.SuspenseAccountID())
-	if owed != 1_500 || p.settlements(t, created.TransferID, "pix_out_settle") != 1 {
+	isUnexpected := owed != 1_500 || p.settlements(t, created.TransferID, "pix_out_settle") != 1
+	if isUnexpected {
 		t.Fatalf("suspense moved by %d, %d settlements", owed, p.settlements(t, created.TransferID, "pix_out_settle"))
 	}
 }

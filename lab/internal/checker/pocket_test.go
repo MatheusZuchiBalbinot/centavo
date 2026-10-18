@@ -208,7 +208,8 @@ func TestPocket_UnresolvedMakesTheRoundInconclusive(t *testing.T) {
 	b.operation(history.FunctionDeposit, depositArgs{AccountID: alice, AmountCents: 500}, history.TypeInfo, nil)
 
 	result := b.evaluate()
-	if result.Verdict != VerdictInconclusive || len(result.Unresolved) != 1 {
+	isUnexpected := result.Verdict != VerdictInconclusive || len(result.Unresolved) != 1
+	if isUnexpected {
 		t.Fatalf("verdict %s, unresolved %v", result.Verdict, result.Unresolved)
 	}
 

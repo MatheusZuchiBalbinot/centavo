@@ -41,7 +41,8 @@ func TestHonestByDefault(t *testing.T) {
 	}
 
 	planned := decider.Plan(truth.Event{ID: "evt"}, now)
-	if len(planned) != 1 || planned[0].IsDropped || !planned[0].At.Equal(now) {
+	isUnexpected := len(planned) != 1 || planned[0].IsDropped || !planned[0].At.Equal(now)
+	if isUnexpected {
 		t.Fatalf("honest plan: %+v", planned)
 	}
 }

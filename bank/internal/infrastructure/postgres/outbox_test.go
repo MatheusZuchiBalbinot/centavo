@@ -148,7 +148,8 @@ func TestPixOut_CrashAfterSave_IsStillSubmitted(t *testing.T) {
 	}
 
 	calls := partner.calls()
-	if len(calls) != 1 || calls[0] != created.EndToEndID {
+	isUnexpected := len(calls) != 1 || calls[0] != created.EndToEndID
+	if isUnexpected {
 		t.Fatalf("partner calls: %v, want one with %s", calls, created.EndToEndID)
 	}
 

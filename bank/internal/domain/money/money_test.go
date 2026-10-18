@@ -31,7 +31,8 @@ func TestNewAmount_AcceptsExactlyTheValidRange(t *testing.T) {
 			t.Fatalf("rejected valid amount %d: %v", cents, err)
 		}
 
-		if amount.Cents() != cents || amount.Negated() != -cents {
+		isUnexpected := amount.Cents() != cents || amount.Negated() != -cents
+		if isUnexpected {
 			t.Fatalf("amount %d round-tripped as %d and %d", cents, amount.Cents(), amount.Negated())
 		}
 	})
