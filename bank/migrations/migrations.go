@@ -3,6 +3,8 @@ package migrations
 
 import (
 	"embed"
+	"errors"
+	"fmt"
 	"io/fs"
 )
 
@@ -22,8 +24,12 @@ func Defense(name string) (fs.FS, bool, error) {
 	dir := defensesDir + "/" + name
 
 	_, err := fs.Stat(files, dir)
-	if err != nil {
+	if errors.Is(err, fs.ErrNotExist) {
 		return nil, false, nil
+	}
+
+	if err != nil {
+		return nil, false, fmt.Errorf("reading the %s migrations: %w", name, err)
 	}
 
 	defenseFiles, err := fs.Sub(files, dir)
