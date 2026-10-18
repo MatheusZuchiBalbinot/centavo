@@ -20,14 +20,14 @@ func (f fakePinger) Ping(context.Context) error {
 }
 
 type healthBody struct {
-	Service    string            `json:"service"`
-	ChaosBuild bool              `json:"chaos_build"`
-	Defenses   string            `json:"defenses"`
-	Status     string            `json:"status"`
-	Checks     map[string]string `json:"checks"`
+	Service      string            `json:"service"`
+	IsChaosBuild bool              `json:"chaos_build"`
+	Defenses     string            `json:"defenses"`
+	Status       string            `json:"status"`
+	Checks       map[string]string `json:"checks"`
 }
 
-var testBuildInfo = httpapi.BuildInfo{Service: "bank-api", Version: "test", ChaosBuild: true, Env: "chaoslab", Defenses: "robust"}
+var testBuildInfo = httpapi.BuildInfo{Service: "bank-api", Version: "test", IsChaosBuild: true, Env: "chaoslab", Defenses: "robust"}
 
 func TestHealth_DatabaseReachable_ReturnsOK(t *testing.T) {
 	handler := httpapi.NewAdminHandler(testBuildInfo, fakePinger{})
@@ -38,7 +38,7 @@ func TestHealth_DatabaseReachable_ReturnsOK(t *testing.T) {
 		t.Fatalf("status code = %d, want %d", recorder.Code, http.StatusOK)
 	}
 
-	isExpectedBody := body.Status == "ok" && body.Checks["database"] == "ok" && body.ChaosBuild && body.Defenses == "robust" && body.Service == "bank-api"
+	isExpectedBody := body.Status == "ok" && body.Checks["database"] == "ok" && body.IsChaosBuild && body.Defenses == "robust" && body.Service == "bank-api"
 	if !isExpectedBody {
 		t.Fatalf("unexpected body: %+v", body)
 	}

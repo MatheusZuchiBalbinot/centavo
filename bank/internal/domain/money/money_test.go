@@ -71,8 +71,8 @@ func TestBalanceAdd_DetectsEveryOverflow(t *testing.T) {
 
 		sum, err := money.NewBalance(money.Cents(start)).Add(money.Cents(delta))
 
-		wouldOverflow := (delta > 0 && start > math.MaxInt64-delta) || (delta < 0 && start < math.MinInt64-delta)
-		if wouldOverflow {
+		isOverflowing := (delta > 0 && start > math.MaxInt64-delta) || (delta < 0 && start < math.MinInt64-delta)
+		if isOverflowing {
 			if !errors.Is(err, money.ErrBalanceOverflow) {
 				t.Fatalf("%d + %d overflowed without error (got %v)", start, delta, err)
 			}
@@ -99,19 +99,19 @@ func TestBalanceCovers_ComparesWithTheAmount(t *testing.T) {
 	}
 
 	cases := []struct {
-		balance money.Cents
-		want    bool
+		balance         money.Cents
+		shouldBeAllowed bool
 	}{
-		{balance: 99, want: false},
-		{balance: 100, want: true},
-		{balance: 101, want: true},
-		{balance: -5, want: false},
+		{balance: 99, shouldBeAllowed: false},
+		{balance: 100, shouldBeAllowed: true},
+		{balance: 101, shouldBeAllowed: true},
+		{balance: -5, shouldBeAllowed: false},
 	}
 
 	for _, tc := range cases {
 		got := money.NewBalance(tc.balance).Covers(amount)
-		if got != tc.want {
-			t.Errorf("balance %d covers 100: got %v, want %v", tc.balance, got, tc.want)
+		if got != tc.shouldBeAllowed {
+			t.Errorf("balance %d covers 100: got %v, want %v", tc.balance, got, tc.shouldBeAllowed)
 		}
 	}
 }

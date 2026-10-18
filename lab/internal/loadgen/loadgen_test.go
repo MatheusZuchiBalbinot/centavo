@@ -76,7 +76,7 @@ func TestRun_RecordsAWellFormedHistoryThatMatchesTheBank(t *testing.T) {
 	server := httptest.NewServer(bank)
 	defer server.Close()
 
-	workload := scenarios.Workload{Profile: scenarios.ProfileLedgerOnly, Clients: 4, RatePerSecond: 400, Accounts: 8, ExclusiveAccounts: true}
+	workload := scenarios.Workload{Profile: scenarios.ProfileLedgerOnly, Clients: 4, RatePerSecond: 400, Accounts: 8, HasExclusiveAccounts: true}
 	report, path := runRound(t, server.URL, workload, politePolicy)
 
 	isClean := report.IsWellFormed() && len(report.Open) == 0 && report.Info == 0
@@ -94,12 +94,12 @@ func TestRun_RecordsAWellFormedHistoryThatMatchesTheBank(t *testing.T) {
 
 func TestRun_RetriesWithTheSameKeyAndRetiresTheProcessAfterInfo(t *testing.T) {
 	bank := newFakeBank()
-	bank.failFirstAttempt = true
-	bank.alwaysFailTransfers = true
+	bank.shouldFailFirstAttempt = true
+	bank.shouldFailTransfers = true
 	server := httptest.NewServer(bank)
 	defer server.Close()
 
-	workload := scenarios.Workload{Profile: scenarios.ProfileLedgerOnly, Clients: 2, RatePerSecond: 200, Accounts: 4, ExclusiveAccounts: true}
+	workload := scenarios.Workload{Profile: scenarios.ProfileLedgerOnly, Clients: 2, RatePerSecond: 200, Accounts: 4, HasExclusiveAccounts: true}
 	report, path := runRound(t, server.URL, workload, fastPolicy)
 
 	if !report.IsWellFormed() || len(report.Open) != 0 {
@@ -145,7 +145,7 @@ func TestRun_DuplicatorSendsEveryWriteTwiceWithTheSameKey(t *testing.T) {
 	server := httptest.NewServer(bank)
 	defer server.Close()
 
-	workload := scenarios.Workload{Profile: scenarios.ProfileLedgerOnly, Clients: 2, RatePerSecond: 200, Accounts: 4, ExclusiveAccounts: true}
+	workload := scenarios.Workload{Profile: scenarios.ProfileLedgerOnly, Clients: 2, RatePerSecond: 200, Accounts: 4, HasExclusiveAccounts: true}
 	workload.ClientMix = map[scenarios.ClientProfile]float64{scenarios.ClientDuplicator: 1}
 	report, path := runRound(t, server.URL, workload, fastPolicy)
 
@@ -176,11 +176,11 @@ func TestRun_DuplicatorSendsEveryWriteTwiceWithTheSameKey(t *testing.T) {
 
 func TestRun_BuggyClientsAlternateKeysAndAggressiveOnesRetryAtOnce(t *testing.T) {
 	bank := newFakeBank()
-	bank.enforcesKeys = true
+	bank.isEnforcingKeys = true
 	server := httptest.NewServer(bank)
 	defer server.Close()
 
-	workload := scenarios.Workload{Profile: scenarios.ProfileLedgerOnly, Clients: 2, RatePerSecond: 300, Accounts: 4, ExclusiveAccounts: true}
+	workload := scenarios.Workload{Profile: scenarios.ProfileLedgerOnly, Clients: 2, RatePerSecond: 300, Accounts: 4, HasExclusiveAccounts: true}
 	workload.ClientMix = map[scenarios.ClientProfile]float64{scenarios.ClientBuggy: 1}
 	report, path := runRound(t, server.URL, workload, fastPolicy)
 
@@ -356,10 +356,10 @@ func readHistory(t *testing.T, path string) []history.Record {
 
 // fakeBank is a correct in-memory bank with optional faults.
 type fakeBank struct {
-	failFirstAttempt    bool
-	alwaysFailTransfers bool
-	// enforcesKeys refuses a key reused with another body, like idempotency.
-	enforcesKeys bool
+	shouldFailFirstAttempt bool
+	shouldFailTransfers    bool
+	// isEnforcingKeys refuses a key reused with another body, like idempotency.
+	isEnforcingKeys bool
 
 	mu           sync.Mutex
 	nextID       int
@@ -396,7 +396,7 @@ func (b *fakeBank) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if b.enforcesKeys && key != "" {
+	if b.isEnforcingKeys && key != "" {
 		body, _ := io.ReadAll(r.Body)
 		r.Body = io.NopCloser(strings.NewReader(string(body)))
 
@@ -413,7 +413,7 @@ func (b *fakeBank) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	isFirstAttempt := key != "" && b.attempts[key] == 1
 	isTransfer := r.URL.Path == "/v1/transfers"
 
-	shouldFail := (b.failFirstAttempt && isFirstAttempt) || (b.alwaysFailTransfers && isTransfer)
+	shouldFail := (b.shouldFailFirstAttempt && isFirstAttempt) || (b.shouldFailTransfers && isTransfer)
 	if shouldFail {
 		writeFake(w, http.StatusServiceUnavailable, `{"error": {"code": "TEMPORARILY_UNAVAILABLE"}}`)
 

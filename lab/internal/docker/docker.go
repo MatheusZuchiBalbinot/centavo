@@ -140,9 +140,9 @@ type inspected struct {
 	ID           string `json:"Id"`
 	RestartCount int    `json:"RestartCount"`
 	State        struct {
-		Running bool `json:"Running"`
-		Paused  bool `json:"Paused"`
-		Health  *struct {
+		IsRunning bool `json:"Running"`
+		IsPaused  bool `json:"Paused"`
+		Health    *struct {
 			Status string `json:"Status"`
 		} `json:"Health"`
 	} `json:"State"`
@@ -178,11 +178,11 @@ func (c Client) Inspect(ctx context.Context, id string) (Container, error) {
 }
 
 func stateOf(details inspected) ContainerState {
-	if details.State.Paused {
+	if details.State.IsPaused {
 		return StatePaused
 	}
 
-	if details.State.Running {
+	if details.State.IsRunning {
 		return StateRunning
 	}
 

@@ -515,8 +515,8 @@ func (e *evaluation) transferViolation(transfer snapshot.ExternalTransfer, invar
 	}
 }
 
-func boolCount(value bool) int {
-	if value {
+func boolCount(isCounted bool) int {
+	if isCounted {
 		return 1
 	}
 

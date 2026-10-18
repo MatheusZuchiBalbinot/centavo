@@ -249,8 +249,8 @@ func (n *Nemesis) nudgeTargets(ctx context.Context) (bool, error) {
 }
 
 type healthBody struct {
-	ChaosBuild bool   `json:"chaos_build"`
-	Env        string `json:"env"`
+	IsChaosBuild bool   `json:"chaos_build"`
+	Env          string `json:"env"`
 }
 
 func (n *Nemesis) checkSafety(ctx context.Context, t target) error {
@@ -261,9 +261,9 @@ func (n *Nemesis) checkSafety(ctx context.Context, t target) error {
 		return fmt.Errorf("%w: %s: %w", ErrUnsafeTarget, t.service, err)
 	}
 
-	isSafe := health.ChaosBuild && health.Env == expectedEnv
+	isSafe := health.IsChaosBuild && health.Env == expectedEnv
 	if !isSafe {
-		return fmt.Errorf("%w: %s reports chaos_build=%t env=%q", ErrUnsafeTarget, t.service, health.ChaosBuild, health.Env)
+		return fmt.Errorf("%w: %s reports chaos_build=%t env=%q", ErrUnsafeTarget, t.service, health.IsChaosBuild, health.Env)
 	}
 
 	return nil

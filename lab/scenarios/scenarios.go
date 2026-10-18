@@ -177,12 +177,12 @@ type Scenario struct {
 
 // Workload describes the load generator of a round.
 type Workload struct {
-	Profile           Profile
-	Clients           int
-	RatePerSecond     float64
-	Accounts          int
-	ExclusiveAccounts bool
-	ClientMix         map[ClientProfile]float64
+	Profile              Profile
+	Clients              int
+	RatePerSecond        float64
+	Accounts             int
+	HasExclusiveAccounts bool
+	ClientMix            map[ClientProfile]float64
 }
 
 // Fault is one fault of a scenario. Failpoint faults use Failpoint, Action,
@@ -276,12 +276,12 @@ type rawSchedule struct {
 }
 
 type rawWorkload struct {
-	Profile           Profile                   `yaml:"profile"`
-	Clients           int                       `yaml:"clients"`
-	RatePerSecond     float64                   `yaml:"rate_per_second"`
-	Accounts          int                       `yaml:"accounts"`
-	ExclusiveAccounts bool                      `yaml:"exclusive_accounts"`
-	ClientMix         map[ClientProfile]float64 `yaml:"client_mix"`
+	Profile              Profile                   `yaml:"profile"`
+	Clients              int                       `yaml:"clients"`
+	RatePerSecond        float64                   `yaml:"rate_per_second"`
+	Accounts             int                       `yaml:"accounts"`
+	HasExclusiveAccounts bool                      `yaml:"exclusive_accounts"`
+	ClientMix            map[ClientProfile]float64 `yaml:"client_mix"`
 }
 
 // Names lists the embedded scenarios.
@@ -551,7 +551,7 @@ func validateWorkload(raw rawWorkload) (Workload, error) {
 	}
 
 	minimum := minAccounts
-	if raw.ExclusiveAccounts {
+	if raw.HasExclusiveAccounts {
 		minimum = minAccountsPerClient * raw.Clients
 	}
 
@@ -566,7 +566,7 @@ func validateWorkload(raw rawWorkload) (Workload, error) {
 
 	workload := Workload{
 		Profile: raw.Profile, Clients: raw.Clients, RatePerSecond: raw.RatePerSecond, Accounts: raw.Accounts,
-		ExclusiveAccounts: raw.ExclusiveAccounts, ClientMix: maps.Clone(raw.ClientMix),
+		HasExclusiveAccounts: raw.HasExclusiveAccounts, ClientMix: maps.Clone(raw.ClientMix),
 	}
 
 	return workload, nil

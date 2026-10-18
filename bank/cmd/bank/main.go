@@ -589,7 +589,7 @@ func probeHealth(ctx context.Context) error {
 
 func newBuildInfo(selectedRole role, cfg config.Config) httpapi.BuildInfo {
 	return httpapi.BuildInfo{
-		Service: "bank-" + string(selectedRole), Version: buildinfo.Version(), ChaosBuild: chaosbuild.IsEnabled(),
+		Service: "bank-" + string(selectedRole), Version: buildinfo.Version(), IsChaosBuild: chaosbuild.IsEnabled(),
 		Env: string(cfg.Env), Defenses: cfg.Defenses.String(),
 		// Notes explain combinations that weaken another defense.
 		DefenseNotes: cfg.Defenses.Notes(),

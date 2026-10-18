@@ -24,14 +24,14 @@ func TestVerifySignature(t *testing.T) {
 	now := time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)
 
 	cases := []struct {
-		name   string
-		header string
-		body   []byte
-		secret []byte
-		want   bool
+		name         string
+		header       string
+		body         []byte
+		secret       []byte
+		shouldVerify bool
 	}{
-		{name: "valid", header: sign(secret, now, body), body: body, secret: secret, want: true},
-		{name: "four minutes old", header: sign(secret, now.Add(-4*time.Minute), body), body: body, secret: secret, want: true},
+		{name: "valid", header: sign(secret, now, body), body: body, secret: secret, shouldVerify: true},
+		{name: "four minutes old", header: sign(secret, now.Add(-4*time.Minute), body), body: body, secret: secret, shouldVerify: true},
 		{name: "six minutes old", header: sign(secret, now.Add(-6*time.Minute), body), body: body, secret: secret},
 		{name: "from the future", header: sign(secret, now.Add(6*time.Minute), body), body: body, secret: secret},
 		{name: "another body", header: sign(secret, now, body), body: []byte(`{"event_id":"evt_2"}`), secret: secret},
@@ -43,8 +43,8 @@ func TestVerifySignature(t *testing.T) {
 
 	for _, tc := range cases {
 		got := verifySignature(tc.header, tc.body, tc.secret, now)
-		if got != tc.want {
-			t.Errorf("%s: got %t, want %t", tc.name, got, tc.want)
+		if got != tc.shouldVerify {
+			t.Errorf("%s: got %t, want %t", tc.name, got, tc.shouldVerify)
 		}
 	}
 }

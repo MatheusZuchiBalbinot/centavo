@@ -36,24 +36,24 @@ type Pinger interface {
 
 // BuildInfo identifies the running process in the health response.
 type BuildInfo struct {
-	Service    string
-	Version    string
-	ChaosBuild bool
-	Env        string
-	Defenses   string
+	Service      string
+	Version      string
+	IsChaosBuild bool
+	Env          string
+	Defenses     string
 	// DefenseNotes explain profiles where a defense depends on one that is off.
 	DefenseNotes []string
 }
 
 type healthResponse struct {
-	Service    string                 `json:"service"`
-	Version    string                 `json:"version"`
-	ChaosBuild bool                   `json:"chaos_build"`
-	Env        string                 `json:"env"`
-	Defenses   string                 `json:"defenses"`
-	Notes      []string               `json:"defense_notes,omitempty"`
-	Status     healthStatus           `json:"status"`
-	Checks     map[string]checkResult `json:"checks"`
+	Service      string                 `json:"service"`
+	Version      string                 `json:"version"`
+	IsChaosBuild bool                   `json:"chaos_build"`
+	Env          string                 `json:"env"`
+	Defenses     string                 `json:"defenses"`
+	Notes        []string               `json:"defense_notes,omitempty"`
+	Status       healthStatus           `json:"status"`
+	Checks       map[string]checkResult `json:"checks"`
 }
 
 // NewAdminHandler serves the admin port (9090).
@@ -93,7 +93,7 @@ func (h healthHandler) report(pingErr error) (int, healthResponse) {
 
 func (h healthHandler) response(status healthStatus, databaseResult checkResult) healthResponse {
 	return healthResponse{
-		Service: h.info.Service, Version: h.info.Version, ChaosBuild: h.info.ChaosBuild, Env: h.info.Env,
+		Service: h.info.Service, Version: h.info.Version, IsChaosBuild: h.info.IsChaosBuild, Env: h.info.Env,
 		Defenses: h.info.Defenses, Notes: h.info.DefenseNotes, Status: status, Checks: map[string]checkResult{"database": databaseResult},
 	}
 }

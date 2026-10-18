@@ -84,16 +84,16 @@ func naiveMoney(t *testing.T, b bank, profile string) application.MoneyDependenc
 // regression test, with its positive control.
 func TestInternalTransfer_CrashBetweenDebitAndCredit_LeavesNoPartialEntries(t *testing.T) {
 	cases := []struct {
-		name            string
-		transfer        func(b bank) application.TransferInternal
-		wantPartialLeft bool
+		name               string
+		transfer           func(b bank) application.TransferInternal
+		shouldLeavePartial bool
 	}{
 		{name: "robust: the crash rolls everything back", transfer: func(b bank) application.TransferInternal { return b.transfer }},
 		{name: "without atomic_ledger: the debit stays", transfer: func(b bank) application.TransferInternal {
 			useSchema(t, schema{hasAtomicLedger: false, hasBalanceLocking: true, hasIdempotency: false})
 
 			return application.NewTransferInternal(naiveMoney(t, b, "robust,-atomic_ledger"))
-		}, wantPartialLeft: true},
+		}, shouldLeavePartial: true},
 	}
 
 	for _, tc := range cases {
@@ -115,7 +115,7 @@ func TestInternalTransfer_CrashBetweenDebitAndCredit_LeavesNoPartialEntries(t *t
 
 			partial := b.transactionsWithClientRef(t, write.Key)
 
-			if tc.wantPartialLeft {
+			if tc.shouldLeavePartial {
 				if partial != 1 || len(b.statement(t, source)) != 2 || len(b.statement(t, destination)) != 0 {
 					t.Fatalf("expected a debit without credit, got %d transactions", partial)
 				}
@@ -391,12 +391,12 @@ func TestFencing_ZombieReconcilerWriteIsRejected(t *testing.T) {
 // the database's now, and the skew changes nothing.
 func TestLease_ExpiryUsesDatabaseClock(t *testing.T) {
 	cases := []struct {
-		name       string
-		lease      application.LeasePolicy
-		wantStolen bool
+		name           string
+		lease          application.LeasePolicy
+		shouldBeStolen bool
 	}{
-		{name: "fenced", lease: application.FencedLeases{}, wantStolen: false},
-		{name: "local clock", lease: application.LocalClockLeases{}, wantStolen: true},
+		{name: "fenced", lease: application.FencedLeases{}, shouldBeStolen: false},
+		{name: "local clock", lease: application.LocalClockLeases{}, shouldBeStolen: true},
 	}
 
 	for _, tc := range cases {
@@ -432,8 +432,8 @@ func TestLease_ExpiryUsesDatabaseClock(t *testing.T) {
 			}
 
 			isStolen := acquire("worker-2")
-			if isStolen != tc.wantStolen {
-				t.Fatalf("a worker two minutes ahead took the live lease: %v, want %v", isStolen, tc.wantStolen)
+			if isStolen != tc.shouldBeStolen {
+				t.Fatalf("a worker two minutes ahead took the live lease: %v, want %v", isStolen, tc.shouldBeStolen)
 			}
 		})
 	}

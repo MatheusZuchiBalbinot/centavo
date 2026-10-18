@@ -13,23 +13,23 @@ const healthStatusOK = "ok"
 
 // BuildInfo identifies the running process in the health response.
 type BuildInfo struct {
-	Version    string
-	ChaosBuild bool
-	Env        string
+	Version      string
+	IsChaosBuild bool
+	Env          string
 }
 
 type healthResponse struct {
-	Service    string `json:"service"`
-	Version    string `json:"version"`
-	ChaosBuild bool   `json:"chaos_build"`
-	Env        string `json:"env"`
-	Status     string `json:"status"`
+	Service      string `json:"service"`
+	Version      string `json:"version"`
+	IsChaosBuild bool   `json:"chaos_build"`
+	Env          string `json:"env"`
+	Status       string `json:"status"`
 }
 
 // NewAdminHandler serves the admin and chaos port (9092). The lab-only
 // routes live here, never on the client port; chaos is nil outside chaoslab builds.
 func NewAdminHandler(info BuildInfo, api API, chaos http.Handler) http.Handler {
-	response := healthResponse{Service: "partner", Version: info.Version, ChaosBuild: info.ChaosBuild, Env: info.Env, Status: healthStatusOK}
+	response := healthResponse{Service: "partner", Version: info.Version, IsChaosBuild: info.IsChaosBuild, Env: info.Env, Status: healthStatusOK}
 
 	mux := http.NewServeMux()
 	mux.Handle("GET "+HealthPath, healthHandler{response: response})

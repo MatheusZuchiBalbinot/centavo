@@ -108,17 +108,17 @@ func TestPixOut_ReservesTheAmountInTransit(t *testing.T) {
 
 func TestNaiveRelay_RecordsWhatThePartnerAnswered(t *testing.T) {
 	cases := []struct {
-		name        string
-		status      int
-		want        transfer.Status
-		wantRefund  bool
-		wantFailure string
+		name         string
+		status       int
+		want         transfer.Status
+		shouldRefund bool
+		wantFailure  string
 	}{
 		{name: "accepted", status: http.StatusAccepted, want: transfer.StatusSent},
-		{name: "rejected", status: http.StatusUnprocessableEntity, want: transfer.StatusFailed, wantRefund: true, wantFailure: "partner_rejected"},
+		{name: "rejected", status: http.StatusUnprocessableEntity, want: transfer.StatusFailed, shouldRefund: true, wantFailure: "partner_rejected"},
 		// The naive relay takes doubt for failure and refunds: if the partner
 		// did pay, the bank just created money.
-		{name: "unknown", status: http.StatusInternalServerError, want: transfer.StatusFailed, wantRefund: true, wantFailure: "partner_timeout"},
+		{name: "unknown", status: http.StatusInternalServerError, want: transfer.StatusFailed, shouldRefund: true, wantFailure: "partner_timeout"},
 	}
 
 	for _, tc := range cases {
@@ -143,7 +143,7 @@ func TestNaiveRelay_RecordsWhatThePartnerAnswered(t *testing.T) {
 			}
 
 			wantBalance := int64(5_500)
-			if tc.wantRefund {
+			if tc.shouldRefund {
 				wantBalance = 10_000
 			}
 

@@ -137,11 +137,11 @@ type historySummary struct {
 }
 
 type workloadSummary struct {
-	Profile           string  `json:"profile"`
-	Clients           int     `json:"clients"`
-	RatePerSecond     float64 `json:"rate_per_second"`
-	Accounts          int     `json:"accounts"`
-	ExclusiveAccounts bool    `json:"exclusive_accounts"`
+	Profile              string  `json:"profile"`
+	Clients              int     `json:"clients"`
+	RatePerSecond        float64 `json:"rate_per_second"`
+	Accounts             int     `json:"accounts"`
+	HasExclusiveAccounts bool    `json:"exclusive_accounts"`
 }
 
 // Run executes the round. A load error is returned after the round is
@@ -517,7 +517,7 @@ func newManifest(options Options, result Result, startedAt time.Time, runErr err
 		},
 		Workload: workloadSummary{
 			Profile: string(workload.Profile), Clients: workload.Clients, RatePerSecond: workload.RatePerSecond,
-			Accounts: workload.Accounts, ExclusiveAccounts: workload.ExclusiveAccounts,
+			Accounts: workload.Accounts, HasExclusiveAccounts: workload.HasExclusiveAccounts,
 		},
 	}
 

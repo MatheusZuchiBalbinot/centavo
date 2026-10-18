@@ -427,7 +427,7 @@ func (c *client) nextOperation() (operation, error) {
 
 // workingAccounts are the accounts this client operates on during the load.
 func (c *client) workingAccounts() []accountID {
-	if !c.run.config.Workload.ExclusiveAccounts {
+	if !c.run.config.Workload.HasExclusiveAccounts {
 		return c.run.accounts
 	}
 

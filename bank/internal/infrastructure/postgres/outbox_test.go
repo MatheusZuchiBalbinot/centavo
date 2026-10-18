@@ -196,12 +196,12 @@ func TestOutbox_StaleTokenCannotFinish(t *testing.T) {
 // again; the naive id per attempt is a second PIX.
 func TestRelay_RedeliveryAfterCrash_ReusesEndToEndID(t *testing.T) {
 	cases := []struct {
-		name       string
-		policy     application.EndToEndPolicy
-		wantSameID bool
+		name         string
+		policy       application.EndToEndPolicy
+		shouldKeepID bool
 	}{
-		{name: "fixed", policy: application.FixedEndToEnd{}, wantSameID: true},
-		{name: "per attempt", policy: application.NewEndToEndPerAttempt{}, wantSameID: false},
+		{name: "fixed", policy: application.FixedEndToEnd{}, shouldKeepID: true},
+		{name: "per attempt", policy: application.NewEndToEndPerAttempt{}, shouldKeepID: false},
 	}
 
 	for _, tc := range cases {
@@ -237,8 +237,8 @@ func TestRelay_RedeliveryAfterCrash_ReusesEndToEndID(t *testing.T) {
 			}
 
 			isSameID := calls[0] == calls[1]
-			if isSameID != tc.wantSameID {
-				t.Fatalf("end_to_end_ids %v, same = %v, want %v", calls, isSameID, tc.wantSameID)
+			if isSameID != tc.shouldKeepID {
+				t.Fatalf("end_to_end_ids %v, same = %v, want %v", calls, isSameID, tc.shouldKeepID)
 			}
 
 			view := p.status(t, created.TransferID)

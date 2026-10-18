@@ -10,14 +10,14 @@ import (
 )
 
 type healthBody struct {
-	Service    string `json:"service"`
-	ChaosBuild bool   `json:"chaos_build"`
-	Env        string `json:"env"`
-	Status     string `json:"status"`
+	Service      string `json:"service"`
+	IsChaosBuild bool   `json:"chaos_build"`
+	Env          string `json:"env"`
+	Status       string `json:"status"`
 }
 
 func TestHealth_ReportsBuild(t *testing.T) {
-	info := httpapi.BuildInfo{Version: "test", ChaosBuild: true, Env: "chaoslab"}
+	info := httpapi.BuildInfo{Version: "test", IsChaosBuild: true, Env: "chaoslab"}
 	handler := httpapi.NewAdminHandler(info, httpapi.API{}, nil)
 	request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, httpapi.HealthPath, nil)
 	recorder := httptest.NewRecorder()
@@ -35,7 +35,7 @@ func TestHealth_ReportsBuild(t *testing.T) {
 		t.Fatalf("decoding body: %v", err)
 	}
 
-	isExpectedBody := body.Service == "partner" && body.ChaosBuild && body.Env == "chaoslab" && body.Status == "ok"
+	isExpectedBody := body.Service == "partner" && body.IsChaosBuild && body.Env == "chaoslab" && body.Status == "ok"
 	if !isExpectedBody {
 		t.Fatalf("unexpected body: %+v", body)
 	}

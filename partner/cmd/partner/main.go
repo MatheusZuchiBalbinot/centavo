@@ -124,7 +124,7 @@ func serve(ctx context.Context) error {
 	go worker.Run(ctx)
 
 	api := httpapi.NewAPI(httpapi.APIConfig{Store: store, Modes: registry, Participants: participantIDs, Logger: logger})
-	buildInfo := httpapi.BuildInfo{Version: buildinfo.Version(), ChaosBuild: chaosbuild.IsEnabled(), Env: string(cfg.Env)}
+	buildInfo := httpapi.BuildInfo{Version: buildinfo.Version(), IsChaosBuild: chaosbuild.IsEnabled(), Env: string(cfg.Env)}
 	adminHandler := httpapi.NewAdminHandler(buildInfo, api, chaos.Handler(cfg.ChaosToken, registry))
 	apiServer := httpserver.New(apiAddr, api.Handler())
 	adminServer := httpserver.New(adminAddr, adminHandler)

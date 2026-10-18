@@ -35,7 +35,7 @@ func TestLoad_Smoke(t *testing.T) {
 
 	isExpected := smoke.Duration == 5*time.Minute &&
 		smoke.Workload.Profile == scenarios.ProfileLedgerOnly &&
-		smoke.Workload.ExclusiveAccounts &&
+		smoke.Workload.HasExclusiveAccounts &&
 		len(smoke.SHA256) == 64
 	if !isExpected {
 		t.Fatalf("smoke: %+v", smoke)
