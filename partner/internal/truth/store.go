@@ -442,9 +442,9 @@ func (s *Store) Settle(ctx context.Context, command SettleCommand) error {
 			return nil
 		}
 
-		var returnAt any
+		var returnAt sql.NullInt64
 		if command.ReturnAt != nil {
-			returnAt = command.ReturnAt.UnixNano()
+			returnAt = sql.NullInt64{Int64: command.ReturnAt.UnixNano(), Valid: true}
 		}
 
 		_, err = tx.ExecContext(ctx, `UPDATE transfers SET status = 'settled', return_at = ? WHERE end_to_end_id = ?`, returnAt, transfer.EndToEndID)
