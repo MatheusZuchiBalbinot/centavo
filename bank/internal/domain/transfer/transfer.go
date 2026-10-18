@@ -99,16 +99,22 @@ func ParseID(raw string) (ID, error) {
 
 func (id ID) String() string { return uuid.UUID(id).String() }
 
-// EndToEndID is the transfer's id at the partner: E followed by the 32 hex
-// digits of the transfer id (docs/domain.md, section 13.5).
-func (id ID) EndToEndID() string {
-	return "E" + strings.ReplaceAll(id.String(), "-", "")
+// EndToEndID is a PIX's id at the partner. Ours are E followed by the 32 hex
+// digits of the transfer id (docs/domain.md, section 13.5); incoming ones are
+// whatever the partner sent.
+type EndToEndID string
+
+func (e EndToEndID) String() string { return string(e) }
+
+// EndToEndID is the transfer's id at the partner.
+func (id ID) EndToEndID() EndToEndID {
+	return EndToEndID("E" + strings.ReplaceAll(id.String(), "-", ""))
 }
 
 // AttemptEndToEndID is what the naive relay sends: a new id per attempt,
 // E<id>-<attempt>, so the partner sees each retry as another PIX.
-func (id ID) AttemptEndToEndID(attempt int) string {
-	return fmt.Sprintf("%s-%d", id.EndToEndID(), attempt)
+func (id ID) AttemptEndToEndID(attempt int) EndToEndID {
+	return EndToEndID(fmt.Sprintf("%s-%d", id.EndToEndID(), attempt))
 }
 
 // ParseDestinationKey validates a PIX key.

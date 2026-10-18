@@ -26,7 +26,7 @@ type AuthoritativeStatus struct {
 
 // PartnerStatusReader queries a PIX's authoritative status.
 type PartnerStatusReader interface {
-	Status(ctx context.Context, endToEndID string) (AuthoritativeStatus, error)
+	Status(ctx context.Context, endToEndID transfer.EndToEndID) (AuthoritativeStatus, error)
 }
 
 // pathWalk is one resync: a transfer walked to an authoritative status.

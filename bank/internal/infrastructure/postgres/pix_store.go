@@ -79,7 +79,7 @@ func (s LedgerStore) FindExternalTransfer(ctx context.Context, id transfer.ID) (
 }
 
 // FindExternalTransferByEndToEnd finds the transfer a partner event is about.
-func (s LedgerStore) FindExternalTransferByEndToEnd(ctx context.Context, endToEndID string) (application.ExternalTransfer, error) {
+func (s LedgerStore) FindExternalTransferByEndToEnd(ctx context.Context, endToEndID transfer.EndToEndID) (application.ExternalTransfer, error) {
 	row := s.db.QueryRow(ctx, `SELECT `+externalTransferColumns+` FROM external_transfers WHERE end_to_end_id = $1`, endToEndID)
 
 	return scanExternalTransfer(row)
@@ -164,7 +164,7 @@ SET end_to_end_id = $3, updated_at = now()
 WHERE id = $1 AND end_to_end_id = $2 AND status = 'created'`
 
 // ClaimAttempt is the naive relay's compare-and-set on the end_to_end_id.
-func (s LedgerStore) ClaimAttempt(ctx context.Context, id transfer.ID, seen, next string) (bool, error) {
+func (s LedgerStore) ClaimAttempt(ctx context.Context, id transfer.ID, seen, next transfer.EndToEndID) (bool, error) {
 	tag, err := s.db.Exec(ctx, claimAttemptSQL, uuid.UUID(id), seen, next)
 	if err != nil {
 		return false, fmt.Errorf("claiming an attempt: %w", err)
@@ -265,7 +265,7 @@ func (s LedgerStore) ListCreated(ctx context.Context, limit int) ([]transfer.ID,
 const lockEndToEndSQL = `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`
 
 // LockEndToEnd holds one PIX until the transaction ends.
-func (s LedgerStore) LockEndToEnd(ctx context.Context, endToEndID string) error {
+func (s LedgerStore) LockEndToEnd(ctx context.Context, endToEndID transfer.EndToEndID) error {
 	_, err := s.db.Exec(ctx, lockEndToEndSQL, endToEndID)
 	if err != nil {
 		return fmt.Errorf("locking a PIX: %w", err)
@@ -278,7 +278,7 @@ const lockTransfersOfSQL = `SELECT id FROM external_transfers WHERE end_to_end_i
 
 // LockTransfersOf locks a batch of transfers in id order, which every other
 // writer that takes more than one of them follows too.
-func (s LedgerStore) LockTransfersOf(ctx context.Context, endToEndIDs []string) error {
+func (s LedgerStore) LockTransfersOf(ctx context.Context, endToEndIDs []transfer.EndToEndID) error {
 	rows, err := s.db.Query(ctx, lockTransfersOfSQL, endToEndIDs)
 	if err != nil {
 		return fmt.Errorf("locking transfers: %w", err)

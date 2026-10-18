@@ -23,7 +23,7 @@ const (
 type PartnerEvent struct {
 	ID          string
 	Type        string
-	EndToEndID  string
+	EndToEndID  transfer.EndToEndID
 	AmountCents money.Cents
 	Sequence    int
 	Reason      string

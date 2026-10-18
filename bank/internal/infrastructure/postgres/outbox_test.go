@@ -22,7 +22,7 @@ const expiredLease = time.Millisecond
 // recordingPartner accepts every PIX and keeps the end_to_end_id of each call.
 type recordingPartner struct {
 	mu          sync.Mutex
-	endToEndIDs []string
+	endToEndIDs []transfer.EndToEndID
 }
 
 func newRecordingPartner(t *testing.T) (*recordingPartner, partnerclient.Client) {
@@ -37,7 +37,7 @@ func newRecordingPartner(t *testing.T) (*recordingPartner, partnerclient.Client)
 
 func (p *recordingPartner) serve(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		EndToEndID string `json:"end_to_end_id"`
+		EndToEndID transfer.EndToEndID `json:"end_to_end_id"`
 	}
 
 	err := json.NewDecoder(r.Body).Decode(&body)
@@ -54,11 +54,11 @@ func (p *recordingPartner) serve(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
-func (p *recordingPartner) calls() []string {
+func (p *recordingPartner) calls() []transfer.EndToEndID {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	return append([]string{}, p.endToEndIDs...)
+	return append([]transfer.EndToEndID{}, p.endToEndIDs...)
 }
 
 // newOutboxBank is the PIX of phase F7: the transfer and its outbox message
@@ -310,7 +310,7 @@ func (p pixBank) markSent(t *testing.T, id transfer.ID) {
 // statusAnswer is a partner that answers every status query the same way.
 type statusAnswer transfer.PartnerStatus
 
-func (a statusAnswer) Status(context.Context, string) (application.AuthoritativeStatus, error) {
+func (a statusAnswer) Status(context.Context, transfer.EndToEndID) (application.AuthoritativeStatus, error) {
 	return application.AuthoritativeStatus{Status: transfer.PartnerStatus(a)}, nil
 }
 
@@ -392,7 +392,7 @@ func TestInbox_SecondCreditOfAPixInIsADuplicate(t *testing.T) {
 	drainInbox(t, processor)
 
 	account := p.bank.newCustomer(t)
-	endToEndID := "E" + uuid.NewString()[:8] + "0000bbbb"
+	endToEndID := transfer.EndToEndID("E" + uuid.NewString()[:8] + "0000bbbb")
 
 	for _, eventID := range []string{"evt_" + uuid.NewString(), "evt_" + uuid.NewString()} {
 		incoming := application.PartnerEvent{ID: eventID, Type: application.EventIncoming, EndToEndID: endToEndID, AmountCents: 700, AccountID: account.String()}

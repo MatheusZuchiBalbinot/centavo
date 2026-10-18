@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"centavo/bank/internal/application"
+
+	"centavo/bank/internal/domain/transfer"
 )
 
 // ReadCursor returns the last statement entry reconciled.
@@ -80,7 +82,7 @@ func (s LedgerStore) InsertItem(ctx context.Context, item application.Reconcilia
 }
 
 // CountItems counts the entries of a kind already reconciled for an end_to_end_id.
-func (s LedgerStore) CountItems(ctx context.Context, endToEndID string, kind application.StatementKind) (int, error) {
+func (s LedgerStore) CountItems(ctx context.Context, endToEndID transfer.EndToEndID, kind application.StatementKind) (int, error) {
 	var count int
 
 	err := s.db.QueryRow(ctx, `SELECT count(*) FROM reconciliation_items WHERE end_to_end_id = $1 AND partner_entry_kind = $2`, endToEndID, string(kind)).Scan(&count)
@@ -92,7 +94,7 @@ func (s LedgerStore) CountItems(ctx context.Context, endToEndID string, kind app
 }
 
 // IsIncomingCredited reports a PIX in already in incoming_transfers.
-func (s LedgerStore) IsIncomingCredited(ctx context.Context, endToEndID string) (bool, error) {
+func (s LedgerStore) IsIncomingCredited(ctx context.Context, endToEndID transfer.EndToEndID) (bool, error) {
 	var isCredited bool
 
 	err := s.db.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM incoming_transfers WHERE end_to_end_id = $1)`, endToEndID).Scan(&isCredited)

@@ -26,7 +26,7 @@ const (
 type StatementEntry struct {
 	Seq         int64
 	Kind        StatementKind
-	EndToEndID  string
+	EndToEndID  transfer.EndToEndID
 	AmountCents money.Cents
 	// AccountID is the destination of an incoming PIX.
 	AccountID string

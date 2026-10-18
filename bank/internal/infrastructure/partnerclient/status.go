@@ -24,8 +24,8 @@ type statusResponse struct {
 // Status asks the partner for a PIX's authoritative status. 404 is the
 // partner saying it never received it; anything but 200 or 404 is an error,
 // never a status.
-func (c Client) Status(ctx context.Context, endToEndID string) (application.AuthoritativeStatus, error) {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/v1/transfers/"+url.PathEscape(endToEndID), http.NoBody)
+func (c Client) Status(ctx context.Context, endToEndID transfer.EndToEndID) (application.AuthoritativeStatus, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/v1/transfers/"+url.PathEscape(endToEndID.String()), http.NoBody)
 	if err != nil {
 		return application.AuthoritativeStatus{}, fmt.Errorf("building the status request: %w", err)
 	}

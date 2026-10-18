@@ -181,7 +181,7 @@ func TestInbox_CrashBetweenApplyAndMark_AppliesOnce(t *testing.T) {
 	p.bank.fund(t, account, 10_000)
 	created := p.createPixOut(t, account, 4_500)
 	p.markSent(t, created.TransferID)
-	settled := application.PartnerEvent{ID: "evt_fp06_" + created.EndToEndID, Type: application.EventSettled, EndToEndID: created.EndToEndID, AmountCents: 4_500}
+	settled := application.PartnerEvent{ID: "evt_fp06_" + created.EndToEndID.String(), Type: application.EventSettled, EndToEndID: created.EndToEndID, AmountCents: 4_500}
 
 	err := intake.Apply(correlation.With(t.Context(), settled.ID), settled)
 	if err != nil {

@@ -259,7 +259,7 @@ type pausingPartner struct {
 	meantime func()
 }
 
-func (p pausingPartner) Status(context.Context, string) (application.AuthoritativeStatus, error) {
+func (p pausingPartner) Status(context.Context, transfer.EndToEndID) (application.AuthoritativeStatus, error) {
 	p.meantime()
 
 	return application.AuthoritativeStatus{Status: p.answer}, nil

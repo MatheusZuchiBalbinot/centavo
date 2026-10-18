@@ -44,7 +44,7 @@ var (
 // ExternalTransfer is a PIX out as stored.
 type ExternalTransfer struct {
 	ID             transfer.ID
-	EndToEndID     string
+	EndToEndID     transfer.EndToEndID
 	OperationID    ledger.OperationID
 	ClientRef      string
 	AccountID      ledger.AccountID
@@ -78,7 +78,7 @@ type StatusChange struct {
 // IncomingRecord is a PIX in as stored.
 type IncomingRecord struct {
 	ID            uuid.UUID
-	EndToEndID    string
+	EndToEndID    transfer.EndToEndID
 	AccountID     ledger.AccountID
 	Amount        money.Amount
 	SourceEventID string
@@ -89,10 +89,10 @@ type PixStore interface {
 	InsertExternalTransfer(ctx context.Context, external ExternalTransfer) (time.Time, error)
 	InsertTransition(ctx context.Context, transition TransitionRecord) error
 	FindExternalTransfer(ctx context.Context, id transfer.ID) (ExternalTransfer, []TransitionRecord, error)
-	FindExternalTransferByEndToEnd(ctx context.Context, endToEndID string) (ExternalTransfer, error)
+	FindExternalTransferByEndToEnd(ctx context.Context, endToEndID transfer.EndToEndID) (ExternalTransfer, error)
 	// ClaimAttempt moves the transfer from one end_to_end_id to the next, so
 	// only one relay sends each attempt.
-	ClaimAttempt(ctx context.Context, id transfer.ID, seen, next string) (bool, error)
+	ClaimAttempt(ctx context.Context, id transfer.ID, seen, next transfer.EndToEndID) (bool, error)
 	// OverwriteStatus sets the status without checking the current one and
 	// returns what it was and the new sequence number.
 	OverwriteStatus(ctx context.Context, change StatusChange) (transfer.Status, int, error)
@@ -106,9 +106,9 @@ type PixStore interface {
 	// LockEndToEnd holds one PIX for the rest of the transaction, by its
 	// end_to_end_id, before any of its rows exists: an incoming PIX has none
 	// until it is credited.
-	LockEndToEnd(ctx context.Context, endToEndID string) error
+	LockEndToEnd(ctx context.Context, endToEndID transfer.EndToEndID) error
 	// LockTransfersOf locks the transfers of these end_to_end_ids, in id order.
-	LockTransfersOf(ctx context.Context, endToEndIDs []string) error
+	LockTransfersOf(ctx context.Context, endToEndIDs []transfer.EndToEndID) error
 	// ListCreated returns transfers still in created, oldest first.
 	ListCreated(ctx context.Context, limit int) ([]transfer.ID, error)
 }
@@ -124,7 +124,7 @@ type PixOutInput struct {
 // PixOutResult is what the client gets back: the transfer starts as created.
 type PixOutResult struct {
 	TransferID transfer.ID
-	EndToEndID string
+	EndToEndID transfer.EndToEndID
 	Status     transfer.Status
 	CreatedAt  time.Time
 }
@@ -309,7 +309,7 @@ const (
 
 // PartnerSubmission is one PIX sent to the partner.
 type PartnerSubmission struct {
-	EndToEndID     string
+	EndToEndID     transfer.EndToEndID
 	AmountCents    money.Cents
 	DestinationKey string
 	CorrelationID  string
@@ -402,7 +402,7 @@ func (r NaiveRelay) RelayPending(ctx context.Context) error {
 	return nil
 }
 
-func (r NaiveRelay) claim(ctx context.Context, id transfer.ID, seen, next string) (bool, error) {
+func (r NaiveRelay) claim(ctx context.Context, id transfer.ID, seen, next transfer.EndToEndID) (bool, error) {
 	var isClaimed bool
 
 	err := r.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
@@ -437,8 +437,8 @@ func (r NaiveRelay) record(ctx context.Context, external ExternalTransfer, answe
 
 // nextAttemptOf reads the attempt from E<id>-<attempt>; the fixed id means
 // no attempt yet.
-func nextAttemptOf(endToEndID string) int {
-	_, suffix, hasAttempt := strings.Cut(endToEndID, "-")
+func nextAttemptOf(endToEndID transfer.EndToEndID) int {
+	_, suffix, hasAttempt := strings.Cut(endToEndID.String(), "-")
 	if !hasAttempt {
 		return firstRelayAttempt
 	}

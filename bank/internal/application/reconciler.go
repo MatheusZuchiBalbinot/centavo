@@ -38,7 +38,7 @@ var (
 type ReconciliationItem struct {
 	RunID       int64
 	PartnerSeq  int64
-	EndToEndID  string
+	EndToEndID  transfer.EndToEndID
 	EntryKind   StatementKind
 	AmountCents money.Cents
 	Divergence  Divergence
@@ -57,8 +57,8 @@ type ReconciliationStore interface {
 	InsertItem(ctx context.Context, item ReconciliationItem) (int64, error)
 	// CountItems counts the entries of a kind already reconciled for an
 	// end_to_end_id.
-	CountItems(ctx context.Context, endToEndID string, kind StatementKind) (int, error)
-	IsIncomingCredited(ctx context.Context, endToEndID string) (bool, error)
+	CountItems(ctx context.Context, endToEndID transfer.EndToEndID, kind StatementKind) (int, error)
+	IsIncomingCredited(ctx context.Context, endToEndID transfer.EndToEndID) (bool, error)
 }
 
 // PartnerStatementReader reads the partner's statement after a sequence number.
@@ -337,7 +337,7 @@ func incomingFacts(ctx context.Context, stores Stores, entry StatementEntry, fac
 // its commit; taking a transfer after them would wait on a writer that holds
 // the transfer and waits on those balances, a deadlock every few runs.
 func lockBatch(ctx context.Context, stores Stores, batch statementBatch) error {
-	endToEndIDs := make([]string, 0, len(batch.entries))
+	endToEndIDs := make([]transfer.EndToEndID, 0, len(batch.entries))
 	for _, entry := range batch.entries {
 		endToEndIDs = append(endToEndIDs, entry.EndToEndID)
 	}

@@ -85,7 +85,7 @@ func (OutboxPublication) AfterCommit(context.Context, transfer.ID) error {
 
 // EndToEndPolicy is defense D6's strategy: which end_to_end_id a send uses.
 type EndToEndPolicy interface {
-	Next(external ExternalTransfer) string
+	Next(external ExternalTransfer) transfer.EndToEndID
 }
 
 // FixedEndToEnd is D6: the id derived at creation, on every send, so the
@@ -93,7 +93,7 @@ type EndToEndPolicy interface {
 type FixedEndToEnd struct{}
 
 // Next returns the transfer's own id.
-func (FixedEndToEnd) Next(external ExternalTransfer) string {
+func (FixedEndToEnd) Next(external ExternalTransfer) transfer.EndToEndID {
 	return external.ID.EndToEndID()
 }
 
@@ -101,7 +101,7 @@ func (FixedEndToEnd) Next(external ExternalTransfer) string {
 type NewEndToEndPerAttempt struct{}
 
 // Next returns the id of the following attempt.
-func (NewEndToEndPerAttempt) Next(external ExternalTransfer) string {
+func (NewEndToEndPerAttempt) Next(external ExternalTransfer) transfer.EndToEndID {
 	return external.ID.AttemptEndToEndID(nextAttemptOf(external.EndToEndID))
 }
 

@@ -63,10 +63,10 @@ type pixOutRequest struct {
 }
 
 type pixOutResponse struct {
-	TransferID string          `json:"transfer_id"`
-	EndToEndID string          `json:"end_to_end_id"`
-	Status     transfer.Status `json:"status"`
-	CreatedAt  time.Time       `json:"created_at"`
+	TransferID string              `json:"transfer_id"`
+	EndToEndID transfer.EndToEndID `json:"end_to_end_id"`
+	Status     transfer.Status     `json:"status"`
+	CreatedAt  time.Time           `json:"created_at"`
 }
 
 func (a apiHandlers) pixOut(w http.ResponseWriter, r *http.Request) {
@@ -153,7 +153,7 @@ type transitionResponse struct {
 
 type externalTransferResponse struct {
 	TransferID  string               `json:"transfer_id"`
-	EndToEndID  string               `json:"end_to_end_id"`
+	EndToEndID  transfer.EndToEndID  `json:"end_to_end_id"`
 	AccountID   string               `json:"account_id"`
 	AmountCents int64                `json:"amount_cents"`
 	Status      transfer.Status      `json:"status"`
@@ -201,13 +201,13 @@ func newExternalTransferResponse(view application.ExternalTransferView) external
 }
 
 type webhookEvent struct {
-	EventID     string `json:"event_id"`
-	Type        string `json:"type"`
-	EndToEndID  string `json:"end_to_end_id"`
-	AmountCents int64  `json:"amount_cents"`
-	Sequence    int    `json:"sequence"`
-	Reason      string `json:"reason"`
-	AccountID   string `json:"destination_account_id"`
+	EventID     string              `json:"event_id"`
+	Type        string              `json:"type"`
+	EndToEndID  transfer.EndToEndID `json:"end_to_end_id"`
+	AmountCents int64               `json:"amount_cents"`
+	Sequence    int                 `json:"sequence"`
+	Reason      string              `json:"reason"`
+	AccountID   string              `json:"destination_account_id"`
 }
 
 // webhook takes a partner event. Only a valid signature gets in; what it

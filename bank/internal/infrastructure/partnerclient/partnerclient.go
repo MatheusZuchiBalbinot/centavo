@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"centavo/bank/internal/application"
+
+	"centavo/bank/internal/domain/transfer"
 )
 
 // attemptTimeout is the partner call's timeout (docs/architecture.md, section 7).
@@ -31,10 +33,10 @@ func New(baseURL, participantID string) Client {
 }
 
 type submitRequest struct {
-	EndToEndID     string `json:"end_to_end_id"`
-	ParticipantID  string `json:"participant_id"`
-	AmountCents    int64  `json:"amount_cents"`
-	DestinationKey string `json:"destination_key"`
+	EndToEndID     transfer.EndToEndID `json:"end_to_end_id"`
+	ParticipantID  string              `json:"participant_id"`
+	AmountCents    int64               `json:"amount_cents"`
+	DestinationKey string              `json:"destination_key"`
 }
 
 // Submit sends one PIX once. 202 and 200 are accepted, 422 is a definitive

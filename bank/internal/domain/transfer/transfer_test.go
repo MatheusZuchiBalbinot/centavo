@@ -47,7 +47,7 @@ func TestEndToEndIDs(t *testing.T) {
 	}
 
 	e2e := id.EndToEndID()
-	isFixed := strings.HasPrefix(e2e, "E") && len(e2e) == 33 && !strings.Contains(e2e, "-")
+	isFixed := strings.HasPrefix(e2e.String(), "E") && len(e2e) == 33 && !strings.Contains(e2e.String(), "-")
 	if !isFixed {
 		t.Fatalf("end_to_end_id %q", e2e)
 	}

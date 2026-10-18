@@ -35,7 +35,7 @@ func (f *fakeStatement) Statement(_ context.Context, afterSeq int64, limit int) 
 }
 
 // add appends an entry after the last one.
-func (f *fakeStatement) add(kind application.StatementKind, endToEndID string, cents money.Cents, accountID string) {
+func (f *fakeStatement) add(kind application.StatementKind, endToEndID transfer.EndToEndID, cents money.Cents, accountID string) {
 	seq := f.entries[len(f.entries)-1].Seq + 1
 	f.entries = append(f.entries, application.StatementEntry{Seq: seq, Kind: kind, EndToEndID: endToEndID, AmountCents: cents, AccountID: accountID})
 }
@@ -136,7 +136,7 @@ func TestReconciliation_MissingIncoming_CreditsOnce(t *testing.T) {
 	p := newOutboxBank(t)
 	statement := newStatement(t, p)
 	account := p.bank.newCustomer(t)
-	statement.add(application.StatementIncoming, "E"+uuid.NewString()[:8]+"0000cccc", 640, account.String())
+	statement.add(application.StatementIncoming, transfer.EndToEndID("E"+uuid.NewString()[:8]+"0000cccc"), 640, account.String())
 
 	p.reconcile(t, statement)
 	p.reconcile(t, statement)

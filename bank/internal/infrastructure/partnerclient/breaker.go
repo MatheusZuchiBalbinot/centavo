@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"centavo/bank/internal/application"
+
+	"centavo/bank/internal/domain/transfer"
 )
 
 // Circuit breaker settings (docs/architecture.md, section 7).
@@ -61,7 +63,7 @@ func (b *Breaker) Submit(ctx context.Context, submission application.PartnerSubm
 }
 
 // Status queries the partner if the breaker allows it.
-func (b *Breaker) Status(ctx context.Context, endToEndID string) (application.AuthoritativeStatus, error) {
+func (b *Breaker) Status(ctx context.Context, endToEndID transfer.EndToEndID) (application.AuthoritativeStatus, error) {
 	if !b.allow() {
 		return application.AuthoritativeStatus{}, ErrBreakerOpen
 	}

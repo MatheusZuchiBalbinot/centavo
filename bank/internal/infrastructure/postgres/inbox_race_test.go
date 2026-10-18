@@ -18,7 +18,7 @@ type takingPartner struct {
 	take func()
 }
 
-func (p takingPartner) Status(context.Context, string) (application.AuthoritativeStatus, error) {
+func (p takingPartner) Status(context.Context, transfer.EndToEndID) (application.AuthoritativeStatus, error) {
 	p.take()
 
 	return application.AuthoritativeStatus{Status: transfer.PartnerReturned}, nil

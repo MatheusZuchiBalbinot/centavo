@@ -30,7 +30,7 @@ var errSweeperLeaseLost = errors.New("sweeper lease lost to another worker")
 // StuckTransfer is a transfer the saga left in created or sent.
 type StuckTransfer struct {
 	ID         transfer.ID
-	EndToEndID string
+	EndToEndID transfer.EndToEndID
 	ClientRef  string
 }
 

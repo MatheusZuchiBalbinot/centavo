@@ -8,6 +8,8 @@ import (
 
 	"centavo/bank/internal/application"
 	"centavo/bank/internal/domain/ledger"
+
+	"centavo/bank/internal/domain/transfer"
 )
 
 // TestLockOrder_SystemBalancesBeforeTheCustomer covers the writes that share
@@ -95,7 +97,7 @@ func reservePixOut(t *testing.T, p pixBank, account ledger.AccountID) func(conte
 }
 
 func creditIncomingPix(_ *testing.T, p pixBank, account ledger.AccountID) func(context.Context) error {
-	event := application.PartnerEvent{ID: "evt_" + uuid.NewString(), Type: application.EventIncoming, EndToEndID: "E" + uuid.NewString(), AmountCents: 700, AccountID: account.String()}
+	event := application.PartnerEvent{ID: "evt_" + uuid.NewString(), Type: application.EventIncoming, EndToEndID: transfer.EndToEndID("E" + uuid.NewString()), AmountCents: 700, AccountID: account.String()}
 
 	return func(ctx context.Context) error {
 		return p.webhook.Apply(ctx, event)

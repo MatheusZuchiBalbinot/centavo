@@ -191,7 +191,7 @@ func TestNaiveWebhook_AppliesDuplicatesTwice(t *testing.T) {
 func TestNaiveWebhook_CreditsAnIncomingPixOnce(t *testing.T) {
 	p := newPixBank(t)
 	account := p.bank.newCustomer(t)
-	incoming := application.PartnerEvent{ID: "evt_in", Type: application.EventIncoming, EndToEndID: "E" + uuid.NewString()[:8] + "0000aaaa", AmountCents: 900, AccountID: account.String()}
+	incoming := application.PartnerEvent{ID: "evt_in", Type: application.EventIncoming, EndToEndID: transfer.EndToEndID("E" + uuid.NewString()[:8] + "0000aaaa"), AmountCents: 900, AccountID: account.String()}
 
 	err := p.webhook.Apply(t.Context(), incoming)
 	if err != nil {

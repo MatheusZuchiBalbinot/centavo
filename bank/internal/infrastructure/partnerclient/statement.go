@@ -11,6 +11,8 @@ import (
 
 	"centavo/bank/internal/application"
 	"centavo/bank/internal/domain/money"
+
+	"centavo/bank/internal/domain/transfer"
 )
 
 // maxStatementBytes bounds one page of the statement: up to 1000 entries.
@@ -21,12 +23,12 @@ type statementPage struct {
 }
 
 type statementLine struct {
-	Seq                  int64  `json:"seq"`
-	Kind                 string `json:"kind"`
-	EndToEndID           string `json:"end_to_end_id"`
-	AmountCents          int64  `json:"amount_cents"`
-	DestinationAccountID string `json:"destination_account_id"`
-	CorrelationID        string `json:"correlation_id"`
+	Seq                  int64               `json:"seq"`
+	Kind                 string              `json:"kind"`
+	EndToEndID           transfer.EndToEndID `json:"end_to_end_id"`
+	AmountCents          int64               `json:"amount_cents"`
+	DestinationAccountID string              `json:"destination_account_id"`
+	CorrelationID        string              `json:"correlation_id"`
 }
 
 // Statement reads the participant's statement after a sequence number.
