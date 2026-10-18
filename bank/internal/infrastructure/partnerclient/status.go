@@ -25,14 +25,14 @@ type statusResponse struct {
 // partner saying it never received it; anything but 200 or 404 is an error,
 // never a status.
 func (c Client) Status(ctx context.Context, endToEndID string) (application.AuthoritativeStatus, error) {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/v1/transfers/"+url.PathEscape(endToEndID), nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/v1/transfers/"+url.PathEscape(endToEndID), http.NoBody)
 	if err != nil {
-		return application.AuthoritativeStatus{}, err
+		return application.AuthoritativeStatus{}, fmt.Errorf("building the status request: %w", err)
 	}
 
 	response, err := c.http.Do(request)
 	if err != nil {
-		return application.AuthoritativeStatus{}, err
+		return application.AuthoritativeStatus{}, fmt.Errorf("requesting the status: %w", err)
 	}
 	defer response.Body.Close()
 

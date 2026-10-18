@@ -59,7 +59,12 @@ func (s LedgerStore) LockPositions(ctx context.Context, ids []ledger.AccountID) 
 
 	rows.Close()
 
-	return rows.Err()
+	err = rows.Err()
+	if err != nil {
+		return fmt.Errorf("locking positions: %w", err)
+	}
+
+	return nil
 }
 
 // customerFloorCents is BR01: customer balances never go below zero.
@@ -239,7 +244,7 @@ func scanStatementLine(row pgx.CollectableRow) (ledger.StatementLine, error) {
 
 	err := row.Scan(&seq, &transactionID, &kind, &amountCents, &balanceAfterCents, &createdAt)
 	if err != nil {
-		return ledger.StatementLine{}, err
+		return ledger.StatementLine{}, fmt.Errorf("scanning a statement line: %w", err)
 	}
 
 	line := ledger.StatementLine{

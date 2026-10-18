@@ -33,14 +33,14 @@ type statementLine struct {
 func (c Client) Statement(ctx context.Context, afterSeq int64, limit int) ([]application.StatementEntry, error) {
 	query := url.Values{"participant_id": {c.participantID}, "after_seq": {strconv.FormatInt(afterSeq, 10)}, "limit": {strconv.Itoa(limit)}}
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/v1/statements?"+query.Encode(), nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/v1/statements?"+query.Encode(), http.NoBody)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("building the statement request: %w", err)
 	}
 
 	response, err := c.http.Do(request)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("requesting the statement: %w", err)
 	}
 	defer response.Body.Close()
 
