@@ -22,80 +22,6 @@ type fakeStatement struct {
 	entries []application.StatementEntry
 }
 
-func (f *fakeStatement) Statement(_ context.Context, afterSeq int64, limit int) ([]application.StatementEntry, error) {
-	var page []application.StatementEntry
-
-	for _, entry := range f.entries {
-		isOnPage := entry.Seq > afterSeq && len(page) < limit
-		if isOnPage {
-			page = append(page, entry)
-		}
-	}
-
-	return page, nil
-}
-
-// add appends an entry after the last one.
-func (f *fakeStatement) add(kind application.StatementKind, endToEndID transfer.EndToEndID, cents money.Cents, accountID string) {
-	seq := f.entries[len(f.entries)-1].Seq + 1
-	f.entries = append(f.entries, application.StatementEntry{Seq: seq, Kind: kind, EndToEndID: endToEndID, AmountCents: cents, AccountID: accountID})
-}
-
-// newStatement moves the cursor past everything reconciled so far and
-// starts the test's statement right after it.
-func newStatement(t *testing.T, fixture pixBank) *fakeStatement {
-	t.Helper()
-
-	var base int64
-
-	err := fixture.bank.pool.QueryRow(t.Context(), `SELECT greatest(coalesce(max(partner_seq), 0), (SELECT last_partner_seq FROM reconciliation_cursor)) + $1 FROM reconciliation_items`, seqGap).Scan(&base)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = fixture.bank.pool.Exec(t.Context(), `UPDATE reconciliation_cursor SET last_partner_seq = $1`, base)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = fixture.bank.pool.Exec(t.Context(), `UPDATE worker_leases SET holder = NULL, expires_at = NULL WHERE resource = 'reconciler'`)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// A sentinel the reconciler never sees: the statement starts after it.
-	return &fakeStatement{entries: []application.StatementEntry{{Seq: base}}}
-}
-
-func (p pixBank) reconciler(statement application.PartnerStatementReader, policy application.BatchPolicy) application.Reconciler {
-	config := application.ReconcilerConfig{UnitOfWork: p.unitOfWork, Lease: application.FencedLeases{}, Machine: application.GuardedTransitions{}, Statement: statement, Policy: policy, Owner: "worker-a", Logger: discardLogger()}
-
-	return application.NewReconciler(config)
-}
-
-func (p pixBank) systemBalance(t *testing.T, id ledger.AccountID) int64 {
-	t.Helper()
-
-	var balance int64
-
-	err := p.bank.pool.QueryRow(t.Context(), `SELECT coalesce(sum(amount_cents), 0) FROM ledger_entries WHERE account_id = $1`, uuid.UUID(id)).Scan(&balance)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return balance
-}
-
-// reconcile runs the robust reconciler (reconciliation) once.
-func (p pixBank) reconcile(t *testing.T, statement application.PartnerStatementReader) {
-	t.Helper()
-
-	err := p.reconciler(statement, application.AtomicBatches{}).RunOnce(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
 // TestReconciliation_MissingSettlement_ConfirmsTheTransfer: the webhook was
 // lost and the sweeper has not run; the statement shows the settlement.
 func TestReconciliation_MissingSettlement_ConfirmsTheTransfer(t *testing.T) {
@@ -192,6 +118,80 @@ func TestReconciliation_BatchTakesItsTransfersBeforeAnyBalance(t *testing.T) {
 	err = <-reconciled
 	if err != nil {
 		t.Fatalf("the reconciler failed: %v", err)
+	}
+}
+
+func (f *fakeStatement) Statement(_ context.Context, afterSeq int64, limit int) ([]application.StatementEntry, error) {
+	var page []application.StatementEntry
+
+	for _, entry := range f.entries {
+		isOnPage := entry.Seq > afterSeq && len(page) < limit
+		if isOnPage {
+			page = append(page, entry)
+		}
+	}
+
+	return page, nil
+}
+
+// add appends an entry after the last one.
+func (f *fakeStatement) add(kind application.StatementKind, endToEndID transfer.EndToEndID, cents money.Cents, accountID string) {
+	seq := f.entries[len(f.entries)-1].Seq + 1
+	f.entries = append(f.entries, application.StatementEntry{Seq: seq, Kind: kind, EndToEndID: endToEndID, AmountCents: cents, AccountID: accountID})
+}
+
+// newStatement moves the cursor past everything reconciled so far and
+// starts the test's statement right after it.
+func newStatement(t *testing.T, fixture pixBank) *fakeStatement {
+	t.Helper()
+
+	var base int64
+
+	err := fixture.bank.pool.QueryRow(t.Context(), `SELECT greatest(coalesce(max(partner_seq), 0), (SELECT last_partner_seq FROM reconciliation_cursor)) + $1 FROM reconciliation_items`, seqGap).Scan(&base)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = fixture.bank.pool.Exec(t.Context(), `UPDATE reconciliation_cursor SET last_partner_seq = $1`, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = fixture.bank.pool.Exec(t.Context(), `UPDATE worker_leases SET holder = NULL, expires_at = NULL WHERE resource = 'reconciler'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// A sentinel the reconciler never sees: the statement starts after it.
+	return &fakeStatement{entries: []application.StatementEntry{{Seq: base}}}
+}
+
+func (p pixBank) reconciler(statement application.PartnerStatementReader, policy application.BatchPolicy) application.Reconciler {
+	config := application.ReconcilerConfig{UnitOfWork: p.unitOfWork, Lease: application.FencedLeases{}, Machine: application.GuardedTransitions{}, Statement: statement, Policy: policy, Owner: "worker-a", Logger: discardLogger()}
+
+	return application.NewReconciler(config)
+}
+
+func (p pixBank) systemBalance(t *testing.T, id ledger.AccountID) int64 {
+	t.Helper()
+
+	var balance int64
+
+	err := p.bank.pool.QueryRow(t.Context(), `SELECT coalesce(sum(amount_cents), 0) FROM ledger_entries WHERE account_id = $1`, uuid.UUID(id)).Scan(&balance)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return balance
+}
+
+// reconcile runs the robust reconciler (reconciliation) once.
+func (p pixBank) reconcile(t *testing.T, statement application.PartnerStatementReader) {
+	t.Helper()
+
+	err := p.reconciler(statement, application.AtomicBatches{}).RunOnce(t.Context())
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 

@@ -22,6 +22,9 @@ const (
 	maxBodyBytes = 16 << 10
 )
 
+// resolvableEndpoints are the writes whose keys resolve can settle.
+var resolvableEndpoints = map[string]bool{accountsEndpoint: true, depositsEndpoint: true, transfersEndpoint: true, pixOutEndpoint: true}
+
 type openAccountRequest struct {
 	HolderName string `json:"holder_name"`
 }
@@ -53,6 +56,34 @@ type transferResponse struct {
 // applyFunc runs a use case inside the writer's unit of work and encodes the
 // answer that the key will keep.
 type applyFunc func(ctx context.Context, stores application.Stores, operationID ledger.OperationID) (idempotency.StoredResponse, error)
+
+// writeRequest is one client write as the handler prepared it.
+type writeRequest struct {
+	endpoint string
+	body     []byte
+	apply    applyFunc
+	// afterCommit runs once the write is committed; nil for most writes.
+	afterCommit func(ctx context.Context) error
+}
+
+// resolveRequest names the request whose outcome the client asks about, as it
+// sent it: the key alone cannot tell it from another request that took the same
+// key.
+type resolveRequest struct {
+	Endpoint string          `json:"endpoint"`
+	Body     json.RawMessage `json:"body"`
+}
+
+type resolveResponse struct {
+	Key      string              `json:"key"`
+	Outcome  idempotency.Outcome `json:"outcome"`
+	Response *storedAnswer       `json:"response,omitempty"`
+}
+
+type storedAnswer struct {
+	Status int             `json:"status"`
+	Body   json.RawMessage `json:"body"`
+}
 
 func (a apiHandlers) openAccount(w http.ResponseWriter, r *http.Request) {
 	body, err := readBody(w, r)
@@ -152,15 +183,6 @@ func (a apiHandlers) applyTransfer(input application.TransferInput) applyFunc {
 	}
 }
 
-// writeRequest is one client write as the handler prepared it.
-type writeRequest struct {
-	endpoint string
-	body     []byte
-	apply    applyFunc
-	// afterCommit runs once the write is committed; nil for most writes.
-	afterCommit func(ctx context.Context) error
-}
-
 // runWrite runs the write through the writer and sends the stored answer:
 // the same bytes on the first try and on every retry.
 func (a apiHandlers) runWrite(w http.ResponseWriter, r *http.Request, request writeRequest) {
@@ -199,28 +221,6 @@ func (a apiHandlers) runWrite(w http.ResponseWriter, r *http.Request, request wr
 	}
 
 	writeStored(w, response)
-}
-
-// resolveRequest names the request whose outcome the client asks about, as it
-// sent it: the key alone cannot tell it from another request that took the same
-// key.
-type resolveRequest struct {
-	Endpoint string          `json:"endpoint"`
-	Body     json.RawMessage `json:"body"`
-}
-
-// resolvableEndpoints are the writes whose keys resolve can settle.
-var resolvableEndpoints = map[string]bool{accountsEndpoint: true, depositsEndpoint: true, transfersEndpoint: true, pixOutEndpoint: true}
-
-type resolveResponse struct {
-	Key      string              `json:"key"`
-	Outcome  idempotency.Outcome `json:"outcome"`
-	Response *storedAnswer       `json:"response,omitempty"`
-}
-
-type storedAnswer struct {
-	Status int             `json:"status"`
-	Body   json.RawMessage `json:"body"`
 }
 
 // resolve answers "applied" or "voided" for an operation whose outcome the

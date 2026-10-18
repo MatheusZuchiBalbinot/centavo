@@ -27,16 +27,16 @@ type Client struct {
 	http          *http.Client
 }
 
-// New builds a client for one participant.
-func New(baseURL, participantID string) Client {
-	return Client{baseURL: baseURL, participantID: participantID, http: &http.Client{Timeout: attemptTimeout}}
-}
-
 type submitRequest struct {
 	EndToEndID     transfer.EndToEndID `json:"end_to_end_id"`
 	ParticipantID  string              `json:"participant_id"`
 	AmountCents    int64               `json:"amount_cents"`
 	DestinationKey string              `json:"destination_key"`
+}
+
+// New builds a client for one participant.
+func New(baseURL, participantID string) Client {
+	return Client{baseURL: baseURL, participantID: participantID, http: &http.Client{Timeout: attemptTimeout}}
 }
 
 // Submit sends one PIX once. 202 and 200 are accepted, 422 is a definitive

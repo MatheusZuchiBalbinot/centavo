@@ -17,6 +17,24 @@ import (
 // maxEvents bounds the timeline a replay keeps; the counters see them all.
 const maxEvents = 2_000
 
+// The families of the timeline.
+const (
+	familyProcess   EventFamily = "process"
+	familyFailpoint EventFamily = "failpoint"
+	familyNetwork   EventFamily = "network"
+	familyDatabase  EventFamily = "database"
+	familyClock     EventFamily = "clock"
+	familyPartner   EventFamily = "partner"
+	familyHeal      EventFamily = "heal"
+)
+
+// The percentiles the panel draws, and the scale they are written in.
+const (
+	medianPercentile = 50
+	tailPercentile   = 99
+	percentScale     = 100
+)
+
 // Replay is one round as the panel plays it.
 type Replay struct {
 	Round    string          `json:"round"`
@@ -43,17 +61,6 @@ type Second struct {
 
 // EventFamily groups the timeline's events; the panel colors them by family.
 type EventFamily string
-
-// The families of the timeline.
-const (
-	familyProcess   EventFamily = "process"
-	familyFailpoint EventFamily = "failpoint"
-	familyNetwork   EventFamily = "network"
-	familyDatabase  EventFamily = "database"
-	familyClock     EventFamily = "clock"
-	familyPartner   EventFamily = "partner"
-	familyHeal      EventFamily = "heal"
-)
 
 // Event is one entry of the chaos timeline.
 type Event struct {
@@ -87,6 +94,21 @@ type Builder struct {
 	replay    Replay
 	invokes   map[string]int64
 	latencies map[int][]float64
+}
+
+// nemesisValue reads the fields the timeline shows, whatever the record.
+type nemesisValue struct {
+	Target    string   `json:"target"`
+	Instance  string   `json:"instance"`
+	Failpoint string   `json:"failpoint"`
+	Action    string   `json:"action"`
+	Fault     string   `json:"fault"`
+	Proxies   []string `json:"proxies"`
+	Toxic     string   `json:"toxic"`
+	Phase     string   `json:"phase"`
+	Offset    string   `json:"offset"`
+	Duration  string   `json:"duration"`
+	Targets   []string `json:"targets"`
 }
 
 // NewBuilder starts the replay of a round.
@@ -130,6 +152,23 @@ func (b *Builder) Feed(record history.Record) {
 	b.feedCompletion(record)
 }
 
+// Replay returns the replay so far, with the latency percentiles computed.
+func (b *Builder) Replay() Replay {
+	replay := b.replay
+	replay.Seconds = slices.Clone(b.replay.Seconds)
+	replay.Events = slices.Clone(b.replay.Events)
+	replay.BuiltAt = time.Now().UTC()
+
+	for i := range replay.Seconds {
+		latencies := slices.Clone(b.latencies[replay.Seconds[i].T])
+		slices.Sort(latencies)
+		replay.Seconds[i].P50 = percentile(latencies, medianPercentile)
+		replay.Seconds[i].P99 = percentile(latencies, tailPercentile)
+	}
+
+	return replay
+}
+
 func (b *Builder) feedCompletion(record history.Record) {
 	second := b.secondAt(record.TimeNS)
 
@@ -171,30 +210,6 @@ func (b *Builder) secondAt(timeNS int64) *Second {
 	return &b.replay.Seconds[t]
 }
 
-// Replay returns the replay so far, with the latency percentiles computed.
-func (b *Builder) Replay() Replay {
-	replay := b.replay
-	replay.Seconds = slices.Clone(b.replay.Seconds)
-	replay.Events = slices.Clone(b.replay.Events)
-	replay.BuiltAt = time.Now().UTC()
-
-	for i := range replay.Seconds {
-		latencies := slices.Clone(b.latencies[replay.Seconds[i].T])
-		slices.Sort(latencies)
-		replay.Seconds[i].P50 = percentile(latencies, medianPercentile)
-		replay.Seconds[i].P99 = percentile(latencies, tailPercentile)
-	}
-
-	return replay
-}
-
-// The percentiles the panel draws, and the scale they are written in.
-const (
-	medianPercentile = 50
-	tailPercentile   = 99
-	percentScale     = 100
-)
-
 // percentile reads a sorted slice by the nearest-rank method.
 func percentile(sorted []float64, percent int) float64 {
 	if len(sorted) == 0 {
@@ -212,21 +227,6 @@ func (b *Builder) addEvent(record history.Record, family EventFamily, text strin
 	}
 
 	b.replay.Events = append(b.replay.Events, Event{TMillis: record.TimeNS / int64(time.Millisecond), Family: family, Text: text})
-}
-
-// nemesisValue reads the fields the timeline shows, whatever the record.
-type nemesisValue struct {
-	Target    string   `json:"target"`
-	Instance  string   `json:"instance"`
-	Failpoint string   `json:"failpoint"`
-	Action    string   `json:"action"`
-	Fault     string   `json:"fault"`
-	Proxies   []string `json:"proxies"`
-	Toxic     string   `json:"toxic"`
-	Phase     string   `json:"phase"`
-	Offset    string   `json:"offset"`
-	Duration  string   `json:"duration"`
-	Targets   []string `json:"targets"`
 }
 
 func (b *Builder) feedNemesis(record history.Record) {

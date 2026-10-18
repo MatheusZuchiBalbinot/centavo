@@ -4,9 +4,6 @@ package money
 
 import "errors"
 
-// Cents is the smallest unit of money.
-type Cents int64
-
 // MaxOperationCents is the largest amount a single operation may move (an
 // amount is positive and at most R$ 1,000,000.00: R$ 1.000.000,00).
 const MaxOperationCents Cents = 100_000_000
@@ -18,9 +15,17 @@ var (
 	ErrBalanceOverflow   = errors.New("balance overflow")
 )
 
+// Cents is the smallest unit of money.
+type Cents int64
+
 // Amount is the value of one operation: always positive and at most
 // MaxOperationCents.
 type Amount struct {
+	cents Cents
+}
+
+// Balance is a signed account balance.
+type Balance struct {
 	cents Cents
 }
 
@@ -48,11 +53,6 @@ func (a Amount) Cents() Cents {
 // Negated returns the amount as a debit: a negative number of cents.
 func (a Amount) Negated() Cents {
 	return -a.cents
-}
-
-// Balance is a signed account balance.
-type Balance struct {
-	cents Cents
 }
 
 // NewBalance wraps a balance read from storage.

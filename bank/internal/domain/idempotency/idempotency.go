@@ -8,10 +8,6 @@ import (
 	"regexp"
 )
 
-// Key is the client-generated identity of one logical operation; retries reuse
-// it (every client write carries an Idempotency-Key).
-type Key string
-
 // keyFormat matches the idempotency_key_format constraint. Short keys or odd
 // characters usually mean a buggy client.
 var keyFormat = regexp.MustCompile(`^[A-Za-z0-9._:-]{8,128}$`)
@@ -22,22 +18,6 @@ var (
 	ErrKeyInvalid = errors.New("the Idempotency-Key header must have 8 to 128 characters among letters, digits and . _ : -")
 )
 
-// ParseKey validates a key received from a client.
-func ParseKey(raw string) (Key, error) {
-	if raw == "" {
-		return "", ErrKeyMissing
-	}
-
-	if !keyFormat.MatchString(raw) {
-		return "", ErrKeyInvalid
-	}
-
-	return Key(raw), nil
-}
-
-// Status is where a key stands.
-type Status string
-
 // The states of a stored key.
 const (
 	// StatusPending exists only inside the transaction that owns the key.
@@ -46,10 +26,6 @@ const (
 	// StatusVoided is a tombstone left by resolve: the key never applies.
 	StatusVoided Status = "voided"
 )
-
-// Outcome is what resolve says about an operation whose result the client
-// does not know.
-type Outcome string
 
 // The outcomes resolve reports for a key.
 const (
@@ -67,8 +43,47 @@ var (
 	ErrRequestInProgress = errors.New("another request with the same Idempotency-Key is still running")
 )
 
+// Key is the client-generated identity of one logical operation; retries reuse
+// it (every client write carries an Idempotency-Key).
+type Key string
+
+// Status is where a key stands.
+type Status string
+
+// Outcome is what resolve says about an operation whose result the client
+// does not know.
+type Outcome string
+
 // RequestHash binds a key to the exact request it was first used with.
 type RequestHash [sha256.Size]byte
+
+// StoredResponse is the answer a completed key gives to every retry.
+type StoredResponse struct {
+	Status int
+	Body   []byte
+}
+
+// Record is a key as stored.
+type Record struct {
+	Key         Key
+	Endpoint    string
+	RequestHash RequestHash
+	Status      Status
+	Response    StoredResponse
+}
+
+// ParseKey validates a key received from a client.
+func ParseKey(raw string) (Key, error) {
+	if raw == "" {
+		return "", ErrKeyMissing
+	}
+
+	if !keyFormat.MatchString(raw) {
+		return "", ErrKeyInvalid
+	}
+
+	return Key(raw), nil
+}
 
 // HashRequest hashes the endpoint and the raw body; a retry sends the same
 // bytes. A NUL separates the two, which is unambiguous because endpoints are
@@ -86,21 +101,6 @@ func HashRequest(endpoint string, body []byte) RequestHash {
 	copy(hash[:], hasher.Sum(nil))
 
 	return hash
-}
-
-// StoredResponse is the answer a completed key gives to every retry.
-type StoredResponse struct {
-	Status int
-	Body   []byte
-}
-
-// Record is a key as stored.
-type Record struct {
-	Key         Key
-	Endpoint    string
-	RequestHash RequestHash
-	Status      Status
-	Response    StoredResponse
 }
 
 // Replay decides what a request gets when its key already exists.

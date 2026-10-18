@@ -15,24 +15,6 @@ type recordingWriter struct {
 	moved []ledger.AccountID
 }
 
-func (w *recordingWriter) OverwritePosition(context.Context, ledger.AccountID, ledger.Position) error {
-	return nil
-}
-
-func (w *recordingWriter) IncrementBalance(_ context.Context, id ledger.AccountID, _ money.Cents) (ledger.Position, error) {
-	w.moved = append(w.moved, id)
-
-	return ledger.Position{LastSeq: ledger.Seq(len(w.moved))}, nil
-}
-
-func (w *recordingWriter) InsertTransaction(context.Context, ledger.Transaction) (time.Time, error) {
-	return time.Time{}, nil
-}
-
-func (w *recordingWriter) InsertEntry(context.Context, ledger.Entry) error {
-	return nil
-}
-
 // TestPostAll_PostsInAccountOrder: the order the caller lists the lines in
 // does not matter, the balances move system accounts first, as every writer
 // takes them.
@@ -60,4 +42,22 @@ func TestPostAll_PostsInAccountOrder(t *testing.T) {
 	if len(positions) != len(lines) {
 		t.Fatalf("got %d positions for %d lines", len(positions), len(lines))
 	}
+}
+
+func (w *recordingWriter) OverwritePosition(context.Context, ledger.AccountID, ledger.Position) error {
+	return nil
+}
+
+func (w *recordingWriter) IncrementBalance(_ context.Context, id ledger.AccountID, _ money.Cents) (ledger.Position, error) {
+	w.moved = append(w.moved, id)
+
+	return ledger.Position{LastSeq: ledger.Seq(len(w.moved))}, nil
+}
+
+func (w *recordingWriter) InsertTransaction(context.Context, ledger.Transaction) (time.Time, error) {
+	return time.Time{}, nil
+}
+
+func (w *recordingWriter) InsertEntry(context.Context, ledger.Entry) error {
+	return nil
 }

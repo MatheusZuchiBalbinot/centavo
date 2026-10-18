@@ -23,6 +23,14 @@ var (
 	ErrUnavailable = errors.New("storage temporarily unavailable")
 )
 
+// The internal retry of a unit of work: a few quick tries, well inside the
+// request deadline.
+const (
+	unitMaxRetries = 3
+	unitBaseDelay  = 20 * time.Millisecond
+	unitMaxDelay   = 200 * time.Millisecond
+)
+
 // KeyClaim is a request trying to own an idempotency key.
 type KeyClaim struct {
 	Key         idempotency.Key
@@ -56,23 +64,6 @@ type Write struct {
 	Apply func(ctx context.Context, stores Stores, operationID ledger.OperationID) (idempotency.StoredResponse, error)
 }
 
-// replayDurably answers a retry with the stored answer, but only once the
-// commit that stored it is as durable as a new one would be. A client that gave
-// up while its commit waited for the synchronous standby cancels that wait:
-// PostgreSQL keeps the commit locally, unreplicated, and a retry that only read
-// it would hand out an answer, or a refusal, that a failover then loses.
-func replayDurably(ctx context.Context, stores KeyStore, write Write, existing idempotency.Record) (idempotency.StoredResponse, error) {
-	isSettled := existing.Status != idempotency.StatusPending
-	if isSettled {
-		err := stores.TouchKey(ctx, write.Key)
-		if err != nil {
-			return idempotency.StoredResponse{}, err
-		}
-	}
-
-	return existing.Replay(write.Endpoint, write.RequestHash)
-}
-
 // KeyPolicy is the idempotency defense's strategy inside a unit of work.
 type KeyPolicy interface {
 	Run(ctx context.Context, stores Stores, write Write) (idempotency.StoredResponse, error)
@@ -82,6 +73,34 @@ type KeyPolicy interface {
 // effect applied and the key completed in the same transaction, so a crash
 // before the commit erases both and a retry after it gets the stored answer.
 type KeysInTheSameCommit struct{}
+
+// RetryPolicy bounds how often a unit of work is redone.
+type RetryPolicy struct {
+	MaxRetries int
+	BaseDelay  time.Duration
+	MaxDelay   time.Duration
+}
+
+// Writer runs client writes.
+type Writer struct {
+	unitOfWork UnitOfWork
+	keys       KeyPolicy
+	retries    RetryPolicy
+}
+
+// WriterDependencies are the strategies a writer runs on.
+type WriterDependencies struct {
+	UnitOfWork UnitOfWork
+	Keys       KeyPolicy
+	Retries    RetryPolicy
+}
+
+// IdempotencyStrategy is everything the idempotency defense decides.
+type IdempotencyStrategy struct {
+	Keys     KeyPolicy
+	Resolver Resolver
+	Retries  RetryPolicy
+}
 
 // Run claims the key or replays it.
 func (KeysInTheSameCommit) Run(ctx context.Context, stores Stores, write Write) (idempotency.StoredResponse, error) {
@@ -114,21 +133,6 @@ func (KeysInTheSameCommit) Run(ctx context.Context, stores Stores, write Write) 
 	return response, nil
 }
 
-// RetryPolicy bounds how often a unit of work is redone.
-type RetryPolicy struct {
-	MaxRetries int
-	BaseDelay  time.Duration
-	MaxDelay   time.Duration
-}
-
-// The internal retry of a unit of work: a few quick tries, well inside the
-// request deadline.
-const (
-	unitMaxRetries = 3
-	unitBaseDelay  = 20 * time.Millisecond
-	unitMaxDelay   = 200 * time.Millisecond
-)
-
 // UnitRetries is idempotency's internal retry: the unit is idempotent, so
 // redoing it after a transient or ambiguous failure is safe, and the key
 // decides whether it was already applied.
@@ -139,20 +143,6 @@ func UnitRetries() RetryPolicy {
 // NoRetries is the naive bank: whatever fails, fails.
 func NoRetries() RetryPolicy {
 	return RetryPolicy{}
-}
-
-// Writer runs client writes.
-type Writer struct {
-	unitOfWork UnitOfWork
-	keys       KeyPolicy
-	retries    RetryPolicy
-}
-
-// WriterDependencies are the strategies a writer runs on.
-type WriterDependencies struct {
-	UnitOfWork UnitOfWork
-	Keys       KeyPolicy
-	Retries    RetryPolicy
 }
 
 // NewWriter builds a writer.
@@ -177,6 +167,29 @@ func (w Writer) Execute(ctx context.Context, write Write) (idempotency.StoredRes
 			return response, err
 		}
 	}
+}
+
+// RobustIdempotency is the idempotency defense: keys in the same commit as the
+// effect, resolve with tombstones and internal retries of the idempotent unit.
+func RobustIdempotency(unitOfWork UnitOfWork) IdempotencyStrategy {
+	return IdempotencyStrategy{Keys: KeysInTheSameCommit{}, Resolver: NewTombstoneResolver(unitOfWork), Retries: UnitRetries()}
+}
+
+// replayDurably answers a retry with the stored answer, but only once the
+// commit that stored it is as durable as a new one would be. A client that gave
+// up while its commit waited for the synchronous standby cancels that wait:
+// PostgreSQL keeps the commit locally, unreplicated, and a retry that only read
+// it would hand out an answer, or a refusal, that a failover then loses.
+func replayDurably(ctx context.Context, stores KeyStore, write Write, existing idempotency.Record) (idempotency.StoredResponse, error) {
+	isSettled := existing.Status != idempotency.StatusPending
+	if isSettled {
+		err := stores.TouchKey(ctx, write.Key)
+		if err != nil {
+			return idempotency.StoredResponse{}, err
+		}
+	}
+
+	return existing.Replay(write.Endpoint, write.RequestHash)
 }
 
 func (w Writer) runOnce(ctx context.Context, write Write) (idempotency.StoredResponse, error) {
@@ -214,17 +227,4 @@ func sleep(ctx context.Context, d time.Duration) bool {
 	case <-timer.C:
 		return true
 	}
-}
-
-// IdempotencyStrategy is everything the idempotency defense decides.
-type IdempotencyStrategy struct {
-	Keys     KeyPolicy
-	Resolver Resolver
-	Retries  RetryPolicy
-}
-
-// RobustIdempotency is the idempotency defense: keys in the same commit as the
-// effect, resolve with tombstones and internal retries of the idempotent unit.
-func RobustIdempotency(unitOfWork UnitOfWork) IdempotencyStrategy {
-	return IdempotencyStrategy{Keys: KeysInTheSameCommit{}, Resolver: NewTombstoneResolver(unitOfWork), Retries: UnitRetries()}
 }

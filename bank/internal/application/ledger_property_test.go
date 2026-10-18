@@ -35,6 +35,46 @@ type memoryLedger struct {
 	entries      []ledger.Entry
 }
 
+// randomSteps draws one deposit or one transfer between random accounts.
+type randomSteps struct {
+	deposit  application.Deposit
+	transfer application.TransferInternal
+	accounts []ledger.AccountID
+}
+
+func TestLedger_AnySequenceOfOperationsKeepsTheInvariants(t *testing.T) {
+	t.Parallel()
+
+	rapid.Check(t, func(t *rapid.T) {
+		bank := newMemoryLedger()
+		deps := application.MoneyDependencies{UnitOfWork: bank, Locker: application.RowLocker{}}
+		accounts := make([]ledger.AccountID, rapid.IntRange(2, 5).Draw(t, "accounts"))
+		for i := range accounts {
+			accounts[i] = bank.openAccount()
+		}
+
+		steps := randomSteps{deposit: application.NewDeposit(deps), transfer: application.NewTransferInternal(deps), accounts: accounts}
+
+		for step := range rapid.IntRange(1, 60).Draw(t, "steps") {
+			amount, err := money.NewAmount(money.Cents(rapid.Int64Range(1, 50_000).Draw(t, "amount")))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			write := application.WriteContext{Key: idempotency.Key(fmt.Sprintf("prop-%06d", step))}
+			err = steps.apply(t, amount, write)
+
+			isExpectedRefusal := errors.Is(err, ledger.ErrInsufficientFunds) || errors.Is(err, ledger.ErrSameAccount)
+			isUnexpectedError := err != nil && !isExpectedRefusal
+			if isUnexpectedError {
+				t.Fatalf("step %d: %v", step, err)
+			}
+		}
+
+		assertLedgerInvariants(t, bank)
+	})
+}
+
 func newMemoryLedger() *memoryLedger {
 	memory := &memoryLedger{positions: map[ledger.AccountID]ledger.Position{}, isCustomer: map[ledger.AccountID]bool{}}
 	memory.positions[ledger.ExternalCashAccountID()] = ledger.Position{}
@@ -135,13 +175,6 @@ func (m *memoryLedger) openAccount() ledger.AccountID {
 	return id
 }
 
-// randomSteps draws one deposit or one transfer between random accounts.
-type randomSteps struct {
-	deposit  application.Deposit
-	transfer application.TransferInternal
-	accounts []ledger.AccountID
-}
-
 func (s randomSteps) apply(t *rapid.T, amount money.Amount, write application.WriteContext) error {
 	from := rapid.SampledFrom(s.accounts).Draw(t, "from")
 
@@ -158,39 +191,6 @@ func (s randomSteps) apply(t *rapid.T, amount money.Amount, write application.Wr
 	_, err := s.transfer.Execute(context.Background(), input)
 
 	return err
-}
-
-func TestLedger_AnySequenceOfOperationsKeepsTheInvariants(t *testing.T) {
-	t.Parallel()
-
-	rapid.Check(t, func(t *rapid.T) {
-		bank := newMemoryLedger()
-		deps := application.MoneyDependencies{UnitOfWork: bank, Locker: application.RowLocker{}}
-		accounts := make([]ledger.AccountID, rapid.IntRange(2, 5).Draw(t, "accounts"))
-		for i := range accounts {
-			accounts[i] = bank.openAccount()
-		}
-
-		steps := randomSteps{deposit: application.NewDeposit(deps), transfer: application.NewTransferInternal(deps), accounts: accounts}
-
-		for step := range rapid.IntRange(1, 60).Draw(t, "steps") {
-			amount, err := money.NewAmount(money.Cents(rapid.Int64Range(1, 50_000).Draw(t, "amount")))
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			write := application.WriteContext{Key: idempotency.Key(fmt.Sprintf("prop-%06d", step))}
-			err = steps.apply(t, amount, write)
-
-			isExpectedRefusal := errors.Is(err, ledger.ErrInsufficientFunds) || errors.Is(err, ledger.ErrSameAccount)
-			isUnexpectedError := err != nil && !isExpectedRefusal
-			if isUnexpectedError {
-				t.Fatalf("step %d: %v", step, err)
-			}
-		}
-
-		assertLedgerInvariants(t, bank)
-	})
 }
 
 // assertLedgerInvariants is every transaction sums to zero, each account's

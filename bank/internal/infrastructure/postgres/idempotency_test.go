@@ -29,44 +29,6 @@ type writes struct {
 	resolver application.Resolver
 }
 
-func newWrites(t *testing.T) writes {
-	t.Helper()
-
-	b := newBank(t)
-	unitOfWork := postgres.NewUnitOfWork(b.pool)
-	strategy := application.RobustIdempotency(unitOfWork)
-	writer := application.NewWriter(application.WriterDependencies{UnitOfWork: unitOfWork, Keys: strategy.Keys, Retries: strategy.Retries})
-
-	return writes{bank: b, writer: writer, resolver: strategy.Resolver}
-}
-
-// depositWrite builds the write the HTTP layer would: hash of the raw body,
-// answer encoded in the unit of work.
-func (w writes) depositWrite(t *testing.T, key idempotency.Key, account ledger.AccountID, cents money.Cents) application.Write {
-	t.Helper()
-
-	body := []byte(fmt.Sprintf(`{"account_id": %q, "amount_cents": %d}`, account, cents))
-	input := application.DepositInput{AccountID: account, Amount: amountOf(t, cents), Write: application.WriteContext{Key: key, CorrelationID: string(key)}}
-	deposit := w.bank.deposit
-
-	apply := func(ctx context.Context, stores application.Stores, operationID ledger.OperationID) (idempotency.StoredResponse, error) {
-		result, err := deposit.Apply(ctx, stores, operationID, input)
-		if err != nil {
-			return idempotency.StoredResponse{}, err
-		}
-
-		encoded, err := json.Marshal(map[string]any{"transaction_id": result.TransactionID.String(), "balance_cents": result.Balance.Cents()})
-
-		return idempotency.StoredResponse{Status: 201, Body: encoded}, err
-	}
-
-	return application.Write{Key: key, Endpoint: depositEndpoint, RequestHash: idempotency.HashRequest(depositEndpoint, body), Apply: apply}
-}
-
-func newKey() idempotency.Key {
-	return idempotency.Key("test-" + uuid.NewString())
-}
-
 // TestWrite_RetryAfterCrashPostCommit_ReturnsStoredResponse is a regression
 // test: the retry after a lost answer gets the stored answer, byte for byte,
 // and the ledger has one application.
@@ -232,10 +194,6 @@ func TestResolve_KeyTakenByAnotherRequest_IsSuperseded(t *testing.T) {
 	}
 }
 
-func resolveOf(write application.Write) application.ResolveRequest {
-	return application.ResolveRequest{Key: write.Key, Endpoint: write.Endpoint, RequestHash: write.RequestHash}
-}
-
 func TestIdempotencyKeys_NeverCommitPending(t *testing.T) {
 	w := newWrites(t)
 
@@ -298,20 +256,6 @@ func TestDeleteExpiredKeys_RemovesOnlyExpiredOnes(t *testing.T) {
 	}
 }
 
-// keyVersion is the transaction that wrote the key's current row version.
-func (w writes) keyVersion(t *testing.T, key idempotency.Key) string {
-	t.Helper()
-
-	var xmin string
-
-	err := w.bank.pool.QueryRow(t.Context(), `SELECT xmin::text FROM idempotency_keys WHERE key = $1`, string(key)).Scan(&xmin)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return xmin
-}
-
 // TestReplay_WritesBeforeAnswering is a regression test: an answer read from a
 // commit whose wait for the synchronous standby was cancelled may not be on the
 // replica. The replay and resolve both write the key, so their own commit waits
@@ -348,4 +292,60 @@ func TestReplay_WritesBeforeAnswering(t *testing.T) {
 	if w.keyVersion(t, key) == replayed {
 		t.Fatal("resolve answered without writing")
 	}
+}
+
+func newWrites(t *testing.T) writes {
+	t.Helper()
+
+	b := newBank(t)
+	unitOfWork := postgres.NewUnitOfWork(b.pool)
+	strategy := application.RobustIdempotency(unitOfWork)
+	writer := application.NewWriter(application.WriterDependencies{UnitOfWork: unitOfWork, Keys: strategy.Keys, Retries: strategy.Retries})
+
+	return writes{bank: b, writer: writer, resolver: strategy.Resolver}
+}
+
+// depositWrite builds the write the HTTP layer would: hash of the raw body,
+// answer encoded in the unit of work.
+func (w writes) depositWrite(t *testing.T, key idempotency.Key, account ledger.AccountID, cents money.Cents) application.Write {
+	t.Helper()
+
+	body := []byte(fmt.Sprintf(`{"account_id": %q, "amount_cents": %d}`, account, cents))
+	input := application.DepositInput{AccountID: account, Amount: amountOf(t, cents), Write: application.WriteContext{Key: key, CorrelationID: string(key)}}
+	deposit := w.bank.deposit
+
+	apply := func(ctx context.Context, stores application.Stores, operationID ledger.OperationID) (idempotency.StoredResponse, error) {
+		result, err := deposit.Apply(ctx, stores, operationID, input)
+		if err != nil {
+			return idempotency.StoredResponse{}, err
+		}
+
+		encoded, err := json.Marshal(map[string]any{"transaction_id": result.TransactionID.String(), "balance_cents": result.Balance.Cents()})
+
+		return idempotency.StoredResponse{Status: 201, Body: encoded}, err
+	}
+
+	return application.Write{Key: key, Endpoint: depositEndpoint, RequestHash: idempotency.HashRequest(depositEndpoint, body), Apply: apply}
+}
+
+func newKey() idempotency.Key {
+	return idempotency.Key("test-" + uuid.NewString())
+}
+
+func resolveOf(write application.Write) application.ResolveRequest {
+	return application.ResolveRequest{Key: write.Key, Endpoint: write.Endpoint, RequestHash: write.RequestHash}
+}
+
+// keyVersion is the transaction that wrote the key's current row version.
+func (w writes) keyVersion(t *testing.T, key idempotency.Key) string {
+	t.Helper()
+
+	var xmin string
+
+	err := w.bank.pool.QueryRow(t.Context(), `SELECT xmin::text FROM idempotency_keys WHERE key = $1`, string(key)).Scan(&xmin)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return xmin
 }

@@ -10,39 +10,13 @@ import (
 	"centavo/bank/internal/application"
 )
 
+var anySubmission = application.PartnerSubmission{EndToEndID: "E0001", AmountCents: 100, DestinationKey: "dest-0001"}
+
 // switchablePartner answers 500 until it is told to recover.
 type switchablePartner struct {
 	calls       atomic.Int32
 	isRecovered atomic.Bool
 }
-
-func (p *switchablePartner) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
-	p.calls.Add(1)
-
-	if p.isRecovered.Load() {
-		w.WriteHeader(http.StatusAccepted)
-
-		return
-	}
-
-	w.WriteHeader(http.StatusInternalServerError)
-}
-
-func newTestBreaker(t *testing.T) (*Breaker, *switchablePartner, *time.Time) {
-	t.Helper()
-
-	partner := &switchablePartner{}
-	server := httptest.NewServer(partner)
-	t.Cleanup(server.Close)
-
-	now := time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)
-	breaker := NewBreaker(New(server.URL, "centavo-robust"))
-	breaker.now = func() time.Time { return now }
-
-	return breaker, partner, &now
-}
-
-var anySubmission = application.PartnerSubmission{EndToEndID: "E0001", AmountCents: 100, DestinationKey: "dest-0001"}
 
 func TestBreaker_OpensAfterAWindowOfFailuresAndStopsCalling(t *testing.T) {
 	breaker, partner, _ := newTestBreaker(t)
@@ -115,4 +89,30 @@ func TestBreaker_MostlyHealthyPartnerKeepsItClosed(t *testing.T) {
 	if partner.calls.Load() != 3*breakerWindow {
 		t.Fatalf("%d calls reached a healthy partner, want %d", partner.calls.Load(), 3*breakerWindow)
 	}
+}
+
+func (p *switchablePartner) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
+	p.calls.Add(1)
+
+	if p.isRecovered.Load() {
+		w.WriteHeader(http.StatusAccepted)
+
+		return
+	}
+
+	w.WriteHeader(http.StatusInternalServerError)
+}
+
+func newTestBreaker(t *testing.T) (*Breaker, *switchablePartner, *time.Time) {
+	t.Helper()
+
+	partner := &switchablePartner{}
+	server := httptest.NewServer(partner)
+	t.Cleanup(server.Close)
+
+	now := time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)
+	breaker := NewBreaker(New(server.URL, "centavo-robust"))
+	breaker.now = func() time.Time { return now }
+
+	return breaker, partner, &now
 }

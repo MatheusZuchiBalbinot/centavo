@@ -50,6 +50,25 @@ func TestCheck_FailurePathKeepsTheOperationHistory(t *testing.T) {
 	}
 }
 
+// TestCheck_StopsOnAValueItCannotRead: an amount the checker cannot decode
+// would count as zero in the deposit term and match no ledger entry. The
+// check stops instead of judging the round on that.
+func TestCheck_StopsOnAValueItCannotRead(t *testing.T) {
+	t.Parallel()
+
+	b := newRoundBuilder(t)
+	alice := b.createAccount()
+	b.operation(history.FunctionDeposit, map[string]any{"account_id": alice, "amount_cents": "500"}, history.TypeOK, writeValue{TransactionID: b.upcomingTransaction()})
+
+	roundDir := t.TempDir()
+	writeRound(t, roundDir, b.records, b.snapshot())
+
+	_, err := Check(roundDir)
+	if !errors.Is(err, ErrMalformedHistory) {
+		t.Fatalf("got %v, want ErrMalformedHistory", err)
+	}
+}
+
 func writeRound(t *testing.T, roundDir string, records []history.Record, state snapshot.Snapshot) {
 	t.Helper()
 
@@ -90,23 +109,4 @@ func readReport(t *testing.T, roundDir string) Report {
 	}
 
 	return report
-}
-
-// TestCheck_StopsOnAValueItCannotRead: an amount the checker cannot decode
-// would count as zero in the deposit term and match no ledger entry. The
-// check stops instead of judging the round on that.
-func TestCheck_StopsOnAValueItCannotRead(t *testing.T) {
-	t.Parallel()
-
-	b := newRoundBuilder(t)
-	alice := b.createAccount()
-	b.operation(history.FunctionDeposit, map[string]any{"account_id": alice, "amount_cents": "500"}, history.TypeOK, writeValue{TransactionID: b.upcomingTransaction()})
-
-	roundDir := t.TempDir()
-	writeRound(t, roundDir, b.records, b.snapshot())
-
-	_, err := Check(roundDir)
-	if !errors.Is(err, ErrMalformedHistory) {
-		t.Fatalf("got %v, want ErrMalformedHistory", err)
-	}
 }

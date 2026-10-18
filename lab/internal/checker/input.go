@@ -13,6 +13,23 @@ import (
 // entry written by an earlier round.
 const unknownTime int64 = -1
 
+// Outcomes resolve can give.
+const (
+	outcomeApplied = "applied"
+	outcomeVoided  = "voided"
+	// outcomeSuperseded: another request took the key, so this one never
+	// applied; like voided, it counts as not applied.
+	outcomeSuperseded = "superseded"
+)
+
+// transactionKindOf maps a client write to the ledger transaction it produces
+// (K).
+var transactionKindOf = map[history.Function]snapshot.TransactionKind{
+	history.FunctionDeposit:  snapshot.TransactionDeposit,
+	history.FunctionTransfer: snapshot.TransactionInternalTransfer,
+	history.FunctionPixOut:   snapshot.TransactionPixOutReserve,
+}
+
 // operation is everything the history says about one client operation.
 type operation struct {
 	op       string
@@ -29,12 +46,6 @@ type operation struct {
 // reusedKeyArgs reads the key a buggy client reused, if it reused one.
 type reusedKeyArgs struct {
 	ReusedKey string `json:"reused_key"`
-}
-
-// isOpen reports an operation without a completion: the lab stopped before it
-// ended, so it is as indeterminate as an info.
-func (o *operation) isOpen() bool {
-	return o.result == ""
 }
 
 // The checker decodes the history with its own types, written apart from the
@@ -93,27 +104,45 @@ type resolveValue struct {
 	Outcome string `json:"outcome"`
 }
 
-// Outcomes resolve can give.
-const (
-	outcomeApplied = "applied"
-	outcomeVoided  = "voided"
-	// outcomeSuperseded: another request took the key, so this one never
-	// applied; like voided, it counts as not applied.
-	outcomeSuperseded = "superseded"
-)
-
 type statementEntry struct {
 	AccountSeq        int64 `json:"account_seq"`
 	AmountCents       int64 `json:"amount_cents"`
 	BalanceAfterCents int64 `json:"balance_after_cents"`
 }
 
-// transactionKindOf maps a client write to the ledger transaction it produces
-// (K).
-var transactionKindOf = map[history.Function]snapshot.TransactionKind{
-	history.FunctionDeposit:  snapshot.TransactionDeposit,
-	history.FunctionTransfer: snapshot.TransactionInternalTransfer,
-	history.FunctionPixOut:   snapshot.TransactionPixOutReserve,
+// operations indexes the history by operation id, in invoke order.
+type operations struct {
+	byID    map[string]*operation
+	ordered []*operation
+	lastT   int64
+	// resolutions are the answers resolve gave for each key, in order.
+	resolutions map[string][]string
+}
+
+// ledger indexes the export.
+type ledger struct {
+	accounts          map[string]snapshot.Account
+	accountIDs        []string
+	balances          map[string]snapshot.Balance
+	transactions      map[string]snapshot.Transaction
+	transactionIDs    []string
+	byClientRef       map[string][]snapshot.Transaction
+	entriesByTx       map[string][]snapshot.Entry
+	entriesByAccount  map[string][]snapshot.Entry
+	externalCashID    string
+	hasExternalCashID bool
+	systemIDs         map[string]string
+	transfers         []snapshot.ExternalTransfer
+	transitions       map[string][]snapshot.Transition
+	byTransfer        map[string][]snapshot.Transaction
+	byIncoming        map[string][]snapshot.Transaction
+	incomingByE2E     map[string][]snapshot.Incoming
+}
+
+// isOpen reports an operation without a completion: the lab stopped before it
+// ended, so it is as indeterminate as an info.
+func (o *operation) isOpen() bool {
+	return o.result == ""
 }
 
 // isClientKind tells the transactions a client operation causes from those
@@ -126,15 +155,6 @@ func isClientKind(kind snapshot.TransactionKind) bool {
 	}
 
 	return false
-}
-
-// operations indexes the history by operation id, in invoke order.
-type operations struct {
-	byID    map[string]*operation
-	ordered []*operation
-	lastT   int64
-	// resolutions are the answers resolve gave for each key, in order.
-	resolutions map[string][]string
 }
 
 func newOperations() operations {
@@ -218,26 +238,6 @@ func (ops operations) timeOf(clientRef string) int64 {
 	}
 
 	return o.invokeT
-}
-
-// ledger indexes the export.
-type ledger struct {
-	accounts          map[string]snapshot.Account
-	accountIDs        []string
-	balances          map[string]snapshot.Balance
-	transactions      map[string]snapshot.Transaction
-	transactionIDs    []string
-	byClientRef       map[string][]snapshot.Transaction
-	entriesByTx       map[string][]snapshot.Entry
-	entriesByAccount  map[string][]snapshot.Entry
-	externalCashID    string
-	hasExternalCashID bool
-	systemIDs         map[string]string
-	transfers         []snapshot.ExternalTransfer
-	transitions       map[string][]snapshot.Transition
-	byTransfer        map[string][]snapshot.Transaction
-	byIncoming        map[string][]snapshot.Transaction
-	incomingByE2E     map[string][]snapshot.Incoming
 }
 
 // systemID is the id of a system account by its code.

@@ -20,6 +20,19 @@ type healthBody struct {
 	Status  string `json:"status"`
 }
 
+type statusBody struct {
+	Live struct {
+		Checks []struct {
+			State string `json:"state"`
+		} `json:"checks"`
+	} `json:"live"`
+	LastRound *struct {
+		Round     string `json:"round"`
+		Verdict   string `json:"verdict"`
+		ReportURL string `json:"report_url"`
+	} `json:"last_round"`
+}
+
 func TestHealth_ReportsVersion(t *testing.T) {
 	t.Parallel()
 
@@ -138,19 +151,6 @@ func TestPanel_SendsSecurityHeadersAndThePage(t *testing.T) {
 	if !strings.Contains(recorder.Body.String(), `<html lang="pt-BR">`) {
 		t.Fatalf("page body: %s", recorder.Body)
 	}
-}
-
-type statusBody struct {
-	Live struct {
-		Checks []struct {
-			State string `json:"state"`
-		} `json:"checks"`
-	} `json:"live"`
-	LastRound *struct {
-		Round     string `json:"round"`
-		Verdict   string `json:"verdict"`
-		ReportURL string `json:"report_url"`
-	} `json:"last_round"`
 }
 
 func getStatus(t *testing.T, config dashboard.Config) statusBody {

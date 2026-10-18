@@ -41,6 +41,11 @@ var (
 	errBadSkew       = errors.New(`clock body must be {"offset": "+120s", "ttl": "10m"}`)
 )
 
+type skewRequest struct {
+	Offset string `json:"offset"`
+	TTL    string `json:"ttl"`
+}
+
 // Setup records fired failpoints in the shared volume and arms the rules of
 // CENTAVO_FAILPOINTS.
 func Setup(config Config) error {
@@ -59,6 +64,35 @@ func Server(config Config) *http.Server {
 	mux.HandleFunc("DELETE "+clockRoute, clearClock)
 
 	return httpserver.New(Addr, requireToken(config.Token, mux))
+}
+
+// KillMain finds the main process of the container (the binary started by tini,
+// not this chaos-kill invocation) and sends it SIGKILL. The images have no
+// shell and no kill command, so the binary kills itself this way.
+func KillMain(binary string) error {
+	entries, err := os.ReadDir(procDir)
+	if err != nil {
+		return fmt.Errorf("listing processes: %w", err)
+	}
+
+	self := os.Getpid()
+
+	for _, entry := range entries {
+		pid, err := strconv.Atoi(entry.Name())
+		if err != nil {
+			continue
+		}
+
+		if pid == self {
+			continue
+		}
+
+		if isMainProcess(pid, binary) {
+			return syscall.Kill(pid, syscall.SIGKILL)
+		}
+	}
+
+	return errNoMainProcess
 }
 
 // requireToken is the safety rule that every chaos call carries the chaos
@@ -117,11 +151,6 @@ func clearFailpoints(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, map[string]bool{"cleared": true})
 }
 
-type skewRequest struct {
-	Offset string `json:"offset"`
-	TTL    string `json:"ttl"`
-}
-
 // setClock skews this process's wall clock.
 func setClock(w http.ResponseWriter, r *http.Request) {
 	var request skewRequest
@@ -166,35 +195,6 @@ func writeJSON(w http.ResponseWriter, body any) {
 
 	// An encode error means the lab went away; there is nobody to tell.
 	_ = json.NewEncoder(w).Encode(body)
-}
-
-// KillMain finds the main process of the container (the binary started by tini,
-// not this chaos-kill invocation) and sends it SIGKILL. The images have no
-// shell and no kill command, so the binary kills itself this way.
-func KillMain(binary string) error {
-	entries, err := os.ReadDir(procDir)
-	if err != nil {
-		return fmt.Errorf("listing processes: %w", err)
-	}
-
-	self := os.Getpid()
-
-	for _, entry := range entries {
-		pid, err := strconv.Atoi(entry.Name())
-		if err != nil {
-			continue
-		}
-
-		if pid == self {
-			continue
-		}
-
-		if isMainProcess(pid, binary) {
-			return syscall.Kill(pid, syscall.SIGKILL)
-		}
-	}
-
-	return errNoMainProcess
 }
 
 // isMainProcess matches "<binary> api|worker|serve", never healthcheck or

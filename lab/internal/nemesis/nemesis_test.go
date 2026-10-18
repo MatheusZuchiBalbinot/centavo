@@ -15,27 +15,6 @@ import (
 	"centavo/lab/scenarios"
 )
 
-func newTestNemesis(t *testing.T, eventsDir string) (*Nemesis, string) {
-	t.Helper()
-
-	historyPath := filepath.Join(t.TempDir(), "history.jsonl")
-
-	writer, err := history.Create(historyPath, "r0042")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Cleanup(func() { _ = writer.Close() })
-
-	fault := scenarios.Fault{ID: "fp", Kind: scenarios.FaultFailpoint, Targets: []string{"bank-api"}, Failpoint: "transfer.after_debit_before_credit", Action: "kill", Probability: 0.1, MaxFires: 3}
-	config := Config{
-		Round: "r0042", Seed: seed.Seed(0x5eed), Scenario: scenarios.Scenario{Faults: []scenarios.Fault{fault}},
-		History: writer, EventsDir: eventsDir, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
-	}
-
-	return New(config), historyPath
-}
-
 func TestRuleFor_CountsDownTheFiresAndScopesTheRound(t *testing.T) {
 	bot, _ := newTestNemesis(t, t.TempDir())
 	armed := *bot.failpoints.faults[0]
@@ -115,21 +94,6 @@ func TestCollectEvents_RecordsThisRoundAndCountsFires(t *testing.T) {
 	}
 }
 
-func appendTo(t *testing.T, path, content string) {
-	t.Helper()
-
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0o600)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer file.Close()
-
-	_, err = file.WriteString(content)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
 // TestClockFaults_AreRecordedAndCleared: the skew is in the history before
 // it is set, and the faults of the scenario are the ones pushed.
 func TestClockFaults_AreRecordedAndCleared(t *testing.T) {
@@ -166,5 +130,41 @@ func TestClockFaults_AreRecordedAndCleared(t *testing.T) {
 
 	if !strings.Contains(string(content), `"f":"skew_clock"`) || !strings.Contains(string(content), `"offset":"2m0s"`) {
 		t.Fatalf("history without the skew: %s", content)
+	}
+}
+
+func newTestNemesis(t *testing.T, eventsDir string) (*Nemesis, string) {
+	t.Helper()
+
+	historyPath := filepath.Join(t.TempDir(), "history.jsonl")
+
+	writer, err := history.Create(historyPath, "r0042")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() { _ = writer.Close() })
+
+	fault := scenarios.Fault{ID: "fp", Kind: scenarios.FaultFailpoint, Targets: []string{"bank-api"}, Failpoint: "transfer.after_debit_before_credit", Action: "kill", Probability: 0.1, MaxFires: 3}
+	config := Config{
+		Round: "r0042", Seed: seed.Seed(0x5eed), Scenario: scenarios.Scenario{Faults: []scenarios.Fault{fault}},
+		History: writer, EventsDir: eventsDir, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+
+	return New(config), historyPath
+}
+
+func appendTo(t *testing.T, path, content string) {
+	t.Helper()
+
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+
+	_, err = file.WriteString(content)
+	if err != nil {
+		t.Fatal(err)
 	}
 }

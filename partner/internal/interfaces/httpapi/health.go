@@ -26,6 +26,10 @@ type healthResponse struct {
 	Status       string `json:"status"`
 }
 
+type healthHandler struct {
+	response healthResponse
+}
+
 // NewAdminHandler serves the admin and chaos port (9092). The lab-only
 // routes live here, never on the client port; chaos is nil outside chaoslab builds.
 func NewAdminHandler(info BuildInfo, api API, chaos http.Handler) http.Handler {
@@ -42,10 +46,6 @@ func NewAdminHandler(info BuildInfo, api API, chaos http.Handler) http.Handler {
 	}
 
 	return withSecurityHeaders(mux)
-}
-
-type healthHandler struct {
-	response healthResponse
 }
 
 func (h healthHandler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {

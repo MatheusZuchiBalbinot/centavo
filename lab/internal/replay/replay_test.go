@@ -8,8 +8,6 @@ import (
 	"centavo/lab/internal/history"
 )
 
-func at(d time.Duration) int64 { return int64(d) }
-
 func TestBuilder_CountsSecondsLatencyAndChaos(t *testing.T) {
 	t.Parallel()
 
@@ -59,3 +57,5 @@ func TestPercentile_NearestRank(t *testing.T) {
 		t.Fatalf("p50 of nothing = %v", got)
 	}
 }
+
+func at(d time.Duration) int64 { return int64(d) }

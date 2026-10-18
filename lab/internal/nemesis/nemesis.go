@@ -36,15 +36,6 @@ var (
 	ErrHealTimeout  = errors.New("targets did not become healthy before the heal timeout")
 )
 
-// target is one process the bot may hit.
-type target struct {
-	service  string
-	binary   string
-	adminURL string
-	// chaosURL is empty for processes without failpoints.
-	chaosURL string
-}
-
 // targets are the chaos targets of the Compose stack; their ports never leave
 // the Compose network.
 var targets = []target{
@@ -85,6 +76,20 @@ type Nemesis struct {
 	toxiproxyURL string
 	// hasFailedOver keeps the cure from starting a fenced old primary.
 	hasFailedOver atomic.Bool
+}
+
+// target is one process the bot may hit.
+type target struct {
+	service  string
+	binary   string
+	adminURL string
+	// chaosURL is empty for processes without failpoints.
+	chaosURL string
+}
+
+type healthBody struct {
+	IsChaosBuild bool   `json:"chaos_build"`
+	Env          string `json:"env"`
 }
 
 // New builds the nemesis of a round.
@@ -247,11 +252,6 @@ func (n *Nemesis) nudgeTargets(ctx context.Context) (bool, error) {
 	}
 
 	return isEveryoneHealthy, nil
-}
-
-type healthBody struct {
-	IsChaosBuild bool   `json:"chaos_build"`
-	Env          string `json:"env"`
 }
 
 func (n *Nemesis) checkSafety(ctx context.Context, t target) error {

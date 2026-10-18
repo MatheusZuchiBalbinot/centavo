@@ -22,8 +22,6 @@ const (
 // ErrBreakerOpen is a call the breaker did not let through.
 var ErrBreakerOpen = errors.New("partner circuit breaker is open")
 
-type breakerState int
-
 const (
 	breakerClosed breakerState = iota
 	breakerOpen
@@ -45,6 +43,8 @@ type Breaker struct {
 	openedAt     time.Time
 	isProbeOnAir bool
 }
+
+type breakerState int
 
 // NewBreaker wraps a client.
 func NewBreaker(client Client) *Breaker {

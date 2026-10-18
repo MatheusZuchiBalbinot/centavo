@@ -56,6 +56,33 @@ type UseCases struct {
 	Pix          PixUseCases
 }
 
+type apiHandlers struct {
+	useCases UseCases
+	logger   *slog.Logger
+}
+
+type accountResponse struct {
+	AccountID    string    `json:"account_id"`
+	HolderName   string    `json:"holder_name"`
+	BalanceCents int64     `json:"balance_cents"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+type statementResponse struct {
+	AccountID    string                  `json:"account_id"`
+	Entries      []statementLineResponse `json:"entries"`
+	NextAfterSeq *int64                  `json:"next_after_seq"`
+}
+
+type statementLineResponse struct {
+	AccountSeq        int64     `json:"account_seq"`
+	TransactionID     string    `json:"transaction_id"`
+	Kind              string    `json:"kind"`
+	AmountCents       int64     `json:"amount_cents"`
+	BalanceAfterCents int64     `json:"balance_after_cents"`
+	CreatedAt         time.Time `json:"created_at"`
+}
+
 // NewAPIHandler serves the client API (8080).
 func NewAPIHandler(useCases UseCases, logger *slog.Logger) http.Handler {
 	api := apiHandlers{useCases: useCases, logger: logger}
@@ -74,18 +101,6 @@ func NewAPIHandler(useCases UseCases, logger *slog.Logger) http.Handler {
 	return withSecurityHeaders(withRequestContext(mux, logger))
 }
 
-type apiHandlers struct {
-	useCases UseCases
-	logger   *slog.Logger
-}
-
-type accountResponse struct {
-	AccountID    string    `json:"account_id"`
-	HolderName   string    `json:"holder_name"`
-	BalanceCents int64     `json:"balance_cents"`
-	CreatedAt    time.Time `json:"created_at"`
-}
-
 func (a apiHandlers) getAccount(w http.ResponseWriter, r *http.Request) {
 	id, err := ledger.ParseAccountID(r.PathValue("id"))
 	if err != nil {
@@ -102,21 +117,6 @@ func (a apiHandlers) getAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, newAccountResponse(view))
-}
-
-type statementResponse struct {
-	AccountID    string                  `json:"account_id"`
-	Entries      []statementLineResponse `json:"entries"`
-	NextAfterSeq *int64                  `json:"next_after_seq"`
-}
-
-type statementLineResponse struct {
-	AccountSeq        int64     `json:"account_seq"`
-	TransactionID     string    `json:"transaction_id"`
-	Kind              string    `json:"kind"`
-	AmountCents       int64     `json:"amount_cents"`
-	BalanceAfterCents int64     `json:"balance_after_cents"`
-	CreatedAt         time.Time `json:"created_at"`
 }
 
 func (a apiHandlers) getStatement(w http.ResponseWriter, r *http.Request) {

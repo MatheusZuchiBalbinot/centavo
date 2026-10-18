@@ -13,12 +13,6 @@ import (
 	"centavo/lab/internal/snapshot"
 )
 
-// Request says which round to export and which accounts it created.
-type Request struct {
-	Round      string
-	AccountIDs []string
-}
-
 // The queries read the tables raw: the checker recomputes everything from
 // entries and never trusts the bank's own aggregates.
 const (
@@ -97,6 +91,22 @@ WHERE account_id = ANY($1::uuid[])
 ORDER BY id`
 )
 
+// inFlightSQL also counts the partner events the bank took in and has not
+// applied yet: with the inbox a webhook is acknowledged before its effect, and
+// a snapshot taken in between would miss it.
+const inFlightSQL = `
+SELECT (SELECT count(*) FROM external_transfers
+        WHERE status IN ('created', 'sent') AND id IN (` + roundTransfersSQL + `))
+     + (SELECT count(*) FROM inbox_events WHERE status = 'pending')`
+
+const roundTransferIDsSQL = `SELECT id::text FROM external_transfers WHERE id IN (` + roundTransfersSQL + `) ORDER BY id`
+
+// Request says which round to export and which accounts it created.
+type Request struct {
+	Round      string
+	AccountIDs []string
+}
+
 // Take reads the snapshot. Every query runs in the same read-only
 // transaction, so the tables agree with each other.
 func Take(ctx context.Context, pool *pgxpool.Pool, request Request) (snapshot.Snapshot, error) {
@@ -158,6 +168,42 @@ func Take(ctx context.Context, pool *pgxpool.Pool, request Request) (snapshot.Sn
 	}
 
 	return state, nil
+}
+
+// InFlight counts what still moves the round's sagas: transfers not yet in a
+// final status and events waiting in the inbox, for the quiescence of the cure.
+func InFlight(ctx context.Context, pool *pgxpool.Pool, round string) (int, error) {
+	var count int
+
+	err := pool.QueryRow(ctx, inFlightSQL, round).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("counting transfers in flight: %w", err)
+	}
+
+	return count, nil
+}
+
+// TransferIDs lists the round's transfers, for the final reads.
+func TransferIDs(ctx context.Context, pool *pgxpool.Pool, round string) ([]string, error) {
+	rows, err := pool.Query(ctx, roundTransferIDsSQL, round)
+	if err != nil {
+		return nil, fmt.Errorf("listing the round's transfers: %w", err)
+	}
+
+	return pgx.CollectRows(rows, pgx.RowTo[string])
+}
+
+// ReconciledUpTo is the bank's reconciliation cursor: the last statement
+// entry it booked.
+func ReconciledUpTo(ctx context.Context, pool *pgxpool.Pool) (int64, error) {
+	var seq int64
+
+	err := pool.QueryRow(ctx, `SELECT last_partner_seq FROM reconciliation_cursor`).Scan(&seq)
+	if err != nil {
+		return 0, fmt.Errorf("reading the reconciliation cursor: %w", err)
+	}
+
+	return seq, nil
 }
 
 // collect reads every row of one export query.
@@ -229,50 +275,4 @@ func scanEntry(row pgx.CollectableRow) (snapshot.Entry, error) {
 	err := row.Scan(&e.ID, &e.TransactionID, &e.AccountID, &e.AmountCents, &e.AccountSeq, &e.BalanceAfterCents)
 
 	return e, err
-}
-
-// inFlightSQL also counts the partner events the bank took in and has not
-// applied yet: with the inbox a webhook is acknowledged before its effect, and
-// a snapshot taken in between would miss it.
-const inFlightSQL = `
-SELECT (SELECT count(*) FROM external_transfers
-        WHERE status IN ('created', 'sent') AND id IN (` + roundTransfersSQL + `))
-     + (SELECT count(*) FROM inbox_events WHERE status = 'pending')`
-
-// InFlight counts what still moves the round's sagas: transfers not yet in a
-// final status and events waiting in the inbox, for the quiescence of the cure.
-func InFlight(ctx context.Context, pool *pgxpool.Pool, round string) (int, error) {
-	var count int
-
-	err := pool.QueryRow(ctx, inFlightSQL, round).Scan(&count)
-	if err != nil {
-		return 0, fmt.Errorf("counting transfers in flight: %w", err)
-	}
-
-	return count, nil
-}
-
-const roundTransferIDsSQL = `SELECT id::text FROM external_transfers WHERE id IN (` + roundTransfersSQL + `) ORDER BY id`
-
-// TransferIDs lists the round's transfers, for the final reads.
-func TransferIDs(ctx context.Context, pool *pgxpool.Pool, round string) ([]string, error) {
-	rows, err := pool.Query(ctx, roundTransferIDsSQL, round)
-	if err != nil {
-		return nil, fmt.Errorf("listing the round's transfers: %w", err)
-	}
-
-	return pgx.CollectRows(rows, pgx.RowTo[string])
-}
-
-// ReconciledUpTo is the bank's reconciliation cursor: the last statement
-// entry it booked.
-func ReconciledUpTo(ctx context.Context, pool *pgxpool.Pool) (int64, error) {
-	var seq int64
-
-	err := pool.QueryRow(ctx, `SELECT last_partner_seq FROM reconciliation_cursor`).Scan(&seq)
-	if err != nil {
-		return 0, fmt.Errorf("reading the reconciliation cursor: %w", err)
-	}
-
-	return seq, nil
 }

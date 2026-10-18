@@ -42,6 +42,13 @@ type CreatePixOut struct {
 	publication Publication
 }
 
+// reservation is a PIX out whose funds are checked, ready to move to transit.
+type reservation struct {
+	external ExternalTransfer
+	debited  ledger.Position
+	write    WriteContext
+}
+
 // NewCreatePixOut builds the use case.
 func NewCreatePixOut(locker Locker, publication Publication) CreatePixOut {
 	return CreatePixOut{locker: locker, publication: publication}
@@ -118,13 +125,6 @@ func recordTransfer(ctx context.Context, stores PixStore, operationID ledger.Ope
 	}
 
 	return external, createdAt, nil
-}
-
-// reservation is a PIX out whose funds are checked, ready to move to transit.
-type reservation struct {
-	external ExternalTransfer
-	debited  ledger.Position
-	write    WriteContext
 }
 
 // postReserve writes the reserve: the customer's debit and its twin in

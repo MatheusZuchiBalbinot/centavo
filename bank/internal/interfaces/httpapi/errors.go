@@ -14,10 +14,6 @@ import (
 	"centavo/bank/internal/domain/transfer"
 )
 
-// errorCode is the machine-readable code clients branch on. Only 4xx codes are
-// definitive; every 5xx is indeterminate.
-type errorCode string
-
 const (
 	codeValidationFailed       errorCode = "VALIDATION_FAILED"
 	codeIdempotencyKeyMissing  errorCode = "IDEMPOTENCY_KEY_MISSING"
@@ -42,12 +38,6 @@ const (
 
 // errValidation marks malformed input; the wrapped text tells the client what.
 var errValidation = errors.New("invalid request")
-
-type errorMapping struct {
-	target error
-	status int
-	code   errorCode
-}
 
 // errorMappings is the only place where an error becomes an HTTP status.
 var errorMappings = []errorMapping{
@@ -75,6 +65,16 @@ var errorMappings = []errorMapping{
 // internal and never reach the client.
 var fixedMessages = map[errorCode]string{
 	codeOutcomeUnknown: outcomeUnknownMessage, codeTemporarilyUnavailable: unavailableMessage,
+}
+
+// errorCode is the machine-readable code clients branch on. Only 4xx codes are
+// definitive; every 5xx is indeterminate.
+type errorCode string
+
+type errorMapping struct {
+	target error
+	status int
+	code   errorCode
 }
 
 type errorBody struct {

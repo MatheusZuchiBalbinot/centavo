@@ -28,6 +28,11 @@ var databaseLinks = []string{"api_pg", "worker1_pg", "worker2_pg", "auditor_pg"}
 // user inside the replica.
 var promoteCommand = []string{"psql", "--username", "postgres", "--command", "SELECT pg_promote()"}
 
+const (
+	phaseSetUp    = "set_up"
+	phasePromoted = "promoted"
+)
+
 // failoverRecord is a failover in the history.
 type failoverRecord struct {
 	Fault       string `json:"fault"`
@@ -35,11 +40,6 @@ type failoverRecord struct {
 	Lag         string `json:"lag"`
 	Phase       string `json:"phase"`
 }
-
-const (
-	phaseSetUp    = "set_up"
-	phasePromoted = "promoted"
-)
 
 // synchronousStandbyCommand sets who the primary waits for on every commit:
 // the replica in sync mode, nobody in async mode.

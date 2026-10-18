@@ -32,6 +32,9 @@ const (
 	maxResponseBytes  = 64 << 10
 )
 
+// eventIDBytes is the randomness of a webhook id.
+const eventIDBytes = 12
+
 // Participant is a bank the partner serves.
 type Participant struct {
 	ID         string
@@ -87,9 +90,6 @@ func (e *Engine) Run(ctx context.Context) {
 	}
 }
 
-// eventIDBytes is the randomness of a webhook id.
-const eventIDBytes = 12
-
 // NewEventID returns a random webhook id.
 func NewEventID() string {
 	var buffer [eventIDBytes]byte
@@ -98,6 +98,19 @@ func NewEventID() string {
 	_, _ = rand.Read(buffer[:])
 
 	return "evt_" + hex.EncodeToString(buffer[:])
+}
+
+// Sign is t=<unix>,v1=<hex of HMAC-SHA256(secret, t + "." + body)>.
+func Sign(secret []byte, at time.Time, body []byte) string {
+	timestamp := strconv.FormatInt(at.Unix(), 10)
+
+	mac := hmac.New(sha256.New, secret)
+
+	// Writing to an in-memory hash never fails.
+	_, _ = mac.Write([]byte(timestamp + "."))
+	_, _ = mac.Write(body)
+
+	return "t=" + timestamp + ",v1=" + hex.EncodeToString(mac.Sum(nil))
 }
 
 func (e *Engine) decideDue(ctx context.Context) {
@@ -215,19 +228,6 @@ func (e *Engine) send(ctx context.Context, delivery truth.Delivery, now time.Tim
 	}
 
 	return nil
-}
-
-// Sign is t=<unix>,v1=<hex of HMAC-SHA256(secret, t + "." + body)>.
-func Sign(secret []byte, at time.Time, body []byte) string {
-	timestamp := strconv.FormatInt(at.Unix(), 10)
-
-	mac := hmac.New(sha256.New, secret)
-
-	// Writing to an in-memory hash never fails.
-	_, _ = mac.Write([]byte(timestamp + "."))
-	_, _ = mac.Write(body)
-
-	return "t=" + timestamp + ",v1=" + hex.EncodeToString(mac.Sum(nil))
 }
 
 func (e *Engine) record(ctx context.Context, err error) {

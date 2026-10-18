@@ -53,6 +53,38 @@ type APIConfig struct {
 	Logger       *slog.Logger
 }
 
+type submitRequest struct {
+	EndToEndID     string `json:"end_to_end_id"`
+	ParticipantID  string `json:"participant_id"`
+	AmountCents    int64  `json:"amount_cents"`
+	DestinationKey string `json:"destination_key"`
+}
+
+type statusResponse struct {
+	EndToEndID  string       `json:"end_to_end_id"`
+	Status      truth.Status `json:"status"`
+	AmountCents int64        `json:"amount_cents"`
+	Reason      string       `json:"reason,omitempty"`
+}
+
+type statementResponse struct {
+	Entries      []truth.StatementEntry `json:"entries"`
+	NextAfterSeq *int64                 `json:"next_after_seq"`
+}
+
+type incomingRequest struct {
+	ParticipantID string `json:"participant_id"`
+	EndToEndID    string `json:"end_to_end_id"`
+	AccountID     string `json:"account_id"`
+	AmountCents   int64  `json:"amount_cents"`
+}
+
+// pending counts the webhooks still to be sent, for the lab's quiescence.
+type pendingResponse struct {
+	PendingDeliveries int   `json:"pending_deliveries"`
+	LastStatementSeq  int64 `json:"last_statement_seq"`
+}
+
 // NewAPI builds the handlers.
 func NewAPI(config APIConfig) API {
 	participants := make(map[string]bool, len(config.Participants))
@@ -71,20 +103,6 @@ func (a API) Handler() http.Handler {
 	mux.HandleFunc("GET "+statementsRoute, a.statement)
 
 	return withSecurityHeaders(mux)
-}
-
-type submitRequest struct {
-	EndToEndID     string `json:"end_to_end_id"`
-	ParticipantID  string `json:"participant_id"`
-	AmountCents    int64  `json:"amount_cents"`
-	DestinationKey string `json:"destination_key"`
-}
-
-type statusResponse struct {
-	EndToEndID  string       `json:"end_to_end_id"`
-	Status      truth.Status `json:"status"`
-	AmountCents int64        `json:"amount_cents"`
-	Reason      string       `json:"reason,omitempty"`
 }
 
 // submit is idempotent by end_to_end_id: 202 the first time, 200 with the
@@ -193,11 +211,6 @@ func (a API) status(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, response)
 }
 
-type statementResponse struct {
-	Entries      []truth.StatementEntry `json:"entries"`
-	NextAfterSeq *int64                 `json:"next_after_seq"`
-}
-
 func (a API) statement(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	participant := query.Get("participant_id")
@@ -235,13 +248,6 @@ func (a API) statement(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, response)
-}
-
-type incomingRequest struct {
-	ParticipantID string `json:"participant_id"`
-	EndToEndID    string `json:"end_to_end_id"`
-	AccountID     string `json:"account_id"`
-	AmountCents   int64  `json:"amount_cents"`
 }
 
 // incoming is a lab-only call: a PIX arrives for an account of the bank and the
@@ -311,12 +317,6 @@ func sinceOf(r *http.Request) (time.Time, error) {
 	}
 
 	return time.Parse(time.RFC3339Nano, since)
-}
-
-// pending counts the webhooks still to be sent, for the lab's quiescence.
-type pendingResponse struct {
-	PendingDeliveries int   `json:"pending_deliveries"`
-	LastStatementSeq  int64 `json:"last_statement_seq"`
 }
 
 // pending is what the lab's quiescence waits on: webhooks still to deliver

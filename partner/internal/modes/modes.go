@@ -34,9 +34,6 @@ const (
 	returnDelayMax = 5 * time.Second
 )
 
-// OutageMode is how the partner is unavailable.
-type OutageMode string
-
 // The ways the partner can be down.
 const (
 	OutageServiceUnavailable OutageMode = "503"
@@ -45,6 +42,9 @@ const (
 
 // ErrInvalidMode means a mode request does not decode or is out of range.
 var ErrInvalidMode = errors.New("invalid partner mode")
+
+// OutageMode is how the partner is unavailable.
+type OutageMode string
 
 // Range is a duration range.
 type Range struct {
@@ -78,6 +78,19 @@ type Config struct {
 	Outage                *OutageConfig `json:"outage"`
 }
 
+// Registry keeps the active mode of each participant.
+type Registry struct {
+	mu     sync.Mutex
+	active map[string]*mode
+}
+
+// Decider answers the partner's questions for one participant at one moment.
+type Decider struct {
+	registry    *Registry
+	participant string
+	now         time.Time
+}
+
 // mode is a validated, active configuration.
 type mode struct {
 	config        Config
@@ -90,12 +103,6 @@ type mode struct {
 	hasOutage     bool
 	draws         *mathrand.Rand
 	nextEventCopy int
-}
-
-// Registry keeps the active mode of each participant.
-type Registry struct {
-	mu     sync.Mutex
-	active map[string]*mode
 }
 
 // NewRegistry starts honest.
@@ -137,35 +144,9 @@ func (r *Registry) Clear() {
 	clear(r.active)
 }
 
-// Decider answers the partner's questions for one participant at one moment.
-type Decider struct {
-	registry    *Registry
-	participant string
-	now         time.Time
-}
-
 // For returns the decider of a participant.
 func (r *Registry) For(participant string, now time.Time) Decider {
 	return Decider{registry: r, participant: participant, now: now}
-}
-
-// draw runs fn on the active mode under the lock, or returns the honest answer.
-func draw[T any](d Decider, honest T, fn func(m *mode) T) T {
-	d.registry.mu.Lock()
-	defer d.registry.mu.Unlock()
-
-	current, isActive := d.registry.active[d.participant]
-	if !isActive {
-		return honest
-	}
-
-	if d.now.After(current.expiresAt) {
-		delete(d.registry.active, d.participant)
-
-		return honest
-	}
-
-	return fn(current)
 }
 
 // Outage reports whether the partner is down for this participant now.
@@ -238,6 +219,25 @@ func (d Decider) Plan(event truth.Event, now time.Time) []truth.PlannedDelivery 
 	honest := []truth.PlannedDelivery{{EventID: event.ID, At: now}}
 
 	return draw(d, honest, func(current *mode) []truth.PlannedDelivery { return current.plan(event, now) })
+}
+
+// draw runs fn on the active mode under the lock, or returns the honest answer.
+func draw[T any](d Decider, honest T, fn func(m *mode) T) T {
+	d.registry.mu.Lock()
+	defer d.registry.mu.Unlock()
+
+	current, isActive := d.registry.active[d.participant]
+	if !isActive {
+		return honest
+	}
+
+	if d.now.After(current.expiresAt) {
+		delete(d.registry.active, d.participant)
+
+		return honest
+	}
+
+	return fn(current)
 }
 
 func (m *mode) plan(event truth.Event, now time.Time) []truth.PlannedDelivery {

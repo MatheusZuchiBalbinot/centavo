@@ -22,9 +22,6 @@ import (
 	"centavo/bank/internal/platform/correlation"
 )
 
-// Action is what a failpoint does when it fires.
-type Action string
-
 // The actions a failpoint can take.
 const (
 	ActionKill  Action = "kill"
@@ -84,6 +81,20 @@ var (
 	errEventsDisabled   = errors.New("failpoint events directory is not configured")
 )
 
+var registry = struct {
+	mu    sync.Mutex
+	rules map[Name]*armed
+}{rules: map[Name]*armed{}}
+
+var events = struct {
+	mu     sync.Mutex
+	config EventsConfig
+	file   *os.File
+}{}
+
+// Action is what a failpoint does when it fires.
+type Action string
+
 // Match narrows a rule to some requests, for exact reproduction.
 type Match struct {
 	CorrelationPrefix string `json:"correlation_prefix,omitempty"`
@@ -137,10 +148,18 @@ type firing struct {
 	fire  int
 }
 
-var registry = struct {
-	mu    sync.Mutex
-	rules map[Name]*armed
-}{rules: map[Name]*armed{}}
+type event struct {
+	TS            time.Time `json:"ts"`
+	Service       string    `json:"service"`
+	Instance      string    `json:"instance"`
+	PID           int       `json:"pid"`
+	Failpoint     Name      `json:"failpoint"`
+	Action        Action    `json:"action"`
+	Arg           string    `json:"arg,omitempty"`
+	CorrelationID string    `json:"correlation_id,omitempty"`
+	Hit           int       `json:"hit"`
+	Fire          int       `json:"fire"`
+}
 
 // Arm installs or renews a rule. Re-arming the same rule only extends its
 // life, so the lab can renew it like a lease without resetting the counters.
@@ -215,12 +234,6 @@ func ArmFromSpec(spec string, seed uint64, now time.Time) error {
 
 	return nil
 }
-
-var events = struct {
-	mu     sync.Mutex
-	config EventsConfig
-	file   *os.File
-}{}
 
 // ConfigureEvents sets where fired failpoints are recorded. Until it is
 // called, no failpoint fires: an unrecorded fault would be invisible chaos.
@@ -316,19 +329,6 @@ func execute(ctx context.Context, fired firing) error {
 	default:
 		return nil
 	}
-}
-
-type event struct {
-	TS            time.Time `json:"ts"`
-	Service       string    `json:"service"`
-	Instance      string    `json:"instance"`
-	PID           int       `json:"pid"`
-	Failpoint     Name      `json:"failpoint"`
-	Action        Action    `json:"action"`
-	Arg           string    `json:"arg,omitempty"`
-	CorrelationID string    `json:"correlation_id,omitempty"`
-	Hit           int       `json:"hit"`
-	Fire          int       `json:"fire"`
 }
 
 // record appends the event and fsyncs it before the action runs, so even a

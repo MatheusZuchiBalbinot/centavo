@@ -31,6 +31,12 @@ type LeasePolicy interface {
 // schema). A paused or skewed worker cannot write.
 type FencedLeases struct{}
 
+// LocalClockLeases is the naive variant: the worker computes expiry with its
+// own wall clock, believes the check it made before the write, and saves the
+// cursor blindly. A worker whose clock runs ahead takes a live lease, and one
+// that paused past the TTL writes as if it still held it.
+type LocalClockLeases struct{}
+
 // Acquire takes the lease by the database's clock.
 func (FencedLeases) Acquire(ctx context.Context, stores LeaseStore, lease Lease, ttl time.Duration) (int64, bool, error) {
 	return stores.AcquireLease(ctx, lease, ttl)
@@ -45,12 +51,6 @@ func (FencedLeases) Holds(ctx context.Context, stores LeaseStore, lease Lease, t
 func (FencedLeases) MoveCursor(ctx context.Context, stores ReconciliationStore, from, to int64) (bool, error) {
 	return stores.AdvanceCursor(ctx, from, to)
 }
-
-// LocalClockLeases is the naive variant: the worker computes expiry with its
-// own wall clock, believes the check it made before the write, and saves the
-// cursor blindly. A worker whose clock runs ahead takes a live lease, and one
-// that paused past the TTL writes as if it still held it.
-type LocalClockLeases struct{}
 
 // Acquire takes the lease by this process's clock.
 func (LocalClockLeases) Acquire(ctx context.Context, stores LeaseStore, lease Lease, ttl time.Duration) (int64, bool, error) {

@@ -13,6 +13,26 @@ import (
 	"centavo/bank/internal/infrastructure/postgres"
 )
 
+// IgnoredKeys is the naive variant of idempotency: the key is recorded as
+// client_ref and nothing else, so a retry after a lost answer runs again.
+type IgnoredKeys struct{}
+
+// ClientRefResolver is the naive resolve: it looks for the key in the
+// ledger and answers, with no tombstone, so a request still in flight can
+// apply after the answer "voided".
+type ClientRefResolver struct {
+	store clientRefLookup
+}
+
+// NoLocker is the naive variant of balance_locking: it reads balances without
+// locking them, so a read and the write that follows can interleave with
+// another writer's.
+type NoLocker struct{}
+
+type clientRefLookup interface {
+	IsClientRefApplied(ctx context.Context, key idempotency.Key) (bool, error)
+}
+
 // NewUnitOfWork is the naive variant of atomic_ledger: every statement commits
 // on its own, so a crash between the debit and the credit destroys money.
 func NewUnitOfWork(pool *pgxpool.Pool) application.UnitOfWork {
@@ -27,10 +47,6 @@ func NewIdempotency(pool *pgxpool.Pool) application.IdempotencyStrategy {
 	return application.IdempotencyStrategy{Keys: IgnoredKeys{}, Resolver: resolver, Retries: application.NoRetries()}
 }
 
-// IgnoredKeys is the naive variant of idempotency: the key is recorded as
-// client_ref and nothing else, so a retry after a lost answer runs again.
-type IgnoredKeys struct{}
-
 // Run executes every request as a new operation.
 func (IgnoredKeys) Run(ctx context.Context, stores application.Stores, write application.Write) (idempotency.StoredResponse, error) {
 	operationID, err := ledger.NewOperationID()
@@ -39,17 +55,6 @@ func (IgnoredKeys) Run(ctx context.Context, stores application.Stores, write app
 	}
 
 	return write.Apply(ctx, stores, operationID)
-}
-
-type clientRefLookup interface {
-	IsClientRefApplied(ctx context.Context, key idempotency.Key) (bool, error)
-}
-
-// ClientRefResolver is the naive resolve: it looks for the key in the
-// ledger and answers, with no tombstone, so a request still in flight can
-// apply after the answer "voided".
-type ClientRefResolver struct {
-	store clientRefLookup
 }
 
 // Resolve answers from the ledger as it is right now.
@@ -65,11 +70,6 @@ func (r ClientRefResolver) Resolve(ctx context.Context, request application.Reso
 
 	return application.Resolution{Outcome: idempotency.OutcomeVoided}, nil
 }
-
-// NoLocker is the naive variant of balance_locking: it reads balances without
-// locking them, so a read and the write that follows can interleave with
-// another writer's.
-type NoLocker struct{}
 
 // Lock does nothing.
 func (NoLocker) Lock(context.Context, application.PositionLocker, []ledger.AccountID) error {

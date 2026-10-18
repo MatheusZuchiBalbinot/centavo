@@ -15,38 +15,6 @@ import (
 	"centavo/bank/internal/platform/correlation"
 )
 
-func armForTest(t *testing.T, rule Rule) string {
-	t.Helper()
-
-	DisarmAll()
-	t.Cleanup(DisarmAll)
-
-	dir := t.TempDir()
-	ConfigureEvents(EventsConfig{Dir: dir, Service: "bank-api", Instance: "bank-api-test"})
-	t.Cleanup(func() {
-		events.mu.Lock()
-		defer events.mu.Unlock()
-
-		if events.file != nil {
-			_ = events.file.Close()
-			events.file = nil
-		}
-
-		events.config = EventsConfig{}
-	})
-
-	err := Arm(TransferAfterDebitBeforeCredit, rule, time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return dir
-}
-
-func errorRule() Rule {
-	return Rule{Action: ActionError, Arg: "conn_reset", Probability: 1, TTL: "1m", Seed: 7}
-}
-
 func TestHit_FiresAndRecordsTheEventBeforeActing(t *testing.T) {
 	dir := armForTest(t, errorRule())
 	ctx := correlation.With(context.Background(), "r0001-p01-000001")
@@ -203,6 +171,38 @@ func TestArmFromSpec(t *testing.T) {
 	if !errors.Is(err, ErrInvalidRule) {
 		t.Fatalf("malformed spec: got %v", err)
 	}
+}
+
+func armForTest(t *testing.T, rule Rule) string {
+	t.Helper()
+
+	DisarmAll()
+	t.Cleanup(DisarmAll)
+
+	dir := t.TempDir()
+	ConfigureEvents(EventsConfig{Dir: dir, Service: "bank-api", Instance: "bank-api-test"})
+	t.Cleanup(func() {
+		events.mu.Lock()
+		defer events.mu.Unlock()
+
+		if events.file != nil {
+			_ = events.file.Close()
+			events.file = nil
+		}
+
+		events.config = EventsConfig{}
+	})
+
+	err := Arm(TransferAfterDebitBeforeCredit, rule, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return dir
+}
+
+func errorRule() Rule {
+	return Rule{Action: ActionError, Arg: "conn_reset", Probability: 1, TTL: "1m", Seed: 7}
 }
 
 func readEvents(t *testing.T, path string) []event {

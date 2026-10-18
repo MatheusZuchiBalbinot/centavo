@@ -24,6 +24,53 @@ INSERT INTO external_transfers (id, end_to_end_id, operation_id, client_ref, acc
 VALUES ($1, $2, $3, $4, $5, $6, $7, 'created', 1)
 RETURNING created_at`
 
+const insertTransitionSQL = `
+INSERT INTO external_transfer_transitions (transfer_id, seq, from_status, to_status, cause, ledger_transaction_id, correlation_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7)`
+
+const externalTransferColumns = `id, end_to_end_id, operation_id, client_ref, account_id, amount_cents, destination_key,
+	status::text, status_seq, coalesce(failure_code, ''), created_at`
+
+const transitionsSQL = `
+SELECT seq, from_status::text, to_status::text, cause, ledger_transaction_id, correlation_id, created_at
+FROM external_transfer_transitions
+WHERE transfer_id = $1
+ORDER BY seq, id`
+
+const claimAttemptSQL = `
+UPDATE external_transfers
+SET end_to_end_id = $3, updated_at = now()
+WHERE id = $1 AND end_to_end_id = $2 AND status = 'created'`
+
+// overwriteStatusSQL writes the status without checking it; the CTE reads
+// the old one in the same statement so the history shows the jump.
+const overwriteStatusSQL = `
+WITH previous AS (SELECT status FROM external_transfers WHERE id = $1)
+UPDATE external_transfers
+SET status = $2::external_transfer_status,
+    status_seq = status_seq + 1,
+    failure_code = CASE WHEN $2::external_transfer_status = 'failed' THEN $3 ELSE NULL END,
+    updated_at = now()
+WHERE id = $1
+RETURNING (SELECT status::text FROM previous), status_seq`
+
+const insertIncomingSQL = `
+INSERT INTO incoming_transfers (id, end_to_end_id, account_id, amount_cents, source_event_id)
+VALUES ($1, $2, $3, $4, $5)`
+
+const listCreatedSQL = `
+SELECT id FROM external_transfers
+WHERE status = 'created'
+ORDER BY updated_at
+LIMIT $1`
+
+// lockEndToEndSQL is a transaction-scoped advisory lock keyed by the PIX:
+// the reconciler and the inbox both credit incoming PIX, and the lock gives
+// them one order to meet in.
+const lockEndToEndSQL = `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`
+
+const lockTransfersOfSQL = `SELECT id FROM external_transfers WHERE end_to_end_id = ANY($1) ORDER BY id FOR UPDATE`
+
 // pixStore keeps external transfers, their transitions and incoming PIX.
 type pixStore struct {
 	db querier
@@ -54,10 +101,6 @@ func (s pixStore) InsertExternalTransfer(ctx context.Context, external applicati
 
 	return createdAt, nil
 }
-
-const insertTransitionSQL = `
-INSERT INTO external_transfer_transitions (transfer_id, seq, from_status, to_status, cause, ledger_transaction_id, correlation_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7)`
 
 // InsertTransition appends one line to the transfer's state history.
 func (s pixStore) InsertTransition(ctx context.Context, transition application.TransitionRecord) error {
@@ -90,9 +133,6 @@ func (s pixStore) InsertTransition(ctx context.Context, transition application.T
 
 	return nil
 }
-
-const externalTransferColumns = `id, end_to_end_id, operation_id, client_ref, account_id, amount_cents, destination_key,
-	status::text, status_seq, coalesce(failure_code, ''), created_at`
 
 // FindExternalTransfer reads a transfer and its state history.
 func (s pixStore) FindExternalTransfer(ctx context.Context, id transfer.ID) (application.ExternalTransfer, []application.TransitionRecord, error) {
@@ -158,12 +198,6 @@ func scanExternalTransfer(row pgx.Row) (application.ExternalTransfer, error) {
 	return external, nil
 }
 
-const transitionsSQL = `
-SELECT seq, from_status::text, to_status::text, cause, ledger_transaction_id, correlation_id, created_at
-FROM external_transfer_transitions
-WHERE transfer_id = $1
-ORDER BY seq, id`
-
 func (s pixStore) transitionsOf(ctx context.Context, id transfer.ID) ([]application.TransitionRecord, error) {
 	rows, err := s.db.Query(ctx, transitionsSQL, uuid.UUID(id))
 	if err != nil {
@@ -200,11 +234,6 @@ func (s pixStore) transitionsOf(ctx context.Context, id transfer.ID) ([]applicat
 	})
 }
 
-const claimAttemptSQL = `
-UPDATE external_transfers
-SET end_to_end_id = $3, updated_at = now()
-WHERE id = $1 AND end_to_end_id = $2 AND status = 'created'`
-
 // ClaimAttempt is the naive relay's compare-and-set on the end_to_end_id.
 func (s pixStore) ClaimAttempt(ctx context.Context, id transfer.ID, seen, next transfer.EndToEndID) (bool, error) {
 	tag, err := s.db.Exec(ctx, claimAttemptSQL, uuid.UUID(id), seen, next)
@@ -214,18 +243,6 @@ func (s pixStore) ClaimAttempt(ctx context.Context, id transfer.ID, seen, next t
 
 	return tag.RowsAffected() == 1, nil
 }
-
-// overwriteStatusSQL writes the status without checking it; the CTE reads
-// the old one in the same statement so the history shows the jump.
-const overwriteStatusSQL = `
-WITH previous AS (SELECT status FROM external_transfers WHERE id = $1)
-UPDATE external_transfers
-SET status = $2::external_transfer_status,
-    status_seq = status_seq + 1,
-    failure_code = CASE WHEN $2::external_transfer_status = 'failed' THEN $3 ELSE NULL END,
-    updated_at = now()
-WHERE id = $1
-RETURNING (SELECT status::text FROM previous), status_seq`
 
 // OverwriteStatus sets the status, whatever it was.
 func (s pixStore) OverwriteStatus(ctx context.Context, change application.StatusChange) (transfer.Status, int, error) {
@@ -245,10 +262,6 @@ func (s pixStore) OverwriteStatus(ctx context.Context, change application.Status
 
 	return transfer.Status(previous), seq, nil
 }
-
-const insertIncomingSQL = `
-INSERT INTO incoming_transfers (id, end_to_end_id, account_id, amount_cents, source_event_id)
-VALUES ($1, $2, $3, $4, $5)`
 
 // InsertIncoming records a PIX in; a second one for the same end_to_end_id
 // is application.ErrAlreadyCredited.
@@ -290,12 +303,6 @@ func (s pixStore) Notify(ctx context.Context, channel, payload string) error {
 	return nil
 }
 
-const listCreatedSQL = `
-SELECT id FROM external_transfers
-WHERE status = 'created'
-ORDER BY updated_at
-LIMIT $1`
-
 // ListCreated returns transfers still waiting for the partner.
 func (s pixStore) ListCreated(ctx context.Context, limit int) ([]transfer.ID, error) {
 	rows, err := s.db.Query(ctx, listCreatedSQL, limit)
@@ -311,11 +318,6 @@ func (s pixStore) ListCreated(ctx context.Context, limit int) ([]transfer.ID, er
 	})
 }
 
-// lockEndToEndSQL is a transaction-scoped advisory lock keyed by the PIX:
-// the reconciler and the inbox both credit incoming PIX, and the lock gives
-// them one order to meet in.
-const lockEndToEndSQL = `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`
-
 // LockEndToEnd holds one PIX until the transaction ends.
 func (s pixStore) LockEndToEnd(ctx context.Context, endToEndID transfer.EndToEndID) error {
 	_, err := s.db.Exec(ctx, lockEndToEndSQL, endToEndID)
@@ -325,8 +327,6 @@ func (s pixStore) LockEndToEnd(ctx context.Context, endToEndID transfer.EndToEnd
 
 	return nil
 }
-
-const lockTransfersOfSQL = `SELECT id FROM external_transfers WHERE end_to_end_id = ANY($1) ORDER BY id FOR UPDATE`
 
 // LockTransfersOf locks a batch of transfers in id order, which every other
 // writer that takes more than one of them follows too.

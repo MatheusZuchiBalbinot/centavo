@@ -98,36 +98,6 @@ func TestTransfer_OppositeDirections_NeverDeadlock(t *testing.T) {
 	assertChainedAndNeverNegative(t, b, second, 10_000)
 }
 
-// assertChainedAndNeverNegative checks each account's entries chain and
-// customer balances never go negative on one account, the way the checker does:
-// positions 1..n, chained balances, materialized equal to the sum.
-func assertChainedAndNeverNegative(t *testing.T, b bank, account ledger.AccountID, want int64) {
-	t.Helper()
-
-	lines := b.statement(t, account)
-
-	var running int64
-
-	for i, line := range lines {
-		running += int64(line.Amount)
-
-		isChained := line.Seq == ledger.Seq(i+1) && int64(line.BalanceAfter.Cents()) == running && running >= 0
-		if !isChained {
-			t.Fatalf("account %s, line %d: %+v (running sum %d)", account, i, line, running)
-		}
-	}
-
-	view, err := b.getAccount.Execute(t.Context(), account)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	isUnexpected := int64(view.Balance.Cents()) != running || running != want
-	if isUnexpected {
-		t.Fatalf("account %s: materialized %d, entries sum %d, want %d", account, view.Balance.Cents(), running, want)
-	}
-}
-
 // TestDefenseConstraints_CatchWhatTheLocksMiss checks the safety net of
 // atomic_ledger and balance_locking: writes a skipped lock or a crash would let
 // through fail at the database instead of corrupting the ledger.
@@ -224,6 +194,36 @@ func TestMigrateDefenses_TakesTheConstraintsOutAndBackIn(t *testing.T) {
 
 	if !hasConstraint(t, b, "entry_unique_seq_per_account") || !hasTrigger(t, b, "ledger_transactions_have_entries") {
 		t.Fatal("the robust schema is missing defense constraints")
+	}
+}
+
+// assertChainedAndNeverNegative checks each account's entries chain and
+// customer balances never go negative on one account, the way the checker does:
+// positions 1..n, chained balances, materialized equal to the sum.
+func assertChainedAndNeverNegative(t *testing.T, b bank, account ledger.AccountID, want int64) {
+	t.Helper()
+
+	lines := b.statement(t, account)
+
+	var running int64
+
+	for i, line := range lines {
+		running += int64(line.Amount)
+
+		isChained := line.Seq == ledger.Seq(i+1) && int64(line.BalanceAfter.Cents()) == running && running >= 0
+		if !isChained {
+			t.Fatalf("account %s, line %d: %+v (running sum %d)", account, i, line, running)
+		}
+	}
+
+	view, err := b.getAccount.Execute(t.Context(), account)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	isUnexpected := int64(view.Balance.Cents()) != running || running != want
+	if isUnexpected {
+		t.Fatalf("account %s: materialized %d, entries sum %d, want %d", account, view.Balance.Cents(), running, want)
 	}
 }
 

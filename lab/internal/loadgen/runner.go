@@ -21,16 +21,6 @@ import (
 	"centavo/lab/scenarios"
 )
 
-// retryPolicy is how a client times out and retries one operation.
-type retryPolicy struct {
-	attemptTimeout time.Duration
-	maxRetries     int
-	backoffBase    time.Duration
-	backoffCap     time.Duration
-	// deadline bounds the whole operation; past it, the operation is info.
-	deadline time.Duration
-}
-
 // politePolicy is the polite client.
 var politePolicy = retryPolicy{
 	attemptTimeout: 2 * time.Second, maxRetries: 8, backoffBase: 100 * time.Millisecond, backoffCap: 5 * time.Second, deadline: 30 * time.Second,
@@ -39,24 +29,6 @@ var politePolicy = retryPolicy{
 // aggressivePolicy retries at once, up to 20 times, with the same key.
 var aggressivePolicy = retryPolicy{
 	attemptTimeout: 2 * time.Second, maxRetries: 20, deadline: 30 * time.Second,
-}
-
-// Result is what the load leaves for the cure: the writes whose outcome is
-// unknown, to resolve, and the next free process number.
-type Result struct {
-	Indeterminate []IndeterminateWrite
-	NextProcess   int
-}
-
-// IndeterminateWrite is a write whose outcome the client does not know, with
-// the request it sent: resolve must name the request, not only its key.
-type IndeterminateWrite struct {
-	// Op is the operation being resolved; Key is the key it sent, its own or
-	// the one a buggy client reused.
-	Op   string
-	Key  string
-	Path string
-	Body json.RawMessage
 }
 
 // Amounts the workload draws, in cents.
@@ -73,30 +45,6 @@ const (
 // ErrPreparationFailed means the accounts or balances a round needs could not
 // be created, so the round never started.
 var ErrPreparationFailed = errors.New("round preparation failed")
-
-// Config is one load phase of a round.
-type Config struct {
-	Round    string
-	Seed     seed.Seed
-	Workload scenarios.Workload
-	Duration time.Duration
-	BankURL  string
-	History  *history.Writer
-	Logger   *slog.Logger
-	// PartnerURL is the partner's admin port, where the lab asks for PIX in.
-	PartnerURL string
-	// ParticipantID is the bank at the partner.
-	ParticipantID string
-	// BeforeLoad runs once the accounts exist and before the load starts;
-	// the nemesis arms its faults here, so preparation never sees chaos.
-	BeforeLoad func(ctx context.Context) error
-}
-
-// weightedFunction is one slice of an operation mix.
-type weightedFunction struct {
-	function history.Function
-	weight   int
-}
 
 // mixes are the workload profiles.
 var mixes = map[scenarios.Profile][]weightedFunction{
@@ -137,6 +85,65 @@ const (
 	destinationKeys   = 10_000
 )
 
+// duplicateCopies is how many times a duplicator sends each operation.
+const duplicateCopies = 2
+
+// endToEndDigestBytes are the bytes of the digest a PIX in id keeps: 32 hex
+// digits, like the bank's own ids.
+const endToEndDigestBytes = 16
+
+// Result is what the load leaves for the cure: the writes whose outcome is
+// unknown, to resolve, and the next free process number.
+type Result struct {
+	Indeterminate []IndeterminateWrite
+	NextProcess   int
+}
+
+// IndeterminateWrite is a write whose outcome the client does not know, with
+// the request it sent: resolve must name the request, not only its key.
+type IndeterminateWrite struct {
+	// Op is the operation being resolved; Key is the key it sent, its own or
+	// the one a buggy client reused.
+	Op   string
+	Key  string
+	Path string
+	Body json.RawMessage
+}
+
+// Config is one load phase of a round.
+type Config struct {
+	Round    string
+	Seed     seed.Seed
+	Workload scenarios.Workload
+	Duration time.Duration
+	BankURL  string
+	History  *history.Writer
+	Logger   *slog.Logger
+	// PartnerURL is the partner's admin port, where the lab asks for PIX in.
+	PartnerURL string
+	// ParticipantID is the bank at the partner.
+	ParticipantID string
+	// BeforeLoad runs once the accounts exist and before the load starts;
+	// the nemesis arms its faults here, so preparation never sees chaos.
+	BeforeLoad func(ctx context.Context) error
+}
+
+// retryPolicy is how a client times out and retries one operation.
+type retryPolicy struct {
+	attemptTimeout time.Duration
+	maxRetries     int
+	backoffBase    time.Duration
+	backoffCap     time.Duration
+	// deadline bounds the whole operation; past it, the operation is info.
+	deadline time.Duration
+}
+
+// weightedFunction is one slice of an operation mix.
+type weightedFunction struct {
+	function history.Function
+	weight   int
+}
+
 // run is the state the clients of one round share.
 type run struct {
 	config      Config
@@ -148,6 +155,24 @@ type run struct {
 
 	mu            sync.Mutex
 	indeterminate []IndeterminateWrite
+}
+
+// client is one logical client: a goroutine that runs one operation at a time.
+// Its process number changes when an operation ends as info.
+type client struct {
+	run     *run
+	index   int
+	process int
+	seq     int
+	profile scenarios.ClientProfile
+	policy  retryPolicy
+	// lastWrite is the key a buggy client reuses with another body.
+	lastWrite string
+	ops       *mathrand.Rand
+	amounts   *mathrand.Rand
+	picks     *mathrand.Rand
+	jitter    *mathrand.Rand
+	accounts  []int
 }
 
 // Run prepares the accounts, then runs the workload for the configured
@@ -259,24 +284,6 @@ func emitTokens(ctx context.Context, ratePerSecond float64, tokens chan<- struct
 		default:
 		}
 	}
-}
-
-// client is one logical client: a goroutine that runs one operation at a time.
-// Its process number changes when an operation ends as info.
-type client struct {
-	run     *run
-	index   int
-	process int
-	seq     int
-	profile scenarios.ClientProfile
-	policy  retryPolicy
-	// lastWrite is the key a buggy client reuses with another body.
-	lastWrite string
-	ops       *mathrand.Rand
-	amounts   *mathrand.Rand
-	picks     *mathrand.Rand
-	jitter    *mathrand.Rand
-	accounts  []int
 }
 
 func (r *run) newClient(index int) *client {
@@ -524,9 +531,6 @@ func (c *client) execute(ctx context.Context, op operation) (attemptResult, erro
 	}
 }
 
-// duplicateCopies is how many times a duplicator sends each operation.
-const duplicateCopies = 2
-
 // executeTwice is the duplicator client: the same request, with the same key,
 // twice in parallel. One success is a success; two definitive failures are a
 // failure; anything else is info.
@@ -713,10 +717,6 @@ func drawDestinationKey(stream *mathrand.Rand) string {
 
 	return fmt.Sprintf("dest-%04d", stream.IntN(destinationKeys))
 }
-
-// endToEndDigestBytes are the bytes of the digest a PIX in id keeps: 32 hex
-// digits, like the bank's own ids.
-const endToEndDigestBytes = 16
 
 // incomingEndToEndID is the id the lab gives a PIX in: E plus 32 hex digits
 // derived from the operation, so the checker can find it again.

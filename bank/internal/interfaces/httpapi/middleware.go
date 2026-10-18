@@ -21,6 +21,13 @@ const requestDeadline = 5 * time.Second
 // correlationFormat keeps log lines and stored ids free of control characters.
 var correlationFormat = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,128}$`)
 
+// securityHeaders lock a JSON API down: nothing it answers is a page to
+// render, frame or sniff.
+var securityHeaders = map[string]string{
+	"X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer",
+	"Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+}
+
 // withRequestContext attaches the correlation id and the request deadline.
 func withRequestContext(next http.Handler, logger *slog.Logger) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -66,13 +73,6 @@ func newCorrelationID() (string, error) {
 
 func correlationIDFrom(ctx context.Context) string {
 	return correlation.From(ctx)
-}
-
-// securityHeaders lock a JSON API down: nothing it answers is a page to
-// render, frame or sniff.
-var securityHeaders = map[string]string{
-	"X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer",
-	"Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
 }
 
 // withSecurityHeaders sets securityHeaders on every answer.

@@ -27,84 +27,6 @@ type bank struct {
 	transfer     application.TransferInternal
 }
 
-func newBank(t *testing.T) bank {
-	t.Helper()
-
-	pool := newPool(t, database.appURL)
-	store := postgres.NewLedgerStore(pool)
-	moneyDependencies := application.MoneyDependencies{UnitOfWork: postgres.NewUnitOfWork(pool), Locker: application.RowLocker{}}
-
-	return bank{
-		pool: pool, openAccount: application.NewOpenAccount(store), getAccount: application.NewGetAccount(store),
-		getStatement: application.NewGetStatement(store, store), deposit: application.NewDeposit(moneyDependencies),
-		transfer: application.NewTransferInternal(moneyDependencies),
-	}
-}
-
-func (b bank) newCustomer(t *testing.T) ledger.AccountID {
-	t.Helper()
-
-	view, err := b.openAccount.Execute(t.Context(), "Test Customer")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return view.Account.ID
-}
-
-func (b bank) fund(t *testing.T, accountID ledger.AccountID, cents money.Cents) application.DepositResult {
-	t.Helper()
-
-	input := application.DepositInput{AccountID: accountID, Amount: amountOf(t, cents), Write: newWrite(t)}
-
-	result, err := b.deposit.Execute(t.Context(), input)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return result
-}
-
-func (b bank) statement(t *testing.T, accountID ledger.AccountID) []ledger.StatementLine {
-	t.Helper()
-
-	query := application.StatementQuery{AccountID: accountID, Limit: application.MaxStatementLimit}
-
-	page, err := b.getStatement.Execute(t.Context(), query)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return page.Lines
-}
-
-// transactionsWithClientRef counts the ledger transactions a client key produced.
-func (b bank) transactionsWithClientRef(t *testing.T, key idempotency.Key) int {
-	t.Helper()
-
-	var count int
-
-	err := b.pool.QueryRow(t.Context(), `SELECT count(*) FROM ledger_transactions WHERE client_ref = $1`, string(key)).Scan(&count)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return count
-}
-
-func (b bank) entrySum(t *testing.T, transactionID ledger.TransactionID) (sum int64, count int) {
-	t.Helper()
-
-	query := `SELECT coalesce(sum(amount_cents), 0), count(*) FROM ledger_entries WHERE transaction_id = $1`
-
-	err := b.pool.QueryRow(t.Context(), query, uuid.UUID(transactionID)).Scan(&sum, &count)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return sum, count
-}
-
 func TestDeposit_CreditsTheCustomerAndDebitsExternalCash(t *testing.T) {
 	b := newBank(t)
 	accountID := b.newCustomer(t)
@@ -291,6 +213,84 @@ func TestLedger_IsAppendOnly(t *testing.T) {
 			}
 		})
 	}
+}
+
+func newBank(t *testing.T) bank {
+	t.Helper()
+
+	pool := newPool(t, database.appURL)
+	store := postgres.NewLedgerStore(pool)
+	moneyDependencies := application.MoneyDependencies{UnitOfWork: postgres.NewUnitOfWork(pool), Locker: application.RowLocker{}}
+
+	return bank{
+		pool: pool, openAccount: application.NewOpenAccount(store), getAccount: application.NewGetAccount(store),
+		getStatement: application.NewGetStatement(store, store), deposit: application.NewDeposit(moneyDependencies),
+		transfer: application.NewTransferInternal(moneyDependencies),
+	}
+}
+
+func (b bank) newCustomer(t *testing.T) ledger.AccountID {
+	t.Helper()
+
+	view, err := b.openAccount.Execute(t.Context(), "Test Customer")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return view.Account.ID
+}
+
+func (b bank) fund(t *testing.T, accountID ledger.AccountID, cents money.Cents) application.DepositResult {
+	t.Helper()
+
+	input := application.DepositInput{AccountID: accountID, Amount: amountOf(t, cents), Write: newWrite(t)}
+
+	result, err := b.deposit.Execute(t.Context(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return result
+}
+
+func (b bank) statement(t *testing.T, accountID ledger.AccountID) []ledger.StatementLine {
+	t.Helper()
+
+	query := application.StatementQuery{AccountID: accountID, Limit: application.MaxStatementLimit}
+
+	page, err := b.getStatement.Execute(t.Context(), query)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return page.Lines
+}
+
+// transactionsWithClientRef counts the ledger transactions a client key produced.
+func (b bank) transactionsWithClientRef(t *testing.T, key idempotency.Key) int {
+	t.Helper()
+
+	var count int
+
+	err := b.pool.QueryRow(t.Context(), `SELECT count(*) FROM ledger_transactions WHERE client_ref = $1`, string(key)).Scan(&count)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return count
+}
+
+func (b bank) entrySum(t *testing.T, transactionID ledger.TransactionID) (sum int64, count int) {
+	t.Helper()
+
+	query := `SELECT coalesce(sum(amount_cents), 0), count(*) FROM ledger_entries WHERE transaction_id = $1`
+
+	err := b.pool.QueryRow(t.Context(), query, uuid.UUID(transactionID)).Scan(&sum, &count)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return sum, count
 }
 
 func assertStatement(t *testing.T, got, want []ledger.StatementLine) {

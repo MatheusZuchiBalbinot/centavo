@@ -7,6 +7,28 @@ import (
 	"time"
 )
 
+const exportTransfersSQL = `
+SELECT end_to_end_id, participant_id, amount_cents, destination_key, status, reject_reason, is_double, created_at
+FROM transfers
+WHERE participant_id = ? AND created_at >= ?
+ORDER BY created_at, end_to_end_id`
+
+// statementSinceSQL is statementSQL bounded by time instead of by sequence.
+const statementSinceSQL = `
+SELECT e.seq, e.participant_id, e.kind, e.end_to_end_id, e.amount_cents, e.created_at,
+       coalesce(i.account_id, ''), coalesce(t.correlation_id, i.correlation_id, '')
+FROM statement_entries e
+LEFT JOIN incoming i ON e.kind = 'incoming' AND i.end_to_end_id = e.end_to_end_id
+LEFT JOIN transfers t ON e.kind IN ('settlement', 'return') AND t.end_to_end_id = e.end_to_end_id
+WHERE e.participant_id = ? AND e.created_at >= ?
+ORDER BY e.seq`
+
+const exportIncomingSQL = `
+SELECT end_to_end_id, participant_id, account_id, amount_cents, created_at
+FROM incoming
+WHERE participant_id = ? AND created_at >= ?
+ORDER BY created_at, end_to_end_id`
+
 // TransferView is a transfer as the lab sees it in the truth.
 type TransferView struct {
 	EndToEndID        string    `json:"end_to_end_id"`
@@ -68,12 +90,6 @@ func (s *Store) Truth(ctx context.Context, participantID string, since time.Time
 	return export, err
 }
 
-const exportTransfersSQL = `
-SELECT end_to_end_id, participant_id, amount_cents, destination_key, status, reject_reason, is_double, created_at
-FROM transfers
-WHERE participant_id = ? AND created_at >= ?
-ORDER BY created_at, end_to_end_id`
-
 func (s *Store) transferViews(ctx context.Context, participantID string, since time.Time) ([]TransferView, error) {
 	rows, err := s.db.QueryContext(
 		ctx,
@@ -115,16 +131,6 @@ func (s *Store) transferViews(ctx context.Context, participantID string, since t
 	return views, rows.Err()
 }
 
-// statementSinceSQL is statementSQL bounded by time instead of by sequence.
-const statementSinceSQL = `
-SELECT e.seq, e.participant_id, e.kind, e.end_to_end_id, e.amount_cents, e.created_at,
-       coalesce(i.account_id, ''), coalesce(t.correlation_id, i.correlation_id, '')
-FROM statement_entries e
-LEFT JOIN incoming i ON e.kind = 'incoming' AND i.end_to_end_id = e.end_to_end_id
-LEFT JOIN transfers t ON e.kind IN ('settlement', 'return') AND t.end_to_end_id = e.end_to_end_id
-WHERE e.participant_id = ? AND e.created_at >= ?
-ORDER BY e.seq`
-
 func (s *Store) statementSince(ctx context.Context, participantID string, since time.Time) ([]StatementEntry, error) {
 	rows, err := s.db.QueryContext(ctx, statementSinceSQL, participantID, since.UnixNano())
 	if err != nil {
@@ -134,12 +140,6 @@ func (s *Store) statementSince(ctx context.Context, participantID string, since 
 
 	return scanStatement(rows)
 }
-
-const exportIncomingSQL = `
-SELECT end_to_end_id, participant_id, account_id, amount_cents, created_at
-FROM incoming
-WHERE participant_id = ? AND created_at >= ?
-ORDER BY created_at, end_to_end_id`
 
 func (s *Store) incoming(ctx context.Context, participantID string, since time.Time) ([]IncomingView, error) {
 	rows, err := s.db.QueryContext(

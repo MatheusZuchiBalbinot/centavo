@@ -44,6 +44,23 @@ WHERE key = $1 AND status = 'pending'`
 
 var errKeyNotPending = errors.New("completing an idempotency key that this unit of work does not own")
 
+const touchKeySQL = `UPDATE idempotency_keys SET expires_at = expires_at WHERE key = $1`
+
+const clientRefAppliedSQL = `SELECT EXISTS (SELECT 1 FROM ledger_transactions WHERE client_ref = $1)`
+
+// deleteExpiredKeysSQL keeps an hour of margin past the 24 hours of idempotency
+// keys live 24 hours by the database clock and measures both with the database
+// clock, immune to any worker's clock.
+const deleteExpiredKeysSQL = `
+DELETE FROM idempotency_keys
+WHERE key IN (
+    SELECT key FROM idempotency_keys
+    WHERE expires_at < now() - interval '1 hour'
+    ORDER BY expires_at
+    LIMIT $1
+    FOR UPDATE SKIP LOCKED
+)`
+
 // keyStore keeps idempotency keys.
 type keyStore struct {
 	db querier
@@ -68,8 +85,6 @@ func (s keyStore) ClaimKey(ctx context.Context, claim application.KeyClaim) (ide
 
 	return record, false, err
 }
-
-const touchKeySQL = `UPDATE idempotency_keys SET expires_at = expires_at WHERE key = $1`
 
 // TouchKey writes a new version of the key's row with the same values.
 func (s keyStore) TouchKey(ctx context.Context, key idempotency.Key) error {
@@ -145,8 +160,6 @@ func keyError(err error, action string) error {
 	return fmt.Errorf("%s: %w", action, err)
 }
 
-const clientRefAppliedSQL = `SELECT EXISTS (SELECT 1 FROM ledger_transactions WHERE client_ref = $1)`
-
 // IsClientRefApplied tells whether any ledger transaction carries the key.
 // The naive resolve answers with it, with no tombstone to stop a late request.
 func (s keyStore) IsClientRefApplied(ctx context.Context, key idempotency.Key) (bool, error) {
@@ -159,19 +172,6 @@ func (s keyStore) IsClientRefApplied(ctx context.Context, key idempotency.Key) (
 
 	return isApplied, nil
 }
-
-// deleteExpiredKeysSQL keeps an hour of margin past the 24 hours of idempotency
-// keys live 24 hours by the database clock and measures both with the database
-// clock, immune to any worker's clock.
-const deleteExpiredKeysSQL = `
-DELETE FROM idempotency_keys
-WHERE key IN (
-    SELECT key FROM idempotency_keys
-    WHERE expires_at < now() - interval '1 hour'
-    ORDER BY expires_at
-    LIMIT $1
-    FOR UPDATE SKIP LOCKED
-)`
 
 // DeleteExpiredKeys removes one batch of expired keys and reports how many.
 func (s keyStore) DeleteExpiredKeys(ctx context.Context, batch int) (int64, error) {

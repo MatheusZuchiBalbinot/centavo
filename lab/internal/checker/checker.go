@@ -30,9 +30,6 @@ const (
 	maxLineBytes = 1 << 20
 )
 
-// Verdict is the outcome of a round.
-type Verdict string
-
 // The verdicts of a round.
 const (
 	VerdictPass Verdict = "pass"
@@ -41,15 +38,34 @@ const (
 	VerdictInconclusive Verdict = "inconclusive"
 )
 
-// Status is the outcome of one invariant.
-type Status string
-
 // The outcomes of one invariant.
 const (
 	StatusOK         Status = "ok"
 	StatusFailed     Status = "failed"
 	StatusNotChecked Status = "not_checked"
 )
+
+// invariantsOfThisVersion lists every invariant with what version 1 covers.
+var invariantsOfThisVersion = []struct {
+	id        Invariant
+	isChecked bool
+	note      string
+}{
+	{id: InvariantI1, isChecked: true, note: "I1a e I1b completas; I1c com os termos D, R e S, por rodada"},
+	{id: InvariantI2, isChecked: true},
+	{id: InvariantI3, isChecked: true, note: "no máximo uma vez, convergência pelo resolve e estabilidade numa amostra"},
+	{id: InvariantI4, isChecked: true},
+	{id: InvariantI5, isChecked: true, note: "transferências terminais e trânsito zero depois da quiescência"},
+	{id: InvariantI6, isChecked: true, note: "comparação direta com a verdade do parceiro"},
+	{id: InvariantI7, isChecked: true},
+	{id: InvariantI8, isChecked: true, note: "todas as faixas completas da rodada anterior, recalculadas a cada rodada"},
+}
+
+// Verdict is the outcome of a round.
+type Verdict string
+
+// Status is the outcome of one invariant.
+type Status string
 
 // InvariantResult is one row of the invariants table.
 type InvariantResult struct {
@@ -81,20 +97,24 @@ type Result struct {
 	ledger     ledger
 }
 
-// invariantsOfThisVersion lists every invariant with what version 1 covers.
-var invariantsOfThisVersion = []struct {
-	id        Invariant
-	isChecked bool
-	note      string
-}{
-	{id: InvariantI1, isChecked: true, note: "I1a e I1b completas; I1c com os termos D, R e S, por rodada"},
-	{id: InvariantI2, isChecked: true},
-	{id: InvariantI3, isChecked: true, note: "no máximo uma vez, convergência pelo resolve e estabilidade numa amostra"},
-	{id: InvariantI4, isChecked: true},
-	{id: InvariantI5, isChecked: true, note: "transferências terminais e trânsito zero depois da quiescência"},
-	{id: InvariantI6, isChecked: true, note: "comparação direta com a verdade do parceiro"},
-	{id: InvariantI7, isChecked: true},
-	{id: InvariantI8, isChecked: true, note: "todas as faixas completas da rodada anterior, recalculadas a cada rodada"},
+// outsideSources are what the checker compares the ledger with besides the
+// history: the partner's truth and the previous round's ledger state.
+type outsideSources struct {
+	truth    *PartnerTruth
+	previous *snapshot.LedgerState
+}
+
+// chaosEvents are the failpoint events of the round, by correlation id. They
+// never decide an invariant; they only tell the story of a violation.
+type chaosEvents map[string][]json.RawMessage
+
+// roundMeta is the part of round.json the report shows; round.json is
+// optional, so the checker also works on a hand-made round directory.
+type roundMeta struct {
+	Round    string `json:"round"`
+	Scenario string `json:"scenario"`
+	Seed     string `json:"seed"`
+	Duration string `json:"duration"`
 }
 
 // Evaluate checks a history against a ledger snapshot, without the partner.
@@ -106,46 +126,6 @@ func Evaluate(records []history.Record, state snapshot.Snapshot) Result {
 // R and S terms of I1c, the authoritative part of I7).
 func EvaluateWithTruth(records []history.Record, state snapshot.Snapshot, truth *PartnerTruth) Result {
 	return evaluate(indexOperations(records), state, outsideSources{truth: truth})
-}
-
-// outsideSources are what the checker compares the ledger with besides the
-// history: the partner's truth and the previous round's ledger state.
-type outsideSources struct {
-	truth    *PartnerTruth
-	previous *snapshot.LedgerState
-}
-
-func evaluate(ops operations, state snapshot.Snapshot, sources outsideSources) Result {
-	truth := sources.truth
-	run := evaluation{ops: ops, ledger: indexLedger(state)}
-
-	run.checkZeroSum()
-	run.checkAccounts()
-	run.checkDepositTerm()
-	run.checkOperations()
-	run.checkPhantoms()
-	run.checkPix(truth)
-	run.checkImmutability(sources.previous, state.Bands, state.Meta.FirstTransactionID)
-
-	slices.SortStableFunc(run.violations, byTime)
-
-	result := Result{Violations: run.violations, Unresolved: run.unresolved, Operations: countOperations(run.ops), ops: run.ops, ledger: run.ledger}
-	result.Invariants = invariantResults(run.violations)
-	result.Verdict = verdictOf(run.violations, run.unresolved)
-
-	return result
-}
-
-func verdictOf(violations []Violation, unresolved []string) Verdict {
-	if len(violations) > 0 {
-		return VerdictFail
-	}
-
-	if len(unresolved) > 0 {
-		return VerdictInconclusive
-	}
-
-	return VerdictPass
 }
 
 // Check reads a round directory, evaluates it and writes report.json and
@@ -191,6 +171,39 @@ func Check(roundDir string) (Result, error) {
 	}
 
 	return result, nil
+}
+
+func evaluate(ops operations, state snapshot.Snapshot, sources outsideSources) Result {
+	truth := sources.truth
+	run := evaluation{ops: ops, ledger: indexLedger(state)}
+
+	run.checkZeroSum()
+	run.checkAccounts()
+	run.checkDepositTerm()
+	run.checkOperations()
+	run.checkPhantoms()
+	run.checkPix(truth)
+	run.checkImmutability(sources.previous, state.Bands, state.Meta.FirstTransactionID)
+
+	slices.SortStableFunc(run.violations, byTime)
+
+	result := Result{Violations: run.violations, Unresolved: run.unresolved, Operations: countOperations(run.ops), ops: run.ops, ledger: run.ledger}
+	result.Invariants = invariantResults(run.violations)
+	result.Verdict = verdictOf(run.violations, run.unresolved)
+
+	return result
+}
+
+func verdictOf(violations []Violation, unresolved []string) Verdict {
+	if len(violations) > 0 {
+		return VerdictFail
+	}
+
+	if len(unresolved) > 0 {
+		return VerdictInconclusive
+	}
+
+	return VerdictPass
 }
 
 // byTime orders violations by when the operation behind them started;
@@ -354,10 +367,6 @@ func readTruth(roundDir string) (*PartnerTruth, error) {
 	return &truth, nil
 }
 
-// chaosEvents are the failpoint events of the round, by correlation id. They
-// never decide an invariant; they only tell the story of a violation.
-type chaosEvents map[string][]json.RawMessage
-
 // readEvents loads events.jsonl when it exists; a round without chaos has none.
 func readEvents(roundDir string) chaosEvents {
 	events := chaosEvents{}
@@ -391,15 +400,6 @@ func readEvents(roundDir string) chaosEvents {
 	}
 
 	return events
-}
-
-// roundMeta is the part of round.json the report shows; round.json is
-// optional, so the checker also works on a hand-made round directory.
-type roundMeta struct {
-	Round    string `json:"round"`
-	Scenario string `json:"scenario"`
-	Seed     string `json:"seed"`
-	Duration string `json:"duration"`
 }
 
 func readRoundMeta(roundDir, round string) roundMeta {

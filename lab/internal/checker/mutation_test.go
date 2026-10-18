@@ -11,15 +11,6 @@ import (
 	"centavo/lab/internal/snapshot"
 )
 
-// mutation plants one fault in a correct round. apply reports false when the
-// round has nothing to mutate (a round without transfers, for instance).
-type mutation struct {
-	name string
-	want Rule
-	// apply returns the mutated history and export.
-	apply func(t *rapid.T, b *roundBuilder) ([]history.Record, snapshot.Snapshot, bool)
-}
-
 // mutations are the export mutations; the CI requires every one of them to be
 // caught by the rule in want.
 var mutations = []mutation{
@@ -35,6 +26,51 @@ var mutations = []mutation{
 	{name: "remove a created account", want: RuleI2MissingAccount, apply: removeAccount},
 	{name: "store a negative balance_after", want: RuleI4EntryBalance, apply: negativeBalanceAfter},
 	{name: "move an entry to another account", want: RuleI2Mismatch, apply: moveEntry},
+}
+
+// mutation plants one fault in a correct round. apply reports false when the
+// round has nothing to mutate (a round without transfers, for instance).
+type mutation struct {
+	name string
+	want Rule
+	// apply returns the mutated history and export.
+	apply func(t *rapid.T, b *roundBuilder) ([]history.Record, snapshot.Snapshot, bool)
+}
+
+func TestModel_CorrectRoundsAlwaysPass(t *testing.T) {
+	t.Parallel()
+
+	rapid.Check(t, func(t *rapid.T) {
+		result := generateRound(t).evaluate()
+
+		if result.Verdict != VerdictPass {
+			t.Fatalf("a correct round failed: %+v", result.Violations)
+		}
+	})
+}
+
+func TestMutations_AreAllDetectedByTheExpectedRule(t *testing.T) {
+	t.Parallel()
+
+	for _, m := range mutations {
+		t.Run(m.name, func(t *testing.T) {
+			t.Parallel()
+
+			rapid.Check(t, func(t *rapid.T) {
+				b := generateRound(t)
+
+				records, mutated, isApplied := m.apply(t, b)
+				if !isApplied {
+					t.Skip("nothing to mutate in this round")
+				}
+
+				rules := rulesOf(Evaluate(records, mutated))
+				if !slices.Contains(rules, m.want) {
+					t.Fatalf("mutation %q went undetected by %s (broken rules: %v)", m.name, m.want, rules)
+				}
+			})
+		})
+	}
 }
 
 // generateRound draws a correct round from a model of the bank: deposits,
@@ -93,42 +129,6 @@ func generateTransfer(t *rapid.T, b *roundBuilder, accounts []string, from strin
 	}
 
 	b.operation(history.FunctionTransfer, transferArgs{From: from, To: to, AmountCents: amount}, history.TypeFail, nil)
-}
-
-func TestModel_CorrectRoundsAlwaysPass(t *testing.T) {
-	t.Parallel()
-
-	rapid.Check(t, func(t *rapid.T) {
-		result := generateRound(t).evaluate()
-
-		if result.Verdict != VerdictPass {
-			t.Fatalf("a correct round failed: %+v", result.Violations)
-		}
-	})
-}
-
-func TestMutations_AreAllDetectedByTheExpectedRule(t *testing.T) {
-	t.Parallel()
-
-	for _, m := range mutations {
-		t.Run(m.name, func(t *testing.T) {
-			t.Parallel()
-
-			rapid.Check(t, func(t *rapid.T) {
-				b := generateRound(t)
-
-				records, mutated, isApplied := m.apply(t, b)
-				if !isApplied {
-					t.Skip("nothing to mutate in this round")
-				}
-
-				rules := rulesOf(Evaluate(records, mutated))
-				if !slices.Contains(rules, m.want) {
-					t.Fatalf("mutation %q went undetected by %s (broken rules: %v)", m.name, m.want, rules)
-				}
-			})
-		})
-	}
 }
 
 // okTransactions are the transactions of operations that ended ok.

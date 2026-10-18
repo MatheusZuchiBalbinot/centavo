@@ -18,9 +18,6 @@ const (
 	inboxRetryDelay = 2 * time.Second
 )
 
-// InboxStatus is where an inbox event ended.
-type InboxStatus string
-
 // Final statuses of an inbox event.
 const (
 	InboxProcessed InboxStatus = "processed"
@@ -40,6 +37,9 @@ const (
 
 // errNoInboxEvent ends a processor pass with nothing to do.
 var errNoInboxEvent = errors.New("no inbox event ready")
+
+// InboxStatus is where an inbox event ended.
+type InboxStatus string
 
 // InboxEvent is a stored partner event waiting to be applied.
 type InboxEvent struct {
@@ -103,21 +103,6 @@ func (p InboxProcessor) Run(ctx context.Context) {
 	}
 }
 
-func (p InboxProcessor) drain(ctx context.Context) {
-	for ctx.Err() == nil {
-		hasMore, err := p.RunOnce(ctx)
-		if err != nil {
-			p.logger.WarnContext(ctx, "processing the inbox", "error", err)
-
-			return
-		}
-
-		if !hasMore {
-			return
-		}
-	}
-}
-
 // RunOnce applies one event; false means the inbox had none ready.
 func (p InboxProcessor) RunOnce(ctx context.Context) (bool, error) {
 	var claimed InboxEvent
@@ -162,6 +147,21 @@ func (p InboxProcessor) RunOnce(ctx context.Context) (bool, error) {
 	// A failed apply rolled its transaction back; what to do with the event
 	// is decided in a new one.
 	return true, p.settleFailure(ctx, claimed, err)
+}
+
+func (p InboxProcessor) drain(ctx context.Context) {
+	for ctx.Err() == nil {
+		hasMore, err := p.RunOnce(ctx)
+		if err != nil {
+			p.logger.WarnContext(ctx, "processing the inbox", "error", err)
+
+			return
+		}
+
+		if !hasMore {
+			return
+		}
+	}
 }
 
 func (p InboxProcessor) settleFailure(ctx context.Context, claimed InboxEvent, cause error) error {

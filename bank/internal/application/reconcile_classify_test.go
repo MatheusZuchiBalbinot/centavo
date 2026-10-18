@@ -8,17 +8,6 @@ import (
 	"centavo/bank/internal/domain/transfer"
 )
 
-func transferIn(t *testing.T, status transfer.Status, cents money.Cents) ExternalTransfer {
-	t.Helper()
-
-	amount, err := money.NewAmount(cents)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return ExternalTransfer{Status: status, Amount: amount}
-}
-
 func TestClassify(t *testing.T) {
 	t.Parallel()
 
@@ -109,4 +98,15 @@ func TestClassify_RefusesAnUnknownTransferStatus(t *testing.T) {
 			t.Fatalf("%s: got %+v (%v), want errUnknownTransferStatus", kind, got, err)
 		}
 	}
+}
+
+func transferIn(t *testing.T, status transfer.Status, cents money.Cents) ExternalTransfer {
+	t.Helper()
+
+	amount, err := money.NewAmount(cents)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return ExternalTransfer{Status: status, Amount: amount}
 }

@@ -9,9 +9,6 @@ import (
 	"centavo/lab/internal/snapshot"
 )
 
-// Invariant names one invariant.
-type Invariant string
-
 // The invariants the checker judges.
 const (
 	// InvariantI1 is conservation: every transaction sums to zero (I1a), each
@@ -30,9 +27,6 @@ const (
 	// read, ever goes below zero, and every statement page is coherent.
 	InvariantI4 Invariant = "I4"
 )
-
-// Rule names the precise rule inside an invariant.
-type Rule string
 
 // The rules inside each invariant.
 const (
@@ -58,6 +52,18 @@ const (
 	minEntriesInTransaction      = 2
 )
 
+const (
+	standingNotApplied standing = iota
+	standingApplied
+	standingUnknown
+)
+
+// Invariant names one invariant.
+type Invariant string
+
+// Rule names the precise rule inside an invariant.
+type Rule string
+
 // Violation is one broken rule, placed in time by the operation behind it.
 type Violation struct {
 	Invariant     Invariant `json:"invariant"`
@@ -77,6 +83,9 @@ type evaluation struct {
 	// round inconclusive, never failed.
 	unresolved []string
 }
+
+// standing is what the round knows about whether a write applied.
+type standing int
 
 func (e *evaluation) add(violation Violation) {
 	e.violations = append(e.violations, violation)
@@ -415,15 +424,6 @@ func (e *evaluation) checkIndeterminate(o *operation, applied int) {
 		e.add(e.opViolation(o, InvariantI3, RuleI3Convergence, message))
 	}
 }
-
-// standing is what the round knows about whether a write applied.
-type standing int
-
-const (
-	standingNotApplied standing = iota
-	standingApplied
-	standingUnknown
-)
 
 // depositStanding settles an operation with its result and, for an info,
 // with resolve's answer.

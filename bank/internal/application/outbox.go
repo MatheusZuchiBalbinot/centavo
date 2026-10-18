@@ -61,27 +61,6 @@ type OutboxStore interface {
 // the same commit as the transfer, so it can never be lost between the two.
 type OutboxPublication struct{}
 
-type pixOutPayload struct {
-	TransferID string `json:"transfer_id"`
-}
-
-// WithinCommit writes the outbox message.
-func (OutboxPublication) WithinCommit(ctx context.Context, stores OutboxStore, external ExternalTransfer, correlationID string) error {
-	payload, err := json.Marshal(pixOutPayload{TransferID: external.ID.String()})
-	if err != nil {
-		return err
-	}
-
-	message := OutboxMessage{Topic: TopicPixOutSubmit, AggregateID: uuid.UUID(external.ID), Payload: payload, CorrelationID: correlationID}
-
-	return stores.EnqueueOutbox(ctx, message)
-}
-
-// AfterCommit does nothing: the relay polls the table.
-func (OutboxPublication) AfterCommit(context.Context, transfer.ID) error {
-	return nil
-}
-
 // EndToEndPolicy is the partner_idempotency defense's strategy: which
 // end_to_end_id a send uses.
 type EndToEndPolicy interface {
@@ -93,18 +72,8 @@ type EndToEndPolicy interface {
 // twice (the end_to_end_id is fixed at creation).
 type FixedEndToEnd struct{}
 
-// Next returns the transfer's own id.
-func (FixedEndToEnd) Next(external ExternalTransfer) transfer.EndToEndID {
-	return external.ID.EndToEndID()
-}
-
 // NewEndToEndPerAttempt is the naive variant: E<id>-<attempt>.
 type NewEndToEndPerAttempt struct{}
-
-// Next returns the id of the following attempt.
-func (NewEndToEndPerAttempt) Next(external ExternalTransfer) transfer.EndToEndID {
-	return external.ID.AttemptEndToEndID(nextAttemptOf(external.EndToEndID))
-}
 
 // OutboxRelay delivers outbox messages to the partner, with a lease per message
 // and the token as fencing.
@@ -132,6 +101,37 @@ type OutboxRelayConfig struct {
 	// may take it; OutboxLeaseTTL in production.
 	LeaseTTL time.Duration
 	Logger   *slog.Logger
+}
+
+type pixOutPayload struct {
+	TransferID string `json:"transfer_id"`
+}
+
+// WithinCommit writes the outbox message.
+func (OutboxPublication) WithinCommit(ctx context.Context, stores OutboxStore, external ExternalTransfer, correlationID string) error {
+	payload, err := json.Marshal(pixOutPayload{TransferID: external.ID.String()})
+	if err != nil {
+		return err
+	}
+
+	message := OutboxMessage{Topic: TopicPixOutSubmit, AggregateID: uuid.UUID(external.ID), Payload: payload, CorrelationID: correlationID}
+
+	return stores.EnqueueOutbox(ctx, message)
+}
+
+// AfterCommit does nothing: the relay polls the table.
+func (OutboxPublication) AfterCommit(context.Context, transfer.ID) error {
+	return nil
+}
+
+// Next returns the transfer's own id.
+func (FixedEndToEnd) Next(external ExternalTransfer) transfer.EndToEndID {
+	return external.ID.EndToEndID()
+}
+
+// Next returns the id of the following attempt.
+func (NewEndToEndPerAttempt) Next(external ExternalTransfer) transfer.EndToEndID {
+	return external.ID.AttemptEndToEndID(nextAttemptOf(external.EndToEndID))
 }
 
 // NewOutboxRelay builds the relay.

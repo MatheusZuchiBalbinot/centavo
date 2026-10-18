@@ -5,9 +5,6 @@ import (
 	"fmt"
 )
 
-// PartnerStatus is the authoritative status of a PIX at the partner.
-type PartnerStatus string
-
 // The statuses a PIX can have at the partner.
 const (
 	PartnerProcessing PartnerStatus = "processing"
@@ -25,12 +22,6 @@ var (
 	// does not know: an anomaly to alert on, while the outbox sends again.
 	ErrSentButUnknown = errors.New("transfer sent but unknown to the partner")
 )
-
-// pathKey is one cell of the paths table below.
-type pathKey struct {
-	current       Status
-	authoritative PartnerStatus
-}
 
 // paths is the table: the shortest valid path from the bank's status to the
 // partner's. A missing cell is a conflict.
@@ -52,6 +43,15 @@ var paths = map[pathKey][]Status{
 	{StatusFailed, PartnerRejected}: {},
 
 	{StatusReversed, PartnerReturned}: {},
+}
+
+// PartnerStatus is the authoritative status of a PIX at the partner.
+type PartnerStatus string
+
+// pathKey is one cell of the paths table below.
+type pathKey struct {
+	current       Status
+	authoritative PartnerStatus
 }
 
 // PathTo returns the statuses to walk, in order, from current to where the

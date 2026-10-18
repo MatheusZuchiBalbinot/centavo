@@ -11,24 +11,6 @@ import (
 
 var now = time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)
 
-func lying(t *testing.T, config modes.Config) *modes.Registry {
-	t.Helper()
-
-	registry := modes.NewRegistry()
-
-	config.ParticipantID = "centavo-robust"
-	if config.TTL == "" {
-		config.TTL = "1m"
-	}
-
-	err := registry.Set(config, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return registry
-}
-
 func TestHonestByDefault(t *testing.T) {
 	t.Parallel()
 
@@ -166,4 +148,22 @@ func TestOutage_WithAModeThatDeclaresNone(t *testing.T) {
 	if isDown {
 		t.Fatal("a mode without an outage made the partner unavailable")
 	}
+}
+
+func lying(t *testing.T, config modes.Config) *modes.Registry {
+	t.Helper()
+
+	registry := modes.NewRegistry()
+
+	config.ParticipantID = "centavo-robust"
+	if config.TTL == "" {
+		config.TTL = "1m"
+	}
+
+	err := registry.Set(config, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return registry
 }

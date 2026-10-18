@@ -112,18 +112,6 @@ type Locker interface {
 // keeps two transfers in opposite directions from deadlocking.
 type RowLocker struct{}
 
-// Lock sorts the ids and locks their rows.
-func (RowLocker) Lock(ctx context.Context, stores PositionLocker, ids []ledger.AccountID) error {
-	ordered := slices.Clone(ids)
-	slices.SortFunc(ordered, compareAccountIDs)
-
-	return stores.LockPositions(ctx, slices.Compact(ordered))
-}
-
-func compareAccountIDs(a, b ledger.AccountID) int {
-	return bytes.Compare(a[:], b[:])
-}
-
 // MoneyDependencies are the strategies a money-moving use case runs on.
 type MoneyDependencies struct {
 	UnitOfWork UnitOfWork
@@ -134,22 +122,6 @@ type MoneyDependencies struct {
 type WriteContext struct {
 	Key           idempotency.Key
 	CorrelationID string
-}
-
-// newTransaction ties the ledger transaction to the operation; with idempotency
-// the operation id comes from the idempotency key, without it every request is
-// a new operation and the key is only recorded as client_ref.
-func newTransaction(kind ledger.TransactionKind, write WriteContext, operationID ledger.OperationID) (ledger.Transaction, error) {
-	transactionID, err := ledger.NewTransactionID()
-	if err != nil {
-		return ledger.Transaction{}, err
-	}
-
-	transaction := ledger.Transaction{
-		ID: transactionID, Kind: kind, OperationID: &operationID, ClientRef: string(write.Key), CorrelationID: write.CorrelationID,
-	}
-
-	return transaction, nil
 }
 
 // poster moves one account's balance and appends the matching entry.
@@ -171,6 +143,34 @@ type debitLine struct {
 	account ledger.AccountID
 	debited ledger.Position
 	amount  money.Amount
+}
+
+// Lock sorts the ids and locks their rows.
+func (RowLocker) Lock(ctx context.Context, stores PositionLocker, ids []ledger.AccountID) error {
+	ordered := slices.Clone(ids)
+	slices.SortFunc(ordered, compareAccountIDs)
+
+	return stores.LockPositions(ctx, slices.Compact(ordered))
+}
+
+func compareAccountIDs(a, b ledger.AccountID) int {
+	return bytes.Compare(a[:], b[:])
+}
+
+// newTransaction ties the ledger transaction to the operation; with idempotency
+// the operation id comes from the idempotency key, without it every request is
+// a new operation and the key is only recorded as client_ref.
+func newTransaction(kind ledger.TransactionKind, write WriteContext, operationID ledger.OperationID) (ledger.Transaction, error) {
+	transactionID, err := ledger.NewTransactionID()
+	if err != nil {
+		return ledger.Transaction{}, err
+	}
+
+	transaction := ledger.Transaction{
+		ID: transactionID, Kind: kind, OperationID: &operationID, ClientRef: string(write.Key), CorrelationID: write.CorrelationID,
+	}
+
+	return transaction, nil
 }
 
 // post adds delta to the account in the database and appends the entry. The

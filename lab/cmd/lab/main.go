@@ -90,6 +90,12 @@ var (
 	errCheckerCrashed    = errors.New("the checker could not finish")
 )
 
+type runFlags struct {
+	scenario string
+	seed     string
+	duration time.Duration
+}
+
 func main() {
 	os.Exit(run(os.Args[1:]))
 }
@@ -184,12 +190,6 @@ func newPool(ctx context.Context, databaseURL string, connections int32) (*pgxpo
 	poolConfig.MaxConns = connections
 
 	return pgxpool.NewWithConfig(ctx, poolConfig)
-}
-
-type runFlags struct {
-	scenario string
-	seed     string
-	duration time.Duration
 }
 
 func parseRunFlags(arguments []string) (runFlags, error) {

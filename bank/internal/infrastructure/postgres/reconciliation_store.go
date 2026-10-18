@@ -9,6 +9,16 @@ import (
 	"centavo/bank/internal/domain/transfer"
 )
 
+const startRunSQL = `
+INSERT INTO reconciliation_runs (from_partner_seq, to_partner_seq, fencing_token)
+VALUES ($1, $2, $3)
+RETURNING id`
+
+const insertItemSQL = `
+INSERT INTO reconciliation_items (run_id, partner_seq, end_to_end_id, partner_entry_kind, amount_cents, divergence, action)
+VALUES ($1, $2, $3, $4, $5, $6::divergence_kind, $7)
+RETURNING id`
+
 // reconciliationStore keeps reconciliation runs, items and the cursor.
 type reconciliationStore struct {
 	db querier
@@ -47,11 +57,6 @@ func (s reconciliationStore) SaveCursor(ctx context.Context, to int64) error {
 	return nil
 }
 
-const startRunSQL = `
-INSERT INTO reconciliation_runs (from_partner_seq, to_partner_seq, fencing_token)
-VALUES ($1, $2, $3)
-RETURNING id`
-
 // StartRun records a batch.
 func (s reconciliationStore) StartRun(ctx context.Context, from, to, token int64) (int64, error) {
 	var id int64
@@ -75,11 +80,6 @@ func (s reconciliationStore) FinishRun(ctx context.Context, runID int64) error {
 
 	return nil
 }
-
-const insertItemSQL = `
-INSERT INTO reconciliation_items (run_id, partner_seq, end_to_end_id, partner_entry_kind, amount_cents, divergence, action)
-VALUES ($1, $2, $3, $4, $5, $6::divergence_kind, $7)
-RETURNING id`
 
 // InsertItem records how one entry was reconciled.
 func (s reconciliationStore) InsertItem(ctx context.Context, item application.ReconciliationItem) (int64, error) {

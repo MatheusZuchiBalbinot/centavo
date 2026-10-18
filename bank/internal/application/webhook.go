@@ -11,9 +11,6 @@ import (
 	"centavo/bank/internal/domain/transfer"
 )
 
-// EventType is the kind of a partner webhook.
-type EventType string
-
 // Event types the partner sends.
 const (
 	EventSettled  EventType = "transfer.settled"
@@ -21,6 +18,16 @@ const (
 	EventReturned EventType = "transfer.returned"
 	EventIncoming EventType = "incoming.received"
 )
+
+// expectedFrom is the status each transfer event speaks for. Reaching another
+// status, created to confirmed for one, needs the partner's authoritative
+// status, never just the webhook.
+var expectedFrom = map[EventType]transfer.Status{
+	EventSettled: transfer.StatusSent, EventRejected: transfer.StatusSent, EventReturned: transfer.StatusConfirmed,
+}
+
+// EventType is the kind of a partner webhook.
+type EventType string
 
 // PartnerEvent is a webhook from the partner.
 type PartnerEvent struct {
@@ -40,6 +47,24 @@ type NaiveWebhook struct {
 	events     eventApplier
 }
 
+// eventApplier turns a partner event into its effect.
+type eventApplier struct {
+	machine StateMachine
+}
+
+// eventStores are what applying any partner event may write.
+type eventStores interface {
+	TransitionStores
+	creditStores
+}
+
+// creditStores are what crediting a PIX in writes.
+type creditStores interface {
+	PixStore
+	PositionStore
+	LedgerWriter
+}
+
 // NewNaiveWebhook builds the handler's use case.
 func NewNaiveWebhook(unitOfWork UnitOfWork, machine StateMachine) NaiveWebhook {
 	return NaiveWebhook{unitOfWork: unitOfWork, events: eventApplier{machine: machine}}
@@ -52,18 +77,6 @@ func (w NaiveWebhook) Apply(ctx context.Context, event PartnerEvent) error {
 	return w.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
 		return w.events.apply(ctx, stores, event)
 	})
-}
-
-// eventApplier turns a partner event into its effect.
-type eventApplier struct {
-	machine StateMachine
-}
-
-// expectedFrom is the status each transfer event speaks for. Reaching another
-// status, created to confirmed for one, needs the partner's authoritative
-// status, never just the webhook.
-var expectedFrom = map[EventType]transfer.Status{
-	EventSettled: transfer.StatusSent, EventRejected: transfer.StatusSent, EventReturned: transfer.StatusConfirmed,
 }
 
 func (a eventApplier) apply(ctx context.Context, stores eventStores, event PartnerEvent) error {
@@ -102,19 +115,6 @@ func failureCodeOf(event PartnerEvent) string {
 	}
 
 	return event.Reason
-}
-
-// eventStores are what applying any partner event may write.
-type eventStores interface {
-	TransitionStores
-	creditStores
-}
-
-// creditStores are what crediting a PIX in writes.
-type creditStores interface {
-	PixStore
-	PositionStore
-	LedgerWriter
 }
 
 // creditIncoming credits a PIX in. The unique end_to_end_id of

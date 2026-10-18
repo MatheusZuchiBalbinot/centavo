@@ -5,9 +5,6 @@ package failpoint
 
 import "context"
 
-// Name identifies one failpoint.
-type Name string
-
 const (
 	// TransferAfterDebitBeforeCredit is `transfer.after_debit_before_credit`:
 	// between the debit and the credit entry.
@@ -42,6 +39,9 @@ const (
 	// sweeper wrote nothing yet.
 	SweeperAfterStatusBeforeTransition Name = "sweeper.after_status_before_transition"
 )
+
+// Name identifies one failpoint.
+type Name string
 
 // Hit marks the passage through a named point. It returns an error only when
 // an armed rule says so (the error action); kill never returns.

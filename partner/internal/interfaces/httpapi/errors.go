@@ -8,10 +8,6 @@ import (
 	"centavo/partner/internal/truth"
 )
 
-// errorCode is the machine-readable part of an error answer; clients branch
-// on it, never on the message.
-type errorCode string
-
 const (
 	codeInvalidRequest     errorCode = "invalid_request"
 	codeNotFound           errorCode = "not_found"
@@ -35,12 +31,6 @@ var (
 	errAnswerAfterProcess = errors.New(internalMessage)
 )
 
-type errorMapping struct {
-	target error
-	status int
-	code   errorCode
-}
-
 // errorMappings is the one place that turns an error into a status and a
 // code; an error missing here is a 500.
 var errorMappings = []errorMapping{
@@ -52,6 +42,16 @@ var errorMappings = []errorMapping{
 	{target: truth.ErrNotFound, status: http.StatusNotFound, code: codeNotFound},
 	{target: errUnavailable, status: http.StatusServiceUnavailable, code: codeUnavailable},
 	{target: errAnswerAfterProcess, status: http.StatusInternalServerError, code: codeInternal},
+}
+
+// errorCode is the machine-readable part of an error answer; clients branch
+// on it, never on the message.
+type errorCode string
+
+type errorMapping struct {
+	target error
+	status int
+	code   errorCode
 }
 
 type errorBody struct {

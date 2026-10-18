@@ -23,89 +23,6 @@ type pixRound struct {
 	nextPix   int
 }
 
-func newPixRound(t *testing.T) *pixRound {
-	t.Helper()
-
-	b := newRoundBuilder(t)
-	b.snap.Accounts = append(b.snap.Accounts,
-		snapshot.Account{ID: transit, Kind: snapshot.KindSystem, SystemCode: snapshot.PixOutTransitCode},
-		snapshot.Account{ID: settlement, Kind: snapshot.KindSystem, SystemCode: snapshot.PartnerSettlementCode},
-		snapshot.Account{ID: suspense, Kind: snapshot.KindSystem, SystemCode: snapshot.SuspenseCode},
-	)
-
-	return &pixRound{roundBuilder: b, truth: PartnerTruth{ParticipantID: "centavo-robust"}}
-}
-
-// pixOut is a PIX out the client created and the bank reserved.
-func (p *pixRound) pixOut(account string, cents int64) snapshot.ExternalTransfer {
-	p.nextPix++
-	id := fmt.Sprintf("00000000-0000-7000-8000-%012d", p.nextPix)
-	op := p.upcomingOp()
-
-	transfer := snapshot.ExternalTransfer{ID: id, EndToEndID: fixedEndToEnd(id), ClientRef: op, AccountID: account, AmountCents: cents, Status: statusCreated, StatusSeq: 1}
-	p.snap.Transfers = append(p.snap.Transfers, transfer)
-
-	p.operation(history.FunctionPixOut, pixOutArgs{AccountID: account, AmountCents: cents}, history.TypeOK, writeValue{TransferID: id})
-	reserve := p.apply(op, snapshot.TransactionPixOutReserve, map[string]int64{account: -cents, transit: cents})
-	p.linkTransfer(reserve, id)
-	p.snap.Transitions = append(p.snap.Transitions, snapshot.Transition{TransferID: id, Seq: 1, To: statusCreated, LedgerTransactionID: reserve})
-
-	return transfer
-}
-
-// step moves a transfer, posting what the target status implies.
-func (p *pixRound) step(transfer snapshot.ExternalTransfer, from, to snapshot.TransferStatus) {
-	var ledgerID string
-
-	switch to {
-	case statusConfirmed:
-		ledgerID = p.apply("", snapshot.TransactionPixOutSettle, map[string]int64{transit: -transfer.AmountCents, settlement: transfer.AmountCents})
-	case statusFailed:
-		ledgerID = p.apply("", snapshot.TransactionPixOutRefund, map[string]int64{transit: -transfer.AmountCents, transfer.AccountID: transfer.AmountCents})
-	case statusReversed:
-		ledgerID = p.apply("", snapshot.TransactionPixOutReturn, map[string]int64{settlement: -transfer.AmountCents, transfer.AccountID: transfer.AmountCents})
-	}
-
-	if ledgerID != "" {
-		p.linkTransfer(ledgerID, transfer.ID)
-	}
-
-	for i := range p.snap.Transfers {
-		if p.snap.Transfers[i].ID != transfer.ID {
-			continue
-		}
-
-		p.snap.Transfers[i].Status = to
-		p.snap.Transfers[i].StatusSeq++
-		seq := p.snap.Transfers[i].StatusSeq
-		p.snap.Transitions = append(p.snap.Transitions, snapshot.Transition{TransferID: transfer.ID, Seq: seq, From: from, To: to, LedgerTransactionID: ledgerID})
-	}
-}
-
-func (p *pixRound) linkTransfer(transactionID, transferID string) {
-	for i := range p.snap.Transactions {
-		if p.snap.Transactions[i].ID == transactionID {
-			p.snap.Transactions[i].ExternalTransferID = transferID
-		}
-	}
-}
-
-// partnerSays records what the partner really did with the transfer.
-func (p *pixRound) partnerSays(transfer snapshot.ExternalTransfer, status string, entries ...string) {
-	p.truth.Transfers = append(p.truth.Transfers, truthTransfer{EndToEndID: transfer.EndToEndID, AmountCents: transfer.AmountCents, Status: status})
-
-	for _, kind := range entries {
-		p.nextTruth++
-		p.truth.Statement = append(p.truth.Statement, truthEntry{Seq: p.nextTruth, Kind: kind, EndToEndID: transfer.EndToEndID, AmountCents: transfer.AmountCents})
-	}
-}
-
-func (p *pixRound) evaluate() Result {
-	truth := p.truth
-
-	return EvaluateWithTruth(p.records, p.snapshot(), &truth)
-}
-
 func TestPocketPix_SettledTransferPasses(t *testing.T) {
 	t.Parallel()
 
@@ -250,4 +167,87 @@ func TestPocketPix_IncomingCreditedOrNot(t *testing.T) {
 	}
 
 	assertPasses(t, fixture.evaluate())
+}
+
+func newPixRound(t *testing.T) *pixRound {
+	t.Helper()
+
+	b := newRoundBuilder(t)
+	b.snap.Accounts = append(b.snap.Accounts,
+		snapshot.Account{ID: transit, Kind: snapshot.KindSystem, SystemCode: snapshot.PixOutTransitCode},
+		snapshot.Account{ID: settlement, Kind: snapshot.KindSystem, SystemCode: snapshot.PartnerSettlementCode},
+		snapshot.Account{ID: suspense, Kind: snapshot.KindSystem, SystemCode: snapshot.SuspenseCode},
+	)
+
+	return &pixRound{roundBuilder: b, truth: PartnerTruth{ParticipantID: "centavo-robust"}}
+}
+
+// pixOut is a PIX out the client created and the bank reserved.
+func (p *pixRound) pixOut(account string, cents int64) snapshot.ExternalTransfer {
+	p.nextPix++
+	id := fmt.Sprintf("00000000-0000-7000-8000-%012d", p.nextPix)
+	op := p.upcomingOp()
+
+	transfer := snapshot.ExternalTransfer{ID: id, EndToEndID: fixedEndToEnd(id), ClientRef: op, AccountID: account, AmountCents: cents, Status: statusCreated, StatusSeq: 1}
+	p.snap.Transfers = append(p.snap.Transfers, transfer)
+
+	p.operation(history.FunctionPixOut, pixOutArgs{AccountID: account, AmountCents: cents}, history.TypeOK, writeValue{TransferID: id})
+	reserve := p.apply(op, snapshot.TransactionPixOutReserve, map[string]int64{account: -cents, transit: cents})
+	p.linkTransfer(reserve, id)
+	p.snap.Transitions = append(p.snap.Transitions, snapshot.Transition{TransferID: id, Seq: 1, To: statusCreated, LedgerTransactionID: reserve})
+
+	return transfer
+}
+
+// step moves a transfer, posting what the target status implies.
+func (p *pixRound) step(transfer snapshot.ExternalTransfer, from, to snapshot.TransferStatus) {
+	var ledgerID string
+
+	switch to {
+	case statusConfirmed:
+		ledgerID = p.apply("", snapshot.TransactionPixOutSettle, map[string]int64{transit: -transfer.AmountCents, settlement: transfer.AmountCents})
+	case statusFailed:
+		ledgerID = p.apply("", snapshot.TransactionPixOutRefund, map[string]int64{transit: -transfer.AmountCents, transfer.AccountID: transfer.AmountCents})
+	case statusReversed:
+		ledgerID = p.apply("", snapshot.TransactionPixOutReturn, map[string]int64{settlement: -transfer.AmountCents, transfer.AccountID: transfer.AmountCents})
+	}
+
+	if ledgerID != "" {
+		p.linkTransfer(ledgerID, transfer.ID)
+	}
+
+	for i := range p.snap.Transfers {
+		if p.snap.Transfers[i].ID != transfer.ID {
+			continue
+		}
+
+		p.snap.Transfers[i].Status = to
+		p.snap.Transfers[i].StatusSeq++
+		seq := p.snap.Transfers[i].StatusSeq
+		p.snap.Transitions = append(p.snap.Transitions, snapshot.Transition{TransferID: transfer.ID, Seq: seq, From: from, To: to, LedgerTransactionID: ledgerID})
+	}
+}
+
+func (p *pixRound) linkTransfer(transactionID, transferID string) {
+	for i := range p.snap.Transactions {
+		if p.snap.Transactions[i].ID == transactionID {
+			p.snap.Transactions[i].ExternalTransferID = transferID
+		}
+	}
+}
+
+// partnerSays records what the partner really did with the transfer.
+func (p *pixRound) partnerSays(transfer snapshot.ExternalTransfer, status string, entries ...string) {
+	p.truth.Transfers = append(p.truth.Transfers, truthTransfer{EndToEndID: transfer.EndToEndID, AmountCents: transfer.AmountCents, Status: status})
+
+	for _, kind := range entries {
+		p.nextTruth++
+		p.truth.Statement = append(p.truth.Statement, truthEntry{Seq: p.nextTruth, Kind: kind, EndToEndID: transfer.EndToEndID, AmountCents: transfer.AmountCents})
+	}
+}
+
+func (p *pixRound) evaluate() Result {
+	truth := p.truth
+
+	return EvaluateWithTruth(p.records, p.snapshot(), &truth)
 }

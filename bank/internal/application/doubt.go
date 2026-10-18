@@ -39,6 +39,13 @@ type GiveUpOnDoubt struct {
 	machine StateMachine
 }
 
+// RetryOnDoubt is the resilient_client defense: a timeout never becomes a
+// failure (a transfer fails only on the partner's authoritative refusal). The
+// message goes back to the outbox after an exponential backoff with full
+// jitter, and the next send, under the same end_to_end_id
+// (partner_idempotency), gets the partner's answer.
+type RetryOnDoubt struct{}
+
 // NewGiveUpOnDoubt builds the naive policy.
 func NewGiveUpOnDoubt(machine StateMachine) GiveUpOnDoubt {
 	return GiveUpOnDoubt{machine: machine}
@@ -59,13 +66,6 @@ func (g GiveUpOnDoubt) OnUnknown(ctx context.Context, stores DoubtStores, claim 
 
 	return ignoreMovedOn(g.machine.Move(ctx, stores, command))
 }
-
-// RetryOnDoubt is the resilient_client defense: a timeout never becomes a
-// failure (a transfer fails only on the partner's authoritative refusal). The
-// message goes back to the outbox after an exponential backoff with full
-// jitter, and the next send, under the same end_to_end_id
-// (partner_idempotency), gets the partner's answer.
-type RetryOnDoubt struct{}
 
 // OnUnknown reschedules the message.
 func (RetryOnDoubt) OnUnknown(ctx context.Context, stores DoubtStores, claim OutboxClaim, _ ExternalTransfer) error {

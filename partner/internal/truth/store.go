@@ -15,9 +15,6 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// Status is the authoritative status of a transfer.
-type Status string
-
 // The statuses of a transfer at the partner.
 const (
 	StatusProcessing Status = "processing"
@@ -26,18 +23,12 @@ const (
 	StatusReturned   Status = "returned"
 )
 
-// EntryKind is a line of the participant's statement.
-type EntryKind string
-
 // The kinds of statement line.
 const (
 	EntrySettlement EntryKind = "settlement"
 	EntryReturn     EntryKind = "return"
 	EntryIncoming   EntryKind = "incoming"
 )
-
-// EventType is the type of a webhook.
-type EventType string
 
 // The webhook event types.
 const (
@@ -46,9 +37,6 @@ const (
 	EventReturned EventType = "transfer.returned"
 	EventIncoming EventType = "incoming.received"
 )
-
-// DeliveryStatus is where a webhook delivery stands.
-type DeliveryStatus string
 
 // The states of a webhook delivery.
 const (
@@ -60,6 +48,109 @@ const (
 
 // ErrNotFound means the partner has no record of the transfer.
 var ErrNotFound = errors.New("not found")
+
+const schema = `
+CREATE TABLE IF NOT EXISTS transfers (
+    end_to_end_id      TEXT PRIMARY KEY,
+    participant_id     TEXT NOT NULL,
+    amount_cents       INTEGER NOT NULL CHECK (amount_cents > 0),
+    destination_key    TEXT NOT NULL,
+    status             TEXT NOT NULL CHECK (status IN ('processing', 'settled', 'rejected', 'returned')),
+    reject_reason      TEXT NOT NULL DEFAULT '',
+    is_double          INTEGER NOT NULL DEFAULT 0,
+    webhook_seq        INTEGER NOT NULL DEFAULT 0,
+    settle_at          INTEGER NOT NULL,
+    return_at          INTEGER,
+    created_at         INTEGER NOT NULL,
+    correlation_id     TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS transfers_due ON transfers (status, settle_at);
+
+CREATE TABLE IF NOT EXISTS statement_entries (
+    seq             INTEGER PRIMARY KEY AUTOINCREMENT,
+    participant_id  TEXT NOT NULL,
+    kind            TEXT NOT NULL CHECK (kind IN ('settlement', 'return', 'incoming')),
+    end_to_end_id   TEXT NOT NULL,
+    amount_cents    INTEGER NOT NULL,
+    created_at      INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS statement_by_participant ON statement_entries (participant_id, seq);
+
+CREATE TABLE IF NOT EXISTS incoming (
+    end_to_end_id   TEXT PRIMARY KEY,
+    participant_id  TEXT NOT NULL,
+    account_id      TEXT NOT NULL,
+    amount_cents    INTEGER NOT NULL CHECK (amount_cents > 0),
+    created_at      INTEGER NOT NULL,
+    correlation_id  TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS deliveries (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id         TEXT NOT NULL,
+    participant_id   TEXT NOT NULL,
+    payload          BLOB NOT NULL,
+    attempts         INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at  INTEGER NOT NULL,
+    status           TEXT NOT NULL CHECK (status IN ('pending', 'delivered', 'abandoned')),
+    correlation_id   TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS deliveries_due ON deliveries (status, next_attempt_at);
+`
+
+var columnUpgrades = []columnUpgrade{
+	{table: "transfers", column: "correlation_id", definition: "TEXT NOT NULL DEFAULT ''"},
+	{table: "incoming", column: "correlation_id", definition: "TEXT NOT NULL DEFAULT ''"},
+	{table: "deliveries", column: "correlation_id", definition: "TEXT NOT NULL DEFAULT ''"},
+}
+
+const insertTransferSQL = `
+INSERT INTO transfers (end_to_end_id, participant_id, amount_cents, destination_key, status, reject_reason, is_double, settle_at, created_at, correlation_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+const selectTransferSQL = `
+SELECT end_to_end_id, participant_id, amount_cents, destination_key, status, reject_reason, is_double, settle_at, return_at, created_at, correlation_id
+FROM transfers
+WHERE end_to_end_id = ?`
+
+const insertIncomingSQL = `
+INSERT INTO incoming (end_to_end_id, participant_id, account_id, amount_cents, created_at, correlation_id)
+VALUES (?, ?, ?, ?, ?, ?)
+ON CONFLICT (end_to_end_id) DO NOTHING`
+
+// statementSQL joins incoming entries with the account they credit, which a
+// reconciler needs to credit a PIX in whose webhook never came, and every
+// entry with the correlation id of its PIX.
+const statementSQL = `
+SELECT e.seq, e.participant_id, e.kind, e.end_to_end_id, e.amount_cents, e.created_at,
+       coalesce(i.account_id, ''), coalesce(t.correlation_id, i.correlation_id, '')
+FROM statement_entries e
+LEFT JOIN incoming i ON e.kind = 'incoming' AND i.end_to_end_id = e.end_to_end_id
+LEFT JOIN transfers t ON e.kind IN ('settlement', 'return') AND t.end_to_end_id = e.end_to_end_id
+WHERE e.participant_id = ? AND e.seq > ?
+ORDER BY e.seq
+LIMIT ?`
+
+const dueDeliveriesSQL = `
+SELECT id, event_id, participant_id, payload, attempts, next_attempt_at, correlation_id
+FROM deliveries
+WHERE status = 'pending' AND next_attempt_at <= ?
+ORDER BY next_attempt_at
+LIMIT ?`
+
+const recordAttemptSQL = `UPDATE deliveries SET attempts = attempts + 1, next_attempt_at = ?, status = ? WHERE id = ?`
+
+// Status is the authoritative status of a transfer.
+type Status string
+
+// EntryKind is a line of the participant's statement.
+type EntryKind string
+
+// EventType is the type of a webhook.
+type EventType string
+
+// DeliveryStatus is where a webhook delivery stands.
+type DeliveryStatus string
 
 // Transfer is a PIX the partner received.
 type Transfer struct {
@@ -147,54 +238,45 @@ type Store struct {
 	db *sql.DB
 }
 
-const schema = `
-CREATE TABLE IF NOT EXISTS transfers (
-    end_to_end_id      TEXT PRIMARY KEY,
-    participant_id     TEXT NOT NULL,
-    amount_cents       INTEGER NOT NULL CHECK (amount_cents > 0),
-    destination_key    TEXT NOT NULL,
-    status             TEXT NOT NULL CHECK (status IN ('processing', 'settled', 'rejected', 'returned')),
-    reject_reason      TEXT NOT NULL DEFAULT '',
-    is_double          INTEGER NOT NULL DEFAULT 0,
-    webhook_seq        INTEGER NOT NULL DEFAULT 0,
-    settle_at          INTEGER NOT NULL,
-    return_at          INTEGER,
-    created_at         INTEGER NOT NULL,
-    correlation_id     TEXT NOT NULL DEFAULT ''
-);
-CREATE INDEX IF NOT EXISTS transfers_due ON transfers (status, settle_at);
+// SubmitResult is what POST /v1/transfers found or created.
+type SubmitResult struct {
+	Transfer Transfer
+	IsNew    bool
+}
 
-CREATE TABLE IF NOT EXISTS statement_entries (
-    seq             INTEGER PRIMARY KEY AUTOINCREMENT,
-    participant_id  TEXT NOT NULL,
-    kind            TEXT NOT NULL CHECK (kind IN ('settlement', 'return', 'incoming')),
-    end_to_end_id   TEXT NOT NULL,
-    amount_cents    INTEGER NOT NULL,
-    created_at      INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS statement_by_participant ON statement_entries (participant_id, seq);
+// SettleCommand settles a transfer.
+type SettleCommand struct {
+	EndToEndID string
+	Now        time.Time
+	// ReturnAt schedules a return after the settlement, when the partner lies.
+	ReturnAt *time.Time
+	EventID  string
+	Planner  Planner
+}
 
-CREATE TABLE IF NOT EXISTS incoming (
-    end_to_end_id   TEXT PRIMARY KEY,
-    participant_id  TEXT NOT NULL,
-    account_id      TEXT NOT NULL,
-    amount_cents    INTEGER NOT NULL CHECK (amount_cents > 0),
-    created_at      INTEGER NOT NULL,
-    correlation_id  TEXT NOT NULL DEFAULT ''
-);
+// RejectCommand rejects a transfer that is still processing.
+type RejectCommand struct {
+	EndToEndID string
+	Reason     string
+	Now        time.Time
+	EventID    string
+	Planner    Planner
+}
 
-CREATE TABLE IF NOT EXISTS deliveries (
-    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    event_id         TEXT NOT NULL,
-    participant_id   TEXT NOT NULL,
-    payload          BLOB NOT NULL,
-    attempts         INTEGER NOT NULL DEFAULT 0,
-    next_attempt_at  INTEGER NOT NULL,
-    status           TEXT NOT NULL CHECK (status IN ('pending', 'delivered', 'abandoned')),
-    correlation_id   TEXT NOT NULL DEFAULT ''
-);
-CREATE INDEX IF NOT EXISTS deliveries_due ON deliveries (status, next_attempt_at);
-`
+// ReturnCommand returns a settled transfer.
+type ReturnCommand struct {
+	EndToEndID string
+	Now        time.Time
+	EventID    string
+	Planner    Planner
+}
+
+// IncomingCommand credits an incoming PIX to a participant.
+type IncomingCommand struct {
+	Incoming Incoming
+	EventID  string
+	Planner  Planner
+}
 
 // columnUpgrade is a column a later schema added. CREATE TABLE IF NOT EXISTS
 // leaves a truth created before it as it was, so Open adds what is missing.
@@ -204,10 +286,8 @@ type columnUpgrade struct {
 	definition string
 }
 
-var columnUpgrades = []columnUpgrade{
-	{table: "transfers", column: "correlation_id", definition: "TEXT NOT NULL DEFAULT ''"},
-	{table: "incoming", column: "correlation_id", definition: "TEXT NOT NULL DEFAULT ''"},
-	{table: "deliveries", column: "correlation_id", definition: "TEXT NOT NULL DEFAULT ''"},
+type querier interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
 // Open opens (or creates) the truth at path. synchronous=FULL makes every
@@ -235,43 +315,10 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	return &Store{db: db}, nil
 }
 
-func upgradeColumns(ctx context.Context, db *sql.DB) error {
-	for _, upgrade := range columnUpgrades {
-		var count int
-
-		err := db.QueryRowContext(ctx, `SELECT count(*) FROM pragma_table_info(?) WHERE name = ?`, upgrade.table, upgrade.column).Scan(&count)
-		if err != nil {
-			return fmt.Errorf("reading the columns of %s: %w", upgrade.table, err)
-		}
-
-		if count > 0 {
-			continue
-		}
-
-		// The names come from columnUpgrades, never from input.
-		_, err = db.ExecContext(ctx, fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", upgrade.table, upgrade.column, upgrade.definition))
-		if err != nil {
-			return fmt.Errorf("adding %s.%s: %w", upgrade.table, upgrade.column, err)
-		}
-	}
-
-	return nil
-}
-
 // Close closes the database.
 func (s *Store) Close() error {
 	return s.db.Close()
 }
-
-// SubmitResult is what POST /v1/transfers found or created.
-type SubmitResult struct {
-	Transfer Transfer
-	IsNew    bool
-}
-
-const insertTransferSQL = `
-INSERT INTO transfers (end_to_end_id, participant_id, amount_cents, destination_key, status, reject_reason, is_double, settle_at, created_at, correlation_id)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 // Submit records a new transfer, or returns the one with the same
 // end_to_end_id: the API is idempotent by end_to_end_id.
@@ -321,60 +368,6 @@ func (s *Store) Get(ctx context.Context, endToEndID string) (Transfer, error) {
 	return getTransfer(ctx, s.db, endToEndID)
 }
 
-type querier interface {
-	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
-}
-
-const selectTransferSQL = `
-SELECT end_to_end_id, participant_id, amount_cents, destination_key, status, reject_reason, is_double, settle_at, return_at, created_at, correlation_id
-FROM transfers
-WHERE end_to_end_id = ?`
-
-func getTransfer(ctx context.Context, q querier, endToEndID string) (Transfer, error) {
-	var (
-		transfer          Transfer
-		settleAt, created int64
-		returnAt          sql.NullInt64
-	)
-
-	row := q.QueryRowContext(
-		ctx,
-		selectTransferSQL,
-		endToEndID,
-	)
-
-	err := row.Scan(
-		&transfer.EndToEndID,
-		&transfer.ParticipantID,
-		&transfer.AmountCents,
-		&transfer.DestinationKey,
-		&transfer.Status,
-		&transfer.RejectReason,
-		&transfer.IsDoubleProcessed,
-		&settleAt,
-		&returnAt,
-		&created,
-		&transfer.CorrelationID,
-	)
-	if errors.Is(err, sql.ErrNoRows) {
-		return Transfer{}, ErrNotFound
-	}
-
-	if err != nil {
-		return Transfer{}, fmt.Errorf("reading a transfer: %w", err)
-	}
-
-	transfer.SettleAt = time.Unix(0, settleAt).UTC()
-	transfer.CreatedAt = time.Unix(0, created).UTC()
-
-	if returnAt.Valid {
-		at := time.Unix(0, returnAt.Int64).UTC()
-		transfer.ReturnAt = &at
-	}
-
-	return transfer, nil
-}
-
 // Due lists transfers waiting for a decision: processing ones whose settle
 // time came, and settled ones whose return time came.
 func (s *Store) Due(ctx context.Context, now time.Time, limit int) ([]Transfer, error) {
@@ -417,16 +410,6 @@ ORDER BY settle_at LIMIT ?`, now.UnixNano(), now.UnixNano(), limit)
 	}
 
 	return transfers, nil
-}
-
-// SettleCommand settles a transfer.
-type SettleCommand struct {
-	EndToEndID string
-	Now        time.Time
-	// ReturnAt schedules a return after the settlement, when the partner lies.
-	ReturnAt *time.Time
-	EventID  string
-	Planner  Planner
 }
 
 // Settle moves the money out of the participant's reserve: one statement
@@ -477,15 +460,6 @@ func (s *Store) Settle(ctx context.Context, command SettleCommand) error {
 	})
 }
 
-// RejectCommand rejects a transfer that is still processing.
-type RejectCommand struct {
-	EndToEndID string
-	Reason     string
-	Now        time.Time
-	EventID    string
-	Planner    Planner
-}
-
 // Reject is a definitive refusal: nothing leaves the reserve.
 func (s *Store) Reject(ctx context.Context, command RejectCommand) error {
 	return s.inTx(ctx, func(tx *sql.Tx) error {
@@ -511,14 +485,6 @@ func (s *Store) Reject(ctx context.Context, command RejectCommand) error {
 
 		return enqueue(ctx, tx, event, command.Planner)
 	})
-}
-
-// ReturnCommand returns a settled transfer.
-type ReturnCommand struct {
-	EndToEndID string
-	Now        time.Time
-	EventID    string
-	Planner    Planner
 }
 
 // Return gives a settled transfer's money back to the reserve.
@@ -555,18 +521,6 @@ func (s *Store) Return(ctx context.Context, command ReturnCommand) error {
 		return enqueue(ctx, tx, event, command.Planner)
 	})
 }
-
-// IncomingCommand credits an incoming PIX to a participant.
-type IncomingCommand struct {
-	Incoming Incoming
-	EventID  string
-	Planner  Planner
-}
-
-const insertIncomingSQL = `
-INSERT INTO incoming (end_to_end_id, participant_id, account_id, amount_cents, created_at, correlation_id)
-VALUES (?, ?, ?, ?, ?, ?)
-ON CONFLICT (end_to_end_id) DO NOTHING`
 
 // AddIncoming records an incoming PIX once per end_to_end_id and reports
 // whether it was new.
@@ -615,6 +569,156 @@ func (s *Store) AddIncoming(ctx context.Context, command IncomingCommand) (bool,
 	return isNew, err
 }
 
+// Statement returns the participant's entries after a sequence number.
+func (s *Store) Statement(ctx context.Context, participantID string, afterSeq int64, limit int) ([]StatementEntry, error) {
+	rows, err := s.db.QueryContext(ctx, statementSQL, participantID, afterSeq, limit)
+	if err != nil {
+		return nil, fmt.Errorf("reading the statement: %w", err)
+	}
+	defer rows.Close()
+
+	return scanStatement(rows)
+}
+
+// DueDeliveries lists pending deliveries whose time came.
+func (s *Store) DueDeliveries(ctx context.Context, now time.Time, limit int) ([]Delivery, error) {
+	rows, err := s.db.QueryContext(
+		ctx,
+		dueDeliveriesSQL,
+		now.UnixNano(),
+		limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("listing due deliveries: %w", err)
+	}
+	defer rows.Close()
+
+	var deliveries []Delivery
+
+	for rows.Next() {
+		var (
+			delivery Delivery
+			next     int64
+		)
+
+		err := rows.Scan(&delivery.ID, &delivery.EventID, &delivery.ParticipantID, &delivery.Payload, &delivery.Attempts, &next, &delivery.CorrelationID)
+		if err != nil {
+			return nil, err
+		}
+
+		delivery.NextAttemptAt = time.Unix(0, next).UTC()
+		delivery.Status = DeliveryPending
+		deliveries = append(deliveries, delivery)
+	}
+
+	return deliveries, rows.Err()
+}
+
+// MarkDelivered closes a delivery.
+func (s *Store) MarkDelivered(ctx context.Context, id int64) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE deliveries SET status = 'delivered', attempts = attempts + 1 WHERE id = ?`, id)
+
+	return err
+}
+
+// Reschedule records a failed attempt and when to try again.
+func (s *Store) Reschedule(ctx context.Context, id int64, next time.Time) error {
+	return s.recordAttempt(ctx, id, next, DeliveryPending)
+}
+
+// Abandon records the last failed attempt: the delivery is given up, like a
+// real provider does after its retries.
+func (s *Store) Abandon(ctx context.Context, id int64, at time.Time) error {
+	return s.recordAttempt(ctx, id, at, DeliveryAbandoned)
+}
+
+// PendingDeliveries counts what is still to be sent, for the lab's quiescence.
+func (s *Store) PendingDeliveries(ctx context.Context) (int, error) {
+	var count int
+
+	err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM deliveries WHERE status = 'pending'`).Scan(&count)
+
+	return count, err
+}
+
+// LastStatementSeq is the participant's newest statement entry, or zero:
+// the lab's quiescence waits until the bank reconciled up to it.
+func (s *Store) LastStatementSeq(ctx context.Context, participantID string) (int64, error) {
+	var seq int64
+
+	err := s.db.QueryRowContext(ctx, `SELECT coalesce(max(seq), 0) FROM statement_entries WHERE participant_id = ?`, participantID).Scan(&seq)
+
+	return seq, err
+}
+
+func upgradeColumns(ctx context.Context, db *sql.DB) error {
+	for _, upgrade := range columnUpgrades {
+		var count int
+
+		err := db.QueryRowContext(ctx, `SELECT count(*) FROM pragma_table_info(?) WHERE name = ?`, upgrade.table, upgrade.column).Scan(&count)
+		if err != nil {
+			return fmt.Errorf("reading the columns of %s: %w", upgrade.table, err)
+		}
+
+		if count > 0 {
+			continue
+		}
+
+		// The names come from columnUpgrades, never from input.
+		_, err = db.ExecContext(ctx, fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", upgrade.table, upgrade.column, upgrade.definition))
+		if err != nil {
+			return fmt.Errorf("adding %s.%s: %w", upgrade.table, upgrade.column, err)
+		}
+	}
+
+	return nil
+}
+
+func getTransfer(ctx context.Context, q querier, endToEndID string) (Transfer, error) {
+	var (
+		transfer          Transfer
+		settleAt, created int64
+		returnAt          sql.NullInt64
+	)
+
+	row := q.QueryRowContext(
+		ctx,
+		selectTransferSQL,
+		endToEndID,
+	)
+
+	err := row.Scan(
+		&transfer.EndToEndID,
+		&transfer.ParticipantID,
+		&transfer.AmountCents,
+		&transfer.DestinationKey,
+		&transfer.Status,
+		&transfer.RejectReason,
+		&transfer.IsDoubleProcessed,
+		&settleAt,
+		&returnAt,
+		&created,
+		&transfer.CorrelationID,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Transfer{}, ErrNotFound
+	}
+
+	if err != nil {
+		return Transfer{}, fmt.Errorf("reading a transfer: %w", err)
+	}
+
+	transfer.SettleAt = time.Unix(0, settleAt).UTC()
+	transfer.CreatedAt = time.Unix(0, created).UTC()
+
+	if returnAt.Valid {
+		at := time.Unix(0, returnAt.Int64).UTC()
+		transfer.ReturnAt = &at
+	}
+
+	return transfer, nil
+}
+
 func addEntry(ctx context.Context, tx *sql.Tx, entry StatementEntry) error {
 	_, err := tx.ExecContext(ctx, `INSERT INTO statement_entries (participant_id, kind, end_to_end_id, amount_cents, created_at) VALUES (?, ?, ?, ?, ?)`,
 		entry.ParticipantID, entry.Kind, entry.EndToEndID, entry.AmountCents, entry.CreatedAt.UnixNano())
@@ -661,30 +765,6 @@ func enqueue(ctx context.Context, tx *sql.Tx, event Event, planner Planner) erro
 	return nil
 }
 
-// statementSQL joins incoming entries with the account they credit, which a
-// reconciler needs to credit a PIX in whose webhook never came, and every
-// entry with the correlation id of its PIX.
-const statementSQL = `
-SELECT e.seq, e.participant_id, e.kind, e.end_to_end_id, e.amount_cents, e.created_at,
-       coalesce(i.account_id, ''), coalesce(t.correlation_id, i.correlation_id, '')
-FROM statement_entries e
-LEFT JOIN incoming i ON e.kind = 'incoming' AND i.end_to_end_id = e.end_to_end_id
-LEFT JOIN transfers t ON e.kind IN ('settlement', 'return') AND t.end_to_end_id = e.end_to_end_id
-WHERE e.participant_id = ? AND e.seq > ?
-ORDER BY e.seq
-LIMIT ?`
-
-// Statement returns the participant's entries after a sequence number.
-func (s *Store) Statement(ctx context.Context, participantID string, afterSeq int64, limit int) ([]StatementEntry, error) {
-	rows, err := s.db.QueryContext(ctx, statementSQL, participantID, afterSeq, limit)
-	if err != nil {
-		return nil, fmt.Errorf("reading the statement: %w", err)
-	}
-	defer rows.Close()
-
-	return scanStatement(rows)
-}
-
 func scanStatement(rows *sql.Rows) ([]StatementEntry, error) {
 	var entries []StatementEntry
 
@@ -715,90 +795,10 @@ func scanStatement(rows *sql.Rows) ([]StatementEntry, error) {
 	return entries, rows.Err()
 }
 
-const dueDeliveriesSQL = `
-SELECT id, event_id, participant_id, payload, attempts, next_attempt_at, correlation_id
-FROM deliveries
-WHERE status = 'pending' AND next_attempt_at <= ?
-ORDER BY next_attempt_at
-LIMIT ?`
-
-// DueDeliveries lists pending deliveries whose time came.
-func (s *Store) DueDeliveries(ctx context.Context, now time.Time, limit int) ([]Delivery, error) {
-	rows, err := s.db.QueryContext(
-		ctx,
-		dueDeliveriesSQL,
-		now.UnixNano(),
-		limit,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("listing due deliveries: %w", err)
-	}
-	defer rows.Close()
-
-	var deliveries []Delivery
-
-	for rows.Next() {
-		var (
-			delivery Delivery
-			next     int64
-		)
-
-		err := rows.Scan(&delivery.ID, &delivery.EventID, &delivery.ParticipantID, &delivery.Payload, &delivery.Attempts, &next, &delivery.CorrelationID)
-		if err != nil {
-			return nil, err
-		}
-
-		delivery.NextAttemptAt = time.Unix(0, next).UTC()
-		delivery.Status = DeliveryPending
-		deliveries = append(deliveries, delivery)
-	}
-
-	return deliveries, rows.Err()
-}
-
-// MarkDelivered closes a delivery.
-func (s *Store) MarkDelivered(ctx context.Context, id int64) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE deliveries SET status = 'delivered', attempts = attempts + 1 WHERE id = ?`, id)
-
-	return err
-}
-
-const recordAttemptSQL = `UPDATE deliveries SET attempts = attempts + 1, next_attempt_at = ?, status = ? WHERE id = ?`
-
-// Reschedule records a failed attempt and when to try again.
-func (s *Store) Reschedule(ctx context.Context, id int64, next time.Time) error {
-	return s.recordAttempt(ctx, id, next, DeliveryPending)
-}
-
-// Abandon records the last failed attempt: the delivery is given up, like a
-// real provider does after its retries.
-func (s *Store) Abandon(ctx context.Context, id int64, at time.Time) error {
-	return s.recordAttempt(ctx, id, at, DeliveryAbandoned)
-}
-
 func (s *Store) recordAttempt(ctx context.Context, id int64, next time.Time, status DeliveryStatus) error {
 	_, err := s.db.ExecContext(ctx, recordAttemptSQL, next.UnixNano(), status, id)
 
 	return err
-}
-
-// PendingDeliveries counts what is still to be sent, for the lab's quiescence.
-func (s *Store) PendingDeliveries(ctx context.Context) (int, error) {
-	var count int
-
-	err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM deliveries WHERE status = 'pending'`).Scan(&count)
-
-	return count, err
-}
-
-// LastStatementSeq is the participant's newest statement entry, or zero:
-// the lab's quiescence waits until the bank reconciled up to it.
-func (s *Store) LastStatementSeq(ctx context.Context, participantID string) (int64, error) {
-	var seq int64
-
-	err := s.db.QueryRowContext(ctx, `SELECT coalesce(max(seq), 0) FROM statement_entries WHERE participant_id = ?`, participantID).Scan(&seq)
-
-	return seq, err
 }
 
 func (s *Store) inTx(ctx context.Context, fn func(tx *sql.Tx) error) error {

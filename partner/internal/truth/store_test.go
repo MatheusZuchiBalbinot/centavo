@@ -13,36 +13,6 @@ import (
 
 var epoch = time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)
 
-func honest(event truth.Event, now time.Time) []truth.PlannedDelivery {
-	return []truth.PlannedDelivery{{EventID: event.ID, At: now}}
-}
-
-func openStore(t *testing.T) *truth.Store {
-	t.Helper()
-
-	store, err := truth.Open(t.Context(), filepath.Join(t.TempDir(), "truth.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Cleanup(func() { _ = store.Close() })
-
-	return store
-}
-
-func submit(t *testing.T, store *truth.Store, e2e string, isDouble bool) truth.SubmitResult {
-	t.Helper()
-
-	transfer := truth.Transfer{EndToEndID: e2e, ParticipantID: "centavo-robust", AmountCents: 4_500, DestinationKey: "dest-0001", Status: truth.StatusProcessing, IsDoubleProcessed: isDouble, SettleAt: epoch, CreatedAt: epoch}
-
-	result, err := store.Submit(t.Context(), transfer)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return result
-}
-
 func TestSubmit_IsIdempotentByEndToEndID(t *testing.T) {
 	t.Parallel()
 
@@ -349,4 +319,34 @@ func TestStatement_CarriesTheCorrelationOfEachPix(t *testing.T) {
 	if isUnexpected {
 		t.Fatalf("statement correlations: %v", correlations)
 	}
+}
+
+func honest(event truth.Event, now time.Time) []truth.PlannedDelivery {
+	return []truth.PlannedDelivery{{EventID: event.ID, At: now}}
+}
+
+func openStore(t *testing.T) *truth.Store {
+	t.Helper()
+
+	store, err := truth.Open(t.Context(), filepath.Join(t.TempDir(), "truth.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() { _ = store.Close() })
+
+	return store
+}
+
+func submit(t *testing.T, store *truth.Store, e2e string, isDouble bool) truth.SubmitResult {
+	t.Helper()
+
+	transfer := truth.Transfer{EndToEndID: e2e, ParticipantID: "centavo-robust", AmountCents: 4_500, DestinationKey: "dest-0001", Status: truth.StatusProcessing, IsDoubleProcessed: isDouble, SettleAt: epoch, CreatedAt: epoch}
+
+	result, err := store.Submit(t.Context(), transfer)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return result
 }

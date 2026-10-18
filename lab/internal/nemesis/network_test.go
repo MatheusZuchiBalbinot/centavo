@@ -16,26 +16,6 @@ type fakeToxiproxy struct {
 	calls []string
 }
 
-func (f *fakeToxiproxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	f.mu.Lock()
-	f.calls = append(f.calls, r.Method+" "+r.URL.Path)
-	f.mu.Unlock()
-
-	w.WriteHeader(http.StatusOK)
-}
-
-func newNetworkNemesis(t *testing.T) (*Nemesis, *fakeToxiproxy) {
-	t.Helper()
-
-	bot, _ := newTestNemesis(t, t.TempDir())
-	fake := &fakeToxiproxy{}
-	server := httptest.NewServer(fake)
-	t.Cleanup(server.Close)
-	bot.toxiproxyURL = server.URL
-
-	return bot, fake
-}
-
 func TestNetwork_PartitionsBecomeToxiproxyCalls(t *testing.T) {
 	cases := []struct {
 		toxic      string
@@ -73,4 +53,24 @@ func TestNetwork_TheCureResetsToxiproxy(t *testing.T) {
 	if !slices.Equal(fake.calls, []string{"POST /reset"}) {
 		t.Fatalf("calls %v", fake.calls)
 	}
+}
+
+func (f *fakeToxiproxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	f.mu.Lock()
+	f.calls = append(f.calls, r.Method+" "+r.URL.Path)
+	f.mu.Unlock()
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func newNetworkNemesis(t *testing.T) (*Nemesis, *fakeToxiproxy) {
+	t.Helper()
+
+	bot, _ := newTestNemesis(t, t.TempDir())
+	fake := &fakeToxiproxy{}
+	server := httptest.NewServer(fake)
+	t.Cleanup(server.Close)
+	bot.toxiproxyURL = server.URL
+
+	return bot, fake
 }

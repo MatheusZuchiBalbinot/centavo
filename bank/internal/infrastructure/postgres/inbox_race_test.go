@@ -18,12 +18,6 @@ type takingPartner struct {
 	take func()
 }
 
-func (p takingPartner) Status(context.Context, transfer.EndToEndID) (application.AuthoritativeStatus, error) {
-	p.take()
-
-	return application.AuthoritativeStatus{Status: transfer.PartnerReturned}, nil
-}
-
 // TestInbox_ResyncLeavesAnEventAnotherProcessorTook reproduces the deadlock
 // between the two inbox processors of the chaos rounds: a return that came
 // before the settlement does not fit, its transaction rolls back and frees the
@@ -108,4 +102,10 @@ func TestInbox_ResyncLeavesAnEventAnotherProcessorTook(t *testing.T) {
 	if outcome != "" {
 		t.Fatalf("the event, still the other processor's, was marked %q (%v)", outcome, err)
 	}
+}
+
+func (p takingPartner) Status(context.Context, transfer.EndToEndID) (application.AuthoritativeStatus, error) {
+	p.take()
+
+	return application.AuthoritativeStatus{Status: transfer.PartnerReturned}, nil
 }

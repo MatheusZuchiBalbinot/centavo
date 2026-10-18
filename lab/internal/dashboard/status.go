@@ -17,10 +17,6 @@ import (
 	"centavo/lab/internal/checker"
 )
 
-// checkState is how the panel paints one check; the text says it too, so the
-// state never depends on color alone.
-type checkState string
-
 const (
 	stateOK       checkState = "ok"
 	stateViolated checkState = "violated"
@@ -30,6 +26,13 @@ const (
 const reportJSONFile = "report.json"
 
 var roundDirPattern = regexp.MustCompile(`^r(\d{4,})$`)
+
+// thousandsGroup is how many digits sit between two separators in R$ 1.234.567.
+const thousandsGroup = 3
+
+// checkState is how the panel paints one check; the text says it too, so the
+// state never depends on color alone.
+type checkState string
 
 type statusResponse struct {
 	Live      liveStatus `json:"live"`
@@ -68,9 +71,6 @@ type lastRound struct {
 	} `json:"invariants"`
 	ReportURL string `json:"report_url"`
 }
-
-// thousandsGroup is how many digits sit between two separators in R$ 1.234.567.
-const thousandsGroup = 3
 
 // waitingStatus is the live panel before the auditor's first reading.
 func waitingStatus() liveStatus {

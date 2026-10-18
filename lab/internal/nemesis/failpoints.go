@@ -27,6 +27,9 @@ const (
 	eventsPattern = "*.jsonl"
 )
 
+// actionFreeze is the failpoint action the lab completes with docker pause.
+const actionFreeze = "freeze"
+
 // failpointRule is the rule the bank's chaos port accepts. The lab keeps its
 // own copy of the contract: it never imports the bank.
 type failpointRule struct {
@@ -52,9 +55,6 @@ type failpointEvent struct {
 	CorrelationID string `json:"correlation_id"`
 }
 
-// actionFreeze is the failpoint action the lab completes with docker pause.
-const actionFreeze = "freeze"
-
 type armedFault struct {
 	fault scenarios.Fault
 	fired int
@@ -67,6 +67,15 @@ type failpointController struct {
 	faults  []*armedFault
 	offsets map[string]int64
 	events  []json.RawMessage
+}
+
+type armRecord struct {
+	Fault       string   `json:"fault"`
+	Failpoint   string   `json:"failpoint"`
+	Targets     []string `json:"targets"`
+	Action      string   `json:"action"`
+	Probability float64  `json:"probability"`
+	MaxFires    int      `json:"max_fires"`
 }
 
 func newFailpointController(bot *Nemesis) *failpointController {
@@ -87,15 +96,6 @@ func newFailpointController(bot *Nemesis) *failpointController {
 	}
 
 	return controller
-}
-
-type armRecord struct {
-	Fault       string   `json:"fault"`
-	Failpoint   string   `json:"failpoint"`
-	Targets     []string `json:"targets"`
-	Action      string   `json:"action"`
-	Probability float64  `json:"probability"`
-	MaxFires    int      `json:"max_fires"`
 }
 
 func (c *failpointController) arm(ctx context.Context) error {

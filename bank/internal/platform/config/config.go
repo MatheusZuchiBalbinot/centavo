@@ -16,9 +16,6 @@ const (
 	hexBase     = 16
 )
 
-// Env is the deployment environment the process declares it runs in.
-type Env string
-
 // The environments the bank knows.
 const (
 	EnvLocal      Env = "local"
@@ -54,6 +51,9 @@ var (
 	ErrMissingPartner         = errors.New("the worker role needs PARTNER_BASE_URL and PARTNER_PARTICIPANT_ID")
 )
 
+// Env is the deployment environment the process declares it runs in.
+type Env string
+
 // LookupFunc reads one environment variable; os.LookupEnv satisfies it.
 type LookupFunc func(key string) (string, bool)
 
@@ -73,6 +73,15 @@ type Partner struct {
 	WebhookSecret string
 }
 
+// Chaos is the chaos configuration; only a chaoslab build accepts it.
+type Chaos struct {
+	Token         string
+	FailpointSpec string
+	Seed          uint64
+	// Instance names this process in chaos events; Compose sets the service name.
+	Instance string
+}
+
 // RequireWebhookSecret is the api role's check: unsigned webhooks never get in.
 func (p Partner) RequireWebhookSecret() error {
 	if len(p.WebhookSecret) < minChaosTokenLength {
@@ -90,15 +99,6 @@ func (p Partner) RequireEndpoint() error {
 	}
 
 	return nil
-}
-
-// Chaos is the chaos configuration; only a chaoslab build accepts it.
-type Chaos struct {
-	Token         string
-	FailpointSpec string
-	Seed          uint64
-	// Instance names this process in chaos events; Compose sets the service name.
-	Instance string
 }
 
 // Load reads the configuration from the environment.
@@ -136,6 +136,34 @@ func Load(lookup LookupFunc) (Config, error) {
 	return Config{Env: env, Defenses: profile, DatabaseURL: databaseURL, Chaos: chaos, Partner: partner}, nil
 }
 
+// ValidateBuild enforces the safety rule that chaos code exists only in
+// chaoslab builds: chaos code never runs in production, production never runs a
+// naive variant or takes chaos configuration, and the chaos port has a real
+// secret.
+func ValidateBuild(configuration Config, isChaosBuild bool) error {
+	isChaosBuildInProduction := isChaosBuild && configuration.Env == EnvProduction
+	if isChaosBuildInProduction {
+		return ErrChaosBuildInProduction
+	}
+
+	isWeakenedProductionBuild := !isChaosBuild && !configuration.Defenses.IsRobust()
+	if isWeakenedProductionBuild {
+		return fmt.Errorf("%w: got %q", ErrProductionBuildProfile, configuration.Defenses)
+	}
+
+	hasChaosConfig := configuration.Chaos.FailpointSpec != ""
+	if !isChaosBuild && hasChaosConfig {
+		return ErrChaosConfigProduction
+	}
+
+	hasWeakToken := isChaosBuild && len(configuration.Chaos.Token) < minChaosTokenLength
+	if hasWeakToken {
+		return ErrWeakChaosToken
+	}
+
+	return nil
+}
+
 func loadChaos(lookup LookupFunc) (Chaos, error) {
 	token, _ := lookup(chaosTokenVariable)
 	spec, _ := lookup(failpointsVariable)
@@ -169,34 +197,6 @@ func parseSeed(raw string) (uint64, error) {
 	}
 
 	return seed, nil
-}
-
-// ValidateBuild enforces the safety rule that chaos code exists only in
-// chaoslab builds: chaos code never runs in production, production never runs a
-// naive variant or takes chaos configuration, and the chaos port has a real
-// secret.
-func ValidateBuild(configuration Config, isChaosBuild bool) error {
-	isChaosBuildInProduction := isChaosBuild && configuration.Env == EnvProduction
-	if isChaosBuildInProduction {
-		return ErrChaosBuildInProduction
-	}
-
-	isWeakenedProductionBuild := !isChaosBuild && !configuration.Defenses.IsRobust()
-	if isWeakenedProductionBuild {
-		return fmt.Errorf("%w: got %q", ErrProductionBuildProfile, configuration.Defenses)
-	}
-
-	hasChaosConfig := configuration.Chaos.FailpointSpec != ""
-	if !isChaosBuild && hasChaosConfig {
-		return ErrChaosConfigProduction
-	}
-
-	hasWeakToken := isChaosBuild && len(configuration.Chaos.Token) < minChaosTokenLength
-	if hasWeakToken {
-		return ErrWeakChaosToken
-	}
-
-	return nil
 }
 
 func loadProfile(lookup LookupFunc) (defenses.Profile, error) {

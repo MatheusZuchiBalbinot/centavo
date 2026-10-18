@@ -9,9 +9,6 @@ import (
 	"strings"
 )
 
-// Defense is the flag name of one defense technique.
-type Defense string
-
 // The defenses, atomic_ledger to durable_db.
 const (
 	AtomicLedger       Defense = "atomic_ledger"
@@ -64,6 +61,9 @@ var all = []Defense{
 	Fencing,
 	DurableDB,
 }
+
+// Defense is the flag name of one defense technique.
+type Defense string
 
 // Profile is an immutable set of disabled defenses.
 type Profile struct {
@@ -130,6 +130,49 @@ func (p Profile) String() string {
 	return strings.Join(parts, profileSeparator)
 }
 
+// Notes explains the combinations where one defense depends on another that is
+// off; /internal/health shows them.
+func (p Profile) Notes() []string {
+	var notes []string
+
+	isLockingWithoutTransaction := p.IsEnabled(BalanceLocking) && !p.IsEnabled(AtomicLedger)
+	if isLockingWithoutTransaction {
+		notes = append(notes, "balance_locking without atomic_ledger: each row lock ends with its own statement, so it serializes nothing")
+	}
+
+	isKeyWithoutTransaction := p.IsEnabled(Idempotency) && !p.IsEnabled(AtomicLedger)
+	if isKeyWithoutTransaction {
+		notes = append(notes, "idempotency without atomic_ledger: the key cannot share a commit with the effect, so the naive variant runs")
+	}
+
+	isOutboxWithoutTransaction := p.IsEnabled(Outbox) && !p.IsEnabled(AtomicLedger)
+	if isOutboxWithoutTransaction {
+		notes = append(notes, "outbox without atomic_ledger: the message and the transfer commit apart, so a crash between them still loses the message")
+	}
+
+	isInboxWithoutTransaction := p.IsEnabled(Inbox) && !p.IsEnabled(AtomicLedger)
+	if isInboxWithoutTransaction {
+		notes = append(notes, "inbox without atomic_ledger: an event's effect and its mark commit apart, so a crash between them applies it twice")
+	}
+
+	isFixedIDWithoutOutbox := p.IsEnabled(PartnerIdempotency) && !p.IsEnabled(Outbox)
+	if isFixedIDWithoutOutbox {
+		notes = append(notes, "partner_idempotency without outbox: the naive relay picks a new end_to_end_id per attempt anyway")
+	}
+
+	isRecoveryWithoutGuards := p.IsEnabled(Recovery) && !p.IsEnabled(StateMachine)
+	if isRecoveryWithoutGuards {
+		notes = append(notes, "recovery without state_machine: the sweeper walks to the partner's status by overwriting, with no guard against a concurrent webhook")
+	}
+
+	isRetryWithoutOutbox := p.IsEnabled(ResilientClient) && !p.IsEnabled(Outbox)
+	if isRetryWithoutOutbox {
+		notes = append(notes, "resilient_client without outbox: the naive relay has no message to reschedule, so a doubtful send still fails")
+	}
+
+	return notes
+}
+
 func parseNaive(modifiers []string) (Profile, error) {
 	hasModifiers := len(modifiers) > 0
 	if hasModifiers {
@@ -177,47 +220,4 @@ func parseModifier(modifier string) (Defense, error) {
 
 func compareCatalogOrder(a, b Defense) int {
 	return slices.Index(all, a) - slices.Index(all, b)
-}
-
-// Notes explains the combinations where one defense depends on another that is
-// off; /internal/health shows them.
-func (p Profile) Notes() []string {
-	var notes []string
-
-	isLockingWithoutTransaction := p.IsEnabled(BalanceLocking) && !p.IsEnabled(AtomicLedger)
-	if isLockingWithoutTransaction {
-		notes = append(notes, "balance_locking without atomic_ledger: each row lock ends with its own statement, so it serializes nothing")
-	}
-
-	isKeyWithoutTransaction := p.IsEnabled(Idempotency) && !p.IsEnabled(AtomicLedger)
-	if isKeyWithoutTransaction {
-		notes = append(notes, "idempotency without atomic_ledger: the key cannot share a commit with the effect, so the naive variant runs")
-	}
-
-	isOutboxWithoutTransaction := p.IsEnabled(Outbox) && !p.IsEnabled(AtomicLedger)
-	if isOutboxWithoutTransaction {
-		notes = append(notes, "outbox without atomic_ledger: the message and the transfer commit apart, so a crash between them still loses the message")
-	}
-
-	isInboxWithoutTransaction := p.IsEnabled(Inbox) && !p.IsEnabled(AtomicLedger)
-	if isInboxWithoutTransaction {
-		notes = append(notes, "inbox without atomic_ledger: an event's effect and its mark commit apart, so a crash between them applies it twice")
-	}
-
-	isFixedIDWithoutOutbox := p.IsEnabled(PartnerIdempotency) && !p.IsEnabled(Outbox)
-	if isFixedIDWithoutOutbox {
-		notes = append(notes, "partner_idempotency without outbox: the naive relay picks a new end_to_end_id per attempt anyway")
-	}
-
-	isRecoveryWithoutGuards := p.IsEnabled(Recovery) && !p.IsEnabled(StateMachine)
-	if isRecoveryWithoutGuards {
-		notes = append(notes, "recovery without state_machine: the sweeper walks to the partner's status by overwriting, with no guard against a concurrent webhook")
-	}
-
-	isRetryWithoutOutbox := p.IsEnabled(ResilientClient) && !p.IsEnabled(Outbox)
-	if isRetryWithoutOutbox {
-		notes = append(notes, "resilient_client without outbox: the naive relay has no message to reschedule, so a doubtful send still fails")
-	}
-
-	return notes
 }

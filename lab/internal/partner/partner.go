@@ -25,6 +25,13 @@ type Client struct {
 	http          *http.Client
 }
 
+// Pending is what the partner has not finished for the participant.
+type Pending struct {
+	Webhooks int `json:"pending_deliveries"`
+	// LastStatementSeq is the newest entry of the participant's statement.
+	LastStatementSeq int64 `json:"last_statement_seq"`
+}
+
 // New builds a client for the partner's admin port.
 func New(baseURL, participantID string) Client {
 	return Client{baseURL: baseURL, participantID: participantID, http: &http.Client{Timeout: callTimeout}}
@@ -36,13 +43,6 @@ func (c Client) Truth(ctx context.Context, since time.Time) ([]byte, error) {
 	query := url.Values{"participant_id": {c.participantID}, "since": {since.UTC().Format(time.RFC3339Nano)}}
 
 	return c.get(ctx, truthPath+"?"+query.Encode())
-}
-
-// Pending is what the partner has not finished for the participant.
-type Pending struct {
-	Webhooks int `json:"pending_deliveries"`
-	// LastStatementSeq is the newest entry of the participant's statement.
-	LastStatementSeq int64 `json:"last_statement_seq"`
 }
 
 // Pending reads the partner's unfinished work.

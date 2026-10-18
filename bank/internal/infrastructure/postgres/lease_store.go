@@ -24,6 +24,33 @@ WHERE resource = $1
   AND (holder IS NULL OR expires_at <= now() OR holder = $2)
 RETURNING token`
 
+// acquireLeaseAtSQL is the naive acquisition: the same rule, but every time
+// in it is the caller's wall clock instead of the database's.
+const acquireLeaseAtSQL = `
+UPDATE worker_leases
+SET token = CASE WHEN holder = $2 AND expires_at > $3 THEN token ELSE token + 1 END,
+    holder = $2,
+    expires_at = $3::timestamptz + $4::bigint * interval '1 millisecond'
+WHERE resource = $1
+  AND (holder IS NULL OR expires_at <= $3 OR holder = $2)
+RETURNING token`
+
+// holdsLeaseSQL takes FOR SHARE on a lease still ours: no one can acquire
+// it while the transaction that checked it is open.
+const holdsLeaseSQL = `
+SELECT 1 FROM worker_leases
+WHERE resource = $1 AND holder = $2 AND token = $3 AND expires_at > now()
+FOR SHARE`
+
+// listStuckSQL uses external_transfers_in_flight, the partial index on
+// updated_at of the transfers in created or sent.
+const listStuckSQL = `
+SELECT id, end_to_end_id, client_ref
+FROM external_transfers
+WHERE status IN ('created', 'sent') AND updated_at < now() - $1::bigint * interval '1 millisecond'
+ORDER BY updated_at
+LIMIT $2`
+
 // leaseStore keeps the leases of the singleton loops.
 type leaseStore struct {
 	db querier
@@ -45,17 +72,6 @@ func (s leaseStore) AcquireLease(ctx context.Context, lease application.Lease, t
 	return token, true, nil
 }
 
-// acquireLeaseAtSQL is the naive acquisition: the same rule, but every time
-// in it is the caller's wall clock instead of the database's.
-const acquireLeaseAtSQL = `
-UPDATE worker_leases
-SET token = CASE WHEN holder = $2 AND expires_at > $3 THEN token ELSE token + 1 END,
-    holder = $2,
-    expires_at = $3::timestamptz + $4::bigint * interval '1 millisecond'
-WHERE resource = $1
-  AND (holder IS NULL OR expires_at <= $3 OR holder = $2)
-RETURNING token`
-
 // AcquireLeaseAt takes or renews the lease by the caller's clock.
 func (s leaseStore) AcquireLeaseAt(ctx context.Context, lease application.Lease, now time.Time, ttl time.Duration) (int64, bool, error) {
 	var token int64
@@ -72,13 +88,6 @@ func (s leaseStore) AcquireLeaseAt(ctx context.Context, lease application.Lease,
 	return token, true, nil
 }
 
-// holdsLeaseSQL takes FOR SHARE on a lease still ours: no one can acquire
-// it while the transaction that checked it is open.
-const holdsLeaseSQL = `
-SELECT 1 FROM worker_leases
-WHERE resource = $1 AND holder = $2 AND token = $3 AND expires_at > now()
-FOR SHARE`
-
 // HoldsLease checks the lease within the caller's transaction.
 func (s leaseStore) HoldsLease(ctx context.Context, lease application.Lease, token int64) (bool, error) {
 	var one int
@@ -94,15 +103,6 @@ func (s leaseStore) HoldsLease(ctx context.Context, lease application.Lease, tok
 
 	return true, nil
 }
-
-// listStuckSQL uses external_transfers_in_flight, the partial index on
-// updated_at of the transfers in created or sent.
-const listStuckSQL = `
-SELECT id, end_to_end_id, client_ref
-FROM external_transfers
-WHERE status IN ('created', 'sent') AND updated_at < now() - $1::bigint * interval '1 millisecond'
-ORDER BY updated_at
-LIMIT $2`
 
 // ListStuck returns the transfers that sat in created or sent for too long.
 func (s leaseStore) ListStuck(ctx context.Context, olderThan time.Duration, limit int) ([]application.StuckTransfer, error) {

@@ -21,6 +21,11 @@ const toxiproxyURL = "http://toxiproxy:8474"
 // that leave the connection open.
 const timeoutToxic = "timeout"
 
+const (
+	phaseStart = "start"
+	phaseEnd   = "end"
+)
+
 // networkRecord is a network episode in the history.
 type networkRecord struct {
 	Fault   string   `json:"fault"`
@@ -28,11 +33,6 @@ type networkRecord struct {
 	Toxic   string   `json:"toxic"`
 	Phase   string   `json:"phase"`
 }
-
-const (
-	phaseStart = "start"
-	phaseEnd   = "end"
-)
 
 // toxicBody is one toxic in Toxiproxy's API.
 type toxicBody struct {

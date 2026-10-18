@@ -22,27 +22,6 @@ const (
 	reconcileBatchLimit = 500
 )
 
-// actStores are what acting on a classified entry writes: a walk to the
-// partner's status, a credit or a suspense posting.
-type actStores interface {
-	TransitionStores
-	creditStores
-}
-
-// entryStores are what booking one statement entry reads and writes.
-type entryStores interface {
-	actStores
-	factStores
-}
-
-// factStores are what classifying a statement entry reads: the ledger's
-// transfers and incoming PIX, balances and earlier items.
-type factStores interface {
-	PixStore
-	PositionStore
-	ReconciliationStore
-}
-
 // LeaseReconciler is the reconciler's row in worker_leases.
 const LeaseReconciler = "reconciler"
 
@@ -87,14 +66,6 @@ type PartnerStatementReader interface {
 	Statement(ctx context.Context, afterSeq int64, limit int) ([]StatementEntry, error)
 }
 
-// statementBatch is a contiguous slice of the statement.
-type statementBatch struct {
-	from    int64
-	to      int64
-	token   int64
-	entries []StatementEntry
-}
-
 // BatchPolicy is the reconciliation defense's strategy: how a batch is booked.
 type BatchPolicy interface {
 	Book(ctx context.Context, r Reconciler, batch statementBatch) error
@@ -121,6 +92,52 @@ type ReconcilerConfig struct {
 	Policy     BatchPolicy
 	Owner      string
 	Logger     *slog.Logger
+}
+
+// AtomicBatches is the reconciliation defense: the run, its items, their
+// actions and the cursor fall in one commit, behind the lease. A death in the
+// middle undoes the batch, and the next run starts again from the cursor.
+type AtomicBatches struct{}
+
+// EntryByEntry is the naive variant: each entry commits on its own and the
+// cursor is saved after the batch. A death in the middle leaves the first
+// entries booked and the cursor behind them, so the next run books them again.
+type EntryByEntry struct{}
+
+// actStores are what acting on a classified entry writes: a walk to the
+// partner's status, a credit or a suspense posting.
+type actStores interface {
+	TransitionStores
+	creditStores
+}
+
+// entryStores are what booking one statement entry reads and writes.
+type entryStores interface {
+	actStores
+	factStores
+}
+
+// factStores are what classifying a statement entry reads: the ledger's
+// transfers and incoming PIX, balances and earlier items.
+type factStores interface {
+	PixStore
+	PositionStore
+	ReconciliationStore
+}
+
+// statementBatch is a contiguous slice of the statement.
+type statementBatch struct {
+	from    int64
+	to      int64
+	token   int64
+	entries []StatementEntry
+}
+
+type actCommand struct {
+	entry    StatementEntry
+	facts    entryFacts
+	decision verdict
+	itemID   int64
 }
 
 // NewReconciler builds the reconciler.
@@ -186,6 +203,93 @@ func (r Reconciler) RunOnce(ctx context.Context) error {
 	}
 
 	return ctx.Err()
+}
+
+// Book books the whole batch or nothing.
+func (AtomicBatches) Book(ctx context.Context, r Reconciler, batch statementBatch) error {
+	return r.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
+		isHeld, err := r.lease.Holds(ctx, stores, Lease{Resource: LeaseReconciler, Holder: r.owner}, batch.token)
+		if err != nil {
+			return err
+		}
+
+		if !isHeld {
+			return errReconcilerLeaseLost
+		}
+
+		err = lockBatch(ctx, stores, batch)
+		if err != nil {
+			return err
+		}
+
+		runID, err := stores.StartRun(ctx, batch.from, batch.to, batch.token)
+		if err != nil {
+			return err
+		}
+
+		for _, entry := range batch.entries {
+			err := r.bookEntry(ctx, stores, runID, entry)
+			if err != nil {
+				return err
+			}
+
+			// `recon.mid_apply`: between two entries of the batch.
+			err = failpoint.Hit(entryFailpointContext(ctx, entry), failpoint.ReconMidApply)
+			if err != nil {
+				return err
+			}
+		}
+
+		isAdvanced, err := r.lease.MoveCursor(ctx, stores, batch.from, batch.to)
+		if err != nil {
+			return err
+		}
+
+		if !isAdvanced {
+			return errCursorMoved
+		}
+
+		return stores.FinishRun(ctx, runID)
+	})
+}
+
+// Book books the batch an entry at a time.
+func (EntryByEntry) Book(ctx context.Context, r Reconciler, batch statementBatch) error {
+	var runID int64
+
+	err := r.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
+		var err error
+
+		runID, err = stores.StartRun(ctx, batch.from, batch.to, batch.token)
+
+		return err
+	})
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range batch.entries {
+		err := r.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
+			return r.bookEntry(ctx, stores, runID, entry)
+		})
+		if err != nil {
+			return err
+		}
+
+		err = failpoint.Hit(entryFailpointContext(ctx, entry), failpoint.ReconMidApply)
+		if err != nil {
+			return err
+		}
+	}
+
+	return r.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
+		err := stores.SaveCursor(ctx, batch.to)
+		if err != nil {
+			return err
+		}
+
+		return stores.FinishRun(ctx, runID)
+	})
 }
 
 func (r Reconciler) nextBatch(ctx context.Context) (statementBatch, bool, error) {
@@ -255,13 +359,6 @@ func (r Reconciler) bookEntry(ctx context.Context, stores entryStores, runID int
 	}
 
 	return r.act(ctx, stores, actCommand{entry: entry, facts: facts, decision: decision, itemID: itemID})
-}
-
-type actCommand struct {
-	entry    StatementEntry
-	facts    entryFacts
-	decision verdict
-	itemID   int64
 }
 
 func (r Reconciler) act(ctx context.Context, stores actStores, command actCommand) error {
@@ -432,101 +529,4 @@ func batchFailpointContext(ctx context.Context, batch statementBatch) context.Co
 // entryCorrelation ties the ledger rows a reconciliation writes to the entry.
 func entryCorrelation(entry StatementEntry) string {
 	return fmt.Sprintf("recon-%d", entry.Seq)
-}
-
-// AtomicBatches is the reconciliation defense: the run, its items, their
-// actions and the cursor fall in one commit, behind the lease. A death in the
-// middle undoes the batch, and the next run starts again from the cursor.
-type AtomicBatches struct{}
-
-// Book books the whole batch or nothing.
-func (AtomicBatches) Book(ctx context.Context, r Reconciler, batch statementBatch) error {
-	return r.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
-		isHeld, err := r.lease.Holds(ctx, stores, Lease{Resource: LeaseReconciler, Holder: r.owner}, batch.token)
-		if err != nil {
-			return err
-		}
-
-		if !isHeld {
-			return errReconcilerLeaseLost
-		}
-
-		err = lockBatch(ctx, stores, batch)
-		if err != nil {
-			return err
-		}
-
-		runID, err := stores.StartRun(ctx, batch.from, batch.to, batch.token)
-		if err != nil {
-			return err
-		}
-
-		for _, entry := range batch.entries {
-			err := r.bookEntry(ctx, stores, runID, entry)
-			if err != nil {
-				return err
-			}
-
-			// `recon.mid_apply`: between two entries of the batch.
-			err = failpoint.Hit(entryFailpointContext(ctx, entry), failpoint.ReconMidApply)
-			if err != nil {
-				return err
-			}
-		}
-
-		isAdvanced, err := r.lease.MoveCursor(ctx, stores, batch.from, batch.to)
-		if err != nil {
-			return err
-		}
-
-		if !isAdvanced {
-			return errCursorMoved
-		}
-
-		return stores.FinishRun(ctx, runID)
-	})
-}
-
-// EntryByEntry is the naive variant: each entry commits on its own and the
-// cursor is saved after the batch. A death in the middle leaves the first
-// entries booked and the cursor behind them, so the next run books them again.
-type EntryByEntry struct{}
-
-// Book books the batch an entry at a time.
-func (EntryByEntry) Book(ctx context.Context, r Reconciler, batch statementBatch) error {
-	var runID int64
-
-	err := r.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
-		var err error
-
-		runID, err = stores.StartRun(ctx, batch.from, batch.to, batch.token)
-
-		return err
-	})
-	if err != nil {
-		return err
-	}
-
-	for _, entry := range batch.entries {
-		err := r.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
-			return r.bookEntry(ctx, stores, runID, entry)
-		})
-		if err != nil {
-			return err
-		}
-
-		err = failpoint.Hit(entryFailpointContext(ctx, entry), failpoint.ReconMidApply)
-		if err != nil {
-			return err
-		}
-	}
-
-	return r.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
-		err := stores.SaveCursor(ctx, batch.to)
-		if err != nil {
-			return err
-		}
-
-		return stores.FinishRun(ctx, runID)
-	})
 }

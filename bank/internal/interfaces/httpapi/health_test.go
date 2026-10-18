@@ -11,12 +11,10 @@ import (
 	"centavo/bank/internal/interfaces/httpapi"
 )
 
+var testBuildInfo = httpapi.BuildInfo{Service: "bank-api", Version: "test", IsChaosBuild: true, Env: "chaoslab", Defenses: "robust"}
+
 type fakePinger struct {
 	err error
-}
-
-func (f fakePinger) Ping(context.Context) error {
-	return f.err
 }
 
 type healthBody struct {
@@ -26,8 +24,6 @@ type healthBody struct {
 	Status       string            `json:"status"`
 	Checks       map[string]string `json:"checks"`
 }
-
-var testBuildInfo = httpapi.BuildInfo{Service: "bank-api", Version: "test", IsChaosBuild: true, Env: "chaoslab", Defenses: "robust"}
 
 func TestHealth_DatabaseReachable_ReturnsOK(t *testing.T) {
 	handler := httpapi.NewAdminHandler(testBuildInfo, fakePinger{})
@@ -72,6 +68,21 @@ func TestHealth_RejectsOtherMethods(t *testing.T) {
 	}
 }
 
+// TestHealth_SendsSecurityHeaders: the admin port, like the client one,
+// answers with headers that keep a browser from rendering or sniffing it.
+func TestHealth_SendsSecurityHeaders(t *testing.T) {
+	recorder, _ := getHealth(t, httpapi.NewAdminHandler(testBuildInfo, fakePinger{}))
+
+	isLockedDown := recorder.Header().Get("X-Content-Type-Options") == "nosniff" && recorder.Header().Get("Content-Security-Policy") != ""
+	if !isLockedDown {
+		t.Fatalf("headers %v", recorder.Header())
+	}
+}
+
+func (f fakePinger) Ping(context.Context) error {
+	return f.err
+}
+
 func getHealth(t *testing.T, handler http.Handler) (*httptest.ResponseRecorder, healthBody) {
 	t.Helper()
 
@@ -88,15 +99,4 @@ func getHealth(t *testing.T, handler http.Handler) (*httptest.ResponseRecorder, 
 	}
 
 	return recorder, body
-}
-
-// TestHealth_SendsSecurityHeaders: the admin port, like the client one,
-// answers with headers that keep a browser from rendering or sniffing it.
-func TestHealth_SendsSecurityHeaders(t *testing.T) {
-	recorder, _ := getHealth(t, httpapi.NewAdminHandler(testBuildInfo, fakePinger{}))
-
-	isLockedDown := recorder.Header().Get("X-Content-Type-Options") == "nosniff" && recorder.Header().Get("Content-Security-Policy") != ""
-	if !isLockedDown {
-		t.Fatalf("headers %v", recorder.Header())
-	}
 }

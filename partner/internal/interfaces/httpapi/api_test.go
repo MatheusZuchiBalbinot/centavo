@@ -30,35 +30,6 @@ type partnerFixture struct {
 	registry *modes.Registry
 }
 
-func newPartner(t *testing.T) partnerFixture {
-	t.Helper()
-
-	store, err := truth.Open(t.Context(), filepath.Join(t.TempDir(), "truth.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Cleanup(func() { _ = store.Close() })
-
-	registry := modes.NewRegistry()
-	api := httpapi.NewAPI(httpapi.APIConfig{Store: store, Modes: registry, Participants: []string{participant}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
-
-	return partnerFixture{api: api.Handler(), admin: httpapi.NewAdminHandler(httpapi.BuildInfo{}, api, nil), store: store, registry: registry}
-}
-
-func call(t *testing.T, handler http.Handler, method, path, body string) *httptest.ResponseRecorder {
-	t.Helper()
-
-	recorder := httptest.NewRecorder()
-	handler.ServeHTTP(recorder, httptest.NewRequestWithContext(t.Context(), method, path, strings.NewReader(body)))
-
-	return recorder
-}
-
-func transferBody(e2e, key string) string {
-	return `{"end_to_end_id": "` + e2e + `", "participant_id": "` + participant + `", "amount_cents": 4500, "destination_key": "` + key + `"}`
-}
-
 func TestSubmit_IsIdempotentByEndToEndID(t *testing.T) {
 	fixture := newPartner(t)
 	e2e := "E0192f1c5a1b2c3d4"
@@ -204,19 +175,6 @@ func TestEngine_SettlesAndDeliversSignedWebhooks(t *testing.T) {
 	}
 }
 
-func hasValidSignature(header string, body, secret []byte) bool {
-	timestamp, signature, isFound := strings.Cut(strings.TrimPrefix(header, "t="), ",v1=")
-	if !isFound {
-		return false
-	}
-
-	mac := hmac.New(sha256.New, secret)
-	_, _ = mac.Write([]byte(timestamp + "."))
-	_, _ = mac.Write(body)
-
-	return hmac.Equal([]byte(hex.EncodeToString(mac.Sum(nil))), []byte(signature))
-}
-
 // TestEngine_EchoesTheCorrelationIDOnWebhooks guards the lab's failpoints on
 // the bank's webhook path: they match the PIX's correlation id, which only
 // reaches the bank if the partner sends it back.
@@ -298,4 +256,46 @@ func TestErrors_AnswerAStableCode(t *testing.T) {
 			}
 		})
 	}
+}
+
+func newPartner(t *testing.T) partnerFixture {
+	t.Helper()
+
+	store, err := truth.Open(t.Context(), filepath.Join(t.TempDir(), "truth.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() { _ = store.Close() })
+
+	registry := modes.NewRegistry()
+	api := httpapi.NewAPI(httpapi.APIConfig{Store: store, Modes: registry, Participants: []string{participant}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+
+	return partnerFixture{api: api.Handler(), admin: httpapi.NewAdminHandler(httpapi.BuildInfo{}, api, nil), store: store, registry: registry}
+}
+
+func call(t *testing.T, handler http.Handler, method, path, body string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequestWithContext(t.Context(), method, path, strings.NewReader(body)))
+
+	return recorder
+}
+
+func transferBody(e2e, key string) string {
+	return `{"end_to_end_id": "` + e2e + `", "participant_id": "` + participant + `", "amount_cents": 4500, "destination_key": "` + key + `"}`
+}
+
+func hasValidSignature(header string, body, secret []byte) bool {
+	timestamp, signature, isFound := strings.Cut(strings.TrimPrefix(header, "t="), ",v1=")
+	if !isFound {
+		return false
+	}
+
+	mac := hmac.New(sha256.New, secret)
+	_, _ = mac.Write([]byte(timestamp + "."))
+	_, _ = mac.Write(body)
+
+	return hmac.Equal([]byte(hex.EncodeToString(mac.Sum(nil))), []byte(signature))
 }

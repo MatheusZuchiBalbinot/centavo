@@ -28,68 +28,6 @@ type pixBank struct {
 	get        application.GetExternalTransfer
 }
 
-func newPixBank(t *testing.T) pixBank {
-	t.Helper()
-
-	w := newWrites(t)
-	unitOfWork := postgres.NewUnitOfWork(w.bank.pool)
-	publication := application.NewNotifyAfterCommit(postgres.NewNotifyPublisher(w.bank.pool))
-
-	return pixBank{
-		writes: w, unitOfWork: unitOfWork, create: application.NewCreatePixOut(application.RowLocker{}, publication),
-		webhook: application.NewNaiveWebhook(unitOfWork, application.OverwriteTransitions{}), get: application.NewGetExternalTransfer(postgres.NewLedgerStore(w.bank.pool)),
-	}
-}
-
-func (p pixBank) createPixOut(t *testing.T, account ledger.AccountID, cents int64) application.PixOutResult {
-	t.Helper()
-
-	key := newKey()
-	input := application.PixOutInput{AccountID: account, Amount: amountOf(t, money.Cents(cents)), DestinationKey: "dest-0001", Write: application.WriteContext{Key: key, CorrelationID: string(key)}}
-
-	var result application.PixOutResult
-
-	err := p.unitOfWork.Run(t.Context(), func(ctx context.Context, stores application.Stores) error {
-		operationID, err := ledger.NewOperationID()
-		if err != nil {
-			return err
-		}
-
-		result, err = p.create.Apply(ctx, stores, operationID, input)
-
-		return err
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return result
-}
-
-func (p pixBank) status(t *testing.T, id transfer.ID) application.ExternalTransferView {
-	t.Helper()
-
-	view, err := p.get.Execute(t.Context(), id)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return view
-}
-
-// fakePartner answers every submission with the same status code.
-func fakePartner(t *testing.T, status int, calls *atomic.Int32) partnerclient.Client {
-	t.Helper()
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		calls.Add(1)
-		w.WriteHeader(status)
-	}))
-	t.Cleanup(server.Close)
-
-	return partnerclient.New(server.URL, "centavo-robust")
-}
-
 func TestPixOut_ReservesTheAmountInTransit(t *testing.T) {
 	fixture := newPixBank(t)
 	account := fixture.bank.newCustomer(t)
@@ -249,4 +187,66 @@ func TestNotify_ReachesAListener(t *testing.T) {
 			t.Fatal("no notification arrived; the listener may not be listening yet")
 		}
 	}
+}
+
+func newPixBank(t *testing.T) pixBank {
+	t.Helper()
+
+	w := newWrites(t)
+	unitOfWork := postgres.NewUnitOfWork(w.bank.pool)
+	publication := application.NewNotifyAfterCommit(postgres.NewNotifyPublisher(w.bank.pool))
+
+	return pixBank{
+		writes: w, unitOfWork: unitOfWork, create: application.NewCreatePixOut(application.RowLocker{}, publication),
+		webhook: application.NewNaiveWebhook(unitOfWork, application.OverwriteTransitions{}), get: application.NewGetExternalTransfer(postgres.NewLedgerStore(w.bank.pool)),
+	}
+}
+
+func (p pixBank) createPixOut(t *testing.T, account ledger.AccountID, cents int64) application.PixOutResult {
+	t.Helper()
+
+	key := newKey()
+	input := application.PixOutInput{AccountID: account, Amount: amountOf(t, money.Cents(cents)), DestinationKey: "dest-0001", Write: application.WriteContext{Key: key, CorrelationID: string(key)}}
+
+	var result application.PixOutResult
+
+	err := p.unitOfWork.Run(t.Context(), func(ctx context.Context, stores application.Stores) error {
+		operationID, err := ledger.NewOperationID()
+		if err != nil {
+			return err
+		}
+
+		result, err = p.create.Apply(ctx, stores, operationID, input)
+
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return result
+}
+
+func (p pixBank) status(t *testing.T, id transfer.ID) application.ExternalTransferView {
+	t.Helper()
+
+	view, err := p.get.Execute(t.Context(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return view
+}
+
+// fakePartner answers every submission with the same status code.
+func fakePartner(t *testing.T, status int, calls *atomic.Int32) partnerclient.Client {
+	t.Helper()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(status)
+	}))
+	t.Cleanup(server.Close)
+
+	return partnerclient.New(server.URL, "centavo-robust")
 }

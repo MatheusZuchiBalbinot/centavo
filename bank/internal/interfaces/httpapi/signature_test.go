@@ -9,15 +9,6 @@ import (
 	"time"
 )
 
-func sign(secret []byte, at time.Time, body []byte) string {
-	timestamp := strconv.FormatInt(at.Unix(), 10)
-	mac := hmac.New(sha256.New, secret)
-	_, _ = mac.Write([]byte(timestamp + "."))
-	_, _ = mac.Write(body)
-
-	return "t=" + timestamp + ",v1=" + hex.EncodeToString(mac.Sum(nil))
-}
-
 func TestVerifySignature(t *testing.T) {
 	secret := []byte("0123456789abcdef0123456789abcdef")
 	body := []byte(`{"event_id":"evt_1","type":"transfer.settled"}`)
@@ -73,4 +64,13 @@ func FuzzVerifySignature(f *testing.F) {
 			t.Fatalf("the signature of %q verified another body", body)
 		}
 	})
+}
+
+func sign(secret []byte, at time.Time, body []byte) string {
+	timestamp := strconv.FormatInt(at.Unix(), 10)
+	mac := hmac.New(sha256.New, secret)
+	_, _ = mac.Write([]byte(timestamp + "."))
+	_, _ = mac.Write(body)
+
+	return "t=" + timestamp + ",v1=" + hex.EncodeToString(mac.Sum(nil))
 }

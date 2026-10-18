@@ -68,6 +68,41 @@ type pixOutResponse struct {
 	CreatedAt  time.Time           `json:"created_at"`
 }
 
+// pendingPublication carries the transfer a write created to the step after
+// its commit; a replayed write creates nothing and publishes nothing.
+type pendingPublication struct {
+	transferID *transfer.ID
+}
+
+type transitionResponse struct {
+	Seq       int                         `json:"seq"`
+	From      *transfer.Status            `json:"from"`
+	To        transfer.Status             `json:"to"`
+	Cause     application.TransitionCause `json:"cause"`
+	CreatedAt time.Time                   `json:"created_at"`
+}
+
+type externalTransferResponse struct {
+	TransferID  string               `json:"transfer_id"`
+	EndToEndID  transfer.EndToEndID  `json:"end_to_end_id"`
+	AccountID   string               `json:"account_id"`
+	AmountCents int64                `json:"amount_cents"`
+	Status      transfer.Status      `json:"status"`
+	StatusSeq   int                  `json:"status_seq"`
+	FailureCode string               `json:"failure_code,omitempty"`
+	Transitions []transitionResponse `json:"transitions"`
+}
+
+type webhookEvent struct {
+	EventID     string                `json:"event_id"`
+	Type        application.EventType `json:"type"`
+	EndToEndID  transfer.EndToEndID   `json:"end_to_end_id"`
+	AmountCents int64                 `json:"amount_cents"`
+	Sequence    int                   `json:"sequence"`
+	Reason      string                `json:"reason"`
+	AccountID   string                `json:"destination_account_id"`
+}
+
 func (a apiHandlers) pixOut(w http.ResponseWriter, r *http.Request) {
 	body, err := readBody(w, r)
 	if err != nil {
@@ -85,12 +120,6 @@ func (a apiHandlers) pixOut(w http.ResponseWriter, r *http.Request) {
 
 	publication := &pendingPublication{}
 	a.runWrite(w, r, writeRequest{endpoint: pixOutEndpoint, body: body, apply: a.applyPixOut(input, publication), afterCommit: a.publish(publication)})
-}
-
-// pendingPublication carries the transfer a write created to the step after
-// its commit; a replayed write creates nothing and publishes nothing.
-type pendingPublication struct {
-	transferID *transfer.ID
 }
 
 func (a apiHandlers) applyPixOut(input application.PixOutInput, publication *pendingPublication) applyFunc {
@@ -144,25 +173,6 @@ func pixOutInputOf(r *http.Request, body []byte) (application.PixOutInput, error
 	return application.PixOutInput{AccountID: accountID, Amount: amount, DestinationKey: destination, Write: writeContextOf(r)}, nil
 }
 
-type transitionResponse struct {
-	Seq       int                         `json:"seq"`
-	From      *transfer.Status            `json:"from"`
-	To        transfer.Status             `json:"to"`
-	Cause     application.TransitionCause `json:"cause"`
-	CreatedAt time.Time                   `json:"created_at"`
-}
-
-type externalTransferResponse struct {
-	TransferID  string               `json:"transfer_id"`
-	EndToEndID  transfer.EndToEndID  `json:"end_to_end_id"`
-	AccountID   string               `json:"account_id"`
-	AmountCents int64                `json:"amount_cents"`
-	Status      transfer.Status      `json:"status"`
-	StatusSeq   int                  `json:"status_seq"`
-	FailureCode string               `json:"failure_code,omitempty"`
-	Transitions []transitionResponse `json:"transitions"`
-}
-
 func (a apiHandlers) getPixOut(w http.ResponseWriter, r *http.Request) {
 	id, err := transfer.ParseID(r.PathValue("id"))
 	if err != nil {
@@ -195,16 +205,6 @@ func newExternalTransferResponse(view application.ExternalTransferView) external
 		AmountCents: int64(external.Amount.Cents()), Status: external.Status, StatusSeq: external.StatusSeq,
 		FailureCode: external.FailureCode, Transitions: transitions,
 	}
-}
-
-type webhookEvent struct {
-	EventID     string                `json:"event_id"`
-	Type        application.EventType `json:"type"`
-	EndToEndID  transfer.EndToEndID   `json:"end_to_end_id"`
-	AmountCents int64                 `json:"amount_cents"`
-	Sequence    int                   `json:"sequence"`
-	Reason      string                `json:"reason"`
-	AccountID   string                `json:"destination_account_id"`
 }
 
 // webhook takes a partner event. Only a valid signature gets in; what it

@@ -20,6 +20,10 @@ const (
 	maxModeBytes = 8 << 10
 )
 
+type controls struct {
+	registry *modes.Registry
+}
+
 // Handler serves PUT and DELETE /chaos/modes behind the chaos token.
 func Handler(token string, registry *modes.Registry) http.Handler {
 	controls := controls{registry: registry}
@@ -29,10 +33,6 @@ func Handler(token string, registry *modes.Registry) http.Handler {
 	mux.HandleFunc("DELETE "+modesRoute, controls.clear)
 
 	return requireToken(token, mux)
-}
-
-type controls struct {
-	registry *modes.Registry
 }
 
 func (c controls) set(w http.ResponseWriter, r *http.Request) {

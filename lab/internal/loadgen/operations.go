@@ -11,11 +11,11 @@ import (
 	"centavo/lab/internal/history"
 )
 
+var errMissingField = errors.New("response is missing an expected field")
+
 // parseFunc turns a 2xx body into the value history.jsonl records; it fails
 // when an expected field is missing, which the client treats as a cut response.
 type parseFunc func(body []byte, status int) (json.RawMessage, error)
-
-var errMissingField = errors.New("response is missing an expected field")
 
 // operation is one client operation, ready to send and to record.
 type operation struct {
@@ -87,6 +87,49 @@ type readStatementArgs struct {
 	AccountID accountID `json:"account_id"`
 	AfterSeq  int64     `json:"after_seq"`
 	Limit     int       `json:"limit"`
+}
+
+type createAccountResult struct {
+	AccountID  accountID `json:"account_id"`
+	HTTPStatus int       `json:"http_status"`
+}
+
+type depositResult struct {
+	TransactionID string `json:"transaction_id"`
+	BalanceCents  int64  `json:"balance_cents"`
+	HTTPStatus    int    `json:"http_status"`
+}
+
+type transferResult struct {
+	TransactionID    string `json:"transaction_id"`
+	FromBalanceCents int64  `json:"from_balance_cents"`
+	HTTPStatus       int    `json:"http_status"`
+}
+
+type readBalanceResult struct {
+	BalanceCents int64 `json:"balance_cents"`
+	HTTPStatus   int   `json:"http_status"`
+}
+
+type pixOutResult struct {
+	TransferID string `json:"transfer_id"`
+	EndToEndID string `json:"end_to_end_id"`
+	Status     string `json:"status"`
+	HTTPStatus int    `json:"http_status"`
+}
+
+type pixInResult struct {
+	IsAccepted bool `json:"accepted"`
+	IsNew      bool `json:"new"`
+	HTTPStatus int  `json:"http_status"`
+}
+
+// readStatementResult keeps the page as the bank sent it: the checker verifies
+// contiguous positions and chained balances on each page (I4).
+type readStatementResult struct {
+	Entries      json.RawMessage `json:"entries"`
+	NextAfterSeq *int64          `json:"next_after_seq"`
+	HTTPStatus   int             `json:"http_status"`
 }
 
 func createAccountOperation(arguments createAccountArgs) (operation, error) {
@@ -214,11 +257,6 @@ func (o operation) reusingKey(key string) (operation, error) {
 	return o, nil
 }
 
-type createAccountResult struct {
-	AccountID  accountID `json:"account_id"`
-	HTTPStatus int       `json:"http_status"`
-}
-
 func parseCreateAccount(body []byte, status int) (json.RawMessage, error) {
 	var response struct {
 		AccountID accountID `json:"account_id"`
@@ -234,12 +272,6 @@ func parseCreateAccount(body []byte, status int) (json.RawMessage, error) {
 	}
 
 	return json.Marshal(createAccountResult{AccountID: response.AccountID, HTTPStatus: status})
-}
-
-type depositResult struct {
-	TransactionID string `json:"transaction_id"`
-	BalanceCents  int64  `json:"balance_cents"`
-	HTTPStatus    int    `json:"http_status"`
 }
 
 func parseDeposit(body []byte, status int) (json.RawMessage, error) {
@@ -261,12 +293,6 @@ func parseDeposit(body []byte, status int) (json.RawMessage, error) {
 	return json.Marshal(depositResult{TransactionID: response.TransactionID, BalanceCents: *response.BalanceCents, HTTPStatus: status})
 }
 
-type transferResult struct {
-	TransactionID    string `json:"transaction_id"`
-	FromBalanceCents int64  `json:"from_balance_cents"`
-	HTTPStatus       int    `json:"http_status"`
-}
-
 func parseTransfer(body []byte, status int) (json.RawMessage, error) {
 	var response struct {
 		TransactionID    string `json:"transaction_id"`
@@ -286,11 +312,6 @@ func parseTransfer(body []byte, status int) (json.RawMessage, error) {
 	return json.Marshal(transferResult{TransactionID: response.TransactionID, FromBalanceCents: *response.FromBalanceCents, HTTPStatus: status})
 }
 
-type readBalanceResult struct {
-	BalanceCents int64 `json:"balance_cents"`
-	HTTPStatus   int   `json:"http_status"`
-}
-
 func parseReadBalance(body []byte, status int) (json.RawMessage, error) {
 	var response struct {
 		BalanceCents *int64 `json:"balance_cents"`
@@ -306,13 +327,6 @@ func parseReadBalance(body []byte, status int) (json.RawMessage, error) {
 	}
 
 	return json.Marshal(readBalanceResult{BalanceCents: *response.BalanceCents, HTTPStatus: status})
-}
-
-type pixOutResult struct {
-	TransferID string `json:"transfer_id"`
-	EndToEndID string `json:"end_to_end_id"`
-	Status     string `json:"status"`
-	HTTPStatus int    `json:"http_status"`
 }
 
 func parsePixOut(body []byte, status int) (json.RawMessage, error) {
@@ -331,12 +345,6 @@ func parsePixOut(body []byte, status int) (json.RawMessage, error) {
 	response.HTTPStatus = status
 
 	return json.Marshal(response)
-}
-
-type pixInResult struct {
-	IsAccepted bool `json:"accepted"`
-	IsNew      bool `json:"new"`
-	HTTPStatus int  `json:"http_status"`
 }
 
 func parsePixIn(body []byte, status int) (json.RawMessage, error) {
@@ -376,14 +384,6 @@ func parseReadPixOut(body []byte, status int) (json.RawMessage, error) {
 	}
 
 	return json.Marshal(response)
-}
-
-// readStatementResult keeps the page as the bank sent it: the checker verifies
-// contiguous positions and chained balances on each page (I4).
-type readStatementResult struct {
-	Entries      json.RawMessage `json:"entries"`
-	NextAfterSeq *int64          `json:"next_after_seq"`
-	HTTPStatus   int             `json:"http_status"`
 }
 
 func parseReadStatement(body []byte, status int) (json.RawMessage, error) {

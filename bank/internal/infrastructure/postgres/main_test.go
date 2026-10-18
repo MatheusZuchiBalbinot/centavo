@@ -38,6 +38,15 @@ type testDatabase struct {
 	appURL      string
 }
 
+// schema says which defense constraints the test database has.
+type schema struct {
+	hasAtomicLedger   bool
+	hasBalanceLocking bool
+	hasIdempotency    bool
+	hasInbox          bool
+	hasFencing        bool
+}
+
 func TestMain(m *testing.M) {
 	os.Exit(runTests(m))
 }
@@ -134,15 +143,6 @@ func migrate(ctx context.Context) error {
 // (robust) or takes them out.
 func migrateDefenses(ctx context.Context, isRobust bool) error {
 	return migrateSchema(ctx, schema{hasAtomicLedger: isRobust, hasBalanceLocking: isRobust, hasIdempotency: isRobust, hasInbox: isRobust, hasFencing: isRobust})
-}
-
-// schema says which defense constraints the test database has.
-type schema struct {
-	hasAtomicLedger   bool
-	hasBalanceLocking bool
-	hasIdempotency    bool
-	hasInbox          bool
-	hasFencing        bool
 }
 
 func migrateSchema(ctx context.Context, wanted schema) error {

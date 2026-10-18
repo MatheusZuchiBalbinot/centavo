@@ -9,9 +9,6 @@ import (
 	"strings"
 )
 
-// Env is the deployment environment the process declares it runs in.
-type Env string
-
 // The environments the partner knows.
 const (
 	EnvLocal      Env = "local"
@@ -40,6 +37,9 @@ var (
 	ErrWeakSecret             = errors.New("PARTNER_WEBHOOK_SECRET needs at least 32 characters")
 	ErrWeakChaosToken         = errors.New("the chaoslab build needs CENTAVO_CHAOS_TOKEN with at least 32 characters")
 )
+
+// Env is the deployment environment the process declares it runs in.
+type Env string
 
 // LookupFunc reads one environment variable; os.LookupEnv satisfies it.
 type LookupFunc func(key string) (string, bool)

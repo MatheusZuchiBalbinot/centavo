@@ -45,6 +45,19 @@ type StateMachine interface {
 // the transition requires.
 type GuardedTransitions struct{}
 
+// OverwriteTransitions is the naive variant: it writes the new status whatever
+// the current one is and posts what the target implies, without asking where
+// the transfer comes from.
+type OverwriteTransitions struct{}
+
+type transitionStep struct {
+	external ExternalTransfer
+	from     transfer.Status
+	seq      int
+	posting  transfer.Posting
+	command  TransitionCommand
+}
+
 // Move applies the transition or refuses it.
 func (GuardedTransitions) Move(ctx context.Context, stores TransitionStores, command TransitionCommand) error {
 	external, err := stores.LockExternalTransfer(ctx, command.TransferID)
@@ -73,11 +86,6 @@ func (GuardedTransitions) Move(ctx context.Context, stores TransitionStores, com
 	return recordStep(ctx, stores, step)
 }
 
-// OverwriteTransitions is the naive variant: it writes the new status whatever
-// the current one is and posts what the target implies, without asking where
-// the transfer comes from.
-type OverwriteTransitions struct{}
-
 // Move overwrites the status.
 func (OverwriteTransitions) Move(ctx context.Context, stores TransitionStores, command TransitionCommand) error {
 	external, _, err := stores.FindExternalTransfer(ctx, command.TransferID)
@@ -95,14 +103,6 @@ func (OverwriteTransitions) Move(ctx context.Context, stores TransitionStores, c
 	step := transitionStep{external: external, from: from, seq: seq, posting: postingTowards(command.To), command: command}
 
 	return recordStep(ctx, stores, step)
-}
-
-type transitionStep struct {
-	external ExternalTransfer
-	from     transfer.Status
-	seq      int
-	posting  transfer.Posting
-	command  TransitionCommand
 }
 
 // recordStep posts the step's ledger transaction, if any, and appends it to

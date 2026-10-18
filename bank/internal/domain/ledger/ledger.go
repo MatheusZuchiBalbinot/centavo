@@ -14,18 +14,6 @@ import (
 	"centavo/bank/internal/domain/money"
 )
 
-// AccountID identifies an account.
-type AccountID uuid.UUID
-
-// TransactionID identifies a ledger transaction.
-type TransactionID uuid.UUID
-
-// OperationID identifies one client write as the bank executed it.
-type OperationID uuid.UUID
-
-// AccountKind tells customer accounts (floor at zero) from system accounts.
-type AccountKind string
-
 // The kinds of account.
 const (
 	AccountKindCustomer AccountKind = "customer"
@@ -41,9 +29,6 @@ var (
 	suspenseAccountID          = AccountID(uuid.MustParse("00000000-0000-7000-8000-000000000004"))
 )
 
-// TransactionKind is the kind of a ledger transaction.
-type TransactionKind string
-
 // The kinds of ledger transaction.
 const (
 	TransactionKindDeposit          TransactionKind = "deposit"
@@ -58,9 +43,6 @@ const (
 	TransactionKindAdjustment TransactionKind = "reconciliation_adjustment"
 )
 
-// Seq is the position of an entry within its account: 1, 2, 3...
-type Seq int64
-
 const maxHolderNameLength = 120
 
 // Errors of the ledger's rules.
@@ -72,6 +54,24 @@ var (
 	ErrInvalidAccountID   = errors.New("account id must be a UUID")
 	errIDGenerationFailed = errors.New("generating id")
 )
+
+// AccountID identifies an account.
+type AccountID uuid.UUID
+
+// TransactionID identifies a ledger transaction.
+type TransactionID uuid.UUID
+
+// OperationID identifies one client write as the bank executed it.
+type OperationID uuid.UUID
+
+// AccountKind tells customer accounts (floor at zero) from system accounts.
+type AccountKind string
+
+// TransactionKind is the kind of a ledger transaction.
+type TransactionKind string
+
+// Seq is the position of an entry within its account: 1, 2, 3...
+type Seq int64
 
 // Account is a customer or system account.
 type Account struct {
@@ -179,9 +179,11 @@ func ParseAccountID(raw string) (AccountID, error) {
 	return AccountID(id), nil
 }
 
-func (id AccountID) String() string     { return uuid.UUID(id).String() }
+func (id AccountID) String() string { return uuid.UUID(id).String() }
+
 func (id TransactionID) String() string { return uuid.UUID(id).String() }
-func (id OperationID) String() string   { return uuid.UUID(id).String() }
+
+func (id OperationID) String() string { return uuid.UUID(id).String() }
 
 // ParseHolderName trims and validates the name of a customer.
 func ParseHolderName(raw string) (string, error) {

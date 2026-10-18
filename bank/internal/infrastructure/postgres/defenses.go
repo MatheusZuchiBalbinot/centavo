@@ -21,6 +21,8 @@ const defenseVersionTablePrefix = "goose_defense_"
 // which defense constraints exist; running anyway would test the wrong thing.
 var ErrSchemaProfileMismatch = errors.New("the database schema does not match the defense profile; run bank migrate with the same CENTAVO_DEFENSES")
 
+const appliedDefenseSQL = `SELECT to_regclass($1) IS NOT NULL`
+
 // DefenseMigrations are the constraints of one defense and whether the
 // profile wants them.
 type DefenseMigrations struct {
@@ -75,22 +77,6 @@ func MigrateDefenses(ctx context.Context, databaseURL string, defenses []Defense
 	return nil
 }
 
-// applyDefense runs every migration of a defense that is on.
-func applyDefense(ctx context.Context, provider *goose.Provider) error {
-	_, err := provider.Up(ctx)
-
-	return err
-}
-
-// revertDefense undoes every migration of a defense that is off.
-func revertDefense(ctx context.Context, provider *goose.Provider) error {
-	_, err := provider.DownTo(ctx, 0)
-
-	return err
-}
-
-const appliedDefenseSQL = `SELECT to_regclass($1) IS NOT NULL`
-
 // CheckDefenseSchema refuses a process whose profile differs from the
 // database's: with balance_locking off in the database but on in the process,
 // for instance, a lost update would still be caught by the missing constraint
@@ -108,6 +94,20 @@ func CheckDefenseSchema(ctx context.Context, pool *pgxpool.Pool, defenses []Defe
 	}
 
 	return nil
+}
+
+// applyDefense runs every migration of a defense that is on.
+func applyDefense(ctx context.Context, provider *goose.Provider) error {
+	_, err := provider.Up(ctx)
+
+	return err
+}
+
+// revertDefense undoes every migration of a defense that is off.
+func revertDefense(ctx context.Context, provider *goose.Provider) error {
+	_, err := provider.DownTo(ctx, 0)
+
+	return err
 }
 
 func isDefenseApplied(ctx context.Context, pool *pgxpool.Pool, name string) (bool, error) {

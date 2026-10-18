@@ -23,6 +23,15 @@ type NotifyPublisher struct {
 	store LedgerStore
 }
 
+// Listener holds a connection with LISTEN on Channel and calls Handle for
+// every notification.
+type Listener struct {
+	Pool    *pgxpool.Pool
+	Channel string
+	Handle  func(ctx context.Context, payload string)
+	Logger  *slog.Logger
+}
+
 // NewNotifyPublisher wraps a pool.
 func NewNotifyPublisher(pool *pgxpool.Pool) NotifyPublisher {
 	return NotifyPublisher{store: NewLedgerStore(pool)}
@@ -31,15 +40,6 @@ func NewNotifyPublisher(pool *pgxpool.Pool) NotifyPublisher {
 // Publish sends the transfer id on the pix_out channel.
 func (p NotifyPublisher) Publish(ctx context.Context, id transfer.ID) error {
 	return p.store.Notify(ctx, PixOutChannel, id.String())
-}
-
-// Listener holds a connection with LISTEN on Channel and calls Handle for
-// every notification.
-type Listener struct {
-	Pool    *pgxpool.Pool
-	Channel string
-	Handle  func(ctx context.Context, payload string)
-	Logger  *slog.Logger
 }
 
 // Run listens, reconnecting until ctx ends. Notifications sent while the

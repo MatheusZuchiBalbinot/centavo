@@ -12,15 +12,37 @@ import (
 // rule for: the batch stops rather than move money by default.
 var errUnknownTransferStatus = errors.New("reconciliation has no rule for the transfer's status")
 
-// StatementKind is a line of the partner's statement.
-type StatementKind string
-
 // The kinds of a partner statement line.
 const (
 	StatementSettlement StatementKind = "settlement"
 	StatementReturn     StatementKind = "return"
 	StatementIncoming   StatementKind = "incoming"
 )
+
+// The verdicts of reconciling one statement line.
+const (
+	DivergenceMatched           Divergence = "matched"
+	DivergenceMissingSettlement Divergence = "missing_settlement"
+	DivergenceMissingReturn     Divergence = "missing_return"
+	DivergenceMissingIncoming   Divergence = "missing_incoming"
+	DivergenceDuplicate         Divergence = "duplicate_at_partner"
+	DivergenceAmountMismatch    Divergence = "amount_mismatch"
+	DivergenceUnknownEntry      Divergence = "unknown_entry"
+)
+
+// The actions recorded with each item.
+const (
+	actionNone     ReconciliationAction = "none"
+	actionWalk     ReconciliationAction = "walk_to_partner_status"
+	actionCredit   ReconciliationAction = "credit_incoming"
+	actionSuspense ReconciliationAction = "suspense"
+	// actionWalkAndSuspense settles the amount the bank knows and books the
+	// rest of what the partner moved to suspense.
+	actionWalkAndSuspense ReconciliationAction = "walk_and_suspense"
+)
+
+// StatementKind is a line of the partner's statement.
+type StatementKind string
 
 // StatementEntry is one line of the partner's statement, numbered by seq.
 type StatementEntry struct {
@@ -38,30 +60,8 @@ type StatementEntry struct {
 // Divergence is how a statement entry compares with the ledger.
 type Divergence string
 
-// The verdicts of reconciling one statement line.
-const (
-	DivergenceMatched           Divergence = "matched"
-	DivergenceMissingSettlement Divergence = "missing_settlement"
-	DivergenceMissingReturn     Divergence = "missing_return"
-	DivergenceMissingIncoming   Divergence = "missing_incoming"
-	DivergenceDuplicate         Divergence = "duplicate_at_partner"
-	DivergenceAmountMismatch    Divergence = "amount_mismatch"
-	DivergenceUnknownEntry      Divergence = "unknown_entry"
-)
-
 // ReconciliationAction is what the reconciler did about one statement entry.
 type ReconciliationAction string
-
-// The actions recorded with each item.
-const (
-	actionNone     ReconciliationAction = "none"
-	actionWalk     ReconciliationAction = "walk_to_partner_status"
-	actionCredit   ReconciliationAction = "credit_incoming"
-	actionSuspense ReconciliationAction = "suspense"
-	// actionWalkAndSuspense settles the amount the bank knows and books the
-	// rest of what the partner moved to suspense.
-	actionWalkAndSuspense ReconciliationAction = "walk_and_suspense"
-)
 
 // entryFacts are what the ledger says about one statement entry.
 type entryFacts struct {

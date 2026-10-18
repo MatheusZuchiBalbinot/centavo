@@ -19,24 +19,6 @@ var historyLines = strings.Join([]string{
 	`{"index":2,"round":"r0001","time_ns":1500000000,"wall":"x","process":"nemesis","type":"info","f":"kill","value":{"target":"bank-api"}}`,
 }, "\n") + "\n"
 
-func writeLiveRound(t *testing.T, roundsDir, round, report string) {
-	t.Helper()
-
-	writeRound(t, roundsDir, round, report)
-	dir := filepath.Join(roundsDir, round)
-
-	files := map[string]string{
-		"round.json": `{"round":"` + round + `","scenario":"smoke","seed":"0x5eed"}`, "history.jsonl": strings.ReplaceAll(historyLines, "r0001", round),
-	}
-
-	for name, content := range files {
-		err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600)
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-}
-
 type liveBody struct {
 	Current *struct {
 		Round   string `json:"round"`
@@ -56,23 +38,6 @@ type liveBody struct {
 		Round      string `json:"round"`
 		Operations int    `json:"operations"`
 	} `json:"rounds"`
-}
-
-func get(t *testing.T, handler http.Handler, path string, into any) int {
-	t.Helper()
-
-	recorder := httptest.NewRecorder()
-	handler.ServeHTTP(recorder, httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil))
-
-	shouldDecode := into != nil && recorder.Code == http.StatusOK
-	if shouldDecode {
-		err := json.Unmarshal(recorder.Body.Bytes(), into)
-		if err != nil {
-			t.Fatalf("%s body %q: %v", path, recorder.Body, err)
-		}
-	}
-
-	return recorder.Code
 }
 
 func TestLive_FollowsTheCurrentRoundAndAddsUpTheFinishedOnes(t *testing.T) {
@@ -132,6 +97,41 @@ func TestReplay_ServesOnlyRoundDirectories(t *testing.T) {
 			t.Fatalf("%s answered %d", path, code)
 		}
 	}
+}
+
+func writeLiveRound(t *testing.T, roundsDir, round, report string) {
+	t.Helper()
+
+	writeRound(t, roundsDir, round, report)
+	dir := filepath.Join(roundsDir, round)
+
+	files := map[string]string{
+		"round.json": `{"round":"` + round + `","scenario":"smoke","seed":"0x5eed"}`, "history.jsonl": strings.ReplaceAll(historyLines, "r0001", round),
+	}
+
+	for name, content := range files {
+		err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func get(t *testing.T, handler http.Handler, path string, into any) int {
+	t.Helper()
+
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil))
+
+	shouldDecode := into != nil && recorder.Code == http.StatusOK
+	if shouldDecode {
+		err := json.Unmarshal(recorder.Body.Bytes(), into)
+		if err != nil {
+			t.Fatalf("%s body %q: %v", path, recorder.Body, err)
+		}
+	}
+
+	return recorder.Code
 }
 
 func appendTo(t *testing.T, path, content string) {

@@ -37,8 +37,6 @@ import (
 	"centavo/bank/migrations"
 )
 
-type role string
-
 const (
 	roleAPI         role = "api"
 	roleWorker      role = "worker"
@@ -65,6 +63,32 @@ const (
 )
 
 var errUnhealthy = errors.New("health endpoint did not answer 200")
+
+type role string
+
+// naiveVariants are the naive strategies of a chaoslab build; the production
+// build has none (naive_production.go).
+type naiveVariants struct {
+	unitOfWork  application.UnitOfWork
+	locker      application.Locker
+	idempotency application.IdempotencyStrategy
+}
+
+// partner is what the worker calls on the partner: sends and status queries.
+type partner interface {
+	application.PartnerSubmitter
+	application.PartnerStatusReader
+	application.PartnerStatementReader
+}
+
+// sagaDependencies are shared by the worker's PIX loops.
+type sagaDependencies struct {
+	unitOfWork application.UnitOfWork
+	machine    application.StateMachine
+	partner    partner
+	owner      string
+	logger     *slog.Logger
+}
 
 func main() {
 	os.Exit(run(os.Args[1:]))
@@ -251,14 +275,6 @@ func newIdempotency(pool *pgxpool.Pool, profile defenses.Profile, unitOfWork app
 	return naive.idempotency, nil
 }
 
-// naiveVariants are the naive strategies of a chaoslab build; the production
-// build has none (naive_production.go).
-type naiveVariants struct {
-	unitOfWork  application.UnitOfWork
-	locker      application.Locker
-	idempotency application.IdempotencyStrategy
-}
-
 // newMoneyDependencies is the composition root: the robust strategy unless the
 // profile turns its defense off, in which case the naive variant of the
 // chaoslab build.
@@ -324,22 +340,6 @@ func serveWorker(ctx context.Context, configuration config.Config, logger *slog.
 	logger.InfoContext(ctx, "serving", "admin_addr", adminAddr)
 
 	return httpserver.Run(ctx, servers...)
-}
-
-// partner is what the worker calls on the partner: sends and status queries.
-type partner interface {
-	application.PartnerSubmitter
-	application.PartnerStatusReader
-	application.PartnerStatementReader
-}
-
-// sagaDependencies are shared by the worker's PIX loops.
-type sagaDependencies struct {
-	unitOfWork application.UnitOfWork
-	machine    application.StateMachine
-	partner    partner
-	owner      string
-	logger     *slog.Logger
 }
 
 // startSaga starts the worker's PIX loops, each in the variant the profile

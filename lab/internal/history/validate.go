@@ -31,13 +31,6 @@ type Report struct {
 	Violations  []Violation
 }
 
-// IsWellFormed reports whether every rule, holds. Open operations are allowed:
-// they are what a crashed lab leaves behind, and the caller decides whether
-// they are acceptable.
-func (r Report) IsWellFormed() bool {
-	return len(r.Violations) == 0
-}
-
 type openOperation struct {
 	process  Process
 	function Function
@@ -51,6 +44,13 @@ type validator struct {
 	closed         map[string]bool
 	busyProcesses  map[Process]string
 	retiredProcess map[Process]bool
+}
+
+// IsWellFormed reports whether every rule, holds. Open operations are allowed:
+// they are what a crashed lab leaves behind, and the caller decides whether
+// they are acceptable.
+func (r Report) IsWellFormed() bool {
+	return len(r.Violations) == 0
 }
 
 // Validate reads a whole history and checks its well-formedness.

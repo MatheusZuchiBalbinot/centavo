@@ -16,13 +16,68 @@ import (
 	"centavo/bank/internal/domain/money"
 )
 
-// querier is what both a pool and a transaction offer: on a pool every
-// statement is its own autocommit, inside a transaction they commit together.
-type querier interface {
-	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
-	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
-	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
-}
+const lockPositionsSQL = `
+SELECT account_id
+FROM account_balances
+WHERE account_id = ANY($1::uuid[])
+ORDER BY account_id
+FOR UPDATE`
+
+// customerFloorCents is the lowest a customer balance may go.
+const customerFloorCents = 0
+
+const createCustomerSQL = `
+WITH account AS (
+    INSERT INTO accounts (id, kind, holder_name)
+    VALUES ($1, 'customer', $2)
+    RETURNING id, created_at
+), balance AS (
+    INSERT INTO account_balances (account_id, min_balance_cents)
+    SELECT id, $3 FROM account
+)
+SELECT created_at FROM account`
+
+const findCustomerSQL = `
+SELECT a.holder_name, a.created_at, b.balance_cents
+FROM accounts a
+JOIN account_balances b ON b.account_id = a.id
+WHERE a.id = $1 AND a.kind = 'customer'`
+
+const readCustomerPositionSQL = `
+SELECT b.balance_cents, b.last_entry_seq
+FROM account_balances b
+JOIN accounts a ON a.id = b.account_id
+WHERE b.account_id = $1 AND a.kind = 'customer'`
+
+const overwritePositionSQL = `
+UPDATE account_balances
+SET balance_cents = $2, last_entry_seq = $3, updated_at = now()
+WHERE account_id = $1`
+
+const incrementBalanceSQL = `
+UPDATE account_balances
+SET balance_cents = balance_cents + $2, last_entry_seq = last_entry_seq + 1, updated_at = now()
+WHERE account_id = $1
+RETURNING balance_cents, last_entry_seq`
+
+const insertTransactionSQL = `
+INSERT INTO ledger_transactions (id, kind, operation_id, client_ref, correlation_id, external_transfer_id, incoming_transfer_id, reconciliation_item_id)
+VALUES ($1, $2, $3, nullif($4, ''), $5, $6, $7, $8)
+RETURNING created_at`
+
+const insertEntrySQL = `
+INSERT INTO ledger_entries (transaction_id, account_id, amount_cents, account_seq, balance_after_cents)
+VALUES ($1, $2, $3, $4, $5)`
+
+// The id breaks ties: without the balance_locking defense, two entries can
+// share a position.
+const readStatementSQL = `
+SELECT e.account_seq, e.transaction_id, t.kind, e.amount_cents, e.balance_after_cents, e.created_at
+FROM ledger_entries e
+JOIN ledger_transactions t ON t.id = e.transaction_id
+WHERE e.account_id = $1 AND e.account_seq > $2
+ORDER BY e.account_seq, e.id
+LIMIT $3`
 
 // LedgerStore implements the account, position and ledger interfaces of the
 // application layer. Every method is a single statement; whether statements
@@ -34,6 +89,19 @@ type LedgerStore struct {
 	outboxStore
 	leaseStore
 	reconciliationStore
+}
+
+// querier is what both a pool and a transaction offer: on a pool every
+// statement is its own autocommit, inside a transaction they commit together.
+type querier interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+// ledgerRows keeps balances, positions, transactions and entries.
+type ledgerRows struct {
+	db querier
 }
 
 // NewLedgerStore runs every statement in its own autocommit on the pool.
@@ -49,18 +117,6 @@ func storesOn(db querier) LedgerStore {
 		outboxStore: outboxStore{db: db}, leaseStore: leaseStore{db: db}, reconciliationStore: reconciliationStore{db: db},
 	}
 }
-
-// ledgerRows keeps balances, positions, transactions and entries.
-type ledgerRows struct {
-	db querier
-}
-
-const lockPositionsSQL = `
-SELECT account_id
-FROM account_balances
-WHERE account_id = ANY($1::uuid[])
-ORDER BY account_id
-FOR UPDATE`
 
 // LockPositions takes the row locks of the accounts' balances in id order, so
 // two transfers in opposite directions never wait for each other in a cycle.
@@ -86,20 +142,6 @@ func (s ledgerRows) LockPositions(ctx context.Context, ids []ledger.AccountID) e
 	return nil
 }
 
-// customerFloorCents is the lowest a customer balance may go.
-const customerFloorCents = 0
-
-const createCustomerSQL = `
-WITH account AS (
-    INSERT INTO accounts (id, kind, holder_name)
-    VALUES ($1, 'customer', $2)
-    RETURNING id, created_at
-), balance AS (
-    INSERT INTO account_balances (account_id, min_balance_cents)
-    SELECT id, $3 FROM account
-)
-SELECT created_at FROM account`
-
 // CreateCustomer inserts the account and its zero balance in one statement.
 func (s ledgerRows) CreateCustomer(ctx context.Context, account ledger.Account) (time.Time, error) {
 	var createdAt time.Time
@@ -111,12 +153,6 @@ func (s ledgerRows) CreateCustomer(ctx context.Context, account ledger.Account) 
 
 	return createdAt, nil
 }
-
-const findCustomerSQL = `
-SELECT a.holder_name, a.created_at, b.balance_cents
-FROM accounts a
-JOIN account_balances b ON b.account_id = a.id
-WHERE a.id = $1 AND a.kind = 'customer'`
 
 // FindCustomer reads a customer account and its materialized balance.
 func (s ledgerRows) FindCustomer(ctx context.Context, id ledger.AccountID) (ledger.Account, money.Balance, error) {
@@ -132,12 +168,6 @@ func (s ledgerRows) FindCustomer(ctx context.Context, id ledger.AccountID) (ledg
 	return account, money.NewBalance(money.Cents(balanceCents)), nil
 }
 
-const readCustomerPositionSQL = `
-SELECT b.balance_cents, b.last_entry_seq
-FROM account_balances b
-JOIN accounts a ON a.id = b.account_id
-WHERE b.account_id = $1 AND a.kind = 'customer'`
-
 // ReadCustomerPosition reads a customer's balance and last entry position,
 // without locking the row.
 func (s ledgerRows) ReadCustomerPosition(ctx context.Context, id ledger.AccountID) (ledger.Position, error) {
@@ -150,11 +180,6 @@ func (s ledgerRows) ReadCustomerPosition(ctx context.Context, id ledger.AccountI
 
 	return position, nil
 }
-
-const overwritePositionSQL = `
-UPDATE account_balances
-SET balance_cents = $2, last_entry_seq = $3, updated_at = now()
-WHERE account_id = $1`
 
 // OverwritePosition stores a position the caller computed.
 func (s ledgerRows) OverwritePosition(ctx context.Context, id ledger.AccountID, position ledger.Position) error {
@@ -171,12 +196,6 @@ func (s ledgerRows) OverwritePosition(ctx context.Context, id ledger.AccountID, 
 	return nil
 }
 
-const incrementBalanceSQL = `
-UPDATE account_balances
-SET balance_cents = balance_cents + $2, last_entry_seq = last_entry_seq + 1, updated_at = now()
-WHERE account_id = $1
-RETURNING balance_cents, last_entry_seq`
-
 // IncrementBalance adds delta in the database and returns the new position.
 func (s ledgerRows) IncrementBalance(ctx context.Context, id ledger.AccountID, delta money.Cents) (ledger.Position, error) {
 	row := s.db.QueryRow(ctx, incrementBalanceSQL, uuid.UUID(id), int64(delta))
@@ -188,11 +207,6 @@ func (s ledgerRows) IncrementBalance(ctx context.Context, id ledger.AccountID, d
 
 	return position, nil
 }
-
-const insertTransactionSQL = `
-INSERT INTO ledger_transactions (id, kind, operation_id, client_ref, correlation_id, external_transfer_id, incoming_transfer_id, reconciliation_item_id)
-VALUES ($1, $2, $3, nullif($4, ''), $5, $6, $7, $8)
-RETURNING created_at`
 
 // InsertTransaction appends a ledger transaction header.
 func (s ledgerRows) InsertTransaction(ctx context.Context, transaction ledger.Transaction) (time.Time, error) {
@@ -225,10 +239,6 @@ func (s ledgerRows) InsertTransaction(ctx context.Context, transaction ledger.Tr
 	return createdAt, nil
 }
 
-const insertEntrySQL = `
-INSERT INTO ledger_entries (transaction_id, account_id, amount_cents, account_seq, balance_after_cents)
-VALUES ($1, $2, $3, $4, $5)`
-
 // InsertEntry appends one ledger entry.
 func (s ledgerRows) InsertEntry(ctx context.Context, entry ledger.Entry) error {
 	balanceAfterCents := int64(entry.BalanceAfter.Cents())
@@ -248,16 +258,6 @@ func (s ledgerRows) InsertEntry(ctx context.Context, entry ledger.Entry) error {
 
 	return nil
 }
-
-// The id breaks ties: without the balance_locking defense, two entries can
-// share a position.
-const readStatementSQL = `
-SELECT e.account_seq, e.transaction_id, t.kind, e.amount_cents, e.balance_after_cents, e.created_at
-FROM ledger_entries e
-JOIN ledger_transactions t ON t.id = e.transaction_id
-WHERE e.account_id = $1 AND e.account_seq > $2
-ORDER BY e.account_seq, e.id
-LIMIT $3`
 
 // ReadStatement reads one page of an account's entries.
 func (s ledgerRows) ReadStatement(ctx context.Context, query application.StatementQuery) ([]ledger.StatementLine, error) {

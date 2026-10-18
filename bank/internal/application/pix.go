@@ -46,6 +46,19 @@ var (
 	ErrAlreadyCredited = errors.New("incoming PIX already credited")
 )
 
+const (
+	// PartnerAccepted is 202 processing, or 200 with the current status.
+	PartnerAccepted PartnerAnswer = iota
+	// PartnerRejected is a definitive refusal (422).
+	PartnerRejected
+	// PartnerUnknown is a timeout, a 5xx or a broken connection: the partner
+	// may or may not have processed the transfer.
+	PartnerUnknown
+)
+
+// pendingOnBoot bounds the boot scan of the naive relay.
+const pendingOnBoot = 500
+
 // ExternalTransfer is a PIX out as stored.
 type ExternalTransfer struct {
 	ID             transfer.ID
@@ -121,16 +134,6 @@ type PixStore interface {
 // PartnerAnswer is how the partner answered a submission.
 type PartnerAnswer int
 
-const (
-	// PartnerAccepted is 202 processing, or 200 with the current status.
-	PartnerAccepted PartnerAnswer = iota
-	// PartnerRejected is a definitive refusal (422).
-	PartnerRejected
-	// PartnerUnknown is a timeout, a 5xx or a broken connection: the partner
-	// may or may not have processed the transfer.
-	PartnerUnknown
-)
-
 // PartnerSubmission is one PIX sent to the partner.
 type PartnerSubmission struct {
 	EndToEndID     transfer.EndToEndID
@@ -143,9 +146,6 @@ type PartnerSubmission struct {
 type PartnerSubmitter interface {
 	Submit(ctx context.Context, submission PartnerSubmission) PartnerAnswer
 }
-
-// pendingOnBoot bounds the boot scan of the naive relay.
-const pendingOnBoot = 500
 
 // nextAttemptOf reads the attempt from E<id>-<attempt>; the fixed id means
 // no attempt yet.

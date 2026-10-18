@@ -24,24 +24,17 @@ const validKey = "r0001-p01-000001"
 
 var errStorageDown = errors.New("connection refused to 10.0.0.5:5432 by bank_app")
 
+// resolvedDeposit is the request the fake resolver knows as applied.
+const resolvedDeposit = `{"account_id":"a","amount_cents":100}`
+
 type fakeTransfer struct {
 	received application.TransferInput
 	result   application.TransferResult
 	err      error
 }
 
-func (f *fakeTransfer) Apply(_ context.Context, _ application.MoneyStores, _ ledger.OperationID, input application.TransferInput) (application.TransferResult, error) {
-	f.received = input
-
-	return f.result, f.err
-}
-
 type fakeDeposit struct {
 	err error
-}
-
-func (f fakeDeposit) Apply(_ context.Context, _ application.MoneyStores, _ ledger.OperationID, input application.DepositInput) (application.DepositResult, error) {
-	return application.DepositResult{Balance: money.NewBalance(input.Amount.Cents())}, f.err
 }
 
 // fakeWriter runs the write once, as a naive writer without storage would;
@@ -51,78 +44,21 @@ type fakeWriter struct {
 	err       error
 }
 
-func (f *fakeWriter) Execute(ctx context.Context, write application.Write) (idempotency.StoredResponse, error) {
-	f.lastWrite = write
-
-	if f.err != nil {
-		return idempotency.StoredResponse{}, f.err
-	}
-
-	return write.Apply(ctx, nil, ledger.OperationID{})
-}
-
 type fakeResolver struct{}
-
-// resolvedDeposit is the request the fake resolver knows as applied.
-const resolvedDeposit = `{"account_id":"a","amount_cents":100}`
-
-func (fakeResolver) Resolve(_ context.Context, request application.ResolveRequest) (application.Resolution, error) {
-	if request.Key == "r0001-p01-000404" {
-		return application.Resolution{Outcome: idempotency.OutcomeVoided}, nil
-	}
-
-	isTheAppliedRequest := request.Endpoint == "/v1/deposits" && request.RequestHash == idempotency.HashRequest("/v1/deposits", []byte(resolvedDeposit))
-	if !isTheAppliedRequest {
-		return application.Resolution{Outcome: idempotency.OutcomeSuperseded}, nil
-	}
-
-	stored := idempotency.StoredResponse{Status: 201, Body: []byte(`{"transaction_id":"t"}`)}
-
-	return application.Resolution{Outcome: idempotency.OutcomeApplied, Response: &stored}, nil
-}
 
 type fakeStatement struct {
 	received application.StatementQuery
 }
 
-func (f *fakeStatement) Execute(_ context.Context, query application.StatementQuery) (application.StatementPage, error) {
-	f.received = query
-
-	return application.StatementPage{}, nil
-}
-
 type unusedAccounts struct{}
 
-func (unusedAccounts) Execute(context.Context, ledger.AccountID) (application.AccountView, error) {
-	return application.AccountView{}, ledger.ErrAccountNotFound
-}
-
 type fakeOpenAccount struct{}
-
-func (fakeOpenAccount) Apply(_ context.Context, _ application.CustomerCreator, holderName string) (application.AccountView, error) {
-	name, err := ledger.ParseHolderName(holderName)
-
-	return application.AccountView{Account: ledger.Account{HolderName: name}}, err
-}
 
 type apiFixture struct {
 	handler   http.Handler
 	transfer  *fakeTransfer
 	statement *fakeStatement
 	writer    *fakeWriter
-}
-
-func newFixture(depositErr error) apiFixture {
-	transfer := &fakeTransfer{}
-	statement := &fakeStatement{}
-	writer := &fakeWriter{}
-	useCases := httpapi.UseCases{
-		Writer: writer, Resolver: fakeResolver{}, OpenAccount: fakeOpenAccount{}, GetAccount: unusedAccounts{},
-		GetStatement: statement, Deposit: fakeDeposit{err: depositErr}, Transfer: transfer,
-	}
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-
-	return apiFixture{handler: httpapi.NewAPIHandler(useCases, logger), transfer: transfer, statement: statement, writer: writer}
 }
 
 type apiRequest struct {
@@ -138,49 +74,6 @@ type errorEnvelope struct {
 		Message       string `json:"message"`
 		CorrelationID string `json:"correlation_id"`
 	} `json:"error"`
-}
-
-func (f apiFixture) do(t *testing.T, request apiRequest) *httptest.ResponseRecorder {
-	t.Helper()
-
-	httpRequest := httptest.NewRequestWithContext(t.Context(), request.method, request.path, strings.NewReader(request.body))
-	for name, value := range request.headers {
-		httpRequest.Header.Set(name, value)
-	}
-
-	recorder := httptest.NewRecorder()
-	f.handler.ServeHTTP(recorder, httpRequest)
-
-	return recorder
-}
-
-func decodeError(t *testing.T, recorder *httptest.ResponseRecorder) errorEnvelope {
-	t.Helper()
-
-	var envelope errorEnvelope
-
-	err := json.NewDecoder(recorder.Body).Decode(&envelope)
-	if err != nil {
-		t.Fatalf("error body is not JSON: %v", err)
-	}
-
-	return envelope
-}
-
-func newAccountIDs(t *testing.T) (string, string) {
-	t.Helper()
-
-	first, err := ledger.NewAccountID()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	second, err := ledger.NewAccountID()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return first.String(), second.String()
 }
 
 func TestTransfer_PassesTheRequestToTheUseCase(t *testing.T) {
@@ -422,4 +315,111 @@ func TestClientError_SaysTheRuleNotThePath(t *testing.T) {
 	if envelope.Error.Message != ledger.ErrAccountNotFound.Error() {
 		t.Fatalf("message %q, want %q", envelope.Error.Message, ledger.ErrAccountNotFound.Error())
 	}
+}
+
+func (f *fakeTransfer) Apply(_ context.Context, _ application.MoneyStores, _ ledger.OperationID, input application.TransferInput) (application.TransferResult, error) {
+	f.received = input
+
+	return f.result, f.err
+}
+
+func (f fakeDeposit) Apply(_ context.Context, _ application.MoneyStores, _ ledger.OperationID, input application.DepositInput) (application.DepositResult, error) {
+	return application.DepositResult{Balance: money.NewBalance(input.Amount.Cents())}, f.err
+}
+
+func (f *fakeWriter) Execute(ctx context.Context, write application.Write) (idempotency.StoredResponse, error) {
+	f.lastWrite = write
+
+	if f.err != nil {
+		return idempotency.StoredResponse{}, f.err
+	}
+
+	return write.Apply(ctx, nil, ledger.OperationID{})
+}
+
+func (fakeResolver) Resolve(_ context.Context, request application.ResolveRequest) (application.Resolution, error) {
+	if request.Key == "r0001-p01-000404" {
+		return application.Resolution{Outcome: idempotency.OutcomeVoided}, nil
+	}
+
+	isTheAppliedRequest := request.Endpoint == "/v1/deposits" && request.RequestHash == idempotency.HashRequest("/v1/deposits", []byte(resolvedDeposit))
+	if !isTheAppliedRequest {
+		return application.Resolution{Outcome: idempotency.OutcomeSuperseded}, nil
+	}
+
+	stored := idempotency.StoredResponse{Status: 201, Body: []byte(`{"transaction_id":"t"}`)}
+
+	return application.Resolution{Outcome: idempotency.OutcomeApplied, Response: &stored}, nil
+}
+
+func (f *fakeStatement) Execute(_ context.Context, query application.StatementQuery) (application.StatementPage, error) {
+	f.received = query
+
+	return application.StatementPage{}, nil
+}
+
+func (unusedAccounts) Execute(context.Context, ledger.AccountID) (application.AccountView, error) {
+	return application.AccountView{}, ledger.ErrAccountNotFound
+}
+
+func (fakeOpenAccount) Apply(_ context.Context, _ application.CustomerCreator, holderName string) (application.AccountView, error) {
+	name, err := ledger.ParseHolderName(holderName)
+
+	return application.AccountView{Account: ledger.Account{HolderName: name}}, err
+}
+
+func newFixture(depositErr error) apiFixture {
+	transfer := &fakeTransfer{}
+	statement := &fakeStatement{}
+	writer := &fakeWriter{}
+	useCases := httpapi.UseCases{
+		Writer: writer, Resolver: fakeResolver{}, OpenAccount: fakeOpenAccount{}, GetAccount: unusedAccounts{},
+		GetStatement: statement, Deposit: fakeDeposit{err: depositErr}, Transfer: transfer,
+	}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	return apiFixture{handler: httpapi.NewAPIHandler(useCases, logger), transfer: transfer, statement: statement, writer: writer}
+}
+
+func (f apiFixture) do(t *testing.T, request apiRequest) *httptest.ResponseRecorder {
+	t.Helper()
+
+	httpRequest := httptest.NewRequestWithContext(t.Context(), request.method, request.path, strings.NewReader(request.body))
+	for name, value := range request.headers {
+		httpRequest.Header.Set(name, value)
+	}
+
+	recorder := httptest.NewRecorder()
+	f.handler.ServeHTTP(recorder, httpRequest)
+
+	return recorder
+}
+
+func decodeError(t *testing.T, recorder *httptest.ResponseRecorder) errorEnvelope {
+	t.Helper()
+
+	var envelope errorEnvelope
+
+	err := json.NewDecoder(recorder.Body).Decode(&envelope)
+	if err != nil {
+		t.Fatalf("error body is not JSON: %v", err)
+	}
+
+	return envelope
+}
+
+func newAccountIDs(t *testing.T) (string, string) {
+	t.Helper()
+
+	first, err := ledger.NewAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	second, err := ledger.NewAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return first.String(), second.String()
 }

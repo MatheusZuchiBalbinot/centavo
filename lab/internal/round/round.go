@@ -46,6 +46,16 @@ var roundDirPattern = regexp.MustCompile(`^r(\d{4,})$`)
 // ErrNoRoundID means every candidate round directory was already taken.
 var ErrNoRoundID = errors.New("could not allocate a round id")
 
+// quiescencePoll is how often the cure looks at the sagas in flight.
+const quiescencePoll = time.Second
+
+// The ledger state (I8): one file at the root of the rounds, the last round's,
+// and a copy in each round directory of the state it checked against.
+const (
+	ledgerStateFile   = "state.json"
+	previousStateFile = "state_before.json"
+)
+
 // Options configure one round.
 type Options struct {
 	Scenario scenarios.Scenario
@@ -81,16 +91,6 @@ type SagaOptions struct {
 	ParticipantID string
 }
 
-// quiescencePoll is how often the cure looks at the sagas in flight.
-const quiescencePoll = time.Second
-
-// The ledger state (I8): one file at the root of the rounds, the last round's,
-// and a copy in each round directory of the state it checked against.
-const (
-	ledgerStateFile   = "state.json"
-	previousStateFile = "state_before.json"
-)
-
 // ChaosOptions are the nemesis's means of action.
 type ChaosOptions struct {
 	Docker    docker.Client
@@ -106,11 +106,6 @@ type Result struct {
 	StartedAt time.Time
 	History   history.Report
 	Verdict   checker.Verdict
-}
-
-// IsClean reports whether the history is well formed and every operation ended.
-func (r Result) IsClean() bool {
-	return r.History.IsWellFormed() && len(r.History.Open) == 0
 }
 
 type manifest struct {
@@ -144,6 +139,17 @@ type workloadSummary struct {
 	RatePerSecond        float64 `json:"rate_per_second"`
 	Accounts             int     `json:"accounts"`
 	HasExclusiveAccounts bool    `json:"exclusive_accounts"`
+}
+
+type cureState struct {
+	round  string
+	writer *history.Writer
+	load   loadgen.Result
+}
+
+// IsClean reports whether the history is well formed and every operation ended.
+func (r Result) IsClean() bool {
+	return r.History.IsWellFormed() && len(r.History.Open) == 0
 }
 
 // Run executes the round. A load error is returned after the round is
@@ -220,12 +226,6 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	err = writeManifest(dir, newManifest(options, result, startedAt, runErr))
 
 	return result, errors.Join(runErr, err)
-}
-
-type cureState struct {
-	round  string
-	writer *history.Writer
-	load   loadgen.Result
 }
 
 // cure is the end of the round after heal_complete: resolve every indeterminate

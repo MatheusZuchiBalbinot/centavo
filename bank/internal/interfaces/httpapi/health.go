@@ -15,14 +15,10 @@ const HealthPath = "/internal/health"
 // the healthcheck, which runs under chaos all the time.
 const databaseCheckTimeout = 2 * time.Second
 
-type healthStatus string
-
 const (
 	healthStatusOK          healthStatus = "ok"
 	healthStatusUnavailable healthStatus = "unavailable"
 )
-
-type checkResult string
 
 const (
 	checkResultOK    checkResult = "ok"
@@ -45,6 +41,10 @@ type BuildInfo struct {
 	DefenseNotes []string
 }
 
+type healthStatus string
+
+type checkResult string
+
 type healthResponse struct {
 	Service      string                 `json:"service"`
 	Version      string                 `json:"version"`
@@ -56,17 +56,17 @@ type healthResponse struct {
 	Checks       map[string]checkResult `json:"checks"`
 }
 
+type healthHandler struct {
+	info     BuildInfo
+	database Pinger
+}
+
 // NewAdminHandler serves the admin port (9090).
 func NewAdminHandler(info BuildInfo, database Pinger) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET "+HealthPath, healthHandler{info: info, database: database})
 
 	return withSecurityHeaders(mux)
-}
-
-type healthHandler struct {
-	info     BuildInfo
-	database Pinger
 }
 
 func (h healthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {

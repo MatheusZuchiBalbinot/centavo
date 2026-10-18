@@ -48,6 +48,15 @@ type healthResponse struct {
 	Status  string `json:"status"`
 }
 
+type healthHandler struct {
+	response healthResponse
+}
+
+type panelHandlers struct {
+	config  Config
+	tracker *tracker
+}
+
 // NewHandler serves the panel port (8090).
 func NewHandler(config Config) http.Handler {
 	static, err := fs.Sub(staticFiles, "static")
@@ -79,17 +88,8 @@ func withSecurityHeaders(next http.Handler) http.Handler {
 	})
 }
 
-type healthHandler struct {
-	response healthResponse
-}
-
 func (h healthHandler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, h.response)
-}
-
-type panelHandlers struct {
-	config  Config
-	tracker *tracker
 }
 
 // live is the current round, the headline and the round list.

@@ -10,12 +10,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// ID identifies an external transfer.
-type ID uuid.UUID
-
-// Status is one state of an external transfer; states are exclusive.
-type Status string
-
 // The states of an external transfer.
 const (
 	StatusCreated   Status = "created"
@@ -25,9 +19,6 @@ const (
 	StatusReversed  Status = "reversed"
 )
 
-// Posting is the ledger transaction a transition requires.
-type Posting string
-
 // The ledger transactions a transition can require.
 const (
 	PostingNone   Posting = "none"
@@ -35,12 +26,6 @@ const (
 	PostingRefund Posting = "pix_out_refund"
 	PostingReturn Posting = "pix_out_return"
 )
-
-// Transition is a move between two states.
-type Transition struct {
-	From Status
-	To   Status
-}
 
 // allowedTransitions is the state machine. The database has its own copy
 // (external_transfer_allowed_transitions) and the checker a third, written
@@ -63,6 +48,25 @@ var (
 	ErrInvalidDestinationKey  = errors.New("destination key must have 3 to 77 letters, digits or . _ @ + -")
 	ErrTransferNotFound       = errors.New("external transfer not found")
 )
+
+// ID identifies an external transfer.
+type ID uuid.UUID
+
+// Status is one state of an external transfer; states are exclusive.
+type Status string
+
+// Posting is the ledger transaction a transition requires.
+type Posting string
+
+// Transition is a move between two states.
+type Transition struct {
+	From Status
+	To   Status
+}
+
+// EndToEndID is a PIX's id at the partner. Ours are E followed by the 32 hex
+// digits of the transfer id; incoming ones are whatever the partner sent.
+type EndToEndID string
 
 // PostingOf returns the ledger transaction a transition requires, refusing
 // transitions the state machine does not allow.
@@ -98,10 +102,6 @@ func ParseID(raw string) (ID, error) {
 }
 
 func (id ID) String() string { return uuid.UUID(id).String() }
-
-// EndToEndID is a PIX's id at the partner. Ours are E followed by the 32 hex
-// digits of the transfer id; incoming ones are whatever the partner sent.
-type EndToEndID string
 
 func (e EndToEndID) String() string { return string(e) }
 

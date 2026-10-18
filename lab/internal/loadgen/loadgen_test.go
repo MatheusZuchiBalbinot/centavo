@@ -24,6 +24,22 @@ var fastPolicy = retryPolicy{
 	attemptTimeout: 500 * time.Millisecond, maxRetries: 2, backoffBase: time.Millisecond, backoffCap: 2 * time.Millisecond, deadline: 2 * time.Second,
 }
 
+// fakeBank is a correct in-memory bank with optional faults.
+type fakeBank struct {
+	shouldFailFirstAttempt bool
+	shouldFailTransfers    bool
+	// isEnforcingKeys refuses a key reused with another body, like idempotency.
+	isEnforcingKeys bool
+
+	mu           sync.Mutex
+	nextID       int
+	balances     map[string]int64
+	attempts     map[string]int
+	correlations map[string]bool
+	bodies       map[string]string
+	resolved     map[string]int
+}
+
 func TestClassify(t *testing.T) {
 	parse := parseDeposit
 	validBody := `{"transaction_id": "t1", "balance_cents": 10}`
@@ -366,22 +382,6 @@ func readHistory(t *testing.T, path string) []history.Record {
 	}
 
 	return records
-}
-
-// fakeBank is a correct in-memory bank with optional faults.
-type fakeBank struct {
-	shouldFailFirstAttempt bool
-	shouldFailTransfers    bool
-	// isEnforcingKeys refuses a key reused with another body, like idempotency.
-	isEnforcingKeys bool
-
-	mu           sync.Mutex
-	nextID       int
-	balances     map[string]int64
-	attempts     map[string]int
-	correlations map[string]bool
-	bodies       map[string]string
-	resolved     map[string]int
 }
 
 func newFakeBank() *fakeBank {

@@ -17,36 +17,12 @@ import (
 // sweptNow makes every transfer in created or sent count as stuck.
 const sweptNow = time.Duration(0)
 
-func (p pixBank) settlements(t *testing.T, id transfer.ID, kind string) int {
-	t.Helper()
-
-	return countRows(t, p, `SELECT count(*) FROM ledger_transactions WHERE external_transfer_id = $1 AND kind = $2`, uuid.UUID(id), kind)
-}
-
-func (p pixBank) sentTransfer(t *testing.T, cents int64) application.PixOutResult {
-	t.Helper()
-
-	account := p.bank.newCustomer(t)
-	p.bank.fund(t, account, 10_000)
-	created := p.createPixOut(t, account, cents)
-	p.markSent(t, created.TransferID)
-
-	return created
-}
-
-func receive(t *testing.T, intake application.InboxIntake, events ...application.PartnerEvent) {
-	t.Helper()
-
-	for _, event := range events {
-		err := intake.Apply(t.Context(), event)
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-}
-
-func newEventID() string {
-	return "evt_" + uuid.NewString()
+// pausingPartner answers with a status and, before the sweeper can use it, lets
+// the webhook move the transfer on: a sweeper frozen at
+// `sweeper.after_status_before_transition`.
+type pausingPartner struct {
+	answer   transfer.PartnerStatus
+	meantime func()
 }
 
 // TestTransfer_DuplicateEffectWithNewEventID_IsNoop is a regression test: the
@@ -126,22 +102,6 @@ func TestStateMachine_ContradictionIsAConflict(t *testing.T) {
 	isParked := view.Transfer.Status == transfer.StatusConfirmed && countRows(t, fixture, `SELECT count(*) FROM inbox_events WHERE event_id = $1 AND status = 'conflict'`, rejected.ID) == 1
 	if !isParked {
 		t.Fatalf("status %s; the contradiction should be a conflict", view.Transfer.Status)
-	}
-}
-
-func (p pixBank) sweeper(partner application.PartnerStatusReader, owner string) application.Sweeper {
-	config := application.SweeperConfig{UnitOfWork: p.unitOfWork, Lease: application.FencedLeases{}, Machine: application.GuardedTransitions{}, Partner: partner, Owner: owner, Logger: discardLogger()}
-
-	return application.NewSweeper(config)
-}
-
-// releaseSweeperLease lets each test start with a free lease.
-func (p pixBank) releaseSweeperLease(t *testing.T) {
-	t.Helper()
-
-	_, err := p.bank.pool.Exec(t.Context(), `UPDATE worker_leases SET holder = NULL, expires_at = NULL WHERE resource = 'sweeper'`)
-	if err != nil {
-		t.Fatal(err)
 	}
 }
 
@@ -253,20 +213,6 @@ func TestRelay_PartnerTimeout_NeverFailsTransfer(t *testing.T) {
 	}
 }
 
-// pausingPartner answers with a status and, before the sweeper can use it, lets
-// the webhook move the transfer on: a sweeper frozen at
-// `sweeper.after_status_before_transition`.
-type pausingPartner struct {
-	answer   transfer.PartnerStatus
-	meantime func()
-}
-
-func (p pausingPartner) Status(context.Context, transfer.EndToEndID) (application.AuthoritativeStatus, error) {
-	p.meantime()
-
-	return application.AuthoritativeStatus{Status: p.answer}, nil
-}
-
 // TestSweeper_StaleStatusAfterPause_DoesNotRegressState is a regression test:
 // the sweeper read "processing", paused, and the settlement came in meanwhile.
 // The walk starts from the status under the lock, so the stale answer writes
@@ -299,4 +245,58 @@ func TestSweeper_StaleStatusAfterPause_DoesNotRegressState(t *testing.T) {
 	if isUnexpected {
 		t.Fatalf("status %s after a stale sweep", view.Transfer.Status)
 	}
+}
+
+func (p pixBank) settlements(t *testing.T, id transfer.ID, kind string) int {
+	t.Helper()
+
+	return countRows(t, p, `SELECT count(*) FROM ledger_transactions WHERE external_transfer_id = $1 AND kind = $2`, uuid.UUID(id), kind)
+}
+
+func (p pixBank) sentTransfer(t *testing.T, cents int64) application.PixOutResult {
+	t.Helper()
+
+	account := p.bank.newCustomer(t)
+	p.bank.fund(t, account, 10_000)
+	created := p.createPixOut(t, account, cents)
+	p.markSent(t, created.TransferID)
+
+	return created
+}
+
+func receive(t *testing.T, intake application.InboxIntake, events ...application.PartnerEvent) {
+	t.Helper()
+
+	for _, event := range events {
+		err := intake.Apply(t.Context(), event)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func newEventID() string {
+	return "evt_" + uuid.NewString()
+}
+
+func (p pixBank) sweeper(partner application.PartnerStatusReader, owner string) application.Sweeper {
+	config := application.SweeperConfig{UnitOfWork: p.unitOfWork, Lease: application.FencedLeases{}, Machine: application.GuardedTransitions{}, Partner: partner, Owner: owner, Logger: discardLogger()}
+
+	return application.NewSweeper(config)
+}
+
+// releaseSweeperLease lets each test start with a free lease.
+func (p pixBank) releaseSweeperLease(t *testing.T) {
+	t.Helper()
+
+	_, err := p.bank.pool.Exec(t.Context(), `UPDATE worker_leases SET holder = NULL, expires_at = NULL WHERE resource = 'sweeper'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func (p pausingPartner) Status(context.Context, transfer.EndToEndID) (application.AuthoritativeStatus, error) {
+	p.meantime()
+
+	return application.AuthoritativeStatus{Status: p.answer}, nil
 }

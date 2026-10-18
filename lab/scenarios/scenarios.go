@@ -24,9 +24,6 @@ import (
 //go:embed *.yaml
 var files embed.FS
 
-// Profile is the operation mix of a workload.
-type Profile string
-
 // The operation mixes of a workload.
 const (
 	ProfileLedgerOnly    Profile = "ledger-only"
@@ -38,9 +35,6 @@ const (
 )
 
 var workloadProfiles = []Profile{ProfileLedgerOnly, ProfileBalanced, ProfilePaymentsHeavy, ProfilePaymentsOut}
-
-// ClientProfile is how a client behaves around timeouts and retries.
-type ClientProfile string
 
 // The client behaviors around timeouts and retries.
 const (
@@ -54,9 +48,6 @@ const (
 )
 
 var clientProfiles = []ClientProfile{ClientPolite, ClientDuplicator, ClientAggressive, ClientBuggy}
-
-// FaultKind is the fault family.
-type FaultKind string
 
 // The fault families.
 const (
@@ -117,9 +108,6 @@ var partnerModeFields = []string{
 	"webhook_reorder_window", "webhook_drop", "outage",
 }
 
-// ScheduleType is how a scheduled fault spreads over the round.
-type ScheduleType string
-
 // The ways a scheduled fault spreads over the round.
 const (
 	SchedulePoisson ScheduleType = "poisson"
@@ -159,6 +147,21 @@ var (
 	ErrUnknownScenario = errors.New("unknown scenario")
 	ErrInvalidScenario = errors.New("invalid scenario")
 )
+
+// maxClockSkew bounds a clock fault, as the bank does.
+const maxClockSkew = 48 * time.Hour
+
+// Profile is the operation mix of a workload.
+type Profile string
+
+// ClientProfile is how a client behaves around timeouts and retries.
+type ClientProfile string
+
+// FaultKind is the fault family.
+type FaultKind string
+
+// ScheduleType is how a scheduled fault spreads over the round.
+type ScheduleType string
 
 // Scenario is a validated scenario.
 type Scenario struct {
@@ -490,9 +493,6 @@ func validateFailpointFault(fault Fault, r rawFault) (Fault, error) {
 
 	return fault, nil
 }
-
-// maxClockSkew bounds a clock fault, as the bank does.
-const maxClockSkew = 48 * time.Hour
 
 func validateClockFault(fault Fault, r rawFault) (Fault, error) {
 	err := validateTargets(r.Targets, failpointTargets)

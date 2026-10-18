@@ -12,9 +12,6 @@ import (
 	"time"
 )
 
-// outcomeKind classifies what one HTTP attempt showed the client.
-type outcomeKind string
-
 const (
 	outcomeDomain            outcomeKind = "domain"
 	outcomeRequestInProgress outcomeKind = "request_in_progress"
@@ -24,9 +21,6 @@ const (
 	outcomeInvalidBody       outcomeKind = "invalid_body"
 	outcomeUnexpected        outcomeKind = "unexpected_response"
 )
-
-// verdict is what the client does after an attempt.
-type verdict int
 
 const (
 	verdictSucceeded verdict = iota
@@ -51,6 +45,12 @@ var definitiveCodes = map[string]bool{
 }
 
 const requestInProgressCode = "REQUEST_IN_PROGRESS"
+
+// outcomeKind classifies what one HTTP attempt showed the client.
+type outcomeKind string
+
+// verdict is what the client does after an attempt.
+type verdict int
 
 // outcome is how history.jsonl records an attempt or a failed operation.
 type outcome struct {
@@ -81,17 +81,17 @@ type bankClient struct {
 	http    *http.Client
 }
 
+type errorEnvelope struct {
+	Error struct {
+		Code string `json:"code"`
+	} `json:"error"`
+}
+
 func newBankClient(baseURL string, connections int) bankClient {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.MaxIdleConnsPerHost = connections
 
 	return bankClient{baseURL: baseURL, http: &http.Client{Transport: transport}}
-}
-
-type errorEnvelope struct {
-	Error struct {
-		Code string `json:"code"`
-	} `json:"error"`
 }
 
 // attempt sends the request once and classifies what came back. parse turns a

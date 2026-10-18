@@ -4,9 +4,6 @@ package history
 
 import "encoding/json"
 
-// Type is the kind of a history record.
-type Type string
-
 // The kinds of history record.
 const (
 	TypeInvoke  Type = "invoke"
@@ -15,9 +12,6 @@ const (
 	TypeFail    Type = "fail"
 	TypeInfo    Type = "info"
 )
-
-// Function is the operation a client performed, or the injection the nemesis made.
-type Function string
 
 // The operations and injections a history records.
 const (
@@ -54,6 +48,12 @@ const (
 	FunctionSkewClock    Function = "skew_clock"
 	FunctionHealComplete Function = "heal_complete"
 )
+
+// Type is the kind of a history record.
+type Type string
+
+// Function is the operation a client performed, or the injection the nemesis made.
+type Function string
 
 // Record is one line of history.jsonl. The writer fills Index, Round, TimeNS
 // and Wall; the caller fills the rest.

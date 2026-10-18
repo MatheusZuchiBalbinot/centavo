@@ -33,15 +33,6 @@ const (
 	metaFile         = "meta.json"
 )
 
-// AccountKind tells customer accounts from system ones.
-type AccountKind string
-
-// TransactionKind is the kind of a ledger transaction.
-type TransactionKind string
-
-// TransferStatus is one state of an external transfer.
-type TransferStatus string
-
 // Account kinds and the system accounts the checker reads by code.
 const (
 	KindCustomer AccountKind = "customer"
@@ -67,6 +58,99 @@ const (
 
 // ErrMalformedExport means the bank's export does not decode.
 var ErrMalformedExport = errors.New("malformed export")
+
+// BandSize is how many entry ids one immutability band covers (I8).
+const BandSize = 100_000
+
+var tables = []table{
+	{file: accountsFile, header: []string{"id", "kind", "system_code"}, rows: accountRows, load: loadAccount},
+	{file: balancesFile, header: []string{"account_id", "balance_cents", "last_entry_seq"}, rows: balanceRows, load: loadBalance},
+	{
+		file: transactionsFile, header: []string{"id", "kind", "client_ref", "correlation_id", "external_transfer_id", "incoming_transfer_id"},
+		rows: transactionRows, load: loadTransaction,
+	},
+	{
+		file: entriesFile, header: []string{"id", "transaction_id", "account_id", "amount_cents", "account_seq", "balance_after_cents"},
+		rows: entryRows, load: loadEntry,
+	},
+	{
+		file: transfersFile, header: []string{"id", "end_to_end_id", "client_ref", "account_id", "amount_cents", "status", "status_seq", "failure_code"},
+		rows: transferRows, load: loadTransfer,
+	},
+	{
+		file: transitionsFile, header: []string{"transfer_id", "seq", "from_status", "to_status", "cause", "ledger_transaction_id"},
+		rows: transitionRows, load: loadTransition,
+	},
+	{file: incomingFile, header: []string{"id", "end_to_end_id", "account_id", "amount_cents"}, rows: incomingRows, load: loadIncoming},
+	{file: bandsFile, header: []string{"band", "count", "sum_cents", "hash"}, rows: bandRows, load: loadBand},
+}
+
+// Columns of each CSV, in the order of its header in tables.
+const (
+	colTransferID = iota
+	colTransferEndToEnd
+	colTransferClientRef
+	colTransferAccount
+	colTransferAmount
+	colTransferStatus
+	colTransferStatusSeq
+	colTransferFailure
+)
+
+const (
+	colTransitionTransfer = iota
+	colTransitionSeq
+	colTransitionFrom
+	colTransitionTo
+	colTransitionCause
+	colTransitionLedger
+)
+
+const (
+	colIncomingID = iota
+	colIncomingEndToEnd
+	colIncomingAccount
+	colIncomingAmount
+)
+
+const (
+	colAccountID = iota
+	colAccountKind
+	colAccountCode
+)
+
+const (
+	colBalanceAccount = iota
+	colBalanceCents
+	colBalanceLastSeq
+)
+
+const (
+	colTransactionID = iota
+	colTransactionKind
+	colTransactionClientRef
+	colTransactionCorrelation
+	colTransactionExternal
+	colTransactionIncoming
+)
+
+const (
+	colEntryID = iota
+	colEntryTransaction
+	colEntryAccount
+	colEntryAmount
+	colEntrySeq
+	colEntryBalanceAfter
+)
+
+// AccountKind tells customer accounts from system ones.
+type AccountKind string
+
+// TransactionKind is the kind of a ledger transaction.
+type TransactionKind string
+
+// TransferStatus is one state of an external transfer.
+type TransferStatus string
 
 // Account is a row of accounts.
 type Account struct {
@@ -141,9 +225,6 @@ type Meta struct {
 	FirstTransactionID string `json:"first_transaction_id"`
 }
 
-// BandSize is how many entry ids one immutability band covers (I8).
-const BandSize = 100_000
-
 // Band is the fingerprint of the ledger entries whose ids fall in one band.
 type Band struct {
 	Band     int64 `json:"band"`
@@ -168,34 +249,18 @@ type Snapshot struct {
 	Bands []Band
 }
 
+// LedgerState is what a round leaves for the next one to check I8 against: the
+// fingerprint of the whole ledger when it was exported.
+type LedgerState struct {
+	FirstTransactionID string `json:"first_transaction_id"`
+	Bands              []Band `json:"bands"`
+}
+
 type table struct {
 	file   string
 	header []string
 	rows   func(s *Snapshot) [][]string
 	load   func(s *Snapshot, record []string) error
-}
-
-var tables = []table{
-	{file: accountsFile, header: []string{"id", "kind", "system_code"}, rows: accountRows, load: loadAccount},
-	{file: balancesFile, header: []string{"account_id", "balance_cents", "last_entry_seq"}, rows: balanceRows, load: loadBalance},
-	{
-		file: transactionsFile, header: []string{"id", "kind", "client_ref", "correlation_id", "external_transfer_id", "incoming_transfer_id"},
-		rows: transactionRows, load: loadTransaction,
-	},
-	{
-		file: entriesFile, header: []string{"id", "transaction_id", "account_id", "amount_cents", "account_seq", "balance_after_cents"},
-		rows: entryRows, load: loadEntry,
-	},
-	{
-		file: transfersFile, header: []string{"id", "end_to_end_id", "client_ref", "account_id", "amount_cents", "status", "status_seq", "failure_code"},
-		rows: transferRows, load: loadTransfer,
-	},
-	{
-		file: transitionsFile, header: []string{"transfer_id", "seq", "from_status", "to_status", "cause", "ledger_transaction_id"},
-		rows: transitionRows, load: loadTransition,
-	},
-	{file: incomingFile, header: []string{"id", "end_to_end_id", "account_id", "amount_cents"}, rows: incomingRows, load: loadIncoming},
-	{file: bandsFile, header: []string{"band", "count", "sum_cents", "hash"}, rows: bandRows, load: loadBand},
 }
 
 // Write stores the snapshot in roundDir/export.
@@ -246,6 +311,42 @@ func Read(roundDir string) (Snapshot, error) {
 	}
 
 	return s, nil
+}
+
+// StateOf is the state the snapshot leaves behind.
+func StateOf(state Snapshot) LedgerState {
+	return LedgerState{FirstTransactionID: state.Meta.FirstTransactionID, Bands: append([]Band{}, state.Bands...)}
+}
+
+// WriteState stores a ledger state.
+func WriteState(path string, state LedgerState) error {
+	content, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encoding the ledger state: %w", err)
+	}
+
+	return os.WriteFile(path, append(content, '\n'), fsmode.PrivateFile)
+}
+
+// ReadState loads a ledger state; false means there is none yet.
+func ReadState(path string) (LedgerState, bool, error) {
+	content, err := os.ReadFile(path) //nolint:gosec // G304: the path comes from the operator's rounds directory.
+	if errors.Is(err, os.ErrNotExist) {
+		return LedgerState{}, false, nil
+	}
+
+	if err != nil {
+		return LedgerState{}, false, fmt.Errorf("reading the ledger state: %w", err)
+	}
+
+	var state LedgerState
+
+	err = json.Unmarshal(content, &state)
+	if err != nil {
+		return LedgerState{}, false, fmt.Errorf("%w: ledger state: %w", ErrMalformedExport, err)
+	}
+
+	return state, true, nil
 }
 
 func writeTable(path string, header []string, rows [][]string) error {
@@ -364,64 +465,6 @@ func incomingRows(state *Snapshot) [][]string {
 
 	return rows
 }
-
-// Columns of each CSV, in the order of its header in tables.
-const (
-	colTransferID = iota
-	colTransferEndToEnd
-	colTransferClientRef
-	colTransferAccount
-	colTransferAmount
-	colTransferStatus
-	colTransferStatusSeq
-	colTransferFailure
-)
-
-const (
-	colTransitionTransfer = iota
-	colTransitionSeq
-	colTransitionFrom
-	colTransitionTo
-	colTransitionCause
-	colTransitionLedger
-)
-
-const (
-	colIncomingID = iota
-	colIncomingEndToEnd
-	colIncomingAccount
-	colIncomingAmount
-)
-
-const (
-	colAccountID = iota
-	colAccountKind
-	colAccountCode
-)
-
-const (
-	colBalanceAccount = iota
-	colBalanceCents
-	colBalanceLastSeq
-)
-
-const (
-	colTransactionID = iota
-	colTransactionKind
-	colTransactionClientRef
-	colTransactionCorrelation
-	colTransactionExternal
-	colTransactionIncoming
-)
-
-const (
-	colEntryID = iota
-	colEntryTransaction
-	colEntryAccount
-	colEntryAmount
-	colEntrySeq
-	colEntryBalanceAfter
-)
 
 func loadTransfer(state *Snapshot, record []string) error {
 	numbers, err := atois(record[colTransferAmount], record[colTransferStatusSeq])
@@ -552,47 +595,4 @@ func atois(fields ...string) ([]int64, error) {
 	}
 
 	return numbers, nil
-}
-
-// LedgerState is what a round leaves for the next one to check I8 against: the
-// fingerprint of the whole ledger when it was exported.
-type LedgerState struct {
-	FirstTransactionID string `json:"first_transaction_id"`
-	Bands              []Band `json:"bands"`
-}
-
-// StateOf is the state the snapshot leaves behind.
-func StateOf(state Snapshot) LedgerState {
-	return LedgerState{FirstTransactionID: state.Meta.FirstTransactionID, Bands: append([]Band{}, state.Bands...)}
-}
-
-// WriteState stores a ledger state.
-func WriteState(path string, state LedgerState) error {
-	content, err := json.MarshalIndent(state, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encoding the ledger state: %w", err)
-	}
-
-	return os.WriteFile(path, append(content, '\n'), fsmode.PrivateFile)
-}
-
-// ReadState loads a ledger state; false means there is none yet.
-func ReadState(path string) (LedgerState, bool, error) {
-	content, err := os.ReadFile(path) //nolint:gosec // G304: the path comes from the operator's rounds directory.
-	if errors.Is(err, os.ErrNotExist) {
-		return LedgerState{}, false, nil
-	}
-
-	if err != nil {
-		return LedgerState{}, false, fmt.Errorf("reading the ledger state: %w", err)
-	}
-
-	var state LedgerState
-
-	err = json.Unmarshal(content, &state)
-	if err != nil {
-		return LedgerState{}, false, fmt.Errorf("%w: ledger state: %w", ErrMalformedExport, err)
-	}
-
-	return state, true, nil
 }

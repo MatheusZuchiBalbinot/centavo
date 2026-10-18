@@ -33,10 +33,6 @@ var (
 	errUnexpectedReply = errors.New("unexpected answer from the Docker API")
 )
 
-// ContainerState is where a container stands. Docker reports a paused
-// container as running too; here the three are exclusive.
-type ContainerState string
-
 // The states of a container.
 const (
 	StateStopped ContainerState = "stopped"
@@ -44,14 +40,18 @@ const (
 	StatePaused  ContainerState = "paused"
 )
 
-// HealthStatus is a container's healthcheck result, empty without one.
-type HealthStatus string
-
 // The healthcheck results the bot tells apart.
 const (
 	HealthNone    HealthStatus = ""
 	HealthHealthy HealthStatus = "healthy"
 )
+
+// ContainerState is where a container stands. Docker reports a paused
+// container as running too; here the three are exclusive.
+type ContainerState string
+
+// HealthStatus is a container's healthcheck result, empty without one.
+type HealthStatus string
 
 // Container is what the bot needs to know about a chaos target.
 type Container struct {
@@ -62,19 +62,51 @@ type Container struct {
 	RestartCount int
 }
 
+// Client is a Docker API client scoped to one Compose project.
+type Client struct {
+	baseURL string
+	project string
+	http    *http.Client
+}
+
+type listedContainer struct {
+	ID     string            `json:"Id"`
+	Labels map[string]string `json:"Labels"`
+}
+
+type inspected struct {
+	ID           string `json:"Id"`
+	RestartCount int    `json:"RestartCount"`
+	State        struct {
+		IsRunning bool `json:"Running"`
+		IsPaused  bool `json:"Paused"`
+		Health    *struct {
+			Status string `json:"Status"`
+		} `json:"Health"`
+	} `json:"State"`
+	Config struct {
+		Labels map[string]string `json:"Labels"`
+	} `json:"Config"`
+}
+
+type execCreated struct {
+	ID string `json:"Id"`
+}
+
+// apiCall is one request to the Docker Engine API; body is sent as JSON when
+// it is not nil.
+type apiCall struct {
+	method string
+	path   string
+	body   any
+}
+
 // IsHealthy reports a running container whose healthcheck passes; a
 // container without a healthcheck counts as healthy once it runs.
 func (c Container) IsHealthy() bool {
 	isCheckPassing := c.Health == HealthNone || c.Health == HealthHealthy
 
 	return c.State == StateRunning && isCheckPassing
-}
-
-// Client is a Docker API client scoped to one Compose project.
-type Client struct {
-	baseURL string
-	project string
-	http    *http.Client
 }
 
 // New builds a client for DOCKER_HOST=tcp://docker-proxy:2375.
@@ -86,11 +118,6 @@ func New(dockerHost, project string) (Client, error) {
 	}
 
 	return Client{baseURL: "http://" + address, project: project, http: &http.Client{Timeout: callTimeout}}, nil
-}
-
-type listedContainer struct {
-	ID     string            `json:"Id"`
-	Labels map[string]string `json:"Labels"`
 }
 
 // Targets lists the chaos targets of the project, running or not.
@@ -137,21 +164,6 @@ func (c Client) Find(ctx context.Context, service string) (Container, error) {
 	return Container{}, fmt.Errorf("%w: %s", ErrUnknownService, service)
 }
 
-type inspected struct {
-	ID           string `json:"Id"`
-	RestartCount int    `json:"RestartCount"`
-	State        struct {
-		IsRunning bool `json:"Running"`
-		IsPaused  bool `json:"Paused"`
-		Health    *struct {
-			Status string `json:"Status"`
-		} `json:"Health"`
-	} `json:"State"`
-	Config struct {
-		Labels map[string]string `json:"Labels"`
-	} `json:"Config"`
-}
-
 // Inspect reads a container's state; it refuses containers that are not
 // chaos targets of this project.
 func (c Client) Inspect(ctx context.Context, id string) (Container, error) {
@@ -176,22 +188,6 @@ func (c Client) Inspect(ctx context.Context, id string) (Container, error) {
 	}
 
 	return container, nil
-}
-
-func stateOf(details inspected) ContainerState {
-	if details.State.IsPaused {
-		return StatePaused
-	}
-
-	if details.State.IsRunning {
-		return StateRunning
-	}
-
-	return StateStopped
-}
-
-type execCreated struct {
-	ID string `json:"Id"`
 }
 
 // Exec runs a command in a target and does not wait for it: chaos-kill ends
@@ -263,12 +259,16 @@ func (c Client) Unpause(ctx context.Context, id string) error {
 	return c.post(ctx, "/containers/"+url.PathEscape(id)+"/unpause", nil, nil)
 }
 
-// apiCall is one request to the Docker Engine API; body is sent as JSON when
-// it is not nil.
-type apiCall struct {
-	method string
-	path   string
-	body   any
+func stateOf(details inspected) ContainerState {
+	if details.State.IsPaused {
+		return StatePaused
+	}
+
+	if details.State.IsRunning {
+		return StateRunning
+	}
+
+	return StateStopped
 }
 
 func (c Client) get(ctx context.Context, path string, into any) error {

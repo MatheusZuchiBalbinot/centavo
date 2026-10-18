@@ -22,62 +22,13 @@ import (
 	"centavo/bank/internal/platform/failpoint"
 )
 
-// armFP01 makes `transfer.after_debit_before_credit` fail every transfer of one
-// correlation id. The error action stands in for the kill: either way the use
-// case stops between the debit and the credit, and a real transaction rolls
-// back.
-func armFP01(t *testing.T, correlationID string) {
-	t.Helper()
-
-	failpoint.DisarmAll()
-	failpoint.ConfigureEvents(failpoint.EventsConfig{Dir: t.TempDir(), Service: "bank-api", Instance: "test"})
-	t.Cleanup(failpoint.DisarmAll)
-
-	rule := failpoint.Rule{Action: failpoint.ActionError, Arg: "crash", Probability: 1, Match: failpoint.Match{CorrelationID: correlationID}, TTL: "1m"}
-
-	err := failpoint.Arm(failpoint.TransferAfterDebitBeforeCredit, rule, time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-// useSchema gives the database the constraints of a weakened profile for one
-// test, as bank migrate would, and restores the robust schema afterwards.
-func useSchema(t *testing.T, wanted schema) {
-	t.Helper()
-
-	err := migrateSchema(t.Context(), wanted)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Cleanup(func() {
-		err := migrateDefenses(context.Background(), true)
-		if err != nil {
-			t.Fatalf("restoring the robust schema: %v", err)
-		}
-	})
-}
-
-func naiveMoney(t *testing.T, b bank, profile string) application.MoneyDependencies {
-	t.Helper()
-
-	parsed, err := defenses.ParseProfile(profile)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	deps := application.MoneyDependencies{UnitOfWork: postgres.NewUnitOfWork(b.pool), Locker: application.RowLocker{}}
-
-	if !parsed.IsEnabled(defenses.AtomicLedger) {
-		deps.UnitOfWork = naive.NewUnitOfWork(b.pool)
-	}
-
-	if !parsed.IsEnabled(defenses.BalanceLocking) {
-		deps.Locker = naive.NoLocker{}
-	}
-
-	return deps
+// pausingStatement hands out the statement and, before the reconciler that
+// asked can book it, lets its lease expire and another worker take over: a
+// reconciler frozen past the TTL (`recon.after_compute_before_apply` or
+// `lease.after_check_before_write` with freeze).
+type pausingStatement struct {
+	statement *fakeStatement
+	meantime  func()
 }
 
 // TestInternalTransfer_CrashBetweenDebitAndCredit_LeavesNoPartialEntries is a
@@ -223,22 +174,6 @@ func TestInbox_CrashBetweenApplyAndMark_AppliesOnce(t *testing.T) {
 	}
 }
 
-// armFP08 fails the reconciliation once, between two entries of a batch.
-func armFP08(t *testing.T) {
-	t.Helper()
-
-	failpoint.DisarmAll()
-	failpoint.ConfigureEvents(failpoint.EventsConfig{Dir: t.TempDir(), Service: "bank-worker", Instance: "test"})
-	t.Cleanup(failpoint.DisarmAll)
-
-	rule := failpoint.Rule{Action: failpoint.ActionError, Arg: "crash", Probability: 1, MaxFires: 1, SkipHits: 1, TTL: "1m"}
-
-	err := failpoint.Arm(failpoint.ReconMidApply, rule, time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
 // TestReconciliation_CrashMidBatch_AppliesEachEntryOnce is a regression test:
 // the reconciler died between two entries (`recon.mid_apply`). With
 // reconciliation the batch rolls back as a whole and the rerun books each entry
@@ -292,42 +227,6 @@ func TestReconciliation_CrashMidBatch_AppliesEachEntryOnce(t *testing.T) {
 			}
 		})
 	}
-}
-
-// renumberRebookedItems moves the items the naive variant booked twice out of
-// the way of reconciliation's unique partner_seq, so the robust schema comes
-// back.
-func renumberRebookedItems(t *testing.T, fixture pixBank) {
-	t.Helper()
-
-	_, err := fixture.bank.pool.Exec(context.Background(), `
-UPDATE reconciliation_items SET partner_seq = -id
-WHERE id NOT IN (SELECT min(id) FROM reconciliation_items GROUP BY partner_seq)`)
-	if err != nil {
-		t.Error(err)
-	}
-}
-
-// pausingStatement hands out the statement and, before the reconciler that
-// asked can book it, lets its lease expire and another worker take over: a
-// reconciler frozen past the TTL (`recon.after_compute_before_apply` or
-// `lease.after_check_before_write` with freeze).
-type pausingStatement struct {
-	statement *fakeStatement
-	meantime  func()
-}
-
-func (p pausingStatement) Statement(ctx context.Context, afterSeq int64, limit int) ([]application.StatementEntry, error) {
-	entries, err := p.statement.Statement(ctx, afterSeq, limit)
-	p.meantime()
-
-	return entries, err
-}
-
-func (p pixBank) reconcilerWith(statement application.PartnerStatementReader, lease application.LeasePolicy, owner string) application.Reconciler {
-	config := application.ReconcilerConfig{UnitOfWork: p.unitOfWork, Lease: lease, Machine: application.GuardedTransitions{}, Statement: statement, Policy: application.AtomicBatches{}, Owner: owner, Logger: discardLogger()}
-
-	return application.NewReconciler(config)
 }
 
 // TestFencing_ZombieReconcilerWriteIsRejected is a regression test: the
@@ -472,4 +371,105 @@ func TestReconciliation_FailpointsMatchThePixCorrelation(t *testing.T) {
 			}
 		})
 	}
+}
+
+// armFP01 makes `transfer.after_debit_before_credit` fail every transfer of one
+// correlation id. The error action stands in for the kill: either way the use
+// case stops between the debit and the credit, and a real transaction rolls
+// back.
+func armFP01(t *testing.T, correlationID string) {
+	t.Helper()
+
+	failpoint.DisarmAll()
+	failpoint.ConfigureEvents(failpoint.EventsConfig{Dir: t.TempDir(), Service: "bank-api", Instance: "test"})
+	t.Cleanup(failpoint.DisarmAll)
+
+	rule := failpoint.Rule{Action: failpoint.ActionError, Arg: "crash", Probability: 1, Match: failpoint.Match{CorrelationID: correlationID}, TTL: "1m"}
+
+	err := failpoint.Arm(failpoint.TransferAfterDebitBeforeCredit, rule, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// useSchema gives the database the constraints of a weakened profile for one
+// test, as bank migrate would, and restores the robust schema afterwards.
+func useSchema(t *testing.T, wanted schema) {
+	t.Helper()
+
+	err := migrateSchema(t.Context(), wanted)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		err := migrateDefenses(context.Background(), true)
+		if err != nil {
+			t.Fatalf("restoring the robust schema: %v", err)
+		}
+	})
+}
+
+func naiveMoney(t *testing.T, b bank, profile string) application.MoneyDependencies {
+	t.Helper()
+
+	parsed, err := defenses.ParseProfile(profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	deps := application.MoneyDependencies{UnitOfWork: postgres.NewUnitOfWork(b.pool), Locker: application.RowLocker{}}
+
+	if !parsed.IsEnabled(defenses.AtomicLedger) {
+		deps.UnitOfWork = naive.NewUnitOfWork(b.pool)
+	}
+
+	if !parsed.IsEnabled(defenses.BalanceLocking) {
+		deps.Locker = naive.NoLocker{}
+	}
+
+	return deps
+}
+
+// armFP08 fails the reconciliation once, between two entries of a batch.
+func armFP08(t *testing.T) {
+	t.Helper()
+
+	failpoint.DisarmAll()
+	failpoint.ConfigureEvents(failpoint.EventsConfig{Dir: t.TempDir(), Service: "bank-worker", Instance: "test"})
+	t.Cleanup(failpoint.DisarmAll)
+
+	rule := failpoint.Rule{Action: failpoint.ActionError, Arg: "crash", Probability: 1, MaxFires: 1, SkipHits: 1, TTL: "1m"}
+
+	err := failpoint.Arm(failpoint.ReconMidApply, rule, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// renumberRebookedItems moves the items the naive variant booked twice out of
+// the way of reconciliation's unique partner_seq, so the robust schema comes
+// back.
+func renumberRebookedItems(t *testing.T, fixture pixBank) {
+	t.Helper()
+
+	_, err := fixture.bank.pool.Exec(context.Background(), `
+UPDATE reconciliation_items SET partner_seq = -id
+WHERE id NOT IN (SELECT min(id) FROM reconciliation_items GROUP BY partner_seq)`)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func (p pausingStatement) Statement(ctx context.Context, afterSeq int64, limit int) ([]application.StatementEntry, error) {
+	entries, err := p.statement.Statement(ctx, afterSeq, limit)
+	p.meantime()
+
+	return entries, err
+}
+
+func (p pixBank) reconcilerWith(statement application.PartnerStatementReader, lease application.LeasePolicy, owner string) application.Reconciler {
+	config := application.ReconcilerConfig{UnitOfWork: p.unitOfWork, Lease: lease, Machine: application.GuardedTransitions{}, Statement: statement, Policy: application.AtomicBatches{}, Owner: owner, Logger: discardLogger()}
+
+	return application.NewReconciler(config)
 }
