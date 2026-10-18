@@ -49,6 +49,7 @@ func synchronousStandbyCommand(replication string) []string {
 		standby = "replica"
 	}
 
+	// ALTER SYSTEM takes no parameters; standby is one of the two constants above.
 	setting := fmt.Sprintf("ALTER SYSTEM SET synchronous_standby_names = '%s'", standby)
 
 	return []string{"psql", "--username", "postgres", "--command", setting, "--command", "SELECT pg_reload_conf()"}

@@ -2,10 +2,10 @@ package postgres
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"centavo/bank/internal/domain/transfer"
@@ -67,7 +67,8 @@ func listenOnce(ctx context.Context, pool *pgxpool.Pool, channel string, handle 
 	}
 	defer conn.Release()
 
-	_, err = conn.Exec(ctx, fmt.Sprintf("LISTEN %s", channel))
+	// LISTEN takes no parameters: the channel is quoted as an identifier.
+	_, err = conn.Exec(ctx, "LISTEN "+pgx.Identifier{channel}.Sanitize())
 	if err != nil {
 		return err
 	}
