@@ -87,9 +87,12 @@ func (e *Engine) Run(ctx context.Context) {
 	}
 }
 
+// eventIDBytes is the randomness of a webhook id.
+const eventIDBytes = 12
+
 // NewEventID returns a random webhook id.
 func NewEventID() string {
-	var buffer [12]byte
+	var buffer [eventIDBytes]byte
 
 	// crypto/rand never fails on supported platforms.
 	_, _ = rand.Read(buffer[:])

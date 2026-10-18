@@ -13,6 +13,26 @@ import (
 	"strings"
 )
 
+// The bases a seed may be written in.
+const (
+	decimalBase = 10
+	hexBase     = 16
+)
+
+// seedBytes is the size of a seed.
+const seedBytes = 8
+
+// The constants of the splitmix64 finalizer (Steele, Lea and Flood, 2014):
+// an odd increment and two multipliers with the shifts between them.
+const (
+	splitmixIncrement   = 0x9e3779b97f4a7c15
+	splitmixMultiplier1 = 0xbf58476d1ce4e5b9
+	splitmixMultiplier2 = 0x94d049bb133111eb
+	splitmixShift1      = 30
+	splitmixShift2      = 27
+	splitmixShift3      = 31
+)
+
 // Seed is the 64-bit seed of a round.
 type Seed uint64
 
@@ -24,9 +44,9 @@ func Parse(raw string) (Seed, error) {
 	normalized := strings.ToLower(strings.TrimSpace(raw))
 	digits, isHex := strings.CutPrefix(normalized, "0x")
 
-	base := 10
+	base := decimalBase
 	if isHex {
-		base = 16
+		base = hexBase
 	}
 
 	value, err := strconv.ParseUint(digits, base, 64)
@@ -39,7 +59,7 @@ func Parse(raw string) (Seed, error) {
 
 // Random draws a fresh seed for a round started without one.
 func Random() (Seed, error) {
-	var buffer [8]byte
+	var buffer [seedBytes]byte
 
 	_, err := rand.Read(buffer[:])
 	if err != nil {
@@ -76,9 +96,9 @@ func hashName(name string) uint64 {
 
 // splitmix64 spreads nearby inputs over the whole 64-bit range.
 func splitmix64(value uint64) uint64 {
-	value += 0x9e3779b97f4a7c15
-	value = (value ^ (value >> 30)) * 0xbf58476d1ce4e5b9
-	value = (value ^ (value >> 27)) * 0x94d049bb133111eb
+	value += splitmixIncrement
+	value = (value ^ (value >> splitmixShift1)) * splitmixMultiplier1
+	value = (value ^ (value >> splitmixShift2)) * splitmixMultiplier2
 
-	return value ^ (value >> 31)
+	return value ^ (value >> splitmixShift3)
 }

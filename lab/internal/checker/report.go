@@ -8,8 +8,11 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"centavo/lab/internal/history"
+
+	"centavo/lab/internal/platform/fsmode"
 )
 
 const (
@@ -155,14 +158,14 @@ func writeReports(roundDir string, report Report) error {
 		return fmt.Errorf("encoding report.json: %w", err)
 	}
 
-	err = os.WriteFile(filepath.Join(roundDir, reportJSONFile), append(content, '\n'), 0o600)
+	err = os.WriteFile(filepath.Join(roundDir, reportJSONFile), append(content, '\n'), fsmode.PrivateFile)
 	if err != nil {
 		return fmt.Errorf("writing report.json: %w", err)
 	}
 
 	markdown := []byte(renderMarkdown(report))
 
-	err = os.WriteFile(filepath.Join(roundDir, reportMDFile), markdown, 0o600)
+	err = os.WriteFile(filepath.Join(roundDir, reportMDFile), markdown, fsmode.PrivateFile)
 	if err != nil {
 		return fmt.Errorf("writing report.md: %w", err)
 	}
@@ -306,7 +309,7 @@ func formatTime(timeNS int64) string {
 		return "antes da rodada"
 	}
 
-	seconds := fmt.Sprintf("%.1f", float64(timeNS)/1e9)
+	seconds := fmt.Sprintf("%.1f", float64(timeNS)/float64(time.Second))
 
 	return "+" + strings.Replace(seconds, ".", ",", 1) + "s"
 }

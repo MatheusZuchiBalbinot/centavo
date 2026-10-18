@@ -10,6 +10,12 @@ import (
 	"centavo/bank/internal/platform/defenses"
 )
 
+// The bases a seed may be written in.
+const (
+	decimalBase = 10
+	hexBase     = 16
+)
+
 // Env is the deployment environment the process declares it runs in.
 type Env string
 
@@ -152,9 +158,9 @@ func parseSeed(raw string) (uint64, error) {
 
 	digits, isHex := strings.CutPrefix(strings.ToLower(raw), "0x")
 
-	base := 10
+	base := decimalBase
 	if isHex {
-		base = 16
+		base = hexBase
 	}
 
 	seed, err := strconv.ParseUint(digits, base, 64)

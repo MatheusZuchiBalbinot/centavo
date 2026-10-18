@@ -19,6 +19,14 @@ import (
 // HonestSettleDelay is how long an honest partner takes to settle.
 const HonestSettleDelay = 300 * time.Millisecond
 
+// The seed of the lies: up to 64 bits read byte by byte, and a salt, the 64-bit
+// golden ratio, that gives the generator's second word a different stream.
+const (
+	maxSeedBytes = 8
+	bitsPerByte  = 8
+	streamSalt   = 0x9e3779b97f4a7c15
+)
+
 const (
 	maxTTL         = time.Hour
 	maxDelay       = 10 * time.Minute
@@ -291,7 +299,8 @@ func newMode(config Config, now time.Time) (*mode, error) {
 		return nil, err
 	}
 
-	draws := mathrand.New(mathrand.NewPCG(seed, seed^0x9e3779b97f4a7c15)) //nolint:gosec // G404: lies must replay from the seed.
+	source := mathrand.NewPCG(seed, seed^streamSalt)
+	draws := mathrand.New(source) //nolint:gosec // G404: lies must replay from the seed.
 	m := &mode{config: config, expiresAt: now.Add(ttl), draws: draws}
 
 	err = m.parseDurations(now)
@@ -398,13 +407,13 @@ func parseSeed(raw string) (uint64, error) {
 		return 0, fmt.Errorf("%w: seed must be a hexadecimal number of up to 64 bits", ErrInvalidMode)
 	}
 
-	if len(decoded) > 8 {
+	if len(decoded) > maxSeedBytes {
 		return 0, fmt.Errorf("%w: seed must be a hexadecimal number of up to 64 bits", ErrInvalidMode)
 	}
 
 	var seed uint64
 	for _, b := range decoded {
-		seed = seed<<8 | uint64(b)
+		seed = seed<<bitsPerByte | uint64(b)
 	}
 
 	return seed, nil

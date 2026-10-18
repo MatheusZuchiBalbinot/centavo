@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"time"
 	"unique"
+
+	"centavo/lab/internal/platform/fsmode"
 )
 
 // Dir is the export directory inside a round directory.
@@ -200,7 +202,7 @@ var tables = []table{
 func Write(roundDir string, s Snapshot) error {
 	dir := filepath.Join(roundDir, Dir)
 
-	err := os.MkdirAll(dir, 0o750)
+	err := os.MkdirAll(dir, fsmode.PrivateDir)
 	if err != nil {
 		return fmt.Errorf("creating export directory: %w", err)
 	}
@@ -217,7 +219,7 @@ func Write(roundDir string, s Snapshot) error {
 		return fmt.Errorf("encoding export meta: %w", err)
 	}
 
-	return os.WriteFile(filepath.Join(dir, metaFile), append(meta, '\n'), 0o600)
+	return os.WriteFile(filepath.Join(dir, metaFile), append(meta, '\n'), fsmode.PrivateFile)
 }
 
 // Read loads the snapshot of roundDir/export.
@@ -247,7 +249,7 @@ func Read(roundDir string) (Snapshot, error) {
 }
 
 func writeTable(path string, header []string, rows [][]string) error {
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) //nolint:gosec // G304: path is built from the round directory and a constant name.
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, fsmode.PrivateFile) //nolint:gosec // G304: the round directory and a constant name.
 	if err != nil {
 		return fmt.Errorf("creating %s: %w", filepath.Base(path), err)
 	}
@@ -572,7 +574,7 @@ func WriteState(path string, state LedgerState) error {
 		return fmt.Errorf("encoding the ledger state: %w", err)
 	}
 
-	return os.WriteFile(path, append(content, '\n'), 0o600)
+	return os.WriteFile(path, append(content, '\n'), fsmode.PrivateFile)
 }
 
 // ReadState loads a ledger state; false means there is none yet.

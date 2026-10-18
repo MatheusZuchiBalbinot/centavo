@@ -714,12 +714,16 @@ func drawDestinationKey(stream *mathrand.Rand) string {
 	return fmt.Sprintf("dest-%04d", stream.IntN(destinationKeys))
 }
 
+// endToEndDigestBytes are the bytes of the digest a PIX in id keeps: 32 hex
+// digits, like the bank's own ids.
+const endToEndDigestBytes = 16
+
 // incomingEndToEndID is the id the lab gives a PIX in: E plus 32 hex digits
 // derived from the operation, so the checker can find it again.
 func incomingEndToEndID(round string, process, seq int) string {
 	digest := sha256.Sum256(fmt.Appendf(nil, "%s-p%02d-%06d", round, process, seq))
 
-	return "E" + hex.EncodeToString(digest[:16])
+	return "E" + hex.EncodeToString(digest[:endToEndDigestBytes])
 }
 
 // mustMarshal encodes the lab's own record types, which always encode.

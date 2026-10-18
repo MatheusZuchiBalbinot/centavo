@@ -61,6 +61,18 @@ var known = []Name{
 	SweeperAfterStatusBeforeTransition,
 }
 
+// The capture groups of specPattern.
+const (
+	groupName = iota + 1
+	groupProbability
+	groupAction
+	groupArg
+	groupMaxFires
+)
+
+// eventsFileMode is the permission of the failpoint events file.
+const eventsFileMode = 0o640
+
 // specPattern is name=[probability%]action[(argument)][*max_fires].
 var specPattern = regexp.MustCompile(`^([a-z_.]+)=(?:([0-9]+(?:\.[0-9]+)?)%)?([a-z]+)(?:\(([^)]*)\))?(?:\*([0-9]+))?$`)
 
@@ -332,7 +344,7 @@ func record(ctx context.Context, f firing) error {
 	if events.file == nil {
 		path := filepath.Join(events.config.Dir, events.config.Instance+".jsonl")
 
-		file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o640) //nolint:gosec // G304: the path comes from the process configuration.
+		file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, eventsFileMode) //nolint:gosec // G304: the path comes from the process configuration.
 		if err != nil {
 			return err
 		}
@@ -428,27 +440,27 @@ func parseSpec(part string, seed uint64) (Name, Rule, error) {
 		return "", Rule{}, fmt.Errorf("%w: %q does not read name=[p%%]action[(arg)][*max]", ErrInvalidRule, part)
 	}
 
-	rule := Rule{Action: Action(match[3]), Arg: match[4], Probability: 1, TTL: envRuleTTL.String(), Seed: seed}
+	rule := Rule{Action: Action(match[groupAction]), Arg: match[groupArg], Probability: 1, TTL: envRuleTTL.String(), Seed: seed}
 
-	if match[2] != "" {
-		percent, err := strconv.ParseFloat(match[2], 64)
+	if match[groupProbability] != "" {
+		percent, err := strconv.ParseFloat(match[groupProbability], 64)
 		if err != nil {
-			return "", Rule{}, fmt.Errorf("%w: probability %q", ErrInvalidRule, match[2])
+			return "", Rule{}, fmt.Errorf("%w: probability %q", ErrInvalidRule, match[groupProbability])
 		}
 
 		rule.Probability = percent / 100
 	}
 
-	if match[5] != "" {
-		maxFires, err := strconv.Atoi(match[5])
+	if match[groupMaxFires] != "" {
+		maxFires, err := strconv.Atoi(match[groupMaxFires])
 		if err != nil {
-			return "", Rule{}, fmt.Errorf("%w: max fires %q", ErrInvalidRule, match[5])
+			return "", Rule{}, fmt.Errorf("%w: max fires %q", ErrInvalidRule, match[groupMaxFires])
 		}
 
 		rule.MaxFires = maxFires
 	}
 
-	return Name(match[1]), rule, nil
+	return Name(match[groupName]), rule, nil
 }
 
 func newDecisions(seed uint64, name Name) *mathrand.Rand {

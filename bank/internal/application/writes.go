@@ -121,11 +121,19 @@ type RetryPolicy struct {
 	MaxDelay   time.Duration
 }
 
+// The internal retry of a unit of work: a few quick tries, well inside the
+// request deadline.
+const (
+	unitMaxRetries = 3
+	unitBaseDelay  = 20 * time.Millisecond
+	unitMaxDelay   = 200 * time.Millisecond
+)
+
 // UnitRetries is idempotency's internal retry: the unit is idempotent, so
 // redoing it after a transient or ambiguous failure is safe, and the key
 // decides whether it was already applied.
 func UnitRetries() RetryPolicy {
-	return RetryPolicy{MaxRetries: 3, BaseDelay: 20 * time.Millisecond, MaxDelay: 200 * time.Millisecond}
+	return RetryPolicy{MaxRetries: unitMaxRetries, BaseDelay: unitBaseDelay, MaxDelay: unitMaxDelay}
 }
 
 // NoRetries is the naive bank: whatever fails, fails.

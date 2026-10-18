@@ -69,6 +69,9 @@ type lastRound struct {
 	ReportURL string `json:"report_url"`
 }
 
+// thousandsGroup is how many digits sit between two separators in R$ 1.234.567.
+const thousandsGroup = 3
+
 // waitingStatus is the live panel before the auditor's first reading.
 func waitingStatus() liveStatus {
 	return liveStatus{Checks: unknownChecks("aguardando a primeira leitura")}
@@ -199,7 +202,7 @@ func formatCents(cents int64) string {
 	var grouped []byte
 
 	for i, digit := range []byte(reais) {
-		isGroupStart := i > 0 && (len(reais)-i)%3 == 0
+		isGroupStart := i > 0 && (len(reais)-i)%thousandsGroup == 0
 		if isGroupStart {
 			grouped = append(grouped, '.')
 		}

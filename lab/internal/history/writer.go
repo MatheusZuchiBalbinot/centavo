@@ -8,6 +8,8 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"centavo/lab/internal/platform/fsmode"
 )
 
 // groupSyncInterval batches fsyncs: an invoke waits at most this long to be
@@ -41,7 +43,7 @@ type Writer struct {
 
 // Create opens a new history file; it refuses to overwrite an existing one.
 func Create(path, round string) (*Writer, error) {
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) //nolint:gosec // G304: a path from its own config
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, fsmode.PrivateFile) //nolint:gosec // G304: a path from its own config
 	if err != nil {
 		return nil, fmt.Errorf("creating history: %w", err)
 	}

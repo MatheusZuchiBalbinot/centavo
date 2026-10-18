@@ -181,12 +181,19 @@ func (b *Builder) Replay() Replay {
 	for i := range replay.Seconds {
 		latencies := slices.Clone(b.latencies[replay.Seconds[i].T])
 		slices.Sort(latencies)
-		replay.Seconds[i].P50 = percentile(latencies, 50)
-		replay.Seconds[i].P99 = percentile(latencies, 99)
+		replay.Seconds[i].P50 = percentile(latencies, medianPercentile)
+		replay.Seconds[i].P99 = percentile(latencies, tailPercentile)
 	}
 
 	return replay
 }
+
+// The percentiles the panel draws, and the scale they are written in.
+const (
+	medianPercentile = 50
+	tailPercentile   = 99
+	percentScale     = 100
+)
 
 // percentile reads a sorted slice by the nearest-rank method.
 func percentile(sorted []float64, p int) float64 {
@@ -194,7 +201,7 @@ func percentile(sorted []float64, p int) float64 {
 		return 0
 	}
 
-	rank := (p*len(sorted) + 99) / 100
+	rank := (p*len(sorted) + percentScale - 1) / percentScale
 
 	return sorted[max(rank-1, 0)]
 }

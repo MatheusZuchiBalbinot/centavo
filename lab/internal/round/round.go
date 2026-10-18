@@ -25,6 +25,8 @@ import (
 	"centavo/lab/internal/seed"
 	"centavo/lab/internal/snapshot"
 	"centavo/lab/scenarios"
+
+	"centavo/lab/internal/platform/fsmode"
 )
 
 const (
@@ -317,7 +319,7 @@ func writeEvents(dir string, events []json.RawMessage) error {
 		content = append(content, '\n')
 	}
 
-	err := os.WriteFile(filepath.Join(dir, eventsFile), content, 0o600)
+	err := os.WriteFile(filepath.Join(dir, eventsFile), content, fsmode.PrivateFile)
 	if err != nil {
 		return fmt.Errorf("writing events.jsonl: %w", err)
 	}
@@ -338,7 +340,7 @@ func exportAndCheck(ctx context.Context, options Options, result Result) (checke
 			return "", err
 		}
 
-		err = os.WriteFile(filepath.Join(result.Dir, truthFile), truth, 0o600)
+		err = os.WriteFile(filepath.Join(result.Dir, truthFile), truth, fsmode.PrivateFile)
 		if err != nil {
 			return "", fmt.Errorf("writing truth.json: %w", err)
 		}
@@ -447,7 +449,7 @@ func createdAccounts(dir string) ([]string, error) {
 // allocate creates the next rNNNN directory; Mkdir failing on an existing
 // directory makes two concurrent labs pick different ids.
 func allocate(roundsDir string) (string, string, error) {
-	err := os.MkdirAll(roundsDir, 0o750)
+	err := os.MkdirAll(roundsDir, fsmode.PrivateDir)
 	if err != nil {
 		return "", "", fmt.Errorf("creating rounds directory: %w", err)
 	}
@@ -461,7 +463,7 @@ func allocate(roundsDir string) (string, string, error) {
 		id := fmt.Sprintf("r%04d", next)
 		dir := filepath.Join(roundsDir, id)
 
-		err = os.Mkdir(dir, 0o750)
+		err = os.Mkdir(dir, fsmode.PrivateDir)
 		if err == nil {
 			return id, dir, nil
 		}
@@ -540,7 +542,7 @@ func writeManifest(dir string, roundManifest manifest) error {
 		return fmt.Errorf("encoding round.json: %w", err)
 	}
 
-	err = os.WriteFile(filepath.Join(dir, manifestFile), append(content, '\n'), 0o600)
+	err = os.WriteFile(filepath.Join(dir, manifestFile), append(content, '\n'), fsmode.PrivateFile)
 	if err != nil {
 		return fmt.Errorf("writing round.json: %w", err)
 	}

@@ -43,6 +43,8 @@ import (
 	"centavo/lab/internal/seed"
 	"centavo/lab/internal/snapshot"
 	"centavo/lab/scenarios"
+
+	"centavo/lab/internal/platform/fsmode"
 )
 
 const (
@@ -393,7 +395,7 @@ func exportReplay(args []string) error {
 
 	path := cmp.Or(*out, filepath.Join(*roundDir, replay.File))
 
-	err = os.WriteFile(path, content, 0o600)
+	err = os.WriteFile(path, content, fsmode.PrivateFile)
 	if err != nil {
 		return fmt.Errorf("writing the replay: %w", err)
 	}
