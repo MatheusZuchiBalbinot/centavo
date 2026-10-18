@@ -1,6 +1,7 @@
 package application
 
 import (
+	"errors"
 	"testing"
 
 	"centavo/bank/internal/domain/money"
@@ -88,10 +89,25 @@ func TestClassify(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := classify(tc.entry, tc.facts)
-			if got != tc.want {
-				t.Fatalf("got %+v, want %+v", got, tc.want)
+			got, err := classify(tc.entry, tc.facts)
+			if err != nil || got != tc.want {
+				t.Fatalf("got %+v (%v), want %+v", got, err, tc.want)
 			}
 		})
+	}
+}
+
+// TestClassify_RefusesAnUnknownTransferStatus: a status the reconciliation
+// has no rule for stops the batch instead of moving money to suspense.
+func TestClassify_RefusesAnUnknownTransferStatus(t *testing.T) {
+	unknown := entryFacts{hasTransfer: true, transfer: transferIn(t, transfer.Status("on_hold"), 500)}
+
+	for _, kind := range []StatementKind{StatementSettlement, StatementReturn} {
+		entry := StatementEntry{Seq: 7, Kind: kind, EndToEndID: "E1", AmountCents: 500}
+
+		got, err := classify(entry, unknown)
+		if !errors.Is(err, errUnknownTransferStatus) {
+			t.Fatalf("%s: got %+v (%v), want errUnknownTransferStatus", kind, got, err)
+		}
 	}
 }

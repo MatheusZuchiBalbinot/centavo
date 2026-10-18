@@ -1,9 +1,16 @@
 package application
 
 import (
+	"errors"
+	"fmt"
+
 	"centavo/bank/internal/domain/money"
 	"centavo/bank/internal/domain/transfer"
 )
+
+// errUnknownTransferStatus is a transfer in a status the reconciliation has no
+// rule for: the batch stops rather than move money by default.
+var errUnknownTransferStatus = errors.New("reconciliation has no rule for the transfer's status")
 
 // StatementKind is a line of the partner's statement.
 type StatementKind string
@@ -78,73 +85,79 @@ type verdict struct {
 // classify compares one statement entry with the ledger. It never touches a
 // customer's account without a known cause: what has no explanation goes to
 // suspense (BR15).
-func classify(entry StatementEntry, facts entryFacts) verdict {
+func classify(entry StatementEntry, facts entryFacts) (verdict, error) {
 	switch entry.Kind {
 	case StatementSettlement:
 		return classifySettlement(entry, facts)
 	case StatementReturn:
 		return classifyReturn(entry, facts)
 	case StatementIncoming:
-		return classifyIncoming(entry, facts)
+		return classifyIncoming(entry, facts), nil
 	default:
-		return verdict{divergence: DivergenceUnknownEntry, action: actionNone}
+		return verdict{divergence: DivergenceUnknownEntry, action: actionNone}, nil
 	}
 }
 
-func classifySettlement(entry StatementEntry, facts entryFacts) verdict {
+func classifySettlement(entry StatementEntry, facts entryFacts) (verdict, error) {
 	paidOut := verdict{divergence: DivergenceUnknownEntry, action: actionSuspense, suspenseCents: entry.AmountCents}
 
 	if !facts.hasTransfer {
-		return paidOut
+		return paidOut, nil
 	}
 
 	if facts.priorItems > 0 {
 		paidOut.divergence = DivergenceDuplicate
 
-		return paidOut
+		return paidOut, nil
 	}
 
 	gap := entry.AmountCents - facts.transfer.Amount.Cents()
 	if gap != 0 {
-		return verdict{divergence: DivergenceAmountMismatch, action: actionWalkAndSuspense, walkTo: transfer.PartnerSettled, suspenseCents: gap}
+		return verdict{divergence: DivergenceAmountMismatch, action: actionWalkAndSuspense, walkTo: transfer.PartnerSettled, suspenseCents: gap}, nil
 	}
 
 	switch facts.transfer.Status {
 	case transfer.StatusConfirmed, transfer.StatusReversed:
-		return verdict{divergence: DivergenceMatched, action: actionNone}
+		return verdict{divergence: DivergenceMatched, action: actionNone}, nil
 	case transfer.StatusCreated, transfer.StatusSent:
-		return verdict{divergence: DivergenceMissingSettlement, action: actionWalk, walkTo: transfer.PartnerSettled}
-	default:
+		return verdict{divergence: DivergenceMissingSettlement, action: actionWalk, walkTo: transfer.PartnerSettled}, nil
+	case transfer.StatusFailed:
 		// The bank refunded a PIX the partner paid (FC21 in a naive relay):
 		// the money is owed back to the bank and waits in suspense.
 		paidOut.divergence = DivergenceMissingSettlement
 
-		return paidOut
+		return paidOut, nil
+	default:
+		return verdict{}, fmt.Errorf("%w: %s", errUnknownTransferStatus, facts.transfer.Status)
 	}
 }
 
-func classifyReturn(entry StatementEntry, facts entryFacts) verdict {
+func classifyReturn(entry StatementEntry, facts entryFacts) (verdict, error) {
 	paidIn := verdict{divergence: DivergenceUnknownEntry, action: actionSuspense, suspenseCents: -entry.AmountCents}
 
 	if !facts.hasTransfer {
-		return paidIn
+		return paidIn, nil
 	}
 
 	if facts.priorItems > 0 {
 		paidIn.divergence = DivergenceDuplicate
 
-		return paidIn
+		return paidIn, nil
 	}
 
 	switch facts.transfer.Status {
 	case transfer.StatusReversed:
-		return verdict{divergence: DivergenceMatched, action: actionNone}
+		return verdict{divergence: DivergenceMatched, action: actionNone}, nil
 	case transfer.StatusCreated, transfer.StatusSent, transfer.StatusConfirmed:
-		return verdict{divergence: DivergenceMissingReturn, action: actionWalk, walkTo: transfer.PartnerReturned}
-	default:
+		return verdict{divergence: DivergenceMissingReturn, action: actionWalk, walkTo: transfer.PartnerReturned}, nil
+	case transfer.StatusFailed:
+		// A return of a PIX the bank already refunded: the partner paid the
+		// money in, and it waits in suspense.
 		paidIn.divergence = DivergenceMissingReturn
 
-		return paidIn
+		return paidIn, nil
+	default:
+		return verdict{}, fmt.Errorf("%w: %s", errUnknownTransferStatus, facts.transfer.Status)
 	}
 }
 

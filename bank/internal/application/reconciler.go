@@ -201,7 +201,10 @@ func (r Reconciler) bookEntry(ctx context.Context, stores Stores, runID int64, e
 		return err
 	}
 
-	decision := classify(entry, facts)
+	decision, err := classify(entry, facts)
+	if err != nil {
+		return err
+	}
 	item := ReconciliationItem{RunID: runID, PartnerSeq: entry.Seq, EndToEndID: entry.EndToEndID, EntryKind: entry.Kind, AmountCents: entry.AmountCents, Divergence: decision.divergence, Action: decision.action}
 
 	itemID, err := stores.InsertItem(ctx, item)
