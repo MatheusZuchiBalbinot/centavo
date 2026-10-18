@@ -405,3 +405,21 @@ func TestResolve_AnswersAppliedOrVoided(t *testing.T) {
 		t.Fatalf("resolve without the request: %d", withoutRequest.Code)
 	}
 }
+
+// TestClientError_SaysTheRuleNotThePath: a domain error wrapped by the
+// storage layer reaches the client as the rule it broke, without the
+// internal step that carried it.
+func TestClientError_SaysTheRuleNotThePath(t *testing.T) {
+	fixture := newFixture(nil)
+	fixture.transfer.err = fmt.Errorf("reading customer position: %w", ledger.ErrAccountNotFound)
+	from, to := newAccountIDs(t)
+	body := `{"from_account_id": "` + from + `", "to_account_id": "` + to + `", "amount_cents": 10}`
+	request := apiRequest{method: http.MethodPost, path: "/v1/transfers", body: body, headers: map[string]string{"Idempotency-Key": validKey}}
+
+	recorder := fixture.do(t, request)
+
+	envelope := decodeError(t, recorder)
+	if envelope.Error.Message != ledger.ErrAccountNotFound.Error() {
+		t.Fatalf("message %q, want %q", envelope.Error.Message, ledger.ErrAccountNotFound.Error())
+	}
+}

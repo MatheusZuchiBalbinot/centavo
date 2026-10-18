@@ -99,7 +99,7 @@ func writeError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, err
 		}
 
 		detail.Code = mapping.code
-		detail.Message = err.Error()
+		detail.Message = clientMessage(mapping, err)
 
 		fixed, isFixed := fixedMessages[mapping.code]
 		if isFixed {
@@ -126,6 +126,18 @@ func writeError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, err
 	detail.Code = codeInternal
 	detail.Message = internalMessage
 	writeJSON(w, http.StatusInternalServerError, errorBody{Error: detail})
+}
+
+// clientMessage is the sentinel's own text: an error wrapped on the way up
+// also carries the internal steps it went through, which are no business of
+// the client and change with every refactoring. A validation error is the
+// exception: its wrapped text says which field is wrong.
+func clientMessage(mapping errorMapping, err error) string {
+	if errors.Is(mapping.target, errValidation) {
+		return err.Error()
+	}
+
+	return mapping.target.Error()
 }
 
 func writeJSON(w http.ResponseWriter, status int, body any) {
