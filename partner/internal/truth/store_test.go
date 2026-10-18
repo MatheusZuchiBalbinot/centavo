@@ -189,7 +189,7 @@ func TestDeliveries_CanBeDroppedRescheduledAndAbandoned(t *testing.T) {
 		t.Fatalf("due now: %+v, %v", now, err)
 	}
 
-	err = store.Reschedule(t.Context(), now[0].ID, epoch.Add(time.Hour), true)
+	err = store.Abandon(t.Context(), now[0].ID, epoch.Add(time.Hour))
 	if err != nil {
 		t.Fatal(err)
 	}

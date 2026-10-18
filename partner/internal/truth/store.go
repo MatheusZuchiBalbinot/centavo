@@ -759,14 +759,21 @@ func (s *Store) MarkDelivered(ctx context.Context, id int64) error {
 	return err
 }
 
-// Reschedule records a failed attempt; past the last attempt the delivery is abandoned.
-func (s *Store) Reschedule(ctx context.Context, id int64, next time.Time, isLastAttempt bool) error {
-	status := DeliveryPending
-	if isLastAttempt {
-		status = DeliveryAbandoned
-	}
+const recordAttemptSQL = `UPDATE deliveries SET attempts = attempts + 1, next_attempt_at = ?, status = ? WHERE id = ?`
 
-	_, err := s.db.ExecContext(ctx, `UPDATE deliveries SET attempts = attempts + 1, next_attempt_at = ?, status = ? WHERE id = ?`, next.UnixNano(), status, id)
+// Reschedule records a failed attempt and when to try again.
+func (s *Store) Reschedule(ctx context.Context, id int64, next time.Time) error {
+	return s.recordAttempt(ctx, id, next, DeliveryPending)
+}
+
+// Abandon records the last failed attempt: the delivery is given up, like a
+// real provider does after its retries.
+func (s *Store) Abandon(ctx context.Context, id int64, at time.Time) error {
+	return s.recordAttempt(ctx, id, at, DeliveryAbandoned)
+}
+
+func (s *Store) recordAttempt(ctx context.Context, id int64, next time.Time, status DeliveryStatus) error {
+	_, err := s.db.ExecContext(ctx, recordAttemptSQL, next.UnixNano(), status, id)
 
 	return err
 }

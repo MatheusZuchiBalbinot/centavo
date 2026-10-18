@@ -69,11 +69,12 @@ type lastRound struct {
 	ReportURL string `json:"report_url"`
 }
 
-func liveStatusOf(reading audit.Reading, hasReading bool) liveStatus {
-	if !hasReading {
-		return liveStatus{Checks: unknownChecks("aguardando a primeira leitura")}
-	}
+// waitingStatus is the live panel before the auditor's first reading.
+func waitingStatus() liveStatus {
+	return liveStatus{Checks: unknownChecks("aguardando a primeira leitura")}
+}
 
+func liveStatusOf(reading audit.Reading) liveStatus {
 	at := reading.At
 
 	if reading.IsUnavailable {

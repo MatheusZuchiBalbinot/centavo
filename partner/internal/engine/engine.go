@@ -165,7 +165,14 @@ func (e *Engine) deliver(ctx context.Context, delivery truth.Delivery, now time.
 	next := now.Add(firstRetryDelay << delivery.Attempts)
 
 	e.logger.InfoContext(ctx, "webhook delivery failed", "event_id", delivery.EventID, "attempt", attempt, "abandoned", isLastAttempt, "error", err)
-	e.record(ctx, e.store.Reschedule(ctx, delivery.ID, next, isLastAttempt))
+
+	if isLastAttempt {
+		e.record(ctx, e.store.Abandon(ctx, delivery.ID, next))
+
+		return
+	}
+
+	e.record(ctx, e.store.Reschedule(ctx, delivery.ID, next))
 }
 
 func (e *Engine) send(ctx context.Context, delivery truth.Delivery, now time.Time) error {

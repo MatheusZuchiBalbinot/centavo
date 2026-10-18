@@ -126,8 +126,14 @@ func (p panelHandlers) replay(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p panelHandlers) status(w http.ResponseWriter, r *http.Request) {
+	live := waitingStatus()
+
 	reading, hasReading := p.config.Live()
-	response := statusResponse{Live: liveStatusOf(reading, hasReading)}
+	if hasReading {
+		live = liveStatusOf(reading)
+	}
+
+	response := statusResponse{Live: live}
 
 	round, err := latestRound(p.config.RoundsDir)
 	if err != nil {

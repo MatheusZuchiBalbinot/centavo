@@ -59,7 +59,12 @@ func MigrateDefenses(ctx context.Context, databaseURL string, defenses []Defense
 			return fmt.Errorf("creating %s migration provider: %w", defense.Name, err)
 		}
 
-		err = reconcile(ctx, provider, defense.IsEnabled)
+		migrate := revertDefense
+		if defense.IsEnabled {
+			migrate = applyDefense
+		}
+
+		err = migrate(ctx, provider)
 		if err != nil {
 			return fmt.Errorf("migrating defense %s: %w", defense.Name, err)
 		}
@@ -70,13 +75,15 @@ func MigrateDefenses(ctx context.Context, databaseURL string, defenses []Defense
 	return nil
 }
 
-func reconcile(ctx context.Context, provider *goose.Provider, isEnabled bool) error {
-	if isEnabled {
-		_, err := provider.Up(ctx)
+// applyDefense runs every migration of a defense that is on.
+func applyDefense(ctx context.Context, provider *goose.Provider) error {
+	_, err := provider.Up(ctx)
 
-		return err
-	}
+	return err
+}
 
+// revertDefense undoes every migration of a defense that is off.
+func revertDefense(ctx context.Context, provider *goose.Provider) error {
 	_, err := provider.DownTo(ctx, 0)
 
 	return err
