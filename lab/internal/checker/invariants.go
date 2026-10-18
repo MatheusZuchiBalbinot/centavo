@@ -147,7 +147,18 @@ func (e *evaluation) checkSequence(accountID string, entries []snapshot.Entry) {
 	}
 
 	entry := ordered[first]
-	e.add(e.entryViolation(entry, RuleI1bSequence, fmt.Sprintf("conta %s: o lançamento na posição %d tem account_seq %d; %d de %d lançamentos fora de 1..n (posição repetida ou buraco)", accountID, first+1, entry.AccountSeq, misplaced, len(ordered))))
+	e.add(e.entryViolation(
+		entry,
+		RuleI1bSequence,
+		fmt.Sprintf(
+			"conta %s: o lançamento na posição %d tem account_seq %d; %d de %d lançamentos fora de 1..n (posição repetida ou buraco)",
+			accountID,
+			first+1,
+			entry.AccountSeq,
+			misplaced,
+			len(ordered),
+		),
+	))
 }
 
 func (e *evaluation) checkChain(accountID string, entries []snapshot.Entry) {
@@ -179,13 +190,32 @@ func (e *evaluation) checkChain(accountID string, entries []snapshot.Entry) {
 		expected += ordered[first-1].BalanceAfterCents
 	}
 
-	e.add(e.entryViolation(entry, RuleI1bChain, fmt.Sprintf("conta %s: na posição %d, balance_after é %d mas o anterior mais o valor dá %d; %d quebras no encadeamento", accountID, entry.AccountSeq, entry.BalanceAfterCents, expected, breaks)))
+	e.add(e.entryViolation(
+		entry,
+		RuleI1bChain,
+		fmt.Sprintf(
+			"conta %s: na posição %d, balance_after é %d mas o anterior mais o valor dá %d; %d quebras no encadeamento",
+			accountID,
+			entry.AccountSeq,
+			entry.BalanceAfterCents,
+			expected,
+			breaks,
+		),
+	))
 }
 
 func (e *evaluation) checkMaterialized(accountID string, entries []snapshot.Entry) {
 	balance, hasBalance := e.ledger.balances[accountID]
 	if !hasBalance {
-		e.add(Violation{Invariant: InvariantI1, Rule: RuleI1bMaterialized, TimeNS: unknownTime, AccountID: accountID, Message: fmt.Sprintf("conta %s não tem linha em account_balances", accountID)})
+		violation := Violation{
+			Invariant: InvariantI1,
+			Rule:      RuleI1bMaterialized,
+			TimeNS:    unknownTime,
+			AccountID: accountID,
+			Message:   fmt.Sprintf("conta %s não tem linha em account_balances", accountID),
+		}
+
+		e.add(violation)
 
 		return
 	}
@@ -205,7 +235,10 @@ func (e *evaluation) checkMaterialized(accountID string, entries []snapshot.Entr
 		Rule:      RuleI1bMaterialized,
 		TimeNS:    e.lastEntryTime(entries),
 		AccountID: accountID,
-		Message:   fmt.Sprintf("conta %s: saldo materializado %d (última posição %d), mas os %d lançamentos somam %d", accountID, balance.BalanceCents, balance.LastEntrySeq, len(entries), sum),
+		Message: fmt.Sprintf(
+			"conta %s: saldo materializado %d (última posição %d), mas os %d lançamentos somam %d",
+			accountID, balance.BalanceCents, balance.LastEntrySeq, len(entries), sum,
+		),
 	})
 }
 
@@ -225,13 +258,28 @@ func (e *evaluation) checkNeverNegative(accountID string, entries []snapshot.Ent
 		isStoredNegative := entry.BalanceAfterCents < 0 && !isStoredReported
 		if isStoredNegative {
 			isStoredReported = true
-			e.add(e.entryViolationOf(InvariantI4, entry, RuleI4EntryBalance, fmt.Sprintf("conta %s: lançamento na posição %d gravou balance_after %d", accountID, entry.AccountSeq, entry.BalanceAfterCents)))
+			e.add(e.entryViolationOf(
+				InvariantI4,
+				entry,
+				RuleI4EntryBalance,
+				fmt.Sprintf("conta %s: lançamento na posição %d gravou balance_after %d", accountID, entry.AccountSeq, entry.BalanceAfterCents),
+			))
 		}
 
 		isRealNegative := running < 0 && !isRealReported
 		if isRealNegative {
 			isRealReported = true
-			e.add(e.entryViolationOf(InvariantI4, entry, RuleI4RealBalance, fmt.Sprintf("conta %s: a soma real dos lançamentos chegou a %d centavos no lançamento %d (o banco aceitou um débito sem saldo)", accountID, running, entry.ID)))
+			e.add(e.entryViolationOf(
+				InvariantI4,
+				entry,
+				RuleI4RealBalance,
+				fmt.Sprintf(
+					"conta %s: a soma real dos lançamentos chegou a %d centavos no lançamento %d (o banco aceitou um débito sem saldo)",
+					accountID,
+					running,
+					entry.ID,
+				),
+			))
 		}
 	}
 
@@ -239,7 +287,15 @@ func (e *evaluation) checkNeverNegative(accountID string, entries []snapshot.Ent
 
 	isMaterializedNegative := hasBalance && balance.BalanceCents < 0
 	if isMaterializedNegative {
-		e.add(Violation{Invariant: InvariantI4, Rule: RuleI4Materialized, TimeNS: e.lastEntryTime(entries), AccountID: accountID, Message: fmt.Sprintf("conta %s: saldo materializado negativo, %d", accountID, balance.BalanceCents)})
+		violation := Violation{
+			Invariant: InvariantI4,
+			Rule:      RuleI4Materialized,
+			TimeNS:    e.lastEntryTime(entries),
+			AccountID: accountID,
+			Message:   fmt.Sprintf("conta %s: saldo materializado negativo, %d", accountID, balance.BalanceCents),
+		}
+
+		e.add(violation)
 	}
 }
 
@@ -291,7 +347,10 @@ func (e *evaluation) checkDepositTerm() {
 		Rule:      RuleI1cDeposits,
 		TimeNS:    e.ops.lastT,
 		AccountID: e.ledger.externalCashID,
-		Message:   fmt.Sprintf("termo D: sys_external_cash registra %d centavos depositados na rodada, o histórico admite entre %d (ok) e %d (ok mais info)", inLedger, confirmed, confirmed+uncertain),
+		Message: fmt.Sprintf(
+			"termo D: sys_external_cash registra %d centavos depositados na rodada, o histórico admite entre %d (ok) e %d (ok mais info)",
+			inLedger, confirmed, confirmed+uncertain,
+		),
 	})
 }
 
@@ -311,7 +370,17 @@ func (e *evaluation) checkOperations() {
 			e.checkStatementPage(o)
 		case history.FunctionResolve, history.FunctionReadPixOut:
 			// Read by the I3 and PIX checks, which follow the writes they answer.
-		case history.FunctionKill, history.FunctionArmFailpoint, history.FunctionArmPartner, history.FunctionFailpointFired, history.FunctionHealStart, history.FunctionFreeze, history.FunctionFailover, history.FunctionDatabase, history.FunctionNetwork, history.FunctionSkewClock, history.FunctionHealComplete:
+		case history.FunctionKill,
+			history.FunctionArmFailpoint,
+			history.FunctionArmPartner,
+			history.FunctionFailpointFired,
+			history.FunctionHealStart,
+			history.FunctionFreeze,
+			history.FunctionFailover,
+			history.FunctionDatabase,
+			history.FunctionNetwork,
+			history.FunctionSkewClock,
+			history.FunctionHealComplete:
 			// The nemesis's own records; no invariant judges them.
 		}
 	}
@@ -403,7 +472,12 @@ func (e *evaluation) depositStanding(o *operation) standing {
 
 func (e *evaluation) checkOKWrite(o *operation, applications []snapshot.Transaction) {
 	if len(applications) == 0 {
-		e.add(e.opViolation(o, InvariantI2, RuleI2Missing, fmt.Sprintf("%s terminou em ok, mas não há transação %s com este client_ref", o.function, transactionKindOf[o.function])))
+		e.add(e.opViolation(
+			o,
+			InvariantI2,
+			RuleI2Missing,
+			fmt.Sprintf("%s terminou em ok, mas não há transação %s com este client_ref", o.function, transactionKindOf[o.function]),
+		))
 
 		return
 	}
@@ -436,7 +510,12 @@ func (e *evaluation) checkOKWrite(o *operation, applications []snapshot.Transact
 
 	isAsRequested := len(entries) == len(expected) && amountsEqual(expected, actual)
 	if !isAsRequested {
-		e.add(e.opViolation(o, InvariantI2, RuleI2Mismatch, fmt.Sprintf("os lançamentos de %s não batem com o pedido: esperado %v, gravado %v", applied.ID, expected, actual)))
+		e.add(e.opViolation(
+			o,
+			InvariantI2,
+			RuleI2Mismatch,
+			fmt.Sprintf("os lançamentos de %s não batem com o pedido: esperado %v, gravado %v", applied.ID, expected, actual),
+		))
 	}
 }
 
@@ -483,7 +562,10 @@ func (e *evaluation) checkPhantoms() {
 			TimeNS:        e.ops.timeOf(transaction.ClientRef),
 			Op:            transaction.ClientRef,
 			TransactionID: id,
-			Message:       fmt.Sprintf("transação %s (%s) com client_ref %q não corresponde a nenhuma operação desse tipo no histórico", id, transaction.Kind, transaction.ClientRef),
+			Message: fmt.Sprintf(
+				"transação %s (%s) com client_ref %q não corresponde a nenhuma operação desse tipo no histórico",
+				id, transaction.Kind, transaction.ClientRef,
+			),
 		})
 	}
 }
@@ -533,7 +615,12 @@ func (e *evaluation) checkStatementPage(o *operation) {
 
 	for i, entry := range page.Entries {
 		if entry.BalanceAfterCents < 0 {
-			e.add(e.opViolation(o, InvariantI4, RuleI4StatementPage, fmt.Sprintf("extrato mostra balance_after %d na posição %d", entry.BalanceAfterCents, entry.AccountSeq)))
+			e.add(e.opViolation(
+				o,
+				InvariantI4,
+				RuleI4StatementPage,
+				fmt.Sprintf("extrato mostra balance_after %d na posição %d", entry.BalanceAfterCents, entry.AccountSeq),
+			))
 
 			return
 		}
@@ -548,7 +635,19 @@ func (e *evaluation) checkStatementPage(o *operation) {
 		isChained := entry.BalanceAfterCents == previous.BalanceAfterCents+entry.AmountCents
 
 		if !isContiguous || !isChained {
-			e.add(e.opViolation(o, InvariantI4, RuleI4StatementPage, fmt.Sprintf("extrato incoerente entre as posições %d e %d (balance_after %d e depois %d com valor %d)", previous.AccountSeq, entry.AccountSeq, previous.BalanceAfterCents, entry.BalanceAfterCents, entry.AmountCents)))
+			e.add(e.opViolation(
+				o,
+				InvariantI4,
+				RuleI4StatementPage,
+				fmt.Sprintf(
+					"extrato incoerente entre as posições %d e %d (balance_after %d e depois %d com valor %d)",
+					previous.AccountSeq,
+					entry.AccountSeq,
+					previous.BalanceAfterCents,
+					entry.BalanceAfterCents,
+					entry.AmountCents,
+				),
+			))
 
 			return
 		}

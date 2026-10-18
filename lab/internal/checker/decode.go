@@ -33,7 +33,18 @@ func shapesOf(function history.Function) (args, value any) {
 		return nil, &statementValue{}
 	case history.FunctionResolve:
 		return &resolveArgs{}, &resolveValue{}
-	case history.FunctionReadPixOut, history.FunctionKill, history.FunctionArmFailpoint, history.FunctionArmPartner, history.FunctionFailpointFired, history.FunctionHealStart, history.FunctionFreeze, history.FunctionFailover, history.FunctionDatabase, history.FunctionNetwork, history.FunctionSkewClock, history.FunctionHealComplete:
+	case history.FunctionReadPixOut,
+		history.FunctionKill,
+		history.FunctionArmFailpoint,
+		history.FunctionArmPartner,
+		history.FunctionFailpointFired,
+		history.FunctionHealStart,
+		history.FunctionFreeze,
+		history.FunctionFailover,
+		history.FunctionDatabase,
+		history.FunctionNetwork,
+		history.FunctionSkewClock,
+		history.FunctionHealComplete:
 		return nil, nil
 	default:
 		return nil, nil

@@ -135,7 +135,16 @@ type OutboxRelayConfig struct {
 
 // NewOutboxRelay builds the relay.
 func NewOutboxRelay(config OutboxRelayConfig) OutboxRelay {
-	return OutboxRelay{unitOfWork: config.UnitOfWork, partner: config.Partner, endToEnd: config.EndToEnd, machine: config.Machine, doubt: config.Doubt, owner: config.Owner, leaseTTL: config.LeaseTTL, logger: config.Logger}
+	return OutboxRelay{
+		unitOfWork: config.UnitOfWork,
+		partner:    config.Partner,
+		endToEnd:   config.EndToEnd,
+		machine:    config.Machine,
+		doubt:      config.Doubt,
+		owner:      config.Owner,
+		leaseTTL:   config.LeaseTTL,
+		logger:     config.Logger,
+	}
 }
 
 // Run polls the outbox until ctx ends. Polling is the source of truth; a
@@ -206,7 +215,12 @@ func (r OutboxRelay) deliver(ctx context.Context, claim OutboxClaim) error {
 		return err
 	}
 
-	submission := PartnerSubmission{EndToEndID: external.EndToEndID, AmountCents: external.Amount.Cents(), DestinationKey: external.DestinationKey, CorrelationID: claim.CorrelationID}
+	submission := PartnerSubmission{
+		EndToEndID:     external.EndToEndID,
+		AmountCents:    external.Amount.Cents(),
+		DestinationKey: external.DestinationKey,
+		CorrelationID:  claim.CorrelationID,
+	}
 	answer := r.partner.Submit(ctx, submission)
 
 	// FP03: with the outbox the message stays pending; the lease expires and

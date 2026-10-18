@@ -73,7 +73,14 @@ type SweeperConfig struct {
 
 // NewSweeper builds the sweeper.
 func NewSweeper(config SweeperConfig) Sweeper {
-	return Sweeper{unitOfWork: config.UnitOfWork, lease: config.Lease, machine: config.Machine, partner: config.Partner, owner: config.Owner, logger: config.Logger}
+	return Sweeper{
+		unitOfWork: config.UnitOfWork,
+		lease:      config.Lease,
+		machine:    config.Machine,
+		partner:    config.Partner,
+		owner:      config.Owner,
+		logger:     config.Logger,
+	}
 }
 
 // Run sweeps until ctx ends.
@@ -171,7 +178,16 @@ func (s Sweeper) sweep(ctx context.Context, candidate StuckTransfer, token int64
 		return walkPath(ctx, stores, s.machine, walk)
 	})
 	if isUnresolvable(err) {
-		s.logger.ErrorContext(ctx, "bank and partner disagree on a transfer", "transfer_id", candidate.ID.String(), "partner_status", string(authoritative.Status), "error", err)
+		s.logger.ErrorContext(
+			ctx,
+			"bank and partner disagree on a transfer",
+			"transfer_id",
+			candidate.ID.String(),
+			"partner_status",
+			string(authoritative.Status),
+			"error",
+			err,
+		)
 
 		return nil
 	}

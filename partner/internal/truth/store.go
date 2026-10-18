@@ -269,6 +269,10 @@ type SubmitResult struct {
 	IsNew    bool
 }
 
+const insertTransferSQL = `
+INSERT INTO transfers (end_to_end_id, participant_id, amount_cents, destination_key, status, reject_reason, is_double, settle_at, created_at, correlation_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
 // Submit records a new transfer, or returns the one with the same
 // end_to_end_id: the API is idempotent by end_to_end_id.
 func (s *Store) Submit(ctx context.Context, transfer Transfer) (SubmitResult, error) {
@@ -286,8 +290,20 @@ func (s *Store) Submit(ctx context.Context, transfer Transfer) (SubmitResult, er
 			return err
 		}
 
-		_, err = tx.ExecContext(ctx, `INSERT INTO transfers (end_to_end_id, participant_id, amount_cents, destination_key, status, reject_reason, is_double, settle_at, created_at, correlation_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			transfer.EndToEndID, transfer.ParticipantID, transfer.AmountCents, transfer.DestinationKey, transfer.Status, transfer.RejectReason, transfer.IsDoubleProcessed, transfer.SettleAt.UnixNano(), transfer.CreatedAt.UnixNano(), transfer.CorrelationID)
+		_, err = tx.ExecContext(
+			ctx,
+			insertTransferSQL,
+			transfer.EndToEndID,
+			transfer.ParticipantID,
+			transfer.AmountCents,
+			transfer.DestinationKey,
+			transfer.Status,
+			transfer.RejectReason,
+			transfer.IsDoubleProcessed,
+			transfer.SettleAt.UnixNano(),
+			transfer.CreatedAt.UnixNano(),
+			transfer.CorrelationID,
+		)
 		if err != nil {
 			return fmt.Errorf("recording a transfer: %w", err)
 		}
@@ -309,6 +325,11 @@ type querier interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
+const selectTransferSQL = `
+SELECT end_to_end_id, participant_id, amount_cents, destination_key, status, reject_reason, is_double, settle_at, return_at, created_at, correlation_id
+FROM transfers
+WHERE end_to_end_id = ?`
+
 func getTransfer(ctx context.Context, q querier, endToEndID string) (Transfer, error) {
 	var (
 		transfer          Transfer
@@ -316,9 +337,25 @@ func getTransfer(ctx context.Context, q querier, endToEndID string) (Transfer, e
 		returnAt          sql.NullInt64
 	)
 
-	row := q.QueryRowContext(ctx, `SELECT end_to_end_id, participant_id, amount_cents, destination_key, status, reject_reason, is_double, settle_at, return_at, created_at, correlation_id FROM transfers WHERE end_to_end_id = ?`, endToEndID)
+	row := q.QueryRowContext(
+		ctx,
+		selectTransferSQL,
+		endToEndID,
+	)
 
-	err := row.Scan(&transfer.EndToEndID, &transfer.ParticipantID, &transfer.AmountCents, &transfer.DestinationKey, &transfer.Status, &transfer.RejectReason, &transfer.IsDoubleProcessed, &settleAt, &returnAt, &created, &transfer.CorrelationID)
+	err := row.Scan(
+		&transfer.EndToEndID,
+		&transfer.ParticipantID,
+		&transfer.AmountCents,
+		&transfer.DestinationKey,
+		&transfer.Status,
+		&transfer.RejectReason,
+		&transfer.IsDoubleProcessed,
+		&settleAt,
+		&returnAt,
+		&created,
+		&transfer.CorrelationID,
+	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Transfer{}, ErrNotFound
 	}
@@ -421,13 +458,29 @@ func (s *Store) Settle(ctx context.Context, command SettleCommand) error {
 		}
 
 		for range settlements {
-			err = addEntry(ctx, tx, StatementEntry{ParticipantID: transfer.ParticipantID, Kind: EntrySettlement, EndToEndID: transfer.EndToEndID, AmountCents: transfer.AmountCents, CreatedAt: command.Now})
+			statementEntry := StatementEntry{
+				ParticipantID: transfer.ParticipantID,
+				Kind:          EntrySettlement,
+				EndToEndID:    transfer.EndToEndID,
+				AmountCents:   transfer.AmountCents,
+				CreatedAt:     command.Now,
+			}
+
+			err = addEntry(ctx, tx, statementEntry)
 			if err != nil {
 				return err
 			}
 		}
 
-		event := Event{ID: command.EventID, Type: EventSettled, EndToEndID: transfer.EndToEndID, AmountCents: transfer.AmountCents, OccurredAt: command.Now, ParticipantID: transfer.ParticipantID, CorrelationID: transfer.CorrelationID}
+		event := Event{
+			ID:            command.EventID,
+			Type:          EventSettled,
+			EndToEndID:    transfer.EndToEndID,
+			AmountCents:   transfer.AmountCents,
+			OccurredAt:    command.Now,
+			ParticipantID: transfer.ParticipantID,
+			CorrelationID: transfer.CorrelationID,
+		}
 
 		return enqueue(ctx, tx, event, command.Planner)
 	})
@@ -459,7 +512,16 @@ func (s *Store) Reject(ctx context.Context, command RejectCommand) error {
 			return err
 		}
 
-		event := Event{ID: command.EventID, Type: EventRejected, EndToEndID: transfer.EndToEndID, AmountCents: transfer.AmountCents, OccurredAt: command.Now, Reason: command.Reason, ParticipantID: transfer.ParticipantID, CorrelationID: transfer.CorrelationID}
+		event := Event{
+			ID:            command.EventID,
+			Type:          EventRejected,
+			EndToEndID:    transfer.EndToEndID,
+			AmountCents:   transfer.AmountCents,
+			OccurredAt:    command.Now,
+			Reason:        command.Reason,
+			ParticipantID: transfer.ParticipantID,
+			CorrelationID: transfer.CorrelationID,
+		}
 
 		return enqueue(ctx, tx, event, command.Planner)
 	})
@@ -490,12 +552,28 @@ func (s *Store) Return(ctx context.Context, command ReturnCommand) error {
 			return err
 		}
 
-		err = addEntry(ctx, tx, StatementEntry{ParticipantID: transfer.ParticipantID, Kind: EntryReturn, EndToEndID: transfer.EndToEndID, AmountCents: transfer.AmountCents, CreatedAt: command.Now})
+		statementEntry := StatementEntry{
+			ParticipantID: transfer.ParticipantID,
+			Kind:          EntryReturn,
+			EndToEndID:    transfer.EndToEndID,
+			AmountCents:   transfer.AmountCents,
+			CreatedAt:     command.Now,
+		}
+
+		err = addEntry(ctx, tx, statementEntry)
 		if err != nil {
 			return err
 		}
 
-		event := Event{ID: command.EventID, Type: EventReturned, EndToEndID: transfer.EndToEndID, AmountCents: transfer.AmountCents, OccurredAt: command.Now, ParticipantID: transfer.ParticipantID, CorrelationID: transfer.CorrelationID}
+		event := Event{
+			ID:            command.EventID,
+			Type:          EventReturned,
+			EndToEndID:    transfer.EndToEndID,
+			AmountCents:   transfer.AmountCents,
+			OccurredAt:    command.Now,
+			ParticipantID: transfer.ParticipantID,
+			CorrelationID: transfer.CorrelationID,
+		}
 
 		return enqueue(ctx, tx, event, command.Planner)
 	})
@@ -508,6 +586,11 @@ type IncomingCommand struct {
 	Planner  Planner
 }
 
+const insertIncomingSQL = `
+INSERT INTO incoming (end_to_end_id, participant_id, account_id, amount_cents, created_at, correlation_id)
+VALUES (?, ?, ?, ?, ?, ?)
+ON CONFLICT (end_to_end_id) DO NOTHING`
+
 // AddIncoming records an incoming PIX once per end_to_end_id and reports
 // whether it was new.
 func (s *Store) AddIncoming(ctx context.Context, command IncomingCommand) (bool, error) {
@@ -516,7 +599,7 @@ func (s *Store) AddIncoming(ctx context.Context, command IncomingCommand) (bool,
 	err := s.inTx(ctx, func(tx *sql.Tx) error {
 		incoming := command.Incoming
 
-		result, err := tx.ExecContext(ctx, `INSERT INTO incoming (end_to_end_id, participant_id, account_id, amount_cents, created_at, correlation_id) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (end_to_end_id) DO NOTHING`,
+		result, err := tx.ExecContext(ctx, insertIncomingSQL,
 			incoming.EndToEndID, incoming.ParticipantID, incoming.AccountID, incoming.AmountCents, incoming.CreatedAt.UnixNano(), incoming.CorrelationID)
 		if err != nil {
 			return err
@@ -529,12 +612,29 @@ func (s *Store) AddIncoming(ctx context.Context, command IncomingCommand) (bool,
 
 		isNew = true
 
-		err = addEntry(ctx, tx, StatementEntry{ParticipantID: incoming.ParticipantID, Kind: EntryIncoming, EndToEndID: incoming.EndToEndID, AmountCents: incoming.AmountCents, CreatedAt: incoming.CreatedAt})
+		statementEntry := StatementEntry{
+			ParticipantID: incoming.ParticipantID,
+			Kind:          EntryIncoming,
+			EndToEndID:    incoming.EndToEndID,
+			AmountCents:   incoming.AmountCents,
+			CreatedAt:     incoming.CreatedAt,
+		}
+
+		err = addEntry(ctx, tx, statementEntry)
 		if err != nil {
 			return err
 		}
 
-		event := Event{ID: command.EventID, Type: EventIncoming, EndToEndID: incoming.EndToEndID, AmountCents: incoming.AmountCents, OccurredAt: incoming.CreatedAt, AccountID: incoming.AccountID, ParticipantID: incoming.ParticipantID, CorrelationID: incoming.CorrelationID}
+		event := Event{
+			ID:            command.EventID,
+			Type:          EventIncoming,
+			EndToEndID:    incoming.EndToEndID,
+			AmountCents:   incoming.AmountCents,
+			OccurredAt:    incoming.CreatedAt,
+			AccountID:     incoming.AccountID,
+			ParticipantID: incoming.ParticipantID,
+			CorrelationID: incoming.CorrelationID,
+		}
 
 		return enqueue(ctx, tx, event, command.Planner)
 	})
@@ -556,7 +656,9 @@ func addEntry(ctx context.Context, tx *sql.Tx, entry StatementEntry) error {
 func enqueue(ctx context.Context, tx *sql.Tx, event Event, planner Planner) error {
 	isTransferEvent := event.Type != EventIncoming
 	if isTransferEvent {
-		err := tx.QueryRowContext(ctx, `UPDATE transfers SET webhook_seq = webhook_seq + 1 WHERE end_to_end_id = ? RETURNING webhook_seq`, event.EndToEndID).Scan(&event.Sequence)
+		err := tx.QueryRowContext(ctx, `UPDATE transfers SET webhook_seq = webhook_seq + 1 WHERE end_to_end_id = ? RETURNING webhook_seq`, event.EndToEndID).Scan(
+			&event.Sequence,
+		)
 		if err != nil {
 			return fmt.Errorf("numbering a webhook: %w", err)
 		}
@@ -590,7 +692,8 @@ func enqueue(ctx context.Context, tx *sql.Tx, event Event, planner Planner) erro
 // reconciler needs to credit a PIX in whose webhook never came, and every
 // entry with the correlation id of its PIX.
 const statementSQL = `
-SELECT e.seq, e.participant_id, e.kind, e.end_to_end_id, e.amount_cents, e.created_at, coalesce(i.account_id, ''), coalesce(t.correlation_id, i.correlation_id, '')
+SELECT e.seq, e.participant_id, e.kind, e.end_to_end_id, e.amount_cents, e.created_at,
+       coalesce(i.account_id, ''), coalesce(t.correlation_id, i.correlation_id, '')
 FROM statement_entries e
 LEFT JOIN incoming i ON e.kind = 'incoming' AND i.end_to_end_id = e.end_to_end_id
 LEFT JOIN transfers t ON e.kind IN ('settlement', 'return') AND t.end_to_end_id = e.end_to_end_id
@@ -618,7 +721,16 @@ func scanStatement(rows *sql.Rows) ([]StatementEntry, error) {
 			created int64
 		)
 
-		err := rows.Scan(&entry.Seq, &entry.ParticipantID, &entry.Kind, &entry.EndToEndID, &entry.AmountCents, &created, &entry.DestinationAccountID, &entry.CorrelationID)
+		err := rows.Scan(
+			&entry.Seq,
+			&entry.ParticipantID,
+			&entry.Kind,
+			&entry.EndToEndID,
+			&entry.AmountCents,
+			&created,
+			&entry.DestinationAccountID,
+			&entry.CorrelationID,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -630,9 +742,21 @@ func scanStatement(rows *sql.Rows) ([]StatementEntry, error) {
 	return entries, rows.Err()
 }
 
+const dueDeliveriesSQL = `
+SELECT id, event_id, participant_id, payload, attempts, next_attempt_at, correlation_id
+FROM deliveries
+WHERE status = 'pending' AND next_attempt_at <= ?
+ORDER BY next_attempt_at
+LIMIT ?`
+
 // DueDeliveries lists pending deliveries whose time came.
 func (s *Store) DueDeliveries(ctx context.Context, now time.Time, limit int) ([]Delivery, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, event_id, participant_id, payload, attempts, next_attempt_at, correlation_id FROM deliveries WHERE status = 'pending' AND next_attempt_at <= ? ORDER BY next_attempt_at LIMIT ?`, now.UnixNano(), limit)
+	rows, err := s.db.QueryContext(
+		ctx,
+		dueDeliveriesSQL,
+		now.UnixNano(),
+		limit,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("listing due deliveries: %w", err)
 	}

@@ -103,7 +103,9 @@ func (a apiHandlers) applyPixOut(input application.PixOutInput, publication *pen
 
 		publication.transferID = &result.TransferID
 
-		return storedJSON(http.StatusAccepted, pixOutResponse{TransferID: result.TransferID.String(), EndToEndID: result.EndToEndID, Status: result.Status, CreatedAt: result.CreatedAt.UTC()})
+		response := pixOutResponse{TransferID: result.TransferID.String(), EndToEndID: result.EndToEndID, Status: result.Status, CreatedAt: result.CreatedAt.UTC()}
+
+		return storedJSON(http.StatusAccepted, response)
 	}
 }
 
@@ -185,7 +187,8 @@ func newExternalTransferResponse(view application.ExternalTransferView) external
 	transitions := make([]transitionResponse, 0, len(view.Transitions))
 
 	for _, transition := range view.Transitions {
-		transitions = append(transitions, transitionResponse{Seq: transition.Seq, From: transition.From, To: transition.To, Cause: transition.Cause, CreatedAt: transition.CreatedAt.UTC()})
+		response := transitionResponse{Seq: transition.Seq, From: transition.From, To: transition.To, Cause: transition.Cause, CreatedAt: transition.CreatedAt.UTC()}
+		transitions = append(transitions, response)
 	}
 
 	return externalTransferResponse{
@@ -222,7 +225,8 @@ func (a apiHandlers) webhook(w http.ResponseWriter, r *http.Request) {
 
 	isSigned := verifySignature(r.Header.Get(signatureHeader), body, a.useCases.Pix.WebhookSecret, clock.Now())
 	if !isSigned {
-		writeJSON(w, http.StatusUnauthorized, errorBody{Error: errorDetail{Code: codeValidationFailed, Message: errBadSignature.Error(), CorrelationID: correlationIDFrom(r.Context())}})
+		detail := errorDetail{Code: codeValidationFailed, Message: errBadSignature.Error(), CorrelationID: correlationIDFrom(r.Context())}
+		writeJSON(w, http.StatusUnauthorized, errorBody{Error: detail})
 
 		return
 	}
@@ -236,7 +240,17 @@ func (a apiHandlers) webhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = a.useCases.Pix.Webhook.Apply(r.Context(), application.PartnerEvent{ID: event.EventID, Type: event.Type, EndToEndID: event.EndToEndID, AmountCents: money.Cents(event.AmountCents), Sequence: event.Sequence, Reason: event.Reason, AccountID: event.AccountID})
+	partnerEvent := application.PartnerEvent{
+		ID:          event.EventID,
+		Type:        event.Type,
+		EndToEndID:  event.EndToEndID,
+		AmountCents: money.Cents(event.AmountCents),
+		Sequence:    event.Sequence,
+		Reason:      event.Reason,
+		AccountID:   event.AccountID,
+	}
+
+	err = a.useCases.Pix.Webhook.Apply(r.Context(), partnerEvent)
 
 	isDuplicateCredit := errors.Is(err, application.ErrAlreadyCredited)
 	if err != nil && !isDuplicateCredit {

@@ -113,13 +113,26 @@ func failurePathOf(result Result, v Violation) FailurePath {
 		path.Ledger = append(path.Ledger, fmt.Sprintf("ledger_transactions %s kind=%s client_ref=%s", id, transaction.Kind, transaction.ClientRef))
 
 		for _, entry := range result.ledger.entriesByTx[id] {
-			path.Ledger = append(path.Ledger, fmt.Sprintf("ledger_entries id=%d conta=%s valor=%d account_seq=%d balance_after=%d", entry.ID, entry.AccountID, entry.AmountCents, entry.AccountSeq, entry.BalanceAfterCents))
+			path.Ledger = append(
+				path.Ledger,
+				fmt.Sprintf(
+					"ledger_entries id=%d conta=%s valor=%d account_seq=%d balance_after=%d",
+					entry.ID,
+					entry.AccountID,
+					entry.AmountCents,
+					entry.AccountSeq,
+					entry.BalanceAfterCents,
+				),
+			)
 		}
 	}
 
 	balance, hasBalance := result.ledger.balances[v.AccountID]
 	if hasBalance {
-		path.Ledger = append(path.Ledger, fmt.Sprintf("account_balances conta=%s saldo=%d last_entry_seq=%d", v.AccountID, balance.BalanceCents, balance.LastEntrySeq))
+		path.Ledger = append(
+			path.Ledger,
+			fmt.Sprintf("account_balances conta=%s saldo=%d last_entry_seq=%d", v.AccountID, balance.BalanceCents, balance.LastEntrySeq),
+		)
 	}
 
 	path.Ledger = path.Ledger[:min(len(path.Ledger), maxPathLines)]

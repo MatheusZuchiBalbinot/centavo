@@ -169,10 +169,30 @@ type table struct {
 var tables = []table{
 	{file: accountsFile, header: []string{"id", "kind", "system_code"}, rows: accountRows, load: loadAccount},
 	{file: balancesFile, header: []string{"account_id", "balance_cents", "last_entry_seq"}, rows: balanceRows, load: loadBalance},
-	{file: transactionsFile, header: []string{"id", "kind", "client_ref", "correlation_id", "external_transfer_id", "incoming_transfer_id"}, rows: transactionRows, load: loadTransaction},
-	{file: entriesFile, header: []string{"id", "transaction_id", "account_id", "amount_cents", "account_seq", "balance_after_cents"}, rows: entryRows, load: loadEntry},
-	{file: transfersFile, header: []string{"id", "end_to_end_id", "client_ref", "account_id", "amount_cents", "status", "status_seq", "failure_code"}, rows: transferRows, load: loadTransfer},
-	{file: transitionsFile, header: []string{"transfer_id", "seq", "from_status", "to_status", "cause", "ledger_transaction_id"}, rows: transitionRows, load: loadTransition},
+	{
+		file:   transactionsFile,
+		header: []string{"id", "kind", "client_ref", "correlation_id", "external_transfer_id", "incoming_transfer_id"},
+		rows:   transactionRows,
+		load:   loadTransaction,
+	},
+	{
+		file:   entriesFile,
+		header: []string{"id", "transaction_id", "account_id", "amount_cents", "account_seq", "balance_after_cents"},
+		rows:   entryRows,
+		load:   loadEntry,
+	},
+	{
+		file:   transfersFile,
+		header: []string{"id", "end_to_end_id", "client_ref", "account_id", "amount_cents", "status", "status_seq", "failure_code"},
+		rows:   transferRows,
+		load:   loadTransfer,
+	},
+	{
+		file:   transitionsFile,
+		header: []string{"transfer_id", "seq", "from_status", "to_status", "cause", "ledger_transaction_id"},
+		rows:   transitionRows,
+		load:   loadTransition,
+	},
 	{file: incomingFile, header: []string{"id", "end_to_end_id", "account_id", "amount_cents"}, rows: incomingRows, load: loadIncoming},
 	{file: bandsFile, header: []string{"band", "count", "sum_cents", "hash"}, rows: bandRows, load: loadBand},
 }
@@ -350,7 +370,16 @@ func loadTransfer(s *Snapshot, record []string) error {
 		return err
 	}
 
-	transfer := ExternalTransfer{ID: record[0], EndToEndID: record[1], ClientRef: record[2], AccountID: record[3], AmountCents: numbers[0], Status: record[5], StatusSeq: numbers[1], FailureCode: record[7]}
+	transfer := ExternalTransfer{
+		ID:          record[0],
+		EndToEndID:  record[1],
+		ClientRef:   record[2],
+		AccountID:   record[3],
+		AmountCents: numbers[0],
+		Status:      record[5],
+		StatusSeq:   numbers[1],
+		FailureCode: record[7],
+	}
 	s.Transfers = append(s.Transfers, transfer)
 
 	return nil
@@ -362,7 +391,9 @@ func loadTransition(s *Snapshot, record []string) error {
 		return err
 	}
 
-	s.Transitions = append(s.Transitions, Transition{TransferID: record[0], Seq: numbers[0], From: record[2], To: record[3], Cause: record[4], LedgerTransactionID: record[5]})
+	transition := Transition{TransferID: record[0], Seq: numbers[0], From: record[2], To: record[3], Cause: record[4], LedgerTransactionID: record[5]}
+
+	s.Transitions = append(s.Transitions, transition)
 
 	return nil
 }
@@ -396,7 +427,16 @@ func loadBalance(s *Snapshot, record []string) error {
 }
 
 func loadTransaction(s *Snapshot, record []string) error {
-	s.Transactions = append(s.Transactions, Transaction{ID: record[0], Kind: record[1], ClientRef: record[2], CorrelationID: record[3], ExternalTransferID: record[4], IncomingTransferID: record[5]})
+	transaction := Transaction{
+		ID:                 record[0],
+		Kind:               record[1],
+		ClientRef:          record[2],
+		CorrelationID:      record[3],
+		ExternalTransferID: record[4],
+		IncomingTransferID: record[5],
+	}
+
+	s.Transactions = append(s.Transactions, transaction)
 
 	return nil
 }
@@ -410,7 +450,14 @@ func loadEntry(s *Snapshot, record []string) error {
 	// Interned, the ids stop pinning the whole CSV line of every entry: a
 	// long round has millions of entries over a few accounts, and two entries
 	// per transaction.
-	entry := Entry{ID: numbers[0], TransactionID: unique.Make(record[1]).Value(), AccountID: unique.Make(record[2]).Value(), AmountCents: numbers[1], AccountSeq: numbers[2], BalanceAfterCents: numbers[3]}
+	entry := Entry{
+		ID:                numbers[0],
+		TransactionID:     unique.Make(record[1]).Value(),
+		AccountID:         unique.Make(record[2]).Value(),
+		AmountCents:       numbers[1],
+		AccountSeq:        numbers[2],
+		BalanceAfterCents: numbers[3],
+	}
 	s.Entries = append(s.Entries, entry)
 
 	return nil

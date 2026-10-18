@@ -527,7 +527,9 @@ func (c *client) execute(ctx context.Context, op operation) (attemptResult, erro
 			return result, c.complete(op, opID, attempt, result)
 		}
 
-		_, err := writer.Append(history.Record{Process: history.Client(c.process), Type: history.TypeAttempt, Op: opID, N: attempt, Outcome: mustMarshal(result.outcome)})
+		record := history.Record{Process: history.Client(c.process), Type: history.TypeAttempt, Op: opID, N: attempt, Outcome: mustMarshal(result.outcome)}
+
+		_, err := writer.Append(record)
 		if err != nil {
 			return attemptResult{}, err
 		}
@@ -572,7 +574,9 @@ func (c *client) executeTwice(ctx context.Context, op operation) error {
 			continue
 		}
 
-		_, err := c.run.config.History.Append(history.Record{Process: history.Client(c.process), Type: history.TypeAttempt, Op: opID, N: i + 1, Outcome: mustMarshal(result.outcome)})
+		record := history.Record{Process: history.Client(c.process), Type: history.TypeAttempt, Op: opID, N: i + 1, Outcome: mustMarshal(result.outcome)}
+
+		_, err := c.run.config.History.Append(record)
 		if err != nil {
 			return err
 		}

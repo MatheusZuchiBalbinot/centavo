@@ -129,14 +129,32 @@ func (n *Nemesis) applyToxic(ctx context.Context, proxy string, fault scenarios.
 	case scenarios.ToxicReject:
 		return n.setProxyEnabled(ctx, proxy, false)
 	case scenarios.ToxicBlackhole:
-		err := n.addToxic(ctx, proxy, toxicBody{Name: fault.ID + "-up", Type: timeoutToxic, Stream: "upstream", Toxicity: toxic.Toxicity, Attributes: map[string]int64{timeoutToxic: 0}})
+		upstream := toxicBody{Name: fault.ID + "-up", Type: timeoutToxic, Stream: "upstream", Toxicity: toxic.Toxicity, Attributes: map[string]int64{timeoutToxic: 0}}
+
+		err := n.addToxic(ctx, proxy, upstream)
 		if err != nil {
 			return err
 		}
 
-		return n.addToxic(ctx, proxy, toxicBody{Name: fault.ID + "-down", Type: timeoutToxic, Stream: "downstream", Toxicity: toxic.Toxicity, Attributes: map[string]int64{timeoutToxic: 0}})
+		downstream := toxicBody{
+			Name:       fault.ID + "-down",
+			Type:       timeoutToxic,
+			Stream:     "downstream",
+			Toxicity:   toxic.Toxicity,
+			Attributes: map[string]int64{timeoutToxic: 0},
+		}
+
+		return n.addToxic(ctx, proxy, downstream)
 	case scenarios.ToxicOneWay:
-		return n.addToxic(ctx, proxy, toxicBody{Name: fault.ID + "-down", Type: timeoutToxic, Stream: "downstream", Toxicity: toxic.Toxicity, Attributes: map[string]int64{timeoutToxic: 0}})
+		downstream := toxicBody{
+			Name:       fault.ID + "-down",
+			Type:       timeoutToxic,
+			Stream:     "downstream",
+			Toxicity:   toxic.Toxicity,
+			Attributes: map[string]int64{timeoutToxic: 0},
+		}
+
+		return n.addToxic(ctx, proxy, downstream)
 	default:
 		return n.addToxic(ctx, proxy, toxicBody{Name: fault.ID, Type: toxic.Type, Stream: toxic.Stream, Toxicity: toxic.Toxicity, Attributes: toxic.Attributes})
 	}

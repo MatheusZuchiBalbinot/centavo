@@ -41,7 +41,7 @@ type Writer struct {
 
 // Create opens a new history file; it refuses to overwrite an existing one.
 func Create(path, round string) (*Writer, error) {
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) //nolint:gosec // G304: the lab builds the path from its own configuration, never from client input.
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) //nolint:gosec // G304: a path from its own config
 	if err != nil {
 		return nil, fmt.Errorf("creating history: %w", err)
 	}

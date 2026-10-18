@@ -234,7 +234,15 @@ type cureState struct {
 // section 3): resolve every indeterminate write, wait for the sagas to
 // settle until t_h + Δ, then read every PIX out once.
 func cure(ctx context.Context, options Options, state cureState) error {
-	resolveConfig := loadgen.ResolveConfig{Round: state.round, Seed: options.Seed, ControlURL: options.ControlURL, History: state.writer, Logger: options.Logger, Writes: state.load.Indeterminate, FirstProcess: state.load.NextProcess}
+	resolveConfig := loadgen.ResolveConfig{
+		Round:        state.round,
+		Seed:         options.Seed,
+		ControlURL:   options.ControlURL,
+		History:      state.writer,
+		Logger:       options.Logger,
+		Writes:       state.load.Indeterminate,
+		FirstProcess: state.load.NextProcess,
+	}
 
 	next, err := loadgen.Resolve(ctx, resolveConfig)
 	if err != nil {

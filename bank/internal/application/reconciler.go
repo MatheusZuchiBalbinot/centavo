@@ -105,7 +105,15 @@ type ReconcilerConfig struct {
 
 // NewReconciler builds the reconciler.
 func NewReconciler(config ReconcilerConfig) Reconciler {
-	return Reconciler{unitOfWork: config.UnitOfWork, lease: config.Lease, machine: config.Machine, statement: config.Statement, policy: config.Policy, owner: config.Owner, logger: config.Logger}
+	return Reconciler{
+		unitOfWork: config.UnitOfWork,
+		lease:      config.Lease,
+		machine:    config.Machine,
+		statement:  config.Statement,
+		policy:     config.Policy,
+		owner:      config.Owner,
+		logger:     config.Logger,
+	}
 }
 
 // Run reconciles until ctx ends.
@@ -205,7 +213,15 @@ func (r Reconciler) bookEntry(ctx context.Context, stores Stores, runID int64, e
 	if err != nil {
 		return err
 	}
-	item := ReconciliationItem{RunID: runID, PartnerSeq: entry.Seq, EndToEndID: entry.EndToEndID, EntryKind: entry.Kind, AmountCents: entry.AmountCents, Divergence: decision.divergence, Action: decision.action}
+	item := ReconciliationItem{
+		RunID:       runID,
+		PartnerSeq:  entry.Seq,
+		EndToEndID:  entry.EndToEndID,
+		EntryKind:   entry.Kind,
+		AmountCents: entry.AmountCents,
+		Divergence:  decision.divergence,
+		Action:      decision.action,
+	}
 
 	itemID, err := stores.InsertItem(ctx, item)
 	if err != nil {
@@ -224,7 +240,12 @@ type actCommand struct {
 
 func (r Reconciler) act(ctx context.Context, stores Stores, command actCommand) error {
 	if command.decision.walkTo != "" {
-		walk := pathWalk{transferID: command.facts.transfer.ID, authoritative: AuthoritativeStatus{Status: command.decision.walkTo}, cause: causeReconciliation, correlationID: entryCorrelation(command.entry)}
+		walk := pathWalk{
+			transferID:    command.facts.transfer.ID,
+			authoritative: AuthoritativeStatus{Status: command.decision.walkTo},
+			cause:         causeReconciliation,
+			correlationID: entryCorrelation(command.entry),
+		}
 
 		err := walkPath(ctx, stores, r.machine, walk)
 		if isUnresolvable(err) {
@@ -239,7 +260,13 @@ func (r Reconciler) act(ctx context.Context, stores Stores, command actCommand) 
 	}
 
 	if command.decision.action == actionCredit {
-		incoming := PartnerEvent{ID: entryCorrelation(command.entry), Type: EventIncoming, EndToEndID: command.entry.EndToEndID, AmountCents: command.entry.AmountCents, AccountID: command.entry.AccountID}
+		incoming := PartnerEvent{
+			ID:          entryCorrelation(command.entry),
+			Type:        EventIncoming,
+			EndToEndID:  command.entry.EndToEndID,
+			AmountCents: command.entry.AmountCents,
+			AccountID:   command.entry.AccountID,
+		}
 
 		return creditIncoming(ctx, stores, incoming)
 	}
@@ -259,7 +286,12 @@ func bookSuspense(ctx context.Context, stores Stores, itemID int64, cents money.
 		return err
 	}
 
-	transaction := ledger.Transaction{ID: transactionID, Kind: ledger.TransactionKindAdjustment, CorrelationID: correlation.From(ctx), ReconciliationItemID: &itemID}
+	transaction := ledger.Transaction{
+		ID:                   transactionID,
+		Kind:                 ledger.TransactionKindAdjustment,
+		CorrelationID:        correlation.From(ctx),
+		ReconciliationItemID: &itemID,
+	}
 
 	_, err = stores.InsertTransaction(ctx, transaction)
 	if err != nil {

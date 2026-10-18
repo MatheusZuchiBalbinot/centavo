@@ -183,7 +183,11 @@ func newUseCases(pool *pgxpool.Pool, cfg config.Config) (httpapi.UseCases, error
 	}
 
 	publication := newPublication(pool, profile)
-	writerDependencies := application.WriterDependencies{UnitOfWork: moneyDependencies.UnitOfWork, Keys: idempotencyStrategy.Keys, Retries: idempotencyStrategy.Retries}
+	writerDependencies := application.WriterDependencies{
+		UnitOfWork: moneyDependencies.UnitOfWork,
+		Keys:       idempotencyStrategy.Keys,
+		Retries:    idempotencyStrategy.Retries,
+	}
 
 	useCases := httpapi.UseCases{
 		Writer:       application.NewWriter(writerDependencies),
@@ -350,7 +354,13 @@ func startSaga(ctx context.Context, pool *pgxpool.Pool, cfg config.Config, logge
 		return err
 	}
 
-	saga := sagaDependencies{unitOfWork: moneyDependencies.UnitOfWork, machine: newStateMachine(cfg.Defenses), partner: newPartner(cfg), owner: cmp.Or(cfg.Chaos.Instance, instanceName()), logger: logger}
+	saga := sagaDependencies{
+		unitOfWork: moneyDependencies.UnitOfWork,
+		machine:    newStateMachine(cfg.Defenses),
+		partner:    newPartner(cfg),
+		owner:      cmp.Or(cfg.Chaos.Instance, instanceName()),
+		logger:     logger,
+	}
 
 	startRelay(ctx, pool, cfg.Defenses, saga)
 
@@ -360,11 +370,26 @@ func startSaga(ctx context.Context, pool *pgxpool.Pool, cfg config.Config, logge
 	}
 
 	if cfg.Defenses.IsEnabled(defenses.Recovery) {
-		sweeperConfig := application.SweeperConfig{UnitOfWork: saga.unitOfWork, Lease: newLeasePolicy(cfg.Defenses), Machine: saga.machine, Partner: saga.partner, Owner: saga.owner, Logger: logger}
+		sweeperConfig := application.SweeperConfig{
+			UnitOfWork: saga.unitOfWork,
+			Lease:      newLeasePolicy(cfg.Defenses),
+			Machine:    saga.machine,
+			Partner:    saga.partner,
+			Owner:      saga.owner,
+			Logger:     logger,
+		}
 		go application.NewSweeper(sweeperConfig).Run(ctx)
 	}
 
-	reconcilerConfig := application.ReconcilerConfig{UnitOfWork: saga.unitOfWork, Lease: newLeasePolicy(cfg.Defenses), Machine: saga.machine, Statement: saga.partner, Policy: newBatchPolicy(cfg.Defenses), Owner: saga.owner, Logger: logger}
+	reconcilerConfig := application.ReconcilerConfig{
+		UnitOfWork: saga.unitOfWork,
+		Lease:      newLeasePolicy(cfg.Defenses),
+		Machine:    saga.machine,
+		Statement:  saga.partner,
+		Policy:     newBatchPolicy(cfg.Defenses),
+		Owner:      saga.owner,
+		Logger:     logger,
+	}
 	go application.NewReconciler(reconcilerConfig).Run(ctx, application.ReconcileInterval)
 
 	return nil
@@ -405,7 +430,16 @@ func newPartner(cfg config.Config) partner {
 // with D4, or the naive LISTEN relay of phase F6.
 func startRelay(ctx context.Context, pool *pgxpool.Pool, profile defenses.Profile, saga sagaDependencies) {
 	if profile.IsEnabled(defenses.Outbox) {
-		relayConfig := application.OutboxRelayConfig{UnitOfWork: saga.unitOfWork, Partner: saga.partner, EndToEnd: newEndToEnd(profile), Machine: saga.machine, Doubt: newDoubt(profile, saga.machine), Owner: saga.owner, LeaseTTL: application.OutboxLeaseTTL, Logger: saga.logger}
+		relayConfig := application.OutboxRelayConfig{
+			UnitOfWork: saga.unitOfWork,
+			Partner:    saga.partner,
+			EndToEnd:   newEndToEnd(profile),
+			Machine:    saga.machine,
+			Doubt:      newDoubt(profile, saga.machine),
+			Owner:      saga.owner,
+			LeaseTTL:   application.OutboxLeaseTTL,
+			Logger:     saga.logger,
+		}
 		go application.NewOutboxRelay(relayConfig).Run(ctx)
 
 		return

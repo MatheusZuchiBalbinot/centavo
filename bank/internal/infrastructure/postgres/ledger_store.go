@@ -184,7 +184,18 @@ func (s LedgerStore) InsertTransaction(ctx context.Context, transaction ledger.T
 		operationID = &id
 	}
 
-	row := s.db.QueryRow(ctx, insertTransactionSQL, uuid.UUID(transaction.ID), string(transaction.Kind), operationID, transaction.ClientRef, transaction.CorrelationID, transaction.ExternalTransferID, transaction.IncomingTransferID, transaction.ReconciliationItemID)
+	row := s.db.QueryRow(
+		ctx,
+		insertTransactionSQL,
+		uuid.UUID(transaction.ID),
+		string(transaction.Kind),
+		operationID,
+		transaction.ClientRef,
+		transaction.CorrelationID,
+		transaction.ExternalTransferID,
+		transaction.IncomingTransferID,
+		transaction.ReconciliationItemID,
+	)
 
 	err := row.Scan(&createdAt)
 	if err != nil {
@@ -200,7 +211,15 @@ VALUES ($1, $2, $3, $4, $5)`
 
 // InsertEntry appends one ledger entry.
 func (s LedgerStore) InsertEntry(ctx context.Context, entry ledger.Entry) error {
-	_, err := s.db.Exec(ctx, insertEntrySQL, uuid.UUID(entry.TransactionID), uuid.UUID(entry.AccountID), int64(entry.Amount), int64(entry.Seq), int64(entry.BalanceAfter.Cents()))
+	_, err := s.db.Exec(
+		ctx,
+		insertEntrySQL,
+		uuid.UUID(entry.TransactionID),
+		uuid.UUID(entry.AccountID),
+		int64(entry.Amount),
+		int64(entry.Seq),
+		int64(entry.BalanceAfter.Cents()),
+	)
 	if err != nil {
 		return fmt.Errorf("inserting ledger entry: %w", err)
 	}

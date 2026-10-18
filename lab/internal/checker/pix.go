@@ -120,7 +120,12 @@ func fixedEndToEnd(transferID string) string {
 }
 
 func indexTruth(truth *PartnerTruth, l ledger) truthIndex {
-	index := truthIndex{statusByE2E: map[string]string{}, settlements: map[string][]truthEntry{}, returns: map[string][]truthEntry{}, incomingByE2E: map[string]truthIncoming{}}
+	index := truthIndex{
+		statusByE2E:   map[string]string{},
+		settlements:   map[string][]truthEntry{},
+		returns:       map[string][]truthEntry{},
+		incomingByE2E: map[string]truthIncoming{},
+	}
 
 	roundTransfers := map[string]bool{}
 	for _, transfer := range l.transfers {
@@ -234,7 +239,12 @@ func (e *evaluation) checkPath(transfer snapshot.ExternalTransfer) {
 		isValidStep := !isFirst && transition.From == previous && allowedTransitions[[2]string{transition.From, transition.To}] && transition.Seq == int64(k+1)
 
 		if !isValidFirst && !isValidStep {
-			e.add(e.transferViolation(transfer, InvariantI7, RuleI7Path, fmt.Sprintf("transferência %s: passo %d vai de %q para %q depois de %q", transfer.ID, transition.Seq, transition.From, transition.To, previous)))
+			e.add(e.transferViolation(
+				transfer,
+				InvariantI7,
+				RuleI7Path,
+				fmt.Sprintf("transferência %s: passo %d vai de %q para %q depois de %q", transfer.ID, transition.Seq, transition.From, transition.To, previous),
+			))
 
 			return
 		}
@@ -244,7 +254,19 @@ func (e *evaluation) checkPath(transfer snapshot.ExternalTransfer) {
 
 	isCurrent := len(transitions) > 0 && transfer.Status == previous && transfer.StatusSeq == int64(len(transitions))
 	if !isCurrent {
-		e.add(e.transferViolation(transfer, InvariantI7, RuleI7Path, fmt.Sprintf("transferência %s está em %s (status_seq %d), mas o histórico tem %d passos e termina em %q", transfer.ID, transfer.Status, transfer.StatusSeq, len(transitions), previous)))
+		e.add(e.transferViolation(
+			transfer,
+			InvariantI7,
+			RuleI7Path,
+			fmt.Sprintf(
+				"transferência %s está em %s (status_seq %d), mas o histórico tem %d passos e termina em %q",
+				transfer.ID,
+				transfer.Status,
+				transfer.StatusSeq,
+				len(transitions),
+				previous,
+			),
+		))
 	}
 }
 
@@ -270,7 +292,12 @@ func (e *evaluation) checkPostings(transfer snapshot.ExternalTransfer) {
 
 	for kind, want := range expected {
 		if counts[kind] != want {
-			e.add(e.transferViolation(transfer, InvariantI7, RuleI7Postings, fmt.Sprintf("transferência %s tem %d transação(ões) %s, o caminho exige %d", transfer.ID, counts[kind], kind, want)))
+			e.add(e.transferViolation(
+				transfer,
+				InvariantI7,
+				RuleI7Postings,
+				fmt.Sprintf("transferência %s tem %d transação(ões) %s, o caminho exige %d", transfer.ID, counts[kind], kind, want),
+			))
 		}
 	}
 }
@@ -281,7 +308,12 @@ func (e *evaluation) checkLiveness(transfer snapshot.ExternalTransfer) {
 		return
 	}
 
-	e.add(e.transferViolation(transfer, InvariantI5, RuleI5NotTerminal, fmt.Sprintf("transferência %s ainda está em %s depois da quiescência", transfer.ID, transfer.Status)))
+	e.add(e.transferViolation(
+		transfer,
+		InvariantI5,
+		RuleI5NotTerminal,
+		fmt.Sprintf("transferência %s ainda está em %s depois da quiescência", transfer.ID, transfer.Status),
+	))
 }
 
 // checkTransit is I5 and BR13: once every transfer of the round is final,
@@ -299,7 +331,15 @@ func (e *evaluation) checkTransit() {
 	}
 
 	if inTransit != 0 {
-		e.add(Violation{Invariant: InvariantI5, Rule: RuleI5Transit, TimeNS: e.ops.lastT, AccountID: transitID, Message: fmt.Sprintf("sys_pix_out_transit guarda %d centavos da rodada depois da quiescência", inTransit)})
+		violation := Violation{
+			Invariant: InvariantI5,
+			Rule:      RuleI5Transit,
+			TimeNS:    e.ops.lastT,
+			AccountID: transitID,
+			Message:   fmt.Sprintf("sys_pix_out_transit guarda %d centavos da rodada depois da quiescência", inTransit),
+		}
+
+		e.add(violation)
 	}
 }
 
@@ -319,11 +359,21 @@ func (e *evaluation) checkAgreement(transfer snapshot.ExternalTransfer, index tr
 	settled, returned := distinctPixOf(index.settlements[base]), distinctPixOf(index.returns[base])
 
 	if settled != counts[snapshot.TransactionPixOutSettle] {
-		e.add(e.transferViolation(transfer, InvariantI6, RuleI6Settlements, fmt.Sprintf("o parceiro liquidou a transferência %s %d vez(es), o ledger registra %d", transfer.ID, settled, counts[snapshot.TransactionPixOutSettle])))
+		e.add(e.transferViolation(
+			transfer,
+			InvariantI6,
+			RuleI6Settlements,
+			fmt.Sprintf("o parceiro liquidou a transferência %s %d vez(es), o ledger registra %d", transfer.ID, settled, counts[snapshot.TransactionPixOutSettle]),
+		))
 	}
 
 	if returned != counts[snapshot.TransactionPixOutReturn] {
-		e.add(e.transferViolation(transfer, InvariantI6, RuleI6Returns, fmt.Sprintf("o parceiro devolveu a transferência %s %d vez(es), o ledger registra %d", transfer.ID, returned, counts[snapshot.TransactionPixOutReturn])))
+		e.add(e.transferViolation(
+			transfer,
+			InvariantI6,
+			RuleI6Returns,
+			fmt.Sprintf("o parceiro devolveu a transferência %s %d vez(es), o ledger registra %d", transfer.ID, returned, counts[snapshot.TransactionPixOutReturn]),
+		))
 	}
 }
 
@@ -340,7 +390,12 @@ func (e *evaluation) checkAuthority(transfer snapshot.ExternalTransfer, index tr
 		return
 	}
 
-	e.add(e.transferViolation(transfer, InvariantI7, RuleI7Authority, fmt.Sprintf("transferência %s terminou em %s, mas o parceiro diz %q para %s", transfer.ID, transfer.Status, cmpOrUnknown(actual), transfer.EndToEndID)))
+	e.add(e.transferViolation(
+		transfer,
+		InvariantI7,
+		RuleI7Authority,
+		fmt.Sprintf("transferência %s terminou em %s, mas o parceiro diz %q para %s", transfer.ID, transfer.Status, cmpOrUnknown(actual), transfer.EndToEndID),
+	))
 }
 
 // checkIncoming is I6 and BR12 for PIX in: each one the partner credited is
@@ -349,13 +404,27 @@ func (e *evaluation) checkIncoming(index truthIndex) {
 	for e2e := range index.incomingByE2E {
 		credits := e.creditsOf(e2e)
 		if credits != 1 {
-			e.add(Violation{Invariant: InvariantI6, Rule: RuleI6Incoming, TimeNS: e.ops.lastT, Message: fmt.Sprintf("o parceiro creditou o PIX de entrada %s, o ledger tem %d crédito(s)", e2e, credits)})
+			violation := Violation{
+				Invariant: InvariantI6,
+				Rule:      RuleI6Incoming,
+				TimeNS:    e.ops.lastT,
+				Message:   fmt.Sprintf("o parceiro creditou o PIX de entrada %s, o ledger tem %d crédito(s)", e2e, credits),
+			}
+
+			e.add(violation)
 		}
 	}
 
 	for e2e := range e.ledger.incomingByE2E {
 		if _, isInTruth := index.incomingByE2E[e2e]; !isInTruth {
-			e.add(Violation{Invariant: InvariantI6, Rule: RuleI6Incoming, TimeNS: e.ops.lastT, Message: fmt.Sprintf("o ledger creditou o PIX de entrada %s, que o parceiro não registra", e2e)})
+			violation := Violation{
+				Invariant: InvariantI6,
+				Rule:      RuleI6Incoming,
+				TimeNS:    e.ops.lastT,
+				Message:   fmt.Sprintf("o ledger creditou o PIX de entrada %s, que o parceiro não registra", e2e),
+			}
+
+			e.add(violation)
 		}
 	}
 }
@@ -381,7 +450,12 @@ func (e *evaluation) checkPixIn(o *operation) {
 
 	credits := e.creditsOf(args.EndToEndID)
 	if credits != 1 {
-		e.add(e.opViolation(o, InvariantI2, RuleI2PixInCredit, fmt.Sprintf("PIX de entrada %s aceito pelo parceiro foi creditado %d vez(es)", args.EndToEndID, credits)))
+		e.add(e.opViolation(
+			o,
+			InvariantI2,
+			RuleI2PixInCredit,
+			fmt.Sprintf("PIX de entrada %s aceito pelo parceiro foi creditado %d vez(es)", args.EndToEndID, credits),
+		))
 	}
 }
 
@@ -397,12 +471,28 @@ func (e *evaluation) checkReserveTerms(index truthIndex) {
 	// checks below.
 	mirrored := -e.roundSum(settlementID)
 	if mirrored != index.reserveCents {
-		e.add(Violation{Invariant: InvariantI1, Rule: RuleI1cPartnerReserve, TimeNS: e.ops.lastT, AccountID: settlementID, Message: fmt.Sprintf("termo R: sys_partner_settlement espelha %d centavos da rodada, a verdade do parceiro diz %d", mirrored, index.reserveCents)})
+		violation := Violation{
+			Invariant: InvariantI1,
+			Rule:      RuleI1cPartnerReserve,
+			TimeNS:    e.ops.lastT,
+			AccountID: settlementID,
+			Message:   fmt.Sprintf("termo R: sys_partner_settlement espelha %d centavos da rodada, a verdade do parceiro diz %d", mirrored, index.reserveCents),
+		}
+
+		e.add(violation)
 	}
 
 	owed := -e.roundSum(suspenseID)
 	if owed != index.doubleCents {
-		e.add(Violation{Invariant: InvariantI1, Rule: RuleI1cDoubleProcess, TimeNS: e.ops.lastT, AccountID: suspenseID, Message: fmt.Sprintf("termo S: o parceiro processou %d centavos em dobro, a suspense guarda %d", index.doubleCents, owed)})
+		violation := Violation{
+			Invariant: InvariantI1,
+			Rule:      RuleI1cDoubleProcess,
+			TimeNS:    e.ops.lastT,
+			AccountID: suspenseID,
+			Message:   fmt.Sprintf("termo S: o parceiro processou %d centavos em dobro, a suspense guarda %d", index.doubleCents, owed),
+		}
+
+		e.add(violation)
 	}
 }
 
@@ -421,7 +511,14 @@ func (e *evaluation) roundSum(accountID string) int64 {
 }
 
 func (e *evaluation) transferViolation(transfer snapshot.ExternalTransfer, invariant Invariant, rule Rule, message string) Violation {
-	return Violation{Invariant: invariant, Rule: rule, TimeNS: e.ops.timeOf(transfer.ClientRef), Op: transfer.ClientRef, AccountID: transfer.AccountID, Message: message}
+	return Violation{
+		Invariant: invariant,
+		Rule:      rule,
+		TimeNS:    e.ops.timeOf(transfer.ClientRef),
+		Op:        transfer.ClientRef,
+		AccountID: transfer.AccountID,
+		Message:   message,
+	}
 }
 
 func boolCount(value bool) int {

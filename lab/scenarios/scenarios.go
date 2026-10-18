@@ -366,7 +366,15 @@ func validate(name string, raw rawScenario) (Scenario, error) {
 		return Scenario{}, err
 	}
 
-	scenario := Scenario{Name: raw.Name, Description: raw.Description, Duration: duration, HealTimeout: healTimeout, LivenessDeadline: liveness, Workload: workload, Faults: faults}
+	scenario := Scenario{
+		Name:             raw.Name,
+		Description:      raw.Description,
+		Duration:         duration,
+		HealTimeout:      healTimeout,
+		LivenessDeadline: liveness,
+		Workload:         workload,
+		Faults:           faults,
+	}
 
 	return scenario, nil
 }
@@ -423,7 +431,16 @@ func validateFault(r rawFault) (Fault, error) {
 	case FaultDatabase:
 		return validateDatabaseFault(fault, r)
 	default:
-		return Fault{}, fmt.Errorf("kind %q is not implemented (known: %s, %s, %s, %s, %s, %s)", r.Kind, FaultFailpoint, FaultProcess, FaultPartner, FaultClock, FaultNetwork, FaultDatabase)
+		return Fault{}, fmt.Errorf(
+			"kind %q is not implemented (known: %s, %s, %s, %s, %s, %s)",
+			r.Kind,
+			FaultFailpoint,
+			FaultProcess,
+			FaultPartner,
+			FaultClock,
+			FaultNetwork,
+			FaultDatabase,
+		)
 	}
 }
 
@@ -456,7 +473,8 @@ func validateFailpointFault(fault Fault, r rawFault) (Fault, error) {
 		return Fault{}, err
 	}
 
-	isValid := failpointPattern.MatchString(r.Failpoint) && slices.Contains(failpointActions, r.Action) && r.Probability > 0 && r.Probability <= 1 && r.MaxFires >= 0
+	isProbability := r.Probability > 0 && r.Probability <= 1
+	isValid := failpointPattern.MatchString(r.Failpoint) && slices.Contains(failpointActions, r.Action) && isProbability && r.MaxFires >= 0
 	if !isValid {
 		return Fault{}, errors.New("a failpoint fault needs failpoint, an action (kill, delay, error, panic, freeze), probability in (0, 1] and max_fires >= 0")
 	}

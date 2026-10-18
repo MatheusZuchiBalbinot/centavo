@@ -214,7 +214,13 @@ func (p poster) debit(ctx context.Context, transactionID ledger.TransactionID, l
 		return err
 	}
 
-	entry := ledger.Entry{TransactionID: transactionID, AccountID: line.account, Amount: line.amount.Negated(), Seq: line.debited.LastSeq, BalanceAfter: line.debited.Balance}
+	entry := ledger.Entry{
+		TransactionID: transactionID,
+		AccountID:     line.account,
+		Amount:        line.amount.Negated(),
+		Seq:           line.debited.LastSeq,
+		BalanceAfter:  line.debited.Balance,
+	}
 
 	return p.entries.InsertEntry(ctx, entry)
 }

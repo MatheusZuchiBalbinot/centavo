@@ -101,7 +101,14 @@ type armRecord struct {
 func (c *failpointController) arm(ctx context.Context) error {
 	for _, armed := range c.faults {
 		fault := armed.fault
-		value := armRecord{Fault: fault.ID, Failpoint: fault.Failpoint, Targets: fault.Targets, Action: fault.Action, Probability: fault.Probability, MaxFires: fault.MaxFires}
+		value := armRecord{
+			Fault:       fault.ID,
+			Failpoint:   fault.Failpoint,
+			Targets:     fault.Targets,
+			Action:      fault.Action,
+			Probability: fault.Probability,
+			MaxFires:    fault.MaxFires,
+		}
 
 		err := c.n.record(history.FunctionArmFailpoint, value)
 		if err != nil {

@@ -98,7 +98,13 @@ func (n *Nemesis) setUpReplication(ctx context.Context, fault scenarios.Fault) e
 		return nil
 	}
 
-	lag := toxicBody{Name: fault.ID + "-lag", Type: "latency", Stream: "downstream", Toxicity: 1, Attributes: map[string]int64{"latency": fault.Lag.Milliseconds()}}
+	lag := toxicBody{
+		Name:       fault.ID + "-lag",
+		Type:       "latency",
+		Stream:     "downstream",
+		Toxicity:   1,
+		Attributes: map[string]int64{"latency": fault.Lag.Milliseconds()},
+	}
 
 	return n.addToxic(ctx, replicationLink, lag)
 }

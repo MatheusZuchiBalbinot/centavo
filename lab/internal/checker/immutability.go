@@ -39,7 +39,14 @@ func (e *evaluation) checkImmutability(previous *snapshot.LedgerState, bands []s
 			continue
 		}
 
-		message := fmt.Sprintf("a faixa %d do ledger mudou desde a rodada anterior: %d lançamentos e soma %d antes, %d e %d agora", before.Band, before.Count, before.SumCents, now.Count, now.SumCents)
+		message := fmt.Sprintf(
+			"a faixa %d do ledger mudou desde a rodada anterior: %d lançamentos e soma %d antes, %d e %d agora",
+			before.Band,
+			before.Count,
+			before.SumCents,
+			now.Count,
+			now.SumCents,
+		)
 		e.add(Violation{Invariant: InvariantI8, Rule: RuleI8Bands, TimeNS: unknownTime, Message: message})
 	}
 }

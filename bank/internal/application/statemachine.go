@@ -110,7 +110,15 @@ func recordStep(ctx context.Context, stores Stores, step transitionStep) error {
 	}
 
 	correlationID := cmp.Or(step.command.CorrelationID, step.external.ClientRef)
-	transition := TransitionRecord{TransferID: step.external.ID, Seq: step.seq, From: &step.from, To: step.command.To, Cause: step.command.Cause, LedgerTransactionID: ledgerTransactionID, CorrelationID: correlationID}
+	transition := TransitionRecord{
+		TransferID:          step.external.ID,
+		Seq:                 step.seq,
+		From:                &step.from,
+		To:                  step.command.To,
+		Cause:               step.command.Cause,
+		LedgerTransactionID: ledgerTransactionID,
+		CorrelationID:       correlationID,
+	}
 
 	return stores.InsertTransition(ctx, transition)
 }

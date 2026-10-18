@@ -68,7 +68,14 @@ func MigrateBase(ctx context.Context, databaseURL string, migrations fs.FS, logg
 		return fmt.Errorf("creating migration lock: %w", err)
 	}
 
-	provider, err := goose.NewProvider(goose.DialectPostgres, db, migrations, goose.WithTableName(baseVersionTable), goose.WithSessionLocker(locker), goose.WithSlog(logger))
+	provider, err := goose.NewProvider(
+		goose.DialectPostgres,
+		db,
+		migrations,
+		goose.WithTableName(baseVersionTable),
+		goose.WithSessionLocker(locker),
+		goose.WithSlog(logger),
+	)
 	if err != nil {
 		return fmt.Errorf("creating migration provider: %w", err)
 	}

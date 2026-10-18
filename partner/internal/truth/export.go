@@ -68,8 +68,19 @@ func (s *Store) Truth(ctx context.Context, participantID string, since time.Time
 	return export, err
 }
 
+const exportTransfersSQL = `
+SELECT end_to_end_id, participant_id, amount_cents, destination_key, status, reject_reason, is_double, created_at
+FROM transfers
+WHERE participant_id = ? AND created_at >= ?
+ORDER BY created_at, end_to_end_id`
+
 func (s *Store) transferViews(ctx context.Context, participantID string, since time.Time) ([]TransferView, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT end_to_end_id, participant_id, amount_cents, destination_key, status, reject_reason, is_double, created_at FROM transfers WHERE participant_id = ? AND created_at >= ? ORDER BY created_at, end_to_end_id`, participantID, since.UnixNano())
+	rows, err := s.db.QueryContext(
+		ctx,
+		exportTransfersSQL,
+		participantID,
+		since.UnixNano(),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("exporting transfers: %w", err)
 	}
@@ -83,7 +94,16 @@ func (s *Store) transferViews(ctx context.Context, participantID string, since t
 			created int64
 		)
 
-		err := rows.Scan(&view.EndToEndID, &view.ParticipantID, &view.AmountCents, &view.DestinationKey, &view.Status, &view.RejectReason, &view.IsDoubleProcessed, &created)
+		err := rows.Scan(
+			&view.EndToEndID,
+			&view.ParticipantID,
+			&view.AmountCents,
+			&view.DestinationKey,
+			&view.Status,
+			&view.RejectReason,
+			&view.IsDoubleProcessed,
+			&created,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -97,7 +117,8 @@ func (s *Store) transferViews(ctx context.Context, participantID string, since t
 
 // statementSinceSQL is statementSQL bounded by time instead of by sequence.
 const statementSinceSQL = `
-SELECT e.seq, e.participant_id, e.kind, e.end_to_end_id, e.amount_cents, e.created_at, coalesce(i.account_id, ''), coalesce(t.correlation_id, i.correlation_id, '')
+SELECT e.seq, e.participant_id, e.kind, e.end_to_end_id, e.amount_cents, e.created_at,
+       coalesce(i.account_id, ''), coalesce(t.correlation_id, i.correlation_id, '')
 FROM statement_entries e
 LEFT JOIN incoming i ON e.kind = 'incoming' AND i.end_to_end_id = e.end_to_end_id
 LEFT JOIN transfers t ON e.kind IN ('settlement', 'return') AND t.end_to_end_id = e.end_to_end_id
@@ -114,8 +135,19 @@ func (s *Store) statementSince(ctx context.Context, participantID string, since 
 	return scanStatement(rows)
 }
 
+const exportIncomingSQL = `
+SELECT end_to_end_id, participant_id, account_id, amount_cents, created_at
+FROM incoming
+WHERE participant_id = ? AND created_at >= ?
+ORDER BY created_at, end_to_end_id`
+
 func (s *Store) incoming(ctx context.Context, participantID string, since time.Time) ([]IncomingView, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT end_to_end_id, participant_id, account_id, amount_cents, created_at FROM incoming WHERE participant_id = ? AND created_at >= ? ORDER BY created_at, end_to_end_id`, participantID, since.UnixNano())
+	rows, err := s.db.QueryContext(
+		ctx,
+		exportIncomingSQL,
+		participantID,
+		since.UnixNano(),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("exporting incoming: %w", err)
 	}

@@ -48,7 +48,14 @@ func MigrateDefenses(ctx context.Context, databaseURL string, defenses []Defense
 			return fmt.Errorf("creating migration lock: %w", err)
 		}
 
-		provider, err := goose.NewProvider(goose.DialectPostgres, db, defense.Files, goose.WithTableName(defenseVersionTablePrefix+defense.Name), goose.WithSessionLocker(locker), goose.WithSlog(logger))
+		provider, err := goose.NewProvider(
+			goose.DialectPostgres,
+			db,
+			defense.Files,
+			goose.WithTableName(defenseVersionTablePrefix+defense.Name),
+			goose.WithSessionLocker(locker),
+			goose.WithSlog(logger),
+		)
 		if err != nil {
 			return fmt.Errorf("creating %s migration provider: %w", defense.Name, err)
 		}

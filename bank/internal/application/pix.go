@@ -158,7 +158,14 @@ func (c CreatePixOut) Apply(ctx context.Context, stores Stores, operationID ledg
 		return PixOutResult{}, err
 	}
 
-	first := TransitionRecord{TransferID: external.ID, Seq: 1, To: transfer.StatusCreated, Cause: causeAPI, LedgerTransactionID: &transactionID, CorrelationID: input.Write.CorrelationID}
+	first := TransitionRecord{
+		TransferID:          external.ID,
+		Seq:                 1,
+		To:                  transfer.StatusCreated,
+		Cause:               causeAPI,
+		LedgerTransactionID: &transactionID,
+		CorrelationID:       input.Write.CorrelationID,
+	}
 
 	err = stores.InsertTransition(ctx, first)
 	if err != nil {
@@ -198,7 +205,17 @@ func recordTransfer(ctx context.Context, stores Stores, operationID ledger.Opera
 		return ExternalTransfer{}, time.Time{}, err
 	}
 
-	external := ExternalTransfer{ID: id, EndToEndID: id.EndToEndID(), OperationID: operationID, ClientRef: string(input.Write.Key), AccountID: input.AccountID, Amount: input.Amount, DestinationKey: input.DestinationKey, Status: transfer.StatusCreated, StatusSeq: 1}
+	external := ExternalTransfer{
+		ID:             id,
+		EndToEndID:     id.EndToEndID(),
+		OperationID:    operationID,
+		ClientRef:      string(input.Write.Key),
+		AccountID:      input.AccountID,
+		Amount:         input.Amount,
+		DestinationKey: input.DestinationKey,
+		Status:         transfer.StatusCreated,
+		StatusSeq:      1,
+	}
 
 	createdAt, err := stores.InsertExternalTransfer(ctx, external)
 	if err != nil {
@@ -365,7 +382,12 @@ func (r NaiveRelay) Relay(ctx context.Context, id transfer.ID) error {
 		return err
 	}
 
-	submission := PartnerSubmission{EndToEndID: attemptID, AmountCents: external.Amount.Cents(), DestinationKey: external.DestinationKey, CorrelationID: external.ClientRef}
+	submission := PartnerSubmission{
+		EndToEndID:     attemptID,
+		AmountCents:    external.Amount.Cents(),
+		DestinationKey: external.DestinationKey,
+		CorrelationID:  external.ClientRef,
+	}
 	answer := r.partner.Submit(ctx, submission)
 
 	return r.record(ctx, external, answer)

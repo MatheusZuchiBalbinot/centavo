@@ -127,10 +127,20 @@ func (e *Engine) decide(ctx context.Context, transfer truth.Transfer, now time.T
 	}
 
 	if decider.Reject() {
-		return e.store.Reject(ctx, truth.RejectCommand{EndToEndID: transfer.EndToEndID, Reason: declinedReason, Now: now, EventID: NewEventID(), Planner: decider.Plan})
+		rejectCommand := truth.RejectCommand{EndToEndID: transfer.EndToEndID, Reason: declinedReason, Now: now, EventID: NewEventID(), Planner: decider.Plan}
+
+		return e.store.Reject(ctx, rejectCommand)
 	}
 
-	return e.store.Settle(ctx, truth.SettleCommand{EndToEndID: transfer.EndToEndID, Now: now, ReturnAt: decider.ReturnAfterSettle(), EventID: NewEventID(), Planner: decider.Plan})
+	settleCommand := truth.SettleCommand{
+		EndToEndID: transfer.EndToEndID,
+		Now:        now,
+		ReturnAt:   decider.ReturnAfterSettle(),
+		EventID:    NewEventID(),
+		Planner:    decider.Plan,
+	}
+
+	return e.store.Settle(ctx, settleCommand)
 }
 
 func (e *Engine) deliverDue(ctx context.Context) {

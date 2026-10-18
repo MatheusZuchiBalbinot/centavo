@@ -43,7 +43,14 @@ type submitRequest struct {
 // refusal, anything else (timeout, 5xx, a broken connection) is unknown:
 // the partner may have processed it.
 func (c Client) Submit(ctx context.Context, submission application.PartnerSubmission) application.PartnerAnswer {
-	body, err := json.Marshal(submitRequest{EndToEndID: submission.EndToEndID, ParticipantID: c.participantID, AmountCents: int64(submission.AmountCents), DestinationKey: submission.DestinationKey})
+	payload := submitRequest{
+		EndToEndID:     submission.EndToEndID,
+		ParticipantID:  c.participantID,
+		AmountCents:    int64(submission.AmountCents),
+		DestinationKey: submission.DestinationKey,
+	}
+
+	body, err := json.Marshal(payload)
 	if err != nil {
 		return application.PartnerUnknown
 	}

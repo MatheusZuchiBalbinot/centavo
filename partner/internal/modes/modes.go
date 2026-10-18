@@ -287,7 +287,8 @@ func newMode(config Config, now time.Time) (*mode, error) {
 		return nil, err
 	}
 
-	m := &mode{config: config, expiresAt: now.Add(ttl), draws: mathrand.New(mathrand.NewPCG(seed, seed^0x9e3779b97f4a7c15))} //nolint:gosec // G404: lies must replay from the seed.
+	draws := mathrand.New(mathrand.NewPCG(seed, seed^0x9e3779b97f4a7c15)) //nolint:gosec // G404: lies must replay from the seed.
+	m := &mode{config: config, expiresAt: now.Add(ttl), draws: draws}
 
 	err = m.parseDurations(now)
 	if err != nil {

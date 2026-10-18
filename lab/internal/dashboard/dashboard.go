@@ -26,10 +26,11 @@ var staticFiles embed.FS
 
 // securityHeaders lock the page down: no inline script, no framing, no sniffing.
 var securityHeaders = map[string]string{
-	"Content-Security-Policy": "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
-	"X-Content-Type-Options":  "nosniff",
-	"Referrer-Policy":         "strict-origin-when-cross-origin",
-	"Permissions-Policy":      "camera=(), microphone=(), geolocation=()",
+	"Content-Security-Policy": "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; " +
+		"base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+	"X-Content-Type-Options": "nosniff",
+	"Referrer-Policy":        "strict-origin-when-cross-origin",
+	"Permissions-Policy":     "camera=(), microphone=(), geolocation=()",
 }
 
 // LiveFunc returns the auditor's latest reading, and false before the first.

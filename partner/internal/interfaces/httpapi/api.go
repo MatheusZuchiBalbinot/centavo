@@ -201,7 +201,9 @@ func (a API) status(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, statusResponse{EndToEndID: transfer.EndToEndID, Status: transfer.Status, AmountCents: transfer.AmountCents, Reason: transfer.RejectReason})
+	response := statusResponse{EndToEndID: transfer.EndToEndID, Status: transfer.Status, AmountCents: transfer.AmountCents, Reason: transfer.RejectReason}
+
+	writeJSON(w, http.StatusOK, response)
 }
 
 type statementResponse struct {
@@ -258,7 +260,8 @@ func (a API) incoming(w http.ResponseWriter, r *http.Request) {
 
 	err := decode(w, r, &request)
 
-	isValid := err == nil && a.participants[request.ParticipantID] && endToEndPattern.MatchString(request.EndToEndID) && request.AccountID != "" && request.AmountCents > 0
+	isKnownSender := err == nil && a.participants[request.ParticipantID] && endToEndPattern.MatchString(request.EndToEndID)
+	isValid := isKnownSender && request.AccountID != "" && request.AmountCents > 0
 	if !isValid {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "participant_id, end_to_end_id, account_id and amount_cents are required"})
 
@@ -266,7 +269,14 @@ func (a API) incoming(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now().UTC()
-	incoming := truth.Incoming{EndToEndID: request.EndToEndID, ParticipantID: request.ParticipantID, AccountID: request.AccountID, AmountCents: request.AmountCents, CreatedAt: now, CorrelationID: correlationOf(r)}
+	incoming := truth.Incoming{
+		EndToEndID:    request.EndToEndID,
+		ParticipantID: request.ParticipantID,
+		AccountID:     request.AccountID,
+		AmountCents:   request.AmountCents,
+		CreatedAt:     now,
+		CorrelationID: correlationOf(r),
+	}
 	decider := a.modes.For(request.ParticipantID, now)
 
 	isNew, err := a.store.AddIncoming(r.Context(), truth.IncomingCommand{Incoming: incoming, EventID: engine.NewEventID(), Planner: decider.Plan})

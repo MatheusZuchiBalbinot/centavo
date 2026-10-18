@@ -28,7 +28,19 @@ RETURNING created_at`
 func (s LedgerStore) InsertExternalTransfer(ctx context.Context, external application.ExternalTransfer) (time.Time, error) {
 	var createdAt time.Time
 
-	err := s.db.QueryRow(ctx, insertExternalTransferSQL, uuid.UUID(external.ID), external.EndToEndID, uuid.UUID(external.OperationID), external.ClientRef, uuid.UUID(external.AccountID), int64(external.Amount.Cents()), external.DestinationKey).Scan(&createdAt)
+	row := s.db.QueryRow(
+		ctx,
+		insertExternalTransferSQL,
+		uuid.UUID(external.ID),
+		external.EndToEndID,
+		uuid.UUID(external.OperationID),
+		external.ClientRef,
+		uuid.UUID(external.AccountID),
+		int64(external.Amount.Cents()),
+		external.DestinationKey,
+	)
+
+	err := row.Scan(&createdAt)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("inserting external transfer: %w", err)
 	}
@@ -54,7 +66,17 @@ func (s LedgerStore) InsertTransition(ctx context.Context, transition applicatio
 		ledgerTransactionID = &id
 	}
 
-	_, err := s.db.Exec(ctx, insertTransitionSQL, uuid.UUID(transition.TransferID), transition.Seq, from, string(transition.To), transition.Cause, ledgerTransactionID, transition.CorrelationID)
+	_, err := s.db.Exec(
+		ctx,
+		insertTransitionSQL,
+		uuid.UUID(transition.TransferID),
+		transition.Seq,
+		from,
+		string(transition.To),
+		transition.Cause,
+		ledgerTransactionID,
+		transition.CorrelationID,
+	)
 	if err != nil {
 		return fmt.Errorf("inserting transition: %w", err)
 	}
@@ -62,7 +84,8 @@ func (s LedgerStore) InsertTransition(ctx context.Context, transition applicatio
 	return nil
 }
 
-const externalTransferColumns = `id, end_to_end_id, operation_id, client_ref, account_id, amount_cents, destination_key, status::text, status_seq, coalesce(failure_code, ''), created_at`
+const externalTransferColumns = `id, end_to_end_id, operation_id, client_ref, account_id, amount_cents, destination_key,
+	status::text, status_seq, coalesce(failure_code, ''), created_at`
 
 // FindExternalTransfer reads a transfer and its state history.
 func (s LedgerStore) FindExternalTransfer(ctx context.Context, id transfer.ID) (application.ExternalTransfer, []application.TransitionRecord, error) {
@@ -93,7 +116,19 @@ func scanExternalTransfer(row pgx.Row) (application.ExternalTransfer, error) {
 		status                     string
 	)
 
-	err := row.Scan(&id, &external.EndToEndID, &operationID, &external.ClientRef, &accountID, &amountCents, &external.DestinationKey, &status, &external.StatusSeq, &external.FailureCode, &external.CreatedAt)
+	err := row.Scan(
+		&id,
+		&external.EndToEndID,
+		&operationID,
+		&external.ClientRef,
+		&accountID,
+		&amountCents,
+		&external.DestinationKey,
+		&status,
+		&external.StatusSeq,
+		&external.FailureCode,
+		&external.CreatedAt,
+	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return application.ExternalTransfer{}, transfer.ErrTransferNotFound
 	}
@@ -211,7 +246,15 @@ VALUES ($1, $2, $3, $4, $5)`
 // InsertIncoming records a PIX in; a second one for the same end_to_end_id
 // is application.ErrAlreadyCredited.
 func (s LedgerStore) InsertIncoming(ctx context.Context, incoming application.IncomingRecord) error {
-	_, err := s.db.Exec(ctx, insertIncomingSQL, incoming.ID, incoming.EndToEndID, uuid.UUID(incoming.AccountID), int64(incoming.Amount.Cents()), incoming.SourceEventID)
+	_, err := s.db.Exec(
+		ctx,
+		insertIncomingSQL,
+		incoming.ID,
+		incoming.EndToEndID,
+		uuid.UUID(incoming.AccountID),
+		int64(incoming.Amount.Cents()),
+		incoming.SourceEventID,
+	)
 
 	var pgErr *pgconn.PgError
 

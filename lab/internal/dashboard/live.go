@@ -195,7 +195,15 @@ func (t *tracker) summaryOf(id string) (summary, bool) {
 		return summary{}, false
 	}
 
-	round := summary{Round: id, Scenario: built.Scenario, Seed: built.Seed, Verdict: built.Verdict, Seconds: len(built.Seconds), Counters: built.Counters, ReportURL: "/rounds/" + id + "/report.md"}
+	round := summary{
+		Round:     id,
+		Scenario:  built.Scenario,
+		Seed:      built.Seed,
+		Verdict:   built.Verdict,
+		Seconds:   len(built.Seconds),
+		Counters:  built.Counters,
+		ReportURL: "/rounds/" + id + "/report.md",
+	}
 
 	for _, second := range built.Seconds {
 		round.Operations += second.OK + second.Fail + second.Info

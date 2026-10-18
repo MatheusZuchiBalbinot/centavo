@@ -76,7 +76,8 @@ const (
 	exitCheckerError      = 3
 )
 
-const usage = "usage: lab serve | run --scenario <name> [--seed <seed>] [--duration <d>] | check --round <dir> | export-replay --round <dir> [--out <file>] | healthcheck"
+const usage = "usage: lab serve | run --scenario <name> [--seed <seed>] [--duration <d>] | check --round <dir> | " +
+	"export-replay --round <dir> [--out <file>] | healthcheck"
 
 var (
 	errUnhealthy         = errors.New("health endpoint did not answer 200")
@@ -318,7 +319,7 @@ func checkInSubprocess(ctx context.Context, roundDir string) (checker.Verdict, e
 		return "", fmt.Errorf("%w: %w", errCheckerCrashed, err)
 	}
 
-	command := exec.CommandContext(ctx, executable, commandCheck, "--round", roundDir) //nolint:gosec // G204: the lab runs its own binary with a directory it allocated.
+	command := exec.CommandContext(ctx, executable, commandCheck, "--round", roundDir) //nolint:gosec // G204: its own binary, on a dir it allocated
 	command.Env = append(os.Environ(), checkerMemoryLimit)
 	command.Stdout = os.Stdout
 	command.Stderr = os.Stderr
