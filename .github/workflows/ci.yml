@@ -14,6 +14,7 @@ concurrency:
 
 env:
   GOLANGCI_LINT_VERSION: v2.15.0
+  GOVULNCHECK_VERSION: v1.8.0
 
 jobs:
   go:
@@ -50,6 +51,11 @@ jobs:
 
       - name: test
         run: go test -race ./... && go test -race -tags chaoslab -coverpkg=./... -coverprofile=cover.out ./...
+
+      - name: known vulnerabilities
+        run: |
+          go run "golang.org/x/vuln/cmd/govulncheck@$GOVULNCHECK_VERSION" ./...
+          go run "golang.org/x/vuln/cmd/govulncheck@$GOVULNCHECK_VERSION" -tags chaoslab ./...
 
       - name: coverage floor
         env:
