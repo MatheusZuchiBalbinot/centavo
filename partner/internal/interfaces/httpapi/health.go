@@ -41,7 +41,7 @@ func NewAdminHandler(info BuildInfo, api API, chaos http.Handler) http.Handler {
 		mux.Handle("/chaos/", chaos)
 	}
 
-	return mux
+	return withSecurityHeaders(mux)
 }
 
 type healthHandler struct {

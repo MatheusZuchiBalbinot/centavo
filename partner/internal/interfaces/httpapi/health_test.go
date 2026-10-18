@@ -40,3 +40,18 @@ func TestHealth_ReportsBuild(t *testing.T) {
 		t.Fatalf("unexpected body: %+v", body)
 	}
 }
+
+// TestHealth_SendsSecurityHeaders: nothing the partner answers is a page a
+// browser may render or sniff.
+func TestHealth_SendsSecurityHeaders(t *testing.T) {
+	handler := httpapi.NewAdminHandler(httpapi.BuildInfo{}, httpapi.API{}, nil)
+	request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, httpapi.HealthPath, http.NoBody)
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, request)
+
+	isLockedDown := recorder.Header().Get("X-Content-Type-Options") == "nosniff" && recorder.Header().Get("Content-Security-Policy") != ""
+	if !isLockedDown {
+		t.Fatalf("headers %v", recorder.Header())
+	}
+}

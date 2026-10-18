@@ -70,7 +70,7 @@ func (a API) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/transfers/{e2e}", a.status)
 	mux.HandleFunc("GET /v1/statements", a.statement)
 
-	return mux
+	return withSecurityHeaders(mux)
 }
 
 type submitRequest struct {

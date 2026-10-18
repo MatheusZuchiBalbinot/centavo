@@ -71,7 +71,7 @@ func NewAPIHandler(useCases UseCases, logger *slog.Logger) http.Handler {
 	mux.HandleFunc("GET /v1/external-transfers/{id}", api.getPixOut)
 	mux.HandleFunc("POST /webhooks/partner", api.webhook)
 
-	return withRequestContext(mux, logger)
+	return withSecurityHeaders(withRequestContext(mux, logger))
 }
 
 type apiHandlers struct {

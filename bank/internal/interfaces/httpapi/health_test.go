@@ -89,3 +89,14 @@ func getHealth(t *testing.T, handler http.Handler) (*httptest.ResponseRecorder, 
 
 	return recorder, body
 }
+
+// TestHealth_SendsSecurityHeaders: the admin port, like the client one,
+// answers with headers that keep a browser from rendering or sniffing it.
+func TestHealth_SendsSecurityHeaders(t *testing.T) {
+	recorder, _ := getHealth(t, httpapi.NewAdminHandler(testBuildInfo, fakePinger{}))
+
+	isLockedDown := recorder.Header().Get("X-Content-Type-Options") == "nosniff" && recorder.Header().Get("Content-Security-Policy") != ""
+	if !isLockedDown {
+		t.Fatalf("headers %v", recorder.Header())
+	}
+}

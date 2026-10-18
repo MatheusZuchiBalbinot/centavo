@@ -61,7 +61,7 @@ func NewAdminHandler(info BuildInfo, database Pinger) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET "+HealthPath, healthHandler{info: info, database: database})
 
-	return mux
+	return withSecurityHeaders(mux)
 }
 
 type healthHandler struct {
