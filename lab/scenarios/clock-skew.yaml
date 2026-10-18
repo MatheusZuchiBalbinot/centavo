@@ -12,9 +12,10 @@ faults:
   - id: divergences
     kind: partner
     modes: {double_process: 0.05, webhook_drop: 0.2}
-  # Just under the 30 s lease: each worker sees the other's lease expire a
-  # second after it was taken, so the two take it from each other every run.
-  # Two minutes would leave it to the one ahead forever.
+  # The worker ahead takes a live lease from the one behind a second after it
+  # was taken; once it holds the lease, the one behind sees it valid for the
+  # TTL plus the skew and rarely gets it back. The theft is checked
+  # deterministically by TestLease_ExpiryUsesDatabaseClock.
   - id: worker-ahead
     kind: clock
     targets: [bank-worker-2]
