@@ -160,6 +160,8 @@ func (ops *operations) add(record history.Record) {
 	ops.lastT = max(ops.lastT, record.TimeNS)
 
 	if record.Type == history.TypeInvoke {
+		// validate runs once the whole history is read and reports a value
+		// that does not decode; until then a bad one just reuses no key.
 		var reused reusedKeyArgs
 		_ = json.Unmarshal(record.Value, &reused)
 
@@ -186,10 +188,10 @@ func (ops operations) indexResolutions() {
 		}
 
 		var args resolveArgs
-		_ = json.Unmarshal(o.args, &args)
+		decodeValidated(o.args, &args)
 
 		var value resolveValue
-		_ = json.Unmarshal(o.value, &value)
+		decodeValidated(o.value, &value)
 
 		resolved := cmp.Or(args.Op, args.Key)
 		ops.resolutions[resolved] = append(ops.resolutions[resolved], value.Outcome)
@@ -365,7 +367,7 @@ func (e *evaluation) isReplayOfTheKey(o *operation) bool {
 	}
 
 	var value writeValue
-	_ = json.Unmarshal(o.value, &value)
+	decodeValidated(o.value, &value)
 
 	kind := transactionKindOf[o.function]
 

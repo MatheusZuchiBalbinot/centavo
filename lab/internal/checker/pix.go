@@ -1,7 +1,6 @@
 package checker
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -378,7 +377,7 @@ func (e *evaluation) checkPixIn(o *operation) {
 	}
 
 	var args pixInArgs
-	_ = json.Unmarshal(o.args, &args)
+	decodeValidated(o.args, &args)
 
 	credits := e.creditsOf(args.EndToEndID)
 	if credits != 1 {

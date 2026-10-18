@@ -2,7 +2,6 @@ package checker
 
 import (
 	"cmp"
-	"encoding/json"
 	"fmt"
 	"slices"
 
@@ -260,7 +259,7 @@ func (e *evaluation) checkDepositTerm() {
 		}
 
 		var args depositArgs
-		_ = json.Unmarshal(o.args, &args)
+		decodeValidated(o.args, &args)
 
 		switch e.depositStanding(o) {
 		case standingApplied:
@@ -412,7 +411,7 @@ func (e *evaluation) checkOKWrite(o *operation, applications []snapshot.Transact
 	applied := applications[0]
 
 	var returned writeValue
-	_ = json.Unmarshal(o.value, &returned)
+	decodeValidated(o.value, &returned)
 
 	returnedID, appliedID := returned.TransactionID, applied.ID
 	if o.function == history.FunctionPixOut {
@@ -439,20 +438,20 @@ func (e *evaluation) checkOKWrite(o *operation, applications []snapshot.Transact
 func (e *evaluation) expectedEntries(o *operation) map[string]int64 {
 	if o.function == history.FunctionDeposit {
 		var args depositArgs
-		_ = json.Unmarshal(o.args, &args)
+		decodeValidated(o.args, &args)
 
 		return map[string]int64{args.AccountID: args.AmountCents, e.ledger.externalCashID: -args.AmountCents}
 	}
 
 	if o.function == history.FunctionPixOut {
 		var args pixOutArgs
-		_ = json.Unmarshal(o.args, &args)
+		decodeValidated(o.args, &args)
 
 		return map[string]int64{args.AccountID: -args.AmountCents, e.ledger.systemID(snapshot.PixOutTransitCode): args.AmountCents}
 	}
 
 	var args transferArgs
-	_ = json.Unmarshal(o.args, &args)
+	decodeValidated(o.args, &args)
 
 	return map[string]int64{args.From: -args.AmountCents, args.To: args.AmountCents}
 }
@@ -491,7 +490,7 @@ func (e *evaluation) checkCreatedAccount(o *operation) {
 	}
 
 	var created createAccountValue
-	_ = json.Unmarshal(o.value, &created)
+	decodeValidated(o.value, &created)
 
 	if !e.ledger.isCustomer(created.AccountID) {
 		e.add(e.opViolation(o, InvariantI2, RuleI2MissingAccount, fmt.Sprintf("conta %s devolvida ao cliente não existe no ledger", created.AccountID)))
@@ -504,11 +503,11 @@ func (e *evaluation) checkReadBalance(o *operation) {
 	}
 
 	var read readBalanceValue
-	_ = json.Unmarshal(o.value, &read)
+	decodeValidated(o.value, &read)
 
 	if read.BalanceCents < 0 {
 		var args readBalanceArgs
-		_ = json.Unmarshal(o.args, &args)
+		decodeValidated(o.args, &args)
 
 		violation := e.opViolation(o, InvariantI4, RuleI4ReadBalance, fmt.Sprintf("leitura de saldo devolveu %d", read.BalanceCents))
 		violation.AccountID = args.AccountID
@@ -524,7 +523,7 @@ func (e *evaluation) checkStatementPage(o *operation) {
 	}
 
 	var page statementValue
-	_ = json.Unmarshal(o.value, &page)
+	decodeValidated(o.value, &page)
 
 	for i, entry := range page.Entries {
 		if entry.BalanceAfterCents < 0 {

@@ -2,6 +2,7 @@ package checker
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -87,4 +88,21 @@ func readReport(t *testing.T, roundDir string) Report {
 	}
 
 	return report
+}
+
+// TestCheck_StopsOnAValueItCannotRead: an amount the checker cannot decode
+// would count as zero in the deposit term and match no ledger entry. The
+// check stops instead of judging the round on that.
+func TestCheck_StopsOnAValueItCannotRead(t *testing.T) {
+	b := newRoundBuilder(t)
+	alice := b.createAccount()
+	b.operation(history.FunctionDeposit, map[string]any{"account_id": alice, "amount_cents": "500"}, history.TypeOK, writeValue{TransactionID: b.upcomingTransaction()})
+
+	roundDir := t.TempDir()
+	writeRound(t, roundDir, b.records, b.snapshot())
+
+	_, err := Check(roundDir)
+	if !errors.Is(err, ErrMalformedHistory) {
+		t.Fatalf("got %v, want ErrMalformedHistory", err)
+	}
 }

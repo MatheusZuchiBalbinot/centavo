@@ -155,6 +155,11 @@ func Check(roundDir string) (Result, error) {
 		return Result{}, err
 	}
 
+	err = ops.validate()
+	if err != nil {
+		return Result{}, err
+	}
+
 	s, err := snapshot.Read(roundDir)
 	if err != nil {
 		return Result{}, err
