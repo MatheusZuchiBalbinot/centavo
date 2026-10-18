@@ -155,8 +155,13 @@ func (r Reconciler) Run(ctx context.Context, interval time.Duration) {
 func (r Reconciler) RunOnce(ctx context.Context) error {
 	for ctx.Err() == nil {
 		batch, isHeld, err := r.nextBatch(ctx)
-		if err != nil || !isHeld || len(batch.entries) == 0 {
+		if err != nil {
 			return err
+		}
+
+		hasNothingToBook := !isHeld || len(batch.entries) == 0
+		if hasNothingToBook {
+			return nil
 		}
 
 		// `recon.after_compute_before_apply`: the batch is read and nothing is
@@ -193,16 +198,24 @@ func (r Reconciler) nextBatch(ctx context.Context) (statementBatch, bool, error)
 		var err error
 
 		batch.token, isHeld, err = r.lease.Acquire(ctx, stores, Lease{Resource: LeaseReconciler, Holder: r.owner}, ReconcilerLeaseTTL)
-		if err != nil || !isHeld {
+		if err != nil {
 			return err
+		}
+
+		if !isHeld {
+			return nil
 		}
 
 		batch.from, err = stores.ReadCursor(ctx)
 
 		return err
 	})
-	if err != nil || !isHeld {
+	if err != nil {
 		return statementBatch{}, isHeld, err
+	}
+
+	if !isHeld {
+		return statementBatch{}, isHeld, nil
 	}
 
 	batch.entries, err = r.statement.Statement(ctx, batch.from, reconcileBatchLimit)

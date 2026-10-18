@@ -78,7 +78,8 @@ func (p Partner) RequireWebhookSecret() error {
 
 // RequireEndpoint is the worker role's check: the relay must know the partner.
 func (p Partner) RequireEndpoint() error {
-	if p.BaseURL == "" || p.ParticipantID == "" {
+	isPartnerMissing := p.BaseURL == "" || p.ParticipantID == ""
+	if isPartnerMissing {
 		return ErrMissingPartner
 	}
 

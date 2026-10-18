@@ -163,7 +163,8 @@ func roundsNewestFirst(entries []os.DirEntry) []string {
 
 	for _, entry := range entries {
 		match := roundDirPattern.FindStringSubmatch(entry.Name())
-		if match == nil || !entry.IsDir() {
+		isNotARound := match == nil || !entry.IsDir()
+		if isNotARound {
 			continue
 		}
 

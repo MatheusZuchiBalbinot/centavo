@@ -344,7 +344,12 @@ func runCheck(args []string) error {
 	roundDir := flags.String("round", "", "round directory")
 
 	err := flags.Parse(args)
-	if err != nil || *roundDir == "" || flags.NArg() != 0 {
+	if err != nil {
+		return errUsage
+	}
+
+	isBadUsage := *roundDir == "" || flags.NArg() != 0
+	if isBadUsage {
 		return errUsage
 	}
 
@@ -367,7 +372,12 @@ func exportReplay(args []string) error {
 	out := flags.String("out", "", "where to write the replay (default: replay.json in the round)")
 
 	err := flags.Parse(args)
-	if err != nil || *roundDir == "" || flags.NArg() != 0 {
+	if err != nil {
+		return errUsage
+	}
+
+	isBadUsage := *roundDir == "" || flags.NArg() != 0
+	if isBadUsage {
 		return errUsage
 	}
 

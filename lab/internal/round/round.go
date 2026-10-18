@@ -369,8 +369,12 @@ func exportAndCheck(ctx context.Context, options Options, result Result) (checke
 // round's directory, where the checker reads it.
 func handOverState(statePath, roundCopy string) error {
 	state, isFound, err := snapshot.ReadState(statePath)
-	if err != nil || !isFound {
+	if err != nil {
 		return err
+	}
+
+	if !isFound {
+		return nil
 	}
 
 	return snapshot.WriteState(roundCopy, state)

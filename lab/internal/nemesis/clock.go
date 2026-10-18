@@ -82,7 +82,8 @@ func (n *Nemesis) pushSkew(ctx context.Context, fault scenarios.Fault) {
 
 	for _, service := range fault.Targets {
 		t, isKnown := targetByService(service)
-		if !isKnown || t.chaosURL == "" {
+		isUnreachable := !isKnown || t.chaosURL == ""
+		if isUnreachable {
 			continue
 		}
 

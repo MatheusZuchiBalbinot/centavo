@@ -110,8 +110,12 @@ func (s Sweeper) RunOnce(ctx context.Context, olderThan time.Duration) error {
 		var err error
 
 		token, isHeld, err = s.lease.Acquire(ctx, stores, Lease{Resource: LeaseSweeper, Holder: s.owner}, SweeperLeaseTTL)
-		if err != nil || !isHeld {
+		if err != nil {
 			return err
+		}
+
+		if !isHeld {
+			return nil
 		}
 
 		stuck, err = stores.ListStuck(ctx, olderThan, sweeperBatch)

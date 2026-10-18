@@ -145,7 +145,8 @@ func (c *failpointController) push(ctx context.Context) {
 
 func (c *failpointController) pushTo(ctx context.Context, armed armedFault, service string) {
 	t, isKnown := targetByService(service)
-	if !isKnown || t.chaosURL == "" {
+	isUnreachable := !isKnown || t.chaosURL == ""
+	if isUnreachable {
 		return
 	}
 

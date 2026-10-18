@@ -334,7 +334,8 @@ func (e *evaluation) checkDepositTerm() {
 
 	for _, entry := range e.ledger.entriesByAccount[e.ledger.externalCashID] {
 		transaction, isRoundTransaction := e.ledger.transactions[entry.TransactionID]
-		if isRoundTransaction && transaction.Kind == snapshot.TransactionDeposit {
+		isRoundDeposit := isRoundTransaction && transaction.Kind == snapshot.TransactionDeposit
+		if isRoundDeposit {
 			inLedger -= entry.AmountCents
 		}
 	}

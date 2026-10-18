@@ -273,7 +273,11 @@ func newMode(config Config, now time.Time) (*mode, error) {
 	}
 
 	ttl, err := parseDuration(config.TTL, maxTTL)
-	if err != nil || ttl == 0 {
+	if err != nil {
+		return nil, fmt.Errorf("%w: ttl must be between 0 and %s", ErrInvalidMode, maxTTL)
+	}
+
+	if ttl == 0 {
 		return nil, fmt.Errorf("%w: ttl must be between 0 and %s", ErrInvalidMode, maxTTL)
 	}
 
@@ -331,7 +335,11 @@ func (m *mode) parseOutage(now time.Time) error {
 	isKnownMode := m.config.Outage.Mode == OutageServiceUnavailable || m.config.Outage.Mode == OutageRefuse
 	window, err := parseDuration(strings.TrimPrefix(m.config.Outage.Until, "+"), maxTTL)
 
-	if err != nil || !isKnownMode {
+	if err != nil {
+		return fmt.Errorf("%w: outage needs until (+3m) and mode 503 or refuse", ErrInvalidMode)
+	}
+
+	if !isKnownMode {
 		return fmt.Errorf("%w: outage needs until (+3m) and mode 503 or refuse", ErrInvalidMode)
 	}
 
@@ -348,7 +356,8 @@ func validateProbabilities(config Config) error {
 	}
 
 	for _, probability := range probabilities {
-		if probability < 0 || probability > 1 {
+		isInvalidProbability := probability < 0 || probability > 1
+		if isInvalidProbability {
 			return fmt.Errorf("%w: probabilities must be between 0 and 1", ErrInvalidMode)
 		}
 	}
@@ -362,7 +371,12 @@ func parseDuration(raw string, ceiling time.Duration) (time.Duration, error) {
 	}
 
 	duration, err := time.ParseDuration(raw)
-	if err != nil || duration < 0 || duration > ceiling {
+	if err != nil {
+		return 0, fmt.Errorf("duration %q must be between 0 and %s", raw, ceiling)
+	}
+
+	isInvalidDuration := duration < 0 || duration > ceiling
+	if isInvalidDuration {
 		return 0, fmt.Errorf("duration %q must be between 0 and %s", raw, ceiling)
 	}
 
@@ -380,7 +394,11 @@ func parseSeed(raw string) (uint64, error) {
 	}
 
 	decoded, err := hex.DecodeString(digits)
-	if err != nil || len(decoded) > 8 {
+	if err != nil {
+		return 0, fmt.Errorf("%w: seed must be a hexadecimal number of up to 64 bits", ErrInvalidMode)
+	}
+
+	if len(decoded) > 8 {
 		return 0, fmt.Errorf("%w: seed must be a hexadecimal number of up to 64 bits", ErrInvalidMode)
 	}
 

@@ -68,7 +68,11 @@ func (p *Process) UnmarshalJSON(data []byte) error {
 	var name string
 
 	err = json.Unmarshal(data, &name)
-	if err != nil || name != nemesisName {
+	if err != nil {
+		return errInvalidProcess
+	}
+
+	if name != nemesisName {
 		return errInvalidProcess
 	}
 

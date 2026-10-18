@@ -242,7 +242,8 @@ func (a apiHandlers) webhook(w http.ResponseWriter, r *http.Request) {
 	err = a.useCases.Pix.Webhook.Apply(r.Context(), partnerEvent)
 
 	isDuplicateCredit := errors.Is(err, application.ErrAlreadyCredited)
-	if err != nil && !isDuplicateCredit {
+	isRealFailure := err != nil && !isDuplicateCredit
+	if isRealFailure {
 		writeError(w, r, a.logger, err)
 
 		return

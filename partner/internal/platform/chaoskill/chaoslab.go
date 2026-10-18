@@ -27,7 +27,11 @@ func KillMain(binary string) error {
 
 	for _, entry := range entries {
 		pid, err := strconv.Atoi(entry.Name())
-		if err != nil || pid == self {
+		if err != nil {
+			continue
+		}
+
+		if pid == self {
 			continue
 		}
 

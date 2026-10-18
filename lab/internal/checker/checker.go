@@ -321,8 +321,12 @@ func scanHistory(roundDir string, take func(history.Record)) error {
 // readPreviousState loads the state the round before left, if any.
 func readPreviousState(roundDir string) (*snapshot.LedgerState, error) {
 	state, isFound, err := snapshot.ReadState(filepath.Join(roundDir, previousStateFile))
-	if err != nil || !isFound {
+	if err != nil {
 		return nil, err
+	}
+
+	if !isFound {
+		return nil, nil
 	}
 
 	return &state, nil
@@ -375,7 +379,11 @@ func readEvents(roundDir string) chaosEvents {
 		line := slices.Clone(scanner.Bytes())
 
 		err := json.Unmarshal(line, &event)
-		if err != nil || event.CorrelationID == "" {
+		if err != nil {
+			continue
+		}
+
+		if event.CorrelationID == "" {
 			continue
 		}
 

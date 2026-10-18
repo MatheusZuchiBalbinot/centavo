@@ -159,7 +159,8 @@ func (w Writer) Execute(ctx context.Context, write Write) (idempotency.StoredRes
 		response, err := w.runOnce(ctx, write)
 
 		isRetryable := errors.Is(err, ErrTransient) || errors.Is(err, ErrOutcomeUnknown)
-		if !isRetryable || attempt >= w.retries.MaxRetries {
+		shouldStopRetrying := !isRetryable || attempt >= w.retries.MaxRetries
+		if shouldStopRetrying {
 			return response, err
 		}
 

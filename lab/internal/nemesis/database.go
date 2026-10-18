@@ -142,7 +142,8 @@ func (n *Nemesis) healDatabase(ctx context.Context) {
 		err = n.config.Docker.Unpause(ctx, container.ID)
 	}
 
-	if container.State == docker.StateStopped && err == nil {
+	isStillStopped := container.State == docker.StateStopped && err == nil
+	if isStillStopped {
 		err = n.config.Docker.Start(ctx, container.ID)
 	}
 

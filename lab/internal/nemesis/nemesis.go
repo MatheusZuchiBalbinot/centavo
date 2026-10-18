@@ -234,7 +234,8 @@ func (n *Nemesis) nudgeTargets(ctx context.Context) (bool, error) {
 			err = n.config.Docker.Unpause(ctx, container.ID)
 		}
 
-		if container.State == docker.StateStopped && err == nil {
+		isStillStopped := container.State == docker.StateStopped && err == nil
+		if isStillStopped {
 			err = n.config.Docker.Start(ctx, container.ID)
 		}
 

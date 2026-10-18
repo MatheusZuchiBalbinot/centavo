@@ -395,7 +395,8 @@ func (e *evaluation) checkAuthority(transfer snapshot.ExternalTransfer, index tr
 
 	actual, isKnown := index.statusByE2E[transfer.EndToEndID]
 	isNeverSent := !isKnown && transfer.Status == statusFailed
-	if actual == want || isNeverSent {
+	isConsistent := actual == want || isNeverSent
+	if isConsistent {
 		return
 	}
 

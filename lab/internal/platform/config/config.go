@@ -164,7 +164,8 @@ func validateAuditorURL(raw string) error {
 	}
 
 	isPostgres := parsed.Scheme == "postgres" || parsed.Scheme == "postgresql"
-	if !isPostgres || parsed.Host == "" {
+	isInvalidAuditor := !isPostgres || parsed.Host == ""
+	if isInvalidAuditor {
 		return ErrInvalidAuditor
 	}
 
@@ -178,7 +179,8 @@ func validateBankURL(raw string) error {
 	}
 
 	isHTTP := parsed.Scheme == "http" || parsed.Scheme == "https"
-	if !isHTTP || parsed.Host == "" {
+	isInvalidBankURL := !isHTTP || parsed.Host == ""
+	if isInvalidBankURL {
 		return fmt.Errorf("%w: got %q", ErrInvalidBankURL, raw)
 	}
 

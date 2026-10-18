@@ -213,8 +213,12 @@ func (p InboxProcessor) resync(ctx context.Context, claimed InboxEvent) error {
 		// keeps the order every apply uses; one that holds the event and
 		// waits on this transfer would otherwise wait on us in a circle.
 		isOurs, err := stores.ReclaimInbox(ctx, claimed.ID)
-		if err != nil || !isOurs {
+		if err != nil {
 			return err
+		}
+
+		if !isOurs {
+			return nil
 		}
 
 		external, err := stores.FindExternalTransferByEndToEnd(ctx, claimed.Event.EndToEndID)

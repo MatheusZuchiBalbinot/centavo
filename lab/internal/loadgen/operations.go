@@ -223,7 +223,11 @@ func parseCreateAccount(body []byte, status int) (json.RawMessage, error) {
 	}
 
 	err := json.Unmarshal(body, &response)
-	if err != nil || response.AccountID == "" {
+	if err != nil {
+		return nil, errMissingField
+	}
+
+	if response.AccountID == "" {
 		return nil, errMissingField
 	}
 
@@ -243,7 +247,12 @@ func parseDeposit(body []byte, status int) (json.RawMessage, error) {
 	}
 
 	err := json.Unmarshal(body, &response)
-	if err != nil || response.TransactionID == "" || response.BalanceCents == nil {
+	if err != nil {
+		return nil, errMissingField
+	}
+
+	isIncomplete := response.TransactionID == "" || response.BalanceCents == nil
+	if isIncomplete {
 		return nil, errMissingField
 	}
 
@@ -263,7 +272,12 @@ func parseTransfer(body []byte, status int) (json.RawMessage, error) {
 	}
 
 	err := json.Unmarshal(body, &response)
-	if err != nil || response.TransactionID == "" || response.FromBalanceCents == nil {
+	if err != nil {
+		return nil, errMissingField
+	}
+
+	isIncomplete := response.TransactionID == "" || response.FromBalanceCents == nil
+	if isIncomplete {
 		return nil, errMissingField
 	}
 
@@ -281,7 +295,11 @@ func parseReadBalance(body []byte, status int) (json.RawMessage, error) {
 	}
 
 	err := json.Unmarshal(body, &response)
-	if err != nil || response.BalanceCents == nil {
+	if err != nil {
+		return nil, errMissingField
+	}
+
+	if response.BalanceCents == nil {
 		return nil, errMissingField
 	}
 
@@ -299,7 +317,12 @@ func parsePixOut(body []byte, status int) (json.RawMessage, error) {
 	var response pixOutResult
 
 	err := json.Unmarshal(body, &response)
-	if err != nil || response.TransferID == "" || response.Status == "" {
+	if err != nil {
+		return nil, errMissingField
+	}
+
+	isIncomplete := response.TransferID == "" || response.Status == ""
+	if isIncomplete {
 		return nil, errMissingField
 	}
 
@@ -318,7 +341,11 @@ func parsePixIn(body []byte, status int) (json.RawMessage, error) {
 	var response pixInResult
 
 	err := json.Unmarshal(body, &response)
-	if err != nil || !response.IsAccepted {
+	if err != nil {
+		return nil, errMissingField
+	}
+
+	if !response.IsAccepted {
 		return nil, errMissingField
 	}
 
@@ -332,7 +359,12 @@ func parseReadPixOut(body []byte, status int) (json.RawMessage, error) {
 	var response map[string]json.RawMessage
 
 	err := json.Unmarshal(body, &response)
-	if err != nil || len(response["status"]) == 0 || len(response["transitions"]) == 0 {
+	if err != nil {
+		return nil, errMissingField
+	}
+
+	isIncomplete := len(response["status"]) == 0 || len(response["transitions"]) == 0
+	if isIncomplete {
 		return nil, errMissingField
 	}
 
@@ -359,7 +391,12 @@ func parseReadStatement(body []byte, status int) (json.RawMessage, error) {
 	}
 
 	err := json.Unmarshal(body, &response)
-	if err != nil || len(response.Entries) == 0 || response.Entries[0] != '[' {
+	if err != nil {
+		return nil, errMissingField
+	}
+
+	isIncomplete := len(response.Entries) == 0 || response.Entries[0] != '['
+	if isIncomplete {
 		return nil, errMissingField
 	}
 

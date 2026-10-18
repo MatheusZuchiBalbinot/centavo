@@ -583,8 +583,12 @@ func (s *Store) AddIncoming(ctx context.Context, command IncomingCommand) (bool,
 		}
 
 		inserted, err := result.RowsAffected()
-		if err != nil || inserted == 0 {
+		if err != nil {
 			return err
+		}
+
+		if inserted == 0 {
+			return nil
 		}
 
 		isNew = true

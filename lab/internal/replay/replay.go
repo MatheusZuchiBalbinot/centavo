@@ -144,7 +144,8 @@ func (b *Builder) feedCompletion(record history.Record) {
 		second.Info++
 	}
 
-	if record.F == history.FunctionResolve && record.Type == history.TypeOK {
+	isResolved := record.F == history.FunctionResolve && record.Type == history.TypeOK
+	if isResolved {
 		b.replay.Counters.Resolved++
 	}
 

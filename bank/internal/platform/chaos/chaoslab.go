@@ -138,7 +138,8 @@ func setClock(w http.ResponseWriter, r *http.Request) {
 	offset, errOffset := time.ParseDuration(request.Offset)
 	ttl, errTTL := time.ParseDuration(request.TTL)
 
-	if errOffset != nil || errTTL != nil {
+	isMalformedSkew := errOffset != nil || errTTL != nil
+	if isMalformedSkew {
 		http.Error(w, errBadSkew.Error(), http.StatusBadRequest)
 
 		return
@@ -179,7 +180,11 @@ func KillMain(binary string) error {
 
 	for _, entry := range entries {
 		pid, err := strconv.Atoi(entry.Name())
-		if err != nil || pid == self {
+		if err != nil {
+			continue
+		}
+
+		if pid == self {
 			continue
 		}
 
@@ -200,7 +205,8 @@ func isMainProcess(pid int, binary string) bool {
 	}
 
 	args := bytes.Split(bytes.TrimRight(cmdline, "\x00"), []byte{0})
-	if len(args) < 2 || string(args[0]) != binary {
+	isOtherCommand := len(args) < 2 || string(args[0]) != binary
+	if isOtherCommand {
 		return false
 	}
 

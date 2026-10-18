@@ -343,7 +343,11 @@ func validate(name string, raw rawScenario) (Scenario, error) {
 	}
 
 	duration, err := time.ParseDuration(raw.Duration)
-	if err != nil || duration <= 0 {
+	if err != nil {
+		return Scenario{}, fmt.Errorf("duration must be positive, such as 5m (got %q)", raw.Duration)
+	}
+
+	if duration <= 0 {
 		return Scenario{}, fmt.Errorf("duration must be positive, such as 5m (got %q)", raw.Duration)
 	}
 
@@ -380,7 +384,11 @@ func optionalDuration(raw string, fallback time.Duration) (time.Duration, error)
 	}
 
 	duration, err := time.ParseDuration(raw)
-	if err != nil || duration <= 0 {
+	if err != nil {
+		return 0, fmt.Errorf("must be a positive duration (got %q)", raw)
+	}
+
+	if duration <= 0 {
 		return 0, fmt.Errorf("must be a positive duration (got %q)", raw)
 	}
 
@@ -392,7 +400,8 @@ func validateFaults(raw []rawFault) ([]Fault, error) {
 	seen := map[string]bool{}
 
 	for _, r := range raw {
-		if r.ID == "" || seen[r.ID] {
+		isDuplicateOrMissingID := r.ID == "" || seen[r.ID]
+		if isDuplicateOrMissingID {
 			return nil, fmt.Errorf("every fault needs a unique id (got %q)", r.ID)
 		}
 
@@ -512,7 +521,11 @@ func validateProcessFault(fault Fault, r rawFault) (Fault, error) {
 	}
 
 	mean, err := time.ParseDuration(r.Schedule.MeanInterval)
-	if err != nil || mean < minMeanInterval {
+	if err != nil {
+		return Fault{}, fmt.Errorf("mean_interval must be at least %s", minMeanInterval)
+	}
+
+	if mean < minMeanInterval {
 		return Fault{}, fmt.Errorf("mean_interval must be at least %s", minMeanInterval)
 	}
 

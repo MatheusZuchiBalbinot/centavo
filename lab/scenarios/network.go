@@ -74,7 +74,11 @@ func failoverFault(fault Fault, r rawFault) (Fault, error) {
 	}
 
 	lag, err := time.ParseDuration(r.Lag)
-	if err != nil || lag < 0 {
+	if err != nil {
+		return Fault{}, errors.New("a failover needs a lag >= 0, such as 2s")
+	}
+
+	if lag < 0 {
 		return Fault{}, errors.New("a failover needs a lag >= 0, such as 2s")
 	}
 
@@ -116,7 +120,11 @@ func poissonOf(raw rawSchedule) (Schedule, error) {
 	}
 
 	mean, err := time.ParseDuration(raw.MeanInterval)
-	if err != nil || mean <= 0 {
+	if err != nil {
+		return Schedule{}, errors.New("a scheduled fault needs a positive mean_interval")
+	}
+
+	if mean <= 0 {
 		return Schedule{}, errors.New("a scheduled fault needs a positive mean_interval")
 	}
 
@@ -158,7 +166,8 @@ func toxicOf(raw map[string]any) (Toxic, error) {
 		toxic.Toxicity = toxicity
 	}
 
-	if toxic.Toxicity <= 0 || toxic.Toxicity > 1 {
+	isInvalidToxicity := toxic.Toxicity <= 0 || toxic.Toxicity > 1
+	if isInvalidToxicity {
 		return Toxic{}, errors.New("toxicity must be in (0, 1]")
 	}
 
@@ -169,7 +178,8 @@ func toxicOf(raw map[string]any) (Toxic, error) {
 		}
 
 		value, isNumber := numberOf(raw[name])
-		if !isNumber || value < 0 {
+		isInvalidAttribute := !isNumber || value < 0
+		if isInvalidAttribute {
 			return Toxic{}, fmt.Errorf("toxic attribute %q must be a number >= 0", name)
 		}
 

@@ -142,7 +142,8 @@ func Arm(name Name, rule Rule, now time.Time) error {
 	defer registry.mu.Unlock()
 
 	existing, isArmed := registry.rules[name]
-	if isArmed && existing.rule == rule {
+	isSameRuleArmed := isArmed && existing.rule == rule
+	if isSameRuleArmed {
 		existing.expiresAt = now.Add(ttl)
 
 		return nil
@@ -272,7 +273,8 @@ func decide(ctx context.Context, name Name, now time.Time) (firing, bool) {
 }
 
 func matches(match Match, correlationID string) bool {
-	if match.CorrelationID != "" && match.CorrelationID != correlationID {
+	isOtherCorrelation := match.CorrelationID != "" && match.CorrelationID != correlationID
+	if isOtherCorrelation {
 		return false
 	}
 
@@ -362,7 +364,12 @@ func validate(name Name, rule Rule) (time.Duration, time.Duration, error) {
 	}
 
 	ttl, err := time.ParseDuration(rule.TTL)
-	if err != nil || ttl <= 0 || ttl > maxTTL {
+	if err != nil {
+		return 0, 0, fmt.Errorf("%w: ttl must be between 0 and %s", ErrInvalidRule, maxTTL)
+	}
+
+	isInvalidTTL := ttl <= 0 || ttl > maxTTL
+	if isInvalidTTL {
 		return 0, 0, fmt.Errorf("%w: ttl must be between 0 and %s", ErrInvalidRule, maxTTL)
 	}
 
@@ -382,7 +389,12 @@ func validateAction(rule Rule) (time.Duration, error) {
 		return 0, nil
 	case ActionDelay:
 		delay, err := time.ParseDuration(rule.Arg)
-		if err != nil || delay <= 0 || delay > maxDelay {
+		if err != nil {
+			return 0, fmt.Errorf("%w: delay needs a duration up to %s", ErrInvalidRule, maxDelay)
+		}
+
+		isInvalidDelay := delay <= 0 || delay > maxDelay
+		if isInvalidDelay {
 			return 0, fmt.Errorf("%w: delay needs a duration up to %s", ErrInvalidRule, maxDelay)
 		}
 
@@ -395,7 +407,12 @@ func validateAction(rule Rule) (time.Duration, error) {
 		return 0, nil
 	case ActionFreeze:
 		freeze, err := time.ParseDuration(rule.Arg)
-		if err != nil || freeze <= 0 || freeze > maxFreeze {
+		if err != nil {
+			return 0, fmt.Errorf("%w: freeze needs a duration up to %s", ErrInvalidRule, maxFreeze)
+		}
+
+		isInvalidFreeze := freeze <= 0 || freeze > maxFreeze
+		if isInvalidFreeze {
 			return 0, fmt.Errorf("%w: freeze needs a duration up to %s", ErrInvalidRule, maxFreeze)
 		}
 

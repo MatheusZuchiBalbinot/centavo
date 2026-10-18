@@ -80,7 +80,8 @@ type Client struct {
 // New builds a client for DOCKER_HOST=tcp://docker-proxy:2375.
 func New(dockerHost, project string) (Client, error) {
 	address, isTCP := strings.CutPrefix(dockerHost, tcpScheme)
-	if !isTCP || address == "" {
+	isInvalidHost := !isTCP || address == ""
+	if isInvalidHost {
 		return Client{}, ErrInvalidHost
 	}
 
@@ -314,7 +315,8 @@ func (c Client) call(ctx context.Context, sent apiCall, into any) error {
 		return fmt.Errorf("%w: %s %s answered %d: %s", errUnexpectedReply, sent.method, sent.path, response.StatusCode, bytes.TrimSpace(content))
 	}
 
-	if into == nil || len(content) == 0 {
+	hasNothingToDecode := into == nil || len(content) == 0
+	if hasNothingToDecode {
 		return nil
 	}
 

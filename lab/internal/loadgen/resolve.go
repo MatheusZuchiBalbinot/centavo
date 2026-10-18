@@ -137,7 +137,12 @@ func parseResolve(body []byte, status int) (json.RawMessage, error) {
 
 	// superseded: another request took the key, so this one never applied.
 	isKnownOutcome := response.Outcome == "applied" || response.Outcome == "voided" || response.Outcome == "superseded"
-	if err != nil || response.Key == "" || !isKnownOutcome {
+	if err != nil {
+		return nil, errMissingField
+	}
+
+	isIncomplete := response.Key == "" || !isKnownOutcome
+	if isIncomplete {
 		return nil, errMissingField
 	}
 

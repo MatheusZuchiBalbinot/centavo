@@ -49,8 +49,12 @@ func (r NaiveRelay) Relay(ctx context.Context, id transfer.ID) error {
 	attemptID := id.AttemptEndToEndID(attempt)
 
 	isClaimed, err := r.claim(ctx, id, external.EndToEndID, attemptID)
-	if err != nil || !isClaimed {
+	if err != nil {
 		return err
+	}
+
+	if !isClaimed {
+		return nil
 	}
 
 	submission := PartnerSubmission{
