@@ -160,12 +160,14 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	startedAt := time.Now().UTC()
 	options.Logger.InfoContext(ctx, "round started", "round", id, "scenario", options.Scenario.Name, "seed", options.Seed.String(), "dir", dir)
 
-	bot := nemesis.New(nemesis.Config{
+	nemesisConfig := nemesis.Config{
 		Round: id, Seed: options.Seed, Scenario: options.Scenario, History: writer, Docker: options.Chaos.Docker,
 		ChaosToken: options.Chaos.Token, EventsDir: options.Chaos.EventsDir, Logger: options.Logger,
 
 		PartnerAdminURL: options.Saga.PartnerURL, ParticipantID: options.Saga.ParticipantID,
-	})
+	}
+
+	bot := nemesis.New(nemesisConfig)
 
 	// Written now so the panel can follow the round as it runs; the end of
 	// the round writes it again with the history and the verdict.

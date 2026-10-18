@@ -338,10 +338,12 @@ func record(ctx context.Context, f firing) error {
 		events.file = file
 	}
 
-	line, err := json.Marshal(event{
+	fired := event{
 		TS: time.Now().UTC(), Service: events.config.Service, Instance: events.config.Instance, PID: os.Getpid(),
 		Failpoint: f.name, Action: f.rule.Action, Arg: f.rule.Arg, CorrelationID: correlation.From(ctx), Hit: f.hit, Fire: f.fire,
-	})
+	}
+
+	line, err := json.Marshal(fired)
 	if err != nil {
 		return err
 	}

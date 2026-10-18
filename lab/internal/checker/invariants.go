@@ -99,10 +99,12 @@ func (e *evaluation) checkZeroSum() {
 			continue
 		}
 
-		e.add(Violation{
+		violation := Violation{
 			Invariant: InvariantI1, Rule: RuleI1aZeroSum, TimeNS: e.ops.timeOf(transaction.ClientRef), Op: transaction.ClientRef, TransactionID: id,
 			Message: fmt.Sprintf("transação %s (%s) tem %d lançamentos que somam %d centavos", id, transaction.Kind, len(entries), sum),
-		})
+		}
+
+		e.add(violation)
 	}
 }
 
@@ -234,13 +236,15 @@ func (e *evaluation) checkMaterialized(accountID string, entries []snapshot.Entr
 		return
 	}
 
-	e.add(Violation{
+	violation := Violation{
 		Invariant: InvariantI1, Rule: RuleI1bMaterialized, TimeNS: e.lastEntryTime(entries), AccountID: accountID,
 		Message: fmt.Sprintf(
 			"conta %s: saldo materializado %d (última posição %d), mas os %d lançamentos somam %d",
 			accountID, balance.BalanceCents, balance.LastEntrySeq, len(entries), sum,
 		),
-	})
+	}
+
+	e.add(violation)
 }
 
 // checkNeverNegative is I4 on the ledger: the stored balance_after, the real
@@ -340,13 +344,15 @@ func (e *evaluation) checkDepositTerm() {
 		return
 	}
 
-	e.add(Violation{
+	violation := Violation{
 		Invariant: InvariantI1, Rule: RuleI1cDeposits, TimeNS: e.ops.lastT, AccountID: e.ledger.externalCashID,
 		Message: fmt.Sprintf(
 			"termo D: sys_external_cash registra %d centavos depositados na rodada, o histórico admite entre %d (ok) e %d (ok mais info)",
 			inLedger, confirmed, confirmed+uncertain,
 		),
-	})
+	}
+
+	e.add(violation)
 }
 
 // checkOperations is I2 and the at-most-once part of I3, operation by
@@ -553,14 +559,16 @@ func (e *evaluation) checkPhantoms() {
 			continue
 		}
 
-		e.add(Violation{
+		violation := Violation{
 			Invariant: InvariantI2, Rule: RuleI2Phantom, TimeNS: e.ops.timeOf(transaction.ClientRef),
 			Op: transaction.ClientRef, TransactionID: id,
 			Message: fmt.Sprintf(
 				"transação %s (%s) com client_ref %q não corresponde a nenhuma operação desse tipo no histórico",
 				id, transaction.Kind, transaction.ClientRef,
 			),
-		})
+		}
+
+		e.add(violation)
 	}
 }
 

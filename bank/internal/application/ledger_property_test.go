@@ -135,18 +135,43 @@ func (m *memoryLedger) openAccount() ledger.AccountID {
 	return id
 }
 
+// randomSteps draws one deposit or one transfer between random accounts.
+type randomSteps struct {
+	deposit  application.Deposit
+	transfer application.TransferInternal
+	accounts []ledger.AccountID
+}
+
+func (s randomSteps) apply(t *rapid.T, amount money.Amount, write application.WriteContext) error {
+	from := rapid.SampledFrom(s.accounts).Draw(t, "from")
+
+	isDeposit := rapid.Bool().Draw(t, "is deposit")
+	if isDeposit {
+		input := application.DepositInput{AccountID: from, Amount: amount, Write: write}
+		_, err := s.deposit.Execute(context.Background(), input)
+
+		return err
+	}
+
+	to := rapid.SampledFrom(s.accounts).Draw(t, "to")
+	input := application.TransferInput{From: from, To: to, Amount: amount, Write: write}
+	_, err := s.transfer.Execute(context.Background(), input)
+
+	return err
+}
+
 func TestLedger_AnySequenceOfOperationsKeepsTheInvariants(t *testing.T) {
 	t.Parallel()
 
 	rapid.Check(t, func(t *rapid.T) {
 		bank := newMemoryLedger()
 		deps := application.MoneyDependencies{UnitOfWork: bank, Locker: application.RowLocker{}}
-		deposit, transfer := application.NewDeposit(deps), application.NewTransferInternal(deps)
-
 		accounts := make([]ledger.AccountID, rapid.IntRange(2, 5).Draw(t, "accounts"))
 		for i := range accounts {
 			accounts[i] = bank.openAccount()
 		}
+
+		steps := randomSteps{deposit: application.NewDeposit(deps), transfer: application.NewTransferInternal(deps), accounts: accounts}
 
 		for step := range rapid.IntRange(1, 60).Draw(t, "steps") {
 			amount, err := money.NewAmount(money.Cents(rapid.Int64Range(1, 50_000).Draw(t, "amount")))
@@ -155,14 +180,7 @@ func TestLedger_AnySequenceOfOperationsKeepsTheInvariants(t *testing.T) {
 			}
 
 			write := application.WriteContext{Key: idempotency.Key(fmt.Sprintf("prop-%06d", step))}
-			from := rapid.SampledFrom(accounts).Draw(t, "from")
-
-			if rapid.Bool().Draw(t, "is deposit") {
-				_, err = deposit.Execute(context.Background(), application.DepositInput{AccountID: from, Amount: amount, Write: write})
-			} else {
-				to := rapid.SampledFrom(accounts).Draw(t, "to")
-				_, err = transfer.Execute(context.Background(), application.TransferInput{From: from, To: to, Amount: amount, Write: write})
-			}
+			err = steps.apply(t, amount, write)
 
 			isExpectedRefusal := errors.Is(err, ledger.ErrInsufficientFunds) || errors.Is(err, ledger.ErrSameAccount)
 			if err != nil && !isExpectedRefusal {
