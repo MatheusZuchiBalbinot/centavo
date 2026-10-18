@@ -24,12 +24,19 @@ type TransitionCommand struct {
 	CorrelationID string
 }
 
+// TransitionStores are what a transition writes: the transfer, its history and
+// the posting of the step.
+type TransitionStores interface {
+	PixStore
+	PostingStores
+}
+
 // StateMachine is the state_machine defense's strategy: how a transfer changes
 // status, inside the caller's unit of work.
 type StateMachine interface {
 	// Move applies the command. The guarded machine refuses, with
 	// transfer.ErrInvalidStateTransition, a transfer that is not in From.
-	Move(ctx context.Context, stores Stores, command TransitionCommand) error
+	Move(ctx context.Context, stores TransitionStores, command TransitionCommand) error
 }
 
 // GuardedTransitions is the state_machine defense: the transfer is locked, its
@@ -39,7 +46,7 @@ type StateMachine interface {
 type GuardedTransitions struct{}
 
 // Move applies the transition or refuses it.
-func (GuardedTransitions) Move(ctx context.Context, stores Stores, command TransitionCommand) error {
+func (GuardedTransitions) Move(ctx context.Context, stores TransitionStores, command TransitionCommand) error {
 	external, err := stores.LockExternalTransfer(ctx, command.TransferID)
 	if err != nil {
 		return err
@@ -72,7 +79,7 @@ func (GuardedTransitions) Move(ctx context.Context, stores Stores, command Trans
 type OverwriteTransitions struct{}
 
 // Move overwrites the status.
-func (OverwriteTransitions) Move(ctx context.Context, stores Stores, command TransitionCommand) error {
+func (OverwriteTransitions) Move(ctx context.Context, stores TransitionStores, command TransitionCommand) error {
 	external, _, err := stores.FindExternalTransfer(ctx, command.TransferID)
 	if err != nil {
 		return err
@@ -100,7 +107,7 @@ type transitionStep struct {
 
 // recordStep posts the step's ledger transaction, if any, and appends it to
 // the transfer's history.
-func recordStep(ctx context.Context, stores Stores, step transitionStep) error {
+func recordStep(ctx context.Context, stores TransitionStores, step transitionStep) error {
 	var ledgerTransactionID *ledger.TransactionID
 
 	if step.posting != transfer.PostingNone {

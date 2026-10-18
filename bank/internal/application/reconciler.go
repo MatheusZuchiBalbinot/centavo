@@ -22,6 +22,27 @@ const (
 	reconcileBatchLimit = 500
 )
 
+// actStores are what acting on a classified entry writes: a walk to the
+// partner's status, a credit or a suspense posting.
+type actStores interface {
+	TransitionStores
+	creditStores
+}
+
+// entryStores are what booking one statement entry reads and writes.
+type entryStores interface {
+	actStores
+	factStores
+}
+
+// factStores are what classifying a statement entry reads: the ledger's
+// transfers and incoming PIX, balances and earlier items.
+type factStores interface {
+	PixStore
+	PositionStore
+	ReconciliationStore
+}
+
 // LeaseReconciler is the reconciler's row in worker_leases.
 const LeaseReconciler = "reconciler"
 
@@ -197,7 +218,7 @@ func (r Reconciler) nextBatch(ctx context.Context) (statementBatch, bool, error)
 }
 
 // bookEntry classifies one entry and books it, in the caller's unit of work.
-func (r Reconciler) bookEntry(ctx context.Context, stores Stores, runID int64, entry StatementEntry) error {
+func (r Reconciler) bookEntry(ctx context.Context, stores entryStores, runID int64, entry StatementEntry) error {
 	ctx = correlation.With(ctx, entryCorrelation(entry))
 
 	facts, err := factsOf(ctx, stores, entry)
@@ -230,7 +251,7 @@ type actCommand struct {
 	itemID   int64
 }
 
-func (r Reconciler) act(ctx context.Context, stores Stores, command actCommand) error {
+func (r Reconciler) act(ctx context.Context, stores actStores, command actCommand) error {
 	if command.decision.walkTo != "" {
 		walk := pathWalk{
 			transferID: command.facts.transfer.ID, authoritative: AuthoritativeStatus{Status: command.decision.walkTo},
@@ -267,7 +288,7 @@ func (r Reconciler) act(ctx context.Context, stores Stores, command actCommand) 
 
 // bookSuspense posts a reconciliation adjustment: the partner reserve mirror
 // moves by what the partner did, and suspense holds the other side.
-func bookSuspense(ctx context.Context, stores Stores, itemID int64, cents money.Cents) error {
+func bookSuspense(ctx context.Context, stores PostingStores, itemID int64, cents money.Cents) error {
 	transactionID, err := ledger.NewTransactionID()
 	if err != nil {
 		return err
@@ -290,7 +311,7 @@ func bookSuspense(ctx context.Context, stores Stores, itemID int64, cents money.
 }
 
 // factsOf reads what the ledger knows about an entry.
-func factsOf(ctx context.Context, stores Stores, entry StatementEntry) (entryFacts, error) {
+func factsOf(ctx context.Context, stores factStores, entry StatementEntry) (entryFacts, error) {
 	var facts entryFacts
 
 	prior, err := stores.CountItems(ctx, entry.EndToEndID, entry.Kind)
@@ -319,7 +340,7 @@ func factsOf(ctx context.Context, stores Stores, entry StatementEntry) (entryFac
 	return facts, nil
 }
 
-func incomingFacts(ctx context.Context, stores Stores, entry StatementEntry, facts entryFacts) (entryFacts, error) {
+func incomingFacts(ctx context.Context, stores factStores, entry StatementEntry, facts entryFacts) (entryFacts, error) {
 	isCredited, err := stores.IsIncomingCredited(ctx, entry.EndToEndID)
 	if err != nil {
 		return entryFacts{}, err
@@ -353,7 +374,7 @@ func incomingFacts(ctx context.Context, stores Stores, entry StatementEntry, fac
 // first balance. The batch holds hot system balances from its first entry to
 // its commit; taking a transfer after them would wait on a writer that holds
 // the transfer and waits on those balances, a deadlock every few runs.
-func lockBatch(ctx context.Context, stores Stores, batch statementBatch) error {
+func lockBatch(ctx context.Context, stores PixStore, batch statementBatch) error {
 	endToEndIDs := make([]transfer.EndToEndID, 0, len(batch.entries))
 	for _, entry := range batch.entries {
 		endToEndIDs = append(endToEndIDs, entry.EndToEndID)

@@ -66,7 +66,7 @@ var expectedFrom = map[EventType]transfer.Status{
 	EventSettled: transfer.StatusSent, EventRejected: transfer.StatusSent, EventReturned: transfer.StatusConfirmed,
 }
 
-func (a eventApplier) apply(ctx context.Context, stores Stores, event PartnerEvent) error {
+func (a eventApplier) apply(ctx context.Context, stores eventStores, event PartnerEvent) error {
 	switch event.Type {
 	case EventSettled:
 		return a.applyTransferEvent(ctx, stores, event, transfer.StatusConfirmed)
@@ -81,7 +81,7 @@ func (a eventApplier) apply(ctx context.Context, stores Stores, event PartnerEve
 	}
 }
 
-func (a eventApplier) applyTransferEvent(ctx context.Context, stores Stores, event PartnerEvent, to transfer.Status) error {
+func (a eventApplier) applyTransferEvent(ctx context.Context, stores TransitionStores, event PartnerEvent, to transfer.Status) error {
 	external, err := stores.FindExternalTransferByEndToEnd(ctx, event.EndToEndID)
 	if err != nil {
 		return err
@@ -104,9 +104,22 @@ func failureCodeOf(event PartnerEvent) string {
 	return event.Reason
 }
 
+// eventStores are what applying any partner event may write.
+type eventStores interface {
+	TransitionStores
+	creditStores
+}
+
+// creditStores are what crediting a PIX in writes.
+type creditStores interface {
+	PixStore
+	PositionStore
+	LedgerWriter
+}
+
 // creditIncoming credits a PIX in. The unique end_to_end_id of
 // incoming_transfers keeps it to one credit in every profile.
-func creditIncoming(ctx context.Context, stores Stores, event PartnerEvent) error {
+func creditIncoming(ctx context.Context, stores creditStores, event PartnerEvent) error {
 	accountID, err := ledger.ParseAccountID(event.AccountID)
 	if err != nil {
 		return err

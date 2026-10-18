@@ -61,7 +61,7 @@ type Write struct {
 // up while its commit waited for the synchronous standby cancels that wait:
 // PostgreSQL keeps the commit locally, unreplicated, and a retry that only read
 // it would hand out an answer, or a refusal, that a failover then loses.
-func replayDurably(ctx context.Context, stores Stores, write Write, existing idempotency.Record) (idempotency.StoredResponse, error) {
+func replayDurably(ctx context.Context, stores KeyStore, write Write, existing idempotency.Record) (idempotency.StoredResponse, error) {
 	isSettled := existing.Status != idempotency.StatusPending
 	if isSettled {
 		err := stores.TouchKey(ctx, write.Key)

@@ -58,7 +58,7 @@ func (d Deposit) Execute(ctx context.Context, input DepositInput) (DepositResult
 
 // Apply runs the deposit inside a unit of work that is already open; the
 // writer opens it so the idempotency key shares its commit.
-func (d Deposit) Apply(ctx context.Context, stores Stores, operationID ledger.OperationID, input DepositInput) (DepositResult, error) {
+func (d Deposit) Apply(ctx context.Context, stores MoneyStores, operationID ledger.OperationID, input DepositInput) (DepositResult, error) {
 	err := d.locker.Lock(ctx, stores, []ledger.AccountID{input.AccountID})
 	if err != nil {
 		return DepositResult{}, err

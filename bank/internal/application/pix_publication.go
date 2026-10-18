@@ -16,7 +16,7 @@ type Publisher interface {
 // relay.
 type Publication interface {
 	// WithinCommit runs in the unit of work that creates the transfer.
-	WithinCommit(ctx context.Context, stores Stores, external ExternalTransfer, correlationID string) error
+	WithinCommit(ctx context.Context, stores OutboxStore, external ExternalTransfer, correlationID string) error
 	// AfterCommit runs once the transfer is committed.
 	AfterCommit(ctx context.Context, id transfer.ID) error
 }
@@ -34,7 +34,7 @@ func NewNotifyAfterCommit(publisher Publisher) NotifyAfterCommit {
 }
 
 // WithinCommit does nothing: the naive bank publishes after the commit.
-func (NotifyAfterCommit) WithinCommit(context.Context, Stores, ExternalTransfer, string) error {
+func (NotifyAfterCommit) WithinCommit(context.Context, OutboxStore, ExternalTransfer, string) error {
 	return nil
 }
 

@@ -32,7 +32,7 @@ var errBadSignature = errors.New("webhook signature is missing, stale or wrong")
 
 // PixOutCreator creates PIX out inside a unit of work.
 type PixOutCreator interface {
-	Apply(ctx context.Context, stores application.Stores, operationID ledger.OperationID, input application.PixOutInput) (application.PixOutResult, error)
+	Apply(ctx context.Context, stores application.PixOutStores, operationID ledger.OperationID, input application.PixOutInput) (application.PixOutResult, error)
 }
 
 // PixOutGetter reads one PIX out.

@@ -81,6 +81,21 @@ type Stores interface {
 	ReconciliationStore
 }
 
+// PostingStores are what posting a transaction needs: the balances it moves and
+// the ledger rows it writes.
+type PostingStores interface {
+	PositionWriter
+	LedgerWriter
+}
+
+// MoneyStores are what a write that moves money between accounts needs: the
+// balances, their locks and the ledger.
+type MoneyStores interface {
+	PositionStore
+	PositionLocker
+	LedgerWriter
+}
+
 // UnitOfWork runs fn with stores whose writes commit together (atomic_ledger)
 // or one by one (naive). fn's error rolls a real transaction back.
 type UnitOfWork interface {
@@ -89,7 +104,7 @@ type UnitOfWork interface {
 
 // Locker decides which balance rows a use case locks before reading them.
 type Locker interface {
-	Lock(ctx context.Context, stores Stores, ids []ledger.AccountID) error
+	Lock(ctx context.Context, stores PositionLocker, ids []ledger.AccountID) error
 }
 
 // RowLocker is the balance_locking defense: it locks every balance the use case
@@ -98,7 +113,7 @@ type Locker interface {
 type RowLocker struct{}
 
 // Lock sorts the ids and locks their rows.
-func (RowLocker) Lock(ctx context.Context, stores Stores, ids []ledger.AccountID) error {
+func (RowLocker) Lock(ctx context.Context, stores PositionLocker, ids []ledger.AccountID) error {
 	ordered := slices.Clone(ids)
 	slices.SortFunc(ordered, compareAccountIDs)
 

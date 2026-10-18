@@ -30,7 +30,7 @@ type fakeTransfer struct {
 	err      error
 }
 
-func (f *fakeTransfer) Apply(_ context.Context, _ application.Stores, _ ledger.OperationID, input application.TransferInput) (application.TransferResult, error) {
+func (f *fakeTransfer) Apply(_ context.Context, _ application.MoneyStores, _ ledger.OperationID, input application.TransferInput) (application.TransferResult, error) {
 	f.received = input
 
 	return f.result, f.err
@@ -40,7 +40,7 @@ type fakeDeposit struct {
 	err error
 }
 
-func (f fakeDeposit) Apply(_ context.Context, _ application.Stores, _ ledger.OperationID, input application.DepositInput) (application.DepositResult, error) {
+func (f fakeDeposit) Apply(_ context.Context, _ application.MoneyStores, _ ledger.OperationID, input application.DepositInput) (application.DepositResult, error) {
 	return application.DepositResult{Balance: money.NewBalance(input.Amount.Cents())}, f.err
 }
 

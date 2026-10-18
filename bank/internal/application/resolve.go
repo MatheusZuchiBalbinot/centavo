@@ -52,7 +52,7 @@ func (r TombstoneResolver) Resolve(ctx context.Context, request ResolveRequest) 
 	return resolution, err
 }
 
-func resolveKey(ctx context.Context, stores Stores, request ResolveRequest) (Resolution, error) {
+func resolveKey(ctx context.Context, stores KeyStore, request ResolveRequest) (Resolution, error) {
 	existing, isVoided, err := stores.VoidKey(ctx, request.Key)
 	if err != nil {
 		return Resolution{}, err

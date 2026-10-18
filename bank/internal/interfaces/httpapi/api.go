@@ -30,12 +30,12 @@ type AccountOpener interface {
 
 // Depositor runs direct deposits inside a unit of work.
 type Depositor interface {
-	Apply(ctx context.Context, stores application.Stores, operationID ledger.OperationID, input application.DepositInput) (application.DepositResult, error)
+	Apply(ctx context.Context, stores application.MoneyStores, operationID ledger.OperationID, input application.DepositInput) (application.DepositResult, error)
 }
 
 // Transferrer runs internal transfers inside a unit of work.
 type Transferrer interface {
-	Apply(ctx context.Context, stores application.Stores, operationID ledger.OperationID, input application.TransferInput) (application.TransferResult, error)
+	Apply(ctx context.Context, stores application.MoneyStores, operationID ledger.OperationID, input application.TransferInput) (application.TransferResult, error)
 }
 
 // WriteExecutor runs a client write exactly once per idempotency key

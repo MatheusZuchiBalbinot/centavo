@@ -27,6 +27,14 @@ type PixOutResult struct {
 	CreatedAt  time.Time
 }
 
+// PixOutStores are what creating a PIX out writes: the reserve, the transfer
+// and, with the outbox, its message.
+type PixOutStores interface {
+	MoneyStores
+	PixStore
+	OutboxStore
+}
+
 // CreatePixOut creates the transfer and reserves its amount in the same step,
 // so the money is never promised twice.
 type CreatePixOut struct {
@@ -41,7 +49,7 @@ func NewCreatePixOut(locker Locker, publication Publication) CreatePixOut {
 
 // Apply runs inside the writer's unit of work: lock, check funds, move the
 // amount to sys_pix_out_transit and record the transfer and its first state.
-func (c CreatePixOut) Apply(ctx context.Context, stores Stores, operationID ledger.OperationID, input PixOutInput) (PixOutResult, error) {
+func (c CreatePixOut) Apply(ctx context.Context, stores PixOutStores, operationID ledger.OperationID, input PixOutInput) (PixOutResult, error) {
 	debited, err := c.reserveFunds(ctx, stores, input)
 	if err != nil {
 		return PixOutResult{}, err
@@ -76,7 +84,7 @@ func (c CreatePixOut) Apply(ctx context.Context, stores Stores, operationID ledg
 
 // reserveFunds locks the customer and transit and returns the customer's
 // position after the debit, refusing to take a customer below zero.
-func (c CreatePixOut) reserveFunds(ctx context.Context, stores Stores, input PixOutInput) (ledger.Position, error) {
+func (c CreatePixOut) reserveFunds(ctx context.Context, stores MoneyStores, input PixOutInput) (ledger.Position, error) {
 	// Transit is locked with the customer, in id order, so the reserve takes
 	// it first, like a refund that moves transit then the customer.
 	err := c.locker.Lock(ctx, stores, []ledger.AccountID{input.AccountID, ledger.PixOutTransitAccountID()})
@@ -93,7 +101,7 @@ func (c CreatePixOut) reserveFunds(ctx context.Context, stores Stores, input Pix
 }
 
 // recordTransfer creates the external transfer in created.
-func recordTransfer(ctx context.Context, stores Stores, operationID ledger.OperationID, input PixOutInput) (ExternalTransfer, time.Time, error) {
+func recordTransfer(ctx context.Context, stores PixStore, operationID ledger.OperationID, input PixOutInput) (ExternalTransfer, time.Time, error) {
 	id, err := transfer.NewID()
 	if err != nil {
 		return ExternalTransfer{}, time.Time{}, err
@@ -121,7 +129,7 @@ type reservation struct {
 
 // postReserve writes the reserve: the customer's debit and its twin in
 // sys_pix_out_transit, in one ledger transaction tied to the transfer.
-func postReserve(ctx context.Context, stores Stores, r reservation) (ledger.TransactionID, error) {
+func postReserve(ctx context.Context, stores PostingStores, r reservation) (ledger.TransactionID, error) {
 	transaction, err := newTransaction(ledger.TransactionKindPixOutReserve, r.write, r.external.OperationID)
 	if err != nil {
 		return ledger.TransactionID{}, err

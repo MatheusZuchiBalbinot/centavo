@@ -72,6 +72,6 @@ func (r ClientRefResolver) Resolve(ctx context.Context, request application.Reso
 type NoLocker struct{}
 
 // Lock does nothing.
-func (NoLocker) Lock(context.Context, application.Stores, []ledger.AccountID) error {
+func (NoLocker) Lock(context.Context, application.PositionLocker, []ledger.AccountID) error {
 	return nil
 }

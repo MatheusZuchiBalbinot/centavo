@@ -164,7 +164,7 @@ func nextAttemptOf(endToEndID transfer.EndToEndID) int {
 }
 
 // postTransferStep writes one step of a transfer's saga in the ledger.
-func postTransferStep(ctx context.Context, stores Stores, external ExternalTransfer, step transfer.Posting) (ledger.TransactionID, error) {
+func postTransferStep(ctx context.Context, stores PostingStores, external ExternalTransfer, step transfer.Posting) (ledger.TransactionID, error) {
 	kind, entries, err := stepEntries(external, step)
 	if err != nil {
 		return ledger.TransactionID{}, err

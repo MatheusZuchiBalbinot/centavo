@@ -18,12 +18,19 @@ const (
 // doubtReason is what a deferred message records as its last error.
 const doubtReason = "partner answer unknown"
 
+// DoubtStores are what a doubtful answer touches: the outbox message and,
+// when the transfer is given up, its transition.
+type DoubtStores interface {
+	OutboxStore
+	TransitionStores
+}
+
 // DoubtPolicy is the resilient_client defense's strategy for an answer that may
 // hide a PIX the partner processed: a timeout, a 5xx, a broken connection or an
 // open circuit breaker. It runs in the commit that would have recorded the
 // answer.
 type DoubtPolicy interface {
-	OnUnknown(ctx context.Context, stores Stores, claim OutboxClaim, external ExternalTransfer) error
+	OnUnknown(ctx context.Context, stores DoubtStores, claim OutboxClaim, external ExternalTransfer) error
 }
 
 // GiveUpOnDoubt is the naive variant: doubt is taken for a failure and the
@@ -38,7 +45,7 @@ func NewGiveUpOnDoubt(machine StateMachine) GiveUpOnDoubt {
 }
 
 // OnUnknown closes the message and fails the transfer.
-func (g GiveUpOnDoubt) OnUnknown(ctx context.Context, stores Stores, claim OutboxClaim, external ExternalTransfer) error {
+func (g GiveUpOnDoubt) OnUnknown(ctx context.Context, stores DoubtStores, claim OutboxClaim, external ExternalTransfer) error {
 	isOurs, err := stores.FinishOutbox(ctx, claim.ID, claim.Token)
 	if err != nil {
 		return err
@@ -59,7 +66,7 @@ func (g GiveUpOnDoubt) OnUnknown(ctx context.Context, stores Stores, claim Outbo
 type RetryOnDoubt struct{}
 
 // OnUnknown reschedules the message.
-func (RetryOnDoubt) OnUnknown(ctx context.Context, stores Stores, claim OutboxClaim, _ ExternalTransfer) error {
+func (RetryOnDoubt) OnUnknown(ctx context.Context, stores DoubtStores, claim OutboxClaim, _ ExternalTransfer) error {
 	isOurs, err := stores.DeferOutbox(ctx, claim, fullJitterBackoff(claim.Attempts), doubtReason)
 	if err != nil {
 		return err

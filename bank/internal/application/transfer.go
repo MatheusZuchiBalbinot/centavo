@@ -62,7 +62,7 @@ func (t TransferInternal) Execute(ctx context.Context, input TransferInput) (Tra
 }
 
 // Apply runs the transfer inside a unit of work that is already open.
-func (t TransferInternal) Apply(ctx context.Context, stores Stores, operationID ledger.OperationID, input TransferInput) (TransferResult, error) {
+func (t TransferInternal) Apply(ctx context.Context, stores MoneyStores, operationID ledger.OperationID, input TransferInput) (TransferResult, error) {
 	err := ledger.CheckTransferAccounts(input.From, input.To)
 	if err != nil {
 		return TransferResult{}, err

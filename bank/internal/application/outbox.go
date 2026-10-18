@@ -66,7 +66,7 @@ type pixOutPayload struct {
 }
 
 // WithinCommit writes the outbox message.
-func (OutboxPublication) WithinCommit(ctx context.Context, stores Stores, external ExternalTransfer, correlationID string) error {
+func (OutboxPublication) WithinCommit(ctx context.Context, stores OutboxStore, external ExternalTransfer, correlationID string) error {
 	payload, err := json.Marshal(pixOutPayload{TransferID: external.ID.String()})
 	if err != nil {
 		return err
