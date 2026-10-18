@@ -27,13 +27,13 @@ func (f *fakeToxiproxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func newNetworkNemesis(t *testing.T) (*Nemesis, *fakeToxiproxy) {
 	t.Helper()
 
-	n, _ := newTestNemesis(t, t.TempDir())
+	bot, _ := newTestNemesis(t, t.TempDir())
 	fake := &fakeToxiproxy{}
 	server := httptest.NewServer(fake)
 	t.Cleanup(server.Close)
-	n.toxiproxyURL = server.URL
+	bot.toxiproxyURL = server.URL
 
-	return n, fake
+	return bot, fake
 }
 
 func TestNetwork_PartitionsBecomeToxiproxyCalls(t *testing.T) {
@@ -50,13 +50,13 @@ func TestNetwork_PartitionsBecomeToxiproxyCalls(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.toxic, func(t *testing.T) {
-			n, fake := newNetworkNemesis(t)
+			bot, fake := newNetworkNemesis(t)
 			fault := scenarios.Fault{ID: "cut", Kind: scenarios.FaultNetwork, Proxies: []string{"worker1_pg"}, Toxic: scenarios.Toxic{Type: tc.toxic, Stream: "downstream", Toxicity: 1}}
 
-			n.applyNetwork(t.Context(), fault)
+			bot.applyNetwork(t.Context(), fault)
 			applied := slices.Clone(fake.calls)
 			fake.calls = nil
-			n.removeNetwork(t.Context(), fault)
+			bot.removeNetwork(t.Context(), fault)
 
 			if !slices.Equal(applied, tc.wantApply) || !slices.Equal(fake.calls, tc.wantRemove) {
 				t.Fatalf("applied %v, removed %v", applied, fake.calls)
@@ -66,9 +66,9 @@ func TestNetwork_PartitionsBecomeToxiproxyCalls(t *testing.T) {
 }
 
 func TestNetwork_TheCureResetsToxiproxy(t *testing.T) {
-	n, fake := newNetworkNemesis(t)
+	bot, fake := newNetworkNemesis(t)
 
-	n.resetNetwork(t.Context())
+	bot.resetNetwork(t.Context())
 
 	if !slices.Equal(fake.calls, []string{"POST /reset"}) {
 		t.Fatalf("calls %v", fake.calls)

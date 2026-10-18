@@ -98,14 +98,14 @@ var invariantsOfThisVersion = []struct {
 }
 
 // Evaluate checks a history against a ledger snapshot, without the partner.
-func Evaluate(records []history.Record, s snapshot.Snapshot) Result {
-	return EvaluateWithTruth(records, s, nil)
+func Evaluate(records []history.Record, state snapshot.Snapshot) Result {
+	return EvaluateWithTruth(records, state, nil)
 }
 
 // EvaluateWithTruth also compares the ledger with the partner's truth (I6, the
 // R and S terms of I1c, the authoritative part of I7).
-func EvaluateWithTruth(records []history.Record, s snapshot.Snapshot, truth *PartnerTruth) Result {
-	return evaluate(indexOperations(records), s, outsideSources{truth: truth})
+func EvaluateWithTruth(records []history.Record, state snapshot.Snapshot, truth *PartnerTruth) Result {
+	return evaluate(indexOperations(records), state, outsideSources{truth: truth})
 }
 
 // outsideSources are what the checker compares the ledger with besides the
@@ -115,23 +115,23 @@ type outsideSources struct {
 	previous *snapshot.LedgerState
 }
 
-func evaluate(ops operations, s snapshot.Snapshot, sources outsideSources) Result {
+func evaluate(ops operations, state snapshot.Snapshot, sources outsideSources) Result {
 	truth := sources.truth
-	e := evaluation{ops: ops, ledger: indexLedger(s)}
+	run := evaluation{ops: ops, ledger: indexLedger(state)}
 
-	e.checkZeroSum()
-	e.checkAccounts()
-	e.checkDepositTerm()
-	e.checkOperations()
-	e.checkPhantoms()
-	e.checkPix(truth)
-	e.checkImmutability(sources.previous, s.Bands, s.Meta.FirstTransactionID)
+	run.checkZeroSum()
+	run.checkAccounts()
+	run.checkDepositTerm()
+	run.checkOperations()
+	run.checkPhantoms()
+	run.checkPix(truth)
+	run.checkImmutability(sources.previous, state.Bands, state.Meta.FirstTransactionID)
 
-	slices.SortStableFunc(e.violations, byTime)
+	slices.SortStableFunc(run.violations, byTime)
 
-	result := Result{Violations: e.violations, Unresolved: e.unresolved, Operations: countOperations(e.ops), ops: e.ops, ledger: e.ledger}
-	result.Invariants = invariantResults(e.violations)
-	result.Verdict = verdictOf(e.violations, e.unresolved)
+	result := Result{Violations: run.violations, Unresolved: run.unresolved, Operations: countOperations(run.ops), ops: run.ops, ledger: run.ledger}
+	result.Invariants = invariantResults(run.violations)
+	result.Verdict = verdictOf(run.violations, run.unresolved)
 
 	return result
 }
@@ -161,7 +161,7 @@ func Check(roundDir string) (Result, error) {
 		return Result{}, err
 	}
 
-	s, err := snapshot.Read(roundDir)
+	state, err := snapshot.Read(roundDir)
 	if err != nil {
 		return Result{}, err
 	}
@@ -171,13 +171,13 @@ func Check(roundDir string) (Result, error) {
 		return Result{}, err
 	}
 
-	meta := readRoundMeta(roundDir, s.Meta.Round)
+	meta := readRoundMeta(roundDir, state.Meta.Round)
 	previous, err := readPreviousState(roundDir)
 	if err != nil {
 		return Result{}, err
 	}
 
-	result := evaluate(ops, s, outsideSources{truth: truth, previous: previous})
+	result := evaluate(ops, state, outsideSources{truth: truth, previous: previous})
 	events := readEvents(roundDir)
 
 	histories, err := readHistoriesOf(roundDir, storiedOperations(result))

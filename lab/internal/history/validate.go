@@ -55,7 +55,7 @@ type validator struct {
 
 // Validate reads a whole history and checks its well-formedness.
 func Validate(reader io.Reader) (Report, error) {
-	v := validator{
+	validation := validator{
 		open: map[string]openOperation{}, closed: map[string]bool{}, busyProcesses: map[Process]string{}, retiredProcess: map[Process]bool{},
 	}
 
@@ -63,8 +63,8 @@ func Validate(reader io.Reader) (Report, error) {
 	scanner.Buffer(make([]byte, 0, 64<<10), maxLineBytes)
 
 	for scanner.Scan() {
-		v.report.Records++
-		v.check(scanner.Bytes())
+		validation.report.Records++
+		validation.check(scanner.Bytes())
 	}
 
 	err := scanner.Err()
@@ -72,13 +72,13 @@ func Validate(reader io.Reader) (Report, error) {
 		return Report{}, fmt.Errorf("reading history: %w", err)
 	}
 
-	for op := range v.open {
-		v.report.Open = append(v.report.Open, op)
+	for op := range validation.open {
+		validation.report.Open = append(validation.report.Open, op)
 	}
 
-	slices.Sort(v.report.Open)
+	slices.Sort(validation.report.Open)
 
-	return v.report, nil
+	return validation.report, nil
 }
 
 func (v *validator) check(line []byte) {
@@ -216,10 +216,10 @@ func (v *validator) count(record Record) {
 	}
 }
 
-func (v *validator) violate(index int64, format string, args ...any) {
+func (v *validator) violate(index int64, format string, arguments ...any) {
 	if len(v.report.Violations) >= maxViolations {
 		return
 	}
 
-	v.report.Violations = append(v.report.Violations, Violation{Index: index, Message: fmt.Sprintf(format, args...)})
+	v.report.Violations = append(v.report.Violations, Violation{Index: index, Message: fmt.Sprintf(format, arguments...)})
 }

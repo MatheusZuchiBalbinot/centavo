@@ -165,10 +165,10 @@ func pickTransaction(t *rapid.T, b *roundBuilder, kind snapshot.TransactionKind)
 	return rapid.SampledFrom(candidates).Draw(t, "transaction"), true
 }
 
-func pickEntryIndex(t *rapid.T, s snapshot.Snapshot, isTarget func(snapshot.Entry) bool) (int, bool) {
+func pickEntryIndex(t *rapid.T, state snapshot.Snapshot, isTarget func(snapshot.Entry) bool) (int, bool) {
 	var candidates []int
 
-	for i, entry := range s.Entries {
+	for i, entry := range state.Entries {
 		if isTarget(entry) {
 			candidates = append(candidates, i)
 		}
@@ -186,16 +186,16 @@ func isCustomerEntry(entry snapshot.Entry) bool {
 }
 
 func deleteEntry(t *rapid.T, b *roundBuilder) ([]history.Record, snapshot.Snapshot, bool) {
-	s := b.snapshot()
+	state := b.snapshot()
 
-	i, isFound := pickEntryIndex(t, s, isCustomerEntry)
+	i, isFound := pickEntryIndex(t, state, isCustomerEntry)
 	if !isFound {
-		return nil, s, false
+		return nil, state, false
 	}
 
-	s.Entries = slices.Delete(s.Entries, i, i+1)
+	state.Entries = slices.Delete(state.Entries, i, i+1)
 
-	return b.records, s, true
+	return b.records, state, true
 }
 
 // duplicateTransaction applies an ok operation a second time, with entries
@@ -213,27 +213,27 @@ func duplicateTransaction(t *rapid.T, b *roundBuilder) ([]history.Record, snapsh
 }
 
 func alterAmount(t *rapid.T, b *roundBuilder) ([]history.Record, snapshot.Snapshot, bool) {
-	s := b.snapshot()
-	i, _ := pickEntryIndex(t, s, func(snapshot.Entry) bool { return true })
-	s.Entries[i].AmountCents++
+	state := b.snapshot()
+	i, _ := pickEntryIndex(t, state, func(snapshot.Entry) bool { return true })
+	state.Entries[i].AmountCents++
 
-	return b.records, s, true
+	return b.records, state, true
 }
 
 func alterBalanceAfter(t *rapid.T, b *roundBuilder) ([]history.Record, snapshot.Snapshot, bool) {
-	s := b.snapshot()
-	i, _ := pickEntryIndex(t, s, func(snapshot.Entry) bool { return true })
-	s.Entries[i].BalanceAfterCents += rapid.Int64Range(1, 1_000).Draw(t, "delta")
+	state := b.snapshot()
+	i, _ := pickEntryIndex(t, state, func(snapshot.Entry) bool { return true })
+	state.Entries[i].BalanceAfterCents += rapid.Int64Range(1, 1_000).Draw(t, "delta")
 
-	return b.records, s, true
+	return b.records, state, true
 }
 
 func alterMaterialized(t *rapid.T, b *roundBuilder) ([]history.Record, snapshot.Snapshot, bool) {
-	s := b.snapshot()
-	i := rapid.IntRange(0, len(s.Balances)-1).Draw(t, "balance")
-	s.Balances[i].BalanceCents -= rapid.Int64Range(1, 1_000).Draw(t, "delta")
+	state := b.snapshot()
+	i := rapid.IntRange(0, len(state.Balances)-1).Draw(t, "balance")
+	state.Balances[i].BalanceCents -= rapid.Int64Range(1, 1_000).Draw(t, "delta")
 
-	return b.records, s, true
+	return b.records, state, true
 }
 
 func removeTransaction(t *rapid.T, b *roundBuilder) ([]history.Record, snapshot.Snapshot, bool) {
@@ -242,11 +242,11 @@ func removeTransaction(t *rapid.T, b *roundBuilder) ([]history.Record, snapshot.
 		return nil, snapshot.Snapshot{}, false
 	}
 
-	s := b.snapshot()
-	s.Transactions = slices.DeleteFunc(s.Transactions, func(tx snapshot.Transaction) bool { return tx.ID == transaction.ID })
-	s.Entries = slices.DeleteFunc(s.Entries, func(e snapshot.Entry) bool { return e.TransactionID == transaction.ID })
+	state := b.snapshot()
+	state.Transactions = slices.DeleteFunc(state.Transactions, func(tx snapshot.Transaction) bool { return tx.ID == transaction.ID })
+	state.Entries = slices.DeleteFunc(state.Entries, func(entry snapshot.Entry) bool { return entry.TransactionID == transaction.ID })
 
-	return b.records, s, true
+	return b.records, state, true
 }
 
 func addPhantom(t *rapid.T, b *roundBuilder) ([]history.Record, snapshot.Snapshot, bool) {
@@ -277,16 +277,16 @@ func retargetClientRef(t *rapid.T, b *roundBuilder) ([]history.Record, snapshot.
 		return nil, snapshot.Snapshot{}, false
 	}
 
-	s := b.snapshot()
+	state := b.snapshot()
 	target := rapid.SampledFrom(others).Draw(t, "target")
 
-	for i := range s.Transactions {
-		if s.Transactions[i].ID == transaction.ID {
-			s.Transactions[i].ClientRef = target
+	for i := range state.Transactions {
+		if state.Transactions[i].ID == transaction.ID {
+			state.Transactions[i].ClientRef = target
 		}
 	}
 
-	return b.records, s, true
+	return b.records, state, true
 }
 
 func changeKind(t *rapid.T, b *roundBuilder) ([]history.Record, snapshot.Snapshot, bool) {
@@ -295,31 +295,31 @@ func changeKind(t *rapid.T, b *roundBuilder) ([]history.Record, snapshot.Snapsho
 		return nil, snapshot.Snapshot{}, false
 	}
 
-	s := b.snapshot()
+	state := b.snapshot()
 
-	for i := range s.Transactions {
-		if s.Transactions[i].ID == transaction.ID {
-			s.Transactions[i].Kind = snapshot.TransactionInternalTransfer
+	for i := range state.Transactions {
+		if state.Transactions[i].ID == transaction.ID {
+			state.Transactions[i].Kind = snapshot.TransactionInternalTransfer
 		}
 	}
 
-	return b.records, s, true
+	return b.records, state, true
 }
 
 func removeAccount(t *rapid.T, b *roundBuilder) ([]history.Record, snapshot.Snapshot, bool) {
-	s := b.snapshot()
-	account := rapid.SampledFrom(customerAccounts(s)).Draw(t, "account")
-	s.Accounts = slices.DeleteFunc(s.Accounts, func(a snapshot.Account) bool { return a.ID == account })
+	state := b.snapshot()
+	account := rapid.SampledFrom(customerAccounts(state)).Draw(t, "account")
+	state.Accounts = slices.DeleteFunc(state.Accounts, func(a snapshot.Account) bool { return a.ID == account })
 
-	return b.records, s, true
+	return b.records, state, true
 }
 
 func negativeBalanceAfter(t *rapid.T, b *roundBuilder) ([]history.Record, snapshot.Snapshot, bool) {
-	s := b.snapshot()
-	i, _ := pickEntryIndex(t, s, isCustomerEntry)
-	s.Entries[i].BalanceAfterCents = -rapid.Int64Range(1, 1_000).Draw(t, "negative")
+	state := b.snapshot()
+	i, _ := pickEntryIndex(t, state, isCustomerEntry)
+	state.Entries[i].BalanceAfterCents = -rapid.Int64Range(1, 1_000).Draw(t, "negative")
 
-	return b.records, s, true
+	return b.records, state, true
 }
 
 func moveEntry(t *rapid.T, b *roundBuilder) ([]history.Record, snapshot.Snapshot, bool) {
@@ -328,26 +328,26 @@ func moveEntry(t *rapid.T, b *roundBuilder) ([]history.Record, snapshot.Snapshot
 		return nil, snapshot.Snapshot{}, false
 	}
 
-	s := b.snapshot()
+	state := b.snapshot()
 
-	i, _ := pickEntryIndex(t, s, func(e snapshot.Entry) bool { return e.TransactionID == transaction.ID })
+	i, _ := pickEntryIndex(t, state, func(entry snapshot.Entry) bool { return entry.TransactionID == transaction.ID })
 
 	var destinations []string
-	for _, account := range customerAccounts(s) {
-		if account != s.Entries[i].AccountID {
+	for _, account := range customerAccounts(state) {
+		if account != state.Entries[i].AccountID {
 			destinations = append(destinations, account)
 		}
 	}
 
-	s.Entries[i].AccountID = rapid.SampledFrom(destinations).Draw(t, "destination")
+	state.Entries[i].AccountID = rapid.SampledFrom(destinations).Draw(t, "destination")
 
-	return b.records, s, true
+	return b.records, state, true
 }
 
-func entriesOf(s snapshot.Snapshot, transactionID string) []snapshot.Entry {
+func entriesOf(state snapshot.Snapshot, transactionID string) []snapshot.Entry {
 	var entries []snapshot.Entry
 
-	for _, entry := range s.Entries {
+	for _, entry := range state.Entries {
 		if entry.TransactionID == transactionID {
 			entries = append(entries, entry)
 		}
@@ -356,10 +356,10 @@ func entriesOf(s snapshot.Snapshot, transactionID string) []snapshot.Entry {
 	return entries
 }
 
-func customerAccounts(s snapshot.Snapshot) []string {
+func customerAccounts(state snapshot.Snapshot) []string {
 	var accounts []string
 
-	for _, account := range s.Accounts {
+	for _, account := range state.Accounts {
 		if account.Kind == snapshot.KindCustomer {
 			accounts = append(accounts, account.ID)
 		}

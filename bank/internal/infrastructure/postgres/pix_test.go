@@ -91,19 +91,19 @@ func fakePartner(t *testing.T, status int, calls *atomic.Int32) partnerclient.Cl
 }
 
 func TestPixOut_ReservesTheAmountInTransit(t *testing.T) {
-	p := newPixBank(t)
-	account := p.bank.newCustomer(t)
-	p.bank.fund(t, account, 10_000)
+	fixture := newPixBank(t)
+	account := fixture.bank.newCustomer(t)
+	fixture.bank.fund(t, account, 10_000)
 
-	result := p.createPixOut(t, account, 4_500)
+	result := fixture.createPixOut(t, account, 4_500)
 
-	view := p.status(t, result.TransferID)
+	view := fixture.status(t, result.TransferID)
 	isCreated := view.Transfer.Status == transfer.StatusCreated && len(view.Transitions) == 1 && view.Transitions[0].From == nil
 	if !isCreated {
 		t.Fatalf("transfer: %+v", view)
 	}
 
-	assertChainedAndNeverNegative(t, p.bank, account, 5_500)
+	assertChainedAndNeverNegative(t, fixture.bank, account, 5_500)
 }
 
 func TestNaiveRelay_RecordsWhatThePartnerAnswered(t *testing.T) {
@@ -123,21 +123,21 @@ func TestNaiveRelay_RecordsWhatThePartnerAnswered(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			p := newPixBank(t)
-			account := p.bank.newCustomer(t)
-			p.bank.fund(t, account, 10_000)
-			created := p.createPixOut(t, account, 4_500)
+			fixture := newPixBank(t)
+			account := fixture.bank.newCustomer(t)
+			fixture.bank.fund(t, account, 10_000)
+			created := fixture.createPixOut(t, account, 4_500)
 
 			var calls atomic.Int32
 
-			relay := application.NewNaiveRelay(p.unitOfWork, fakePartner(t, tc.status, &calls), application.OverwriteTransitions{})
+			relay := application.NewNaiveRelay(fixture.unitOfWork, fakePartner(t, tc.status, &calls), application.OverwriteTransitions{})
 
 			err := relay.Relay(t.Context(), created.TransferID)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			view := p.status(t, created.TransferID)
+			view := fixture.status(t, created.TransferID)
 			isUnexpected := view.Transfer.Status != tc.want || view.Transfer.FailureCode != tc.wantFailure
 			if isUnexpected {
 				t.Fatalf("status %s (%q), want %s (%q)", view.Transfer.Status, view.Transfer.FailureCode, tc.want, tc.wantFailure)
@@ -148,7 +148,7 @@ func TestNaiveRelay_RecordsWhatThePartnerAnswered(t *testing.T) {
 				wantBalance = 10_000
 			}
 
-			assertChainedAndNeverNegative(t, p.bank, account, wantBalance)
+			assertChainedAndNeverNegative(t, fixture.bank, account, wantBalance)
 
 			err = relay.Relay(t.Context(), created.TransferID)
 			if err != nil {
@@ -165,20 +165,20 @@ func TestNaiveRelay_RecordsWhatThePartnerAnswered(t *testing.T) {
 // TestNaiveWebhook_AppliesDuplicatesTwice guards a known failure: without the
 // inbox and the guarded state machine, the same event settles a transfer twice.
 func TestNaiveWebhook_AppliesDuplicatesTwice(t *testing.T) {
-	p := newPixBank(t)
-	account := p.bank.newCustomer(t)
-	p.bank.fund(t, account, 10_000)
-	created := p.createPixOut(t, account, 4_500)
+	fixture := newPixBank(t)
+	account := fixture.bank.newCustomer(t)
+	fixture.bank.fund(t, account, 10_000)
+	created := fixture.createPixOut(t, account, 4_500)
 	settled := application.PartnerEvent{ID: "evt_1", Type: application.EventSettled, EndToEndID: created.EndToEndID, AmountCents: 4_500}
 
 	for range 2 {
-		err := p.webhook.Apply(t.Context(), settled)
+		err := fixture.webhook.Apply(t.Context(), settled)
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	view := p.status(t, created.TransferID)
+	view := fixture.status(t, created.TransferID)
 	isUnexpected := view.Transfer.Status != transfer.StatusConfirmed || len(view.Transitions) != 3
 	if isUnexpected {
 		t.Fatalf("transfer: %s with %d transitions", view.Transfer.Status, len(view.Transitions))
@@ -186,7 +186,7 @@ func TestNaiveWebhook_AppliesDuplicatesTwice(t *testing.T) {
 
 	var settlements int
 
-	err := p.bank.pool.QueryRow(t.Context(), `SELECT count(*) FROM ledger_transactions WHERE external_transfer_id = $1 AND kind = 'pix_out_settle'`, uuid.UUID(created.TransferID)).Scan(&settlements)
+	err := fixture.bank.pool.QueryRow(t.Context(), `SELECT count(*) FROM ledger_transactions WHERE external_transfer_id = $1 AND kind = 'pix_out_settle'`, uuid.UUID(created.TransferID)).Scan(&settlements)
 	if err != nil {
 		t.Fatalf("settlements: %d, %v", settlements, err)
 	}
@@ -197,31 +197,31 @@ func TestNaiveWebhook_AppliesDuplicatesTwice(t *testing.T) {
 }
 
 func TestNaiveWebhook_CreditsAnIncomingPixOnce(t *testing.T) {
-	p := newPixBank(t)
-	account := p.bank.newCustomer(t)
+	fixture := newPixBank(t)
+	account := fixture.bank.newCustomer(t)
 	incoming := application.PartnerEvent{ID: "evt_in", Type: application.EventIncoming, EndToEndID: transfer.EndToEndID("E" + uuid.NewString()[:8] + "0000aaaa"), AmountCents: 900, AccountID: account.String()}
 
-	err := p.webhook.Apply(t.Context(), incoming)
+	err := fixture.webhook.Apply(t.Context(), incoming)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = p.webhook.Apply(t.Context(), incoming)
+	err = fixture.webhook.Apply(t.Context(), incoming)
 	if !errors.Is(err, application.ErrAlreadyCredited) {
 		t.Fatalf("second credit: got %v", err)
 	}
 
-	assertChainedAndNeverNegative(t, p.bank, account, 900)
+	assertChainedAndNeverNegative(t, fixture.bank, account, 900)
 }
 
 func TestNotify_ReachesAListener(t *testing.T) {
-	p := newPixBank(t)
+	fixture := newPixBank(t)
 	received := make(chan string, 1)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
-	listener := postgres.Listener{Pool: p.bank.pool, Channel: postgres.PixOutChannel, Handle: func(_ context.Context, payload string) { received <- payload }, Logger: discardLogger()}
+	listener := postgres.Listener{Pool: fixture.bank.pool, Channel: postgres.PixOutChannel, Handle: func(_ context.Context, payload string) { received <- payload }, Logger: discardLogger()}
 	go listener.Run(ctx)
 
 	id, err := transfer.NewID()
@@ -229,7 +229,7 @@ func TestNotify_ReachesAListener(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	publisher := postgres.NewNotifyPublisher(p.bank.pool)
+	publisher := postgres.NewNotifyPublisher(fixture.bank.pool)
 
 	for {
 		err = publisher.Publish(ctx, id)

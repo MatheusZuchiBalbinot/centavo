@@ -50,7 +50,7 @@ func TestCheck_FailurePathKeepsTheOperationHistory(t *testing.T) {
 	}
 }
 
-func writeRound(t *testing.T, roundDir string, records []history.Record, s snapshot.Snapshot) {
+func writeRound(t *testing.T, roundDir string, records []history.Record, state snapshot.Snapshot) {
 	t.Helper()
 
 	file, err := os.Create(filepath.Join(roundDir, historyFile))
@@ -68,7 +68,7 @@ func writeRound(t *testing.T, roundDir string, records []history.Record, s snaps
 		}
 	}
 
-	err = snapshot.Write(roundDir, s)
+	err = snapshot.Write(roundDir, state)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -37,27 +37,27 @@ func newTestNemesis(t *testing.T, eventsDir string) (*Nemesis, string) {
 }
 
 func TestRuleFor_CountsDownTheFiresAndScopesTheRound(t *testing.T) {
-	n, _ := newTestNemesis(t, t.TempDir())
-	armed := *n.failpoints.faults[0]
+	bot, _ := newTestNemesis(t, t.TempDir())
+	armed := *bot.failpoints.faults[0]
 
-	rule := n.failpoints.ruleFor(armed, "bank-api", 0)
+	rule := bot.failpoints.ruleFor(armed, "bank-api", 0)
 	isFresh := rule.MaxFires == 3 && rule.Probability == 0.1 && rule.Match.CorrelationPrefix == "r0042-" && rule.TTL == ruleTTL
 	if !isFresh {
 		t.Fatalf("fresh rule: %+v", rule)
 	}
 
 	armed.fired = 2
-	if rule := n.failpoints.ruleFor(armed, "bank-api", 0); rule.MaxFires != 1 {
+	if rule := bot.failpoints.ruleFor(armed, "bank-api", 0); rule.MaxFires != 1 {
 		t.Fatalf("after two fires: %+v", rule)
 	}
 
 	armed.fired = 3
-	if rule := n.failpoints.ruleFor(armed, "bank-api", 0); rule.Probability != 0 {
+	if rule := bot.failpoints.ruleFor(armed, "bank-api", 0); rule.Probability != 0 {
 		t.Fatalf("exhausted rule still fires: %+v", rule)
 	}
 
-	sameIncarnation := n.failpoints.ruleFor(armed, "bank-api", 0).Seed
-	nextIncarnation := n.failpoints.ruleFor(armed, "bank-api", 1).Seed
+	sameIncarnation := bot.failpoints.ruleFor(armed, "bank-api", 0).Seed
+	nextIncarnation := bot.failpoints.ruleFor(armed, "bank-api", 1).Seed
 
 	isUnexpected := sameIncarnation != rule.Seed || sameIncarnation == nextIncarnation
 	if isUnexpected {
@@ -74,7 +74,7 @@ func TestCollectEvents_RecordsThisRoundAndCountsFires(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	n, historyPath := newTestNemesis(t, eventsDir)
+	bot, historyPath := newTestNemesis(t, eventsDir)
 
 	lines := []string{
 		`{"instance":"bank-api","failpoint":"transfer.after_debit_before_credit","action":"kill","correlation_id":"r0042-p01-000007"}`,
@@ -83,24 +83,24 @@ func TestCollectEvents_RecordsThisRoundAndCountsFires(t *testing.T) {
 	}
 	appendTo(t, eventsPath, strings.Join(lines, "\n")+"\n"+`{"instance":"bank-api","fail`)
 
-	n.failpoints.collectEvents()
+	bot.failpoints.collectEvents()
 
-	if fired := n.failpoints.faults[0].fired; fired != 1 {
+	if fired := bot.failpoints.faults[0].fired; fired != 1 {
 		t.Fatalf("fault fired %d times, want 1 (the other round and the other failpoint do not count)", fired)
 	}
 
-	if events := n.Events(); len(events) != 2 {
+	if events := bot.Events(); len(events) != 2 {
 		t.Fatalf("round events: %d, want 2", len(events))
 	}
 
 	appendTo(t, eventsPath, `point":"transfer.after_debit_before_credit","action":"kill","correlation_id":"r0042-p03-000001"}`+"\n")
-	n.failpoints.collectEvents()
+	bot.failpoints.collectEvents()
 
-	if fired := n.failpoints.faults[0].fired; fired != 2 {
+	if fired := bot.failpoints.faults[0].fired; fired != 2 {
 		t.Fatalf("the line finished later was not read: fired %d", fired)
 	}
 
-	err = n.config.History.Close()
+	err = bot.config.History.Close()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,11 +133,11 @@ func appendTo(t *testing.T, path, content string) {
 // TestClockFaults_AreRecordedAndCleared: the skew is in the history before
 // it is set, and the faults of the scenario are the ones pushed.
 func TestClockFaults_AreRecordedAndCleared(t *testing.T) {
-	n, historyPath := newTestNemesis(t, t.TempDir())
+	bot, historyPath := newTestNemesis(t, t.TempDir())
 	skew := scenarios.Fault{ID: "ahead", Kind: scenarios.FaultClock, Targets: []string{"bank-worker-2"}, Offset: 2 * time.Minute}
-	n.config.Scenario.Faults = append(n.config.Scenario.Faults, skew)
+	bot.config.Scenario.Faults = append(bot.config.Scenario.Faults, skew)
 
-	faults := n.clockFaults()
+	faults := bot.clockFaults()
 
 	isUnexpected := len(faults) != 1 || faults[0].ID != "ahead"
 	if isUnexpected {
@@ -147,14 +147,14 @@ func TestClockFaults_AreRecordedAndCleared(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	err := n.skewClocks(ctx)
+	err := bot.skewClocks(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	n.wg.Wait()
+	bot.wg.Wait()
 
-	err = n.config.History.Close()
+	err = bot.config.History.Close()
 	if err != nil {
 		t.Fatal(err)
 	}

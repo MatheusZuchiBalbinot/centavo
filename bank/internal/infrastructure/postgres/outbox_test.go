@@ -65,10 +65,10 @@ func (p *recordingPartner) calls() []transfer.EndToEndID {
 func newOutboxBank(t *testing.T) pixBank {
 	t.Helper()
 
-	p := newPixBank(t)
-	p.create = application.NewCreatePixOut(application.RowLocker{}, application.OutboxPublication{})
+	fixture := newPixBank(t)
+	fixture.create = application.NewCreatePixOut(application.RowLocker{}, application.OutboxPublication{})
 
-	return p
+	return fixture
 }
 
 func (p pixBank) relay(partner application.PartnerSubmitter, endToEnd application.EndToEndPolicy, leaseTTL time.Duration) application.OutboxRelay {
@@ -130,15 +130,15 @@ func (p pixBank) drainOutbox(t *testing.T) {
 // after the commit (`pixout.after_save_before_publish`), so nothing was
 // published, and the transfer still goes.
 func TestPixOut_CrashAfterSave_IsStillSubmitted(t *testing.T) {
-	p := newOutboxBank(t)
-	p.drainOutbox(t)
-	account := p.bank.newCustomer(t)
-	p.bank.fund(t, account, 10_000)
+	fixture := newOutboxBank(t)
+	fixture.drainOutbox(t)
+	account := fixture.bank.newCustomer(t)
+	fixture.bank.fund(t, account, 10_000)
 
-	created := p.createPixOut(t, account, 4_500)
+	created := fixture.createPixOut(t, account, 4_500)
 
 	partner, client := newRecordingPartner(t)
-	relay := p.relay(client, application.FixedEndToEnd{}, application.OutboxLeaseTTL)
+	relay := fixture.relay(client, application.FixedEndToEnd{}, application.OutboxLeaseTTL)
 
 	for range 2 {
 		err := relay.RunOnce(t.Context())
@@ -153,7 +153,7 @@ func TestPixOut_CrashAfterSave_IsStillSubmitted(t *testing.T) {
 		t.Fatalf("partner calls: %v, want one with %s", calls, created.EndToEndID)
 	}
 
-	view := p.status(t, created.TransferID)
+	view := fixture.status(t, created.TransferID)
 	if view.Transfer.Status != transfer.StatusSent {
 		t.Fatalf("status %s, want sent", view.Transfer.Status)
 	}
@@ -162,15 +162,15 @@ func TestPixOut_CrashAfterSave_IsStillSubmitted(t *testing.T) {
 // TestOutbox_StaleTokenCannotFinish is the fencing of the relay lease: a
 // relay that lost its lease while it was away cannot close the message.
 func TestOutbox_StaleTokenCannotFinish(t *testing.T) {
-	p := newOutboxBank(t)
-	p.drainOutbox(t)
-	account := p.bank.newCustomer(t)
-	p.bank.fund(t, account, 10_000)
-	p.createPixOut(t, account, 1_000)
+	fixture := newOutboxBank(t)
+	fixture.drainOutbox(t)
+	account := fixture.bank.newCustomer(t)
+	fixture.bank.fund(t, account, 10_000)
+	fixture.createPixOut(t, account, 1_000)
 
-	zombie := p.claim(t, "zombie", expiredLease)
+	zombie := fixture.claim(t, "zombie", expiredLease)
 	time.Sleep(10 * expiredLease)
-	successor := p.claim(t, "successor", time.Minute)
+	successor := fixture.claim(t, "successor", time.Minute)
 
 	isSameMessage := len(zombie) == 1 && len(successor) == 1 && zombie[0].ID == successor[0].ID
 	if !isSameMessage {
@@ -181,11 +181,11 @@ func TestOutbox_StaleTokenCannotFinish(t *testing.T) {
 		t.Fatalf("token %d after %d: tokens must grow", successor[0].Token, zombie[0].Token)
 	}
 
-	if p.finish(t, zombie[0]) {
+	if fixture.finish(t, zombie[0]) {
 		t.Fatal("the zombie's stale token closed the message")
 	}
 
-	if !p.finish(t, successor[0]) {
+	if !fixture.finish(t, successor[0]) {
 		t.Fatal("the current token could not close the message")
 	}
 }
@@ -207,18 +207,18 @@ func TestRelay_RedeliveryAfterCrash_ReusesEndToEndID(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			p := newOutboxBank(t)
-			p.drainOutbox(t)
-			account := p.bank.newCustomer(t)
-			p.bank.fund(t, account, 10_000)
-			created := p.createPixOut(t, account, 2_000)
+			fixture := newOutboxBank(t)
+			fixture.drainOutbox(t)
+			account := fixture.bank.newCustomer(t)
+			fixture.bank.fund(t, account, 10_000)
+			created := fixture.createPixOut(t, account, 2_000)
 
 			partner, client := newRecordingPartner(t)
 
 			// The first relay sends and dies before saving: its lease is
 			// left to expire.
 			ctx, die := context.WithCancel(t.Context())
-			dying := p.relay(dyingAfterSubmit{partner: client, die: die}, tc.policy, expiredLease)
+			dying := fixture.relay(dyingAfterSubmit{partner: client, die: die}, tc.policy, expiredLease)
 
 			err := dying.RunOnce(ctx)
 			if err == nil {
@@ -227,7 +227,7 @@ func TestRelay_RedeliveryAfterCrash_ReusesEndToEndID(t *testing.T) {
 
 			time.Sleep(10 * expiredLease)
 
-			err = p.relay(client, tc.policy, application.OutboxLeaseTTL).RunOnce(t.Context())
+			err = fixture.relay(client, tc.policy, application.OutboxLeaseTTL).RunOnce(t.Context())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -242,7 +242,7 @@ func TestRelay_RedeliveryAfterCrash_ReusesEndToEndID(t *testing.T) {
 				t.Fatalf("end_to_end_ids %v, same = %v, want %v", calls, isSameID, tc.shouldKeepID)
 			}
 
-			view := p.status(t, created.TransferID)
+			view := fixture.status(t, created.TransferID)
 			if view.Transfer.Status != transfer.StatusSent {
 				t.Fatalf("status %s, want sent", view.Transfer.Status)
 			}
@@ -268,27 +268,27 @@ func (d dyingAfterSubmit) Submit(ctx context.Context, submission application.Par
 // TestOutbox_AnswerDoesNotOverwriteAWebhook: the partner's settlement came
 // in before the relay got to the message, so the relay only closes it.
 func TestOutbox_AnswerDoesNotOverwriteAWebhook(t *testing.T) {
-	p := newOutboxBank(t)
-	p.drainOutbox(t)
-	account := p.bank.newCustomer(t)
-	p.bank.fund(t, account, 10_000)
-	created := p.createPixOut(t, account, 3_000)
+	fixture := newOutboxBank(t)
+	fixture.drainOutbox(t)
+	account := fixture.bank.newCustomer(t)
+	fixture.bank.fund(t, account, 10_000)
+	created := fixture.createPixOut(t, account, 3_000)
 
 	settled := application.PartnerEvent{ID: "evt_" + uuid.NewString(), Type: application.EventSettled, EndToEndID: created.EndToEndID, AmountCents: 3_000}
 
-	err := p.webhook.Apply(t.Context(), settled)
+	err := fixture.webhook.Apply(t.Context(), settled)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	partner, client := newRecordingPartner(t)
 
-	err = p.relay(client, application.FixedEndToEnd{}, application.OutboxLeaseTTL).RunOnce(t.Context())
+	err = fixture.relay(client, application.FixedEndToEnd{}, application.OutboxLeaseTTL).RunOnce(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	view := p.status(t, created.TransferID)
+	view := fixture.status(t, created.TransferID)
 	isUntouched := view.Transfer.Status == transfer.StatusConfirmed && len(partner.calls()) == 0
 	if !isUntouched {
 		t.Fatalf("status %s after %d partner calls", view.Transfer.Status, len(partner.calls()))
@@ -317,10 +317,10 @@ func (a statusAnswer) Status(context.Context, transfer.EndToEndID) (application.
 }
 
 // newInbox is inbox over the test database.
-func newInbox(p pixBank, partner application.PartnerStatusReader) (application.InboxIntake, application.InboxProcessor) {
-	config := application.InboxProcessorConfig{UnitOfWork: p.unitOfWork, Machine: application.GuardedTransitions{}, Partner: partner, Logger: discardLogger()}
+func newInbox(fixture pixBank, partner application.PartnerStatusReader) (application.InboxIntake, application.InboxProcessor) {
+	config := application.InboxProcessorConfig{UnitOfWork: fixture.unitOfWork, Machine: application.GuardedTransitions{}, Partner: partner, Logger: discardLogger()}
 
-	return application.NewInboxIntake(p.unitOfWork), application.NewInboxProcessor(config)
+	return application.NewInboxIntake(fixture.unitOfWork), application.NewInboxProcessor(config)
 }
 
 func drainInbox(t *testing.T, processor application.InboxProcessor) {
@@ -338,12 +338,12 @@ func drainInbox(t *testing.T, processor application.InboxProcessor) {
 	}
 }
 
-func countRows(t *testing.T, p pixBank, query string, args ...any) int {
+func countRows(t *testing.T, fixture pixBank, query string, arguments ...any) int {
 	t.Helper()
 
 	var count int
 
-	err := p.bank.pool.QueryRow(t.Context(), query, args...).Scan(&count)
+	err := fixture.bank.pool.QueryRow(t.Context(), query, arguments...).Scan(&count)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -355,13 +355,13 @@ func countRows(t *testing.T, p pixBank, query string, args ...any) int {
 // before the 200 (`webhook.after_receive_before_ack`), the partner delivered
 // the same event again, and the transfer is settled once.
 func TestInbox_DuplicateEventID_IsIgnored(t *testing.T) {
-	p := newOutboxBank(t)
-	intake, processor := newInbox(p, statusAnswer(transfer.PartnerSettled))
+	fixture := newOutboxBank(t)
+	intake, processor := newInbox(fixture, statusAnswer(transfer.PartnerSettled))
 	drainInbox(t, processor)
 
-	account := p.bank.newCustomer(t)
-	p.bank.fund(t, account, 10_000)
-	created := p.createPixOut(t, account, 4_500)
+	account := fixture.bank.newCustomer(t)
+	fixture.bank.fund(t, account, 10_000)
+	created := fixture.createPixOut(t, account, 4_500)
 	settled := application.PartnerEvent{ID: "evt_" + uuid.NewString(), Type: application.EventSettled, EndToEndID: created.EndToEndID, AmountCents: 4_500}
 
 	for range 3 {
@@ -371,14 +371,14 @@ func TestInbox_DuplicateEventID_IsIgnored(t *testing.T) {
 		}
 	}
 
-	if countRows(t, p, `SELECT count(*) FROM inbox_events WHERE event_id = $1`, settled.ID) != 1 {
+	if countRows(t, fixture, `SELECT count(*) FROM inbox_events WHERE event_id = $1`, settled.ID) != 1 {
 		t.Fatal("the inbox kept more than one copy of the event")
 	}
 
 	drainInbox(t, processor)
 
-	settlements := countRows(t, p, `SELECT count(*) FROM ledger_transactions WHERE external_transfer_id = $1 AND kind = 'pix_out_settle'`, uuid.UUID(created.TransferID))
-	view := p.status(t, created.TransferID)
+	settlements := countRows(t, fixture, `SELECT count(*) FROM ledger_transactions WHERE external_transfer_id = $1 AND kind = 'pix_out_settle'`, uuid.UUID(created.TransferID))
+	view := fixture.status(t, created.TransferID)
 
 	isSettledOnce := settlements == 1 && view.Transfer.Status == transfer.StatusConfirmed
 	if !isSettledOnce {
@@ -389,11 +389,11 @@ func TestInbox_DuplicateEventID_IsIgnored(t *testing.T) {
 // TestInbox_SecondCreditOfAPixInIsADuplicate: two events for one PIX in
 // credit it once, and the second is closed, not retried forever.
 func TestInbox_SecondCreditOfAPixInIsADuplicate(t *testing.T) {
-	p := newOutboxBank(t)
-	intake, processor := newInbox(p, nil)
+	fixture := newOutboxBank(t)
+	intake, processor := newInbox(fixture, nil)
 	drainInbox(t, processor)
 
-	account := p.bank.newCustomer(t)
+	account := fixture.bank.newCustomer(t)
 	endToEndID := transfer.EndToEndID("E" + uuid.NewString()[:8] + "0000bbbb")
 
 	for _, eventID := range []string{"evt_" + uuid.NewString(), "evt_" + uuid.NewString()} {
@@ -407,9 +407,9 @@ func TestInbox_SecondCreditOfAPixInIsADuplicate(t *testing.T) {
 
 	drainInbox(t, processor)
 
-	assertChainedAndNeverNegative(t, p.bank, account, 700)
+	assertChainedAndNeverNegative(t, fixture.bank, account, 700)
 
-	outcomes := countRows(t, p, `SELECT count(*) FROM inbox_events WHERE end_to_end_id = $1 AND status = 'processed' AND outcome = 'duplicate'`, endToEndID)
+	outcomes := countRows(t, fixture, `SELECT count(*) FROM inbox_events WHERE end_to_end_id = $1 AND status = 'processed' AND outcome = 'duplicate'`, endToEndID)
 	if outcomes != 1 {
 		t.Fatalf("%d events marked duplicate, want 1", outcomes)
 	}
@@ -418,8 +418,8 @@ func TestInbox_SecondCreditOfAPixInIsADuplicate(t *testing.T) {
 // TestInbox_EventForAnUnknownTransferIsAConflict: the processor parks what it
 // can never apply instead of retrying it.
 func TestInbox_EventForAnUnknownTransferIsAConflict(t *testing.T) {
-	p := newOutboxBank(t)
-	intake, processor := newInbox(p, nil)
+	fixture := newOutboxBank(t)
+	intake, processor := newInbox(fixture, nil)
 	drainInbox(t, processor)
 
 	id, err := transfer.NewID()
@@ -436,7 +436,7 @@ func TestInbox_EventForAnUnknownTransferIsAConflict(t *testing.T) {
 
 	drainInbox(t, processor)
 
-	if countRows(t, p, `SELECT count(*) FROM inbox_events WHERE event_id = $1 AND status = 'conflict'`, orphan.ID) != 1 {
+	if countRows(t, fixture, `SELECT count(*) FROM inbox_events WHERE event_id = $1 AND status = 'conflict'`, orphan.ID) != 1 {
 		t.Fatal("the orphan event is not in conflict")
 	}
 }

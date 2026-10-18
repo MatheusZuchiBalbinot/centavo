@@ -19,14 +19,14 @@ func validVars() map[string]string {
 }
 
 func TestLoad(t *testing.T) {
-	cfg, err := config.Load(lookupFrom(validVars()))
+	configuration, err := config.Load(lookupFrom(validVars()))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	isLoaded := cfg.Env == config.EnvChaoslab && len(cfg.Participants) == 2 && cfg.Participants[1].ID == "centavo-naive"
+	isLoaded := configuration.Env == config.EnvChaoslab && len(configuration.Participants) == 2 && configuration.Participants[1].ID == "centavo-naive"
 	if !isLoaded {
-		t.Fatalf("config: %+v", cfg)
+		t.Fatalf("config: %+v", configuration)
 	}
 
 	testCases := []struct {

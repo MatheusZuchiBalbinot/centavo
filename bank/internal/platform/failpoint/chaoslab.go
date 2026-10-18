@@ -232,18 +232,18 @@ func ConfigureEvents(config EventsConfig) {
 }
 
 func hit(ctx context.Context, name Name) error {
-	f, shouldFire := decide(ctx, name, time.Now())
+	fired, shouldFire := decide(ctx, name, time.Now())
 	if !shouldFire {
 		return nil
 	}
 
-	err := record(ctx, f)
+	err := record(ctx, fired)
 	if err != nil {
 		// Never act without a record: the history would show a fault nobody injected.
 		return nil //nolint:nilerr // dropping the fault is the answer to a failed record
 	}
 
-	return execute(ctx, f)
+	return execute(ctx, fired)
 }
 
 func decide(ctx context.Context, name Name, now time.Time) (firing, bool) {
@@ -293,14 +293,14 @@ func matches(match Match, correlationID string) bool {
 	return strings.HasPrefix(correlationID, match.CorrelationPrefix)
 }
 
-func execute(ctx context.Context, f firing) error {
-	switch f.rule.Action {
+func execute(ctx context.Context, fired firing) error {
+	switch fired.rule.Action {
 	case ActionKill:
 		// The service is not PID 1 (init: true), so SIGKILL to itself works.
 		_ = syscall.Kill(os.Getpid(), syscall.SIGKILL)
 		select {}
 	case ActionDelay, ActionFreeze:
-		timer := time.NewTimer(f.delay)
+		timer := time.NewTimer(fired.delay)
 		defer timer.Stop()
 
 		select {
@@ -310,9 +310,9 @@ func execute(ctx context.Context, f firing) error {
 			return nil
 		}
 	case ActionError:
-		return fmt.Errorf("%w: %s at %s", ErrSynthetic, f.rule.Arg, f.name)
+		return fmt.Errorf("%w: %s at %s", ErrSynthetic, fired.rule.Arg, fired.name)
 	case ActionPanic:
-		panic(fmt.Sprintf("failpoint %s fired with action panic", f.name))
+		panic(fmt.Sprintf("failpoint %s fired with action panic", fired.name))
 	default:
 		return nil
 	}
@@ -333,7 +333,7 @@ type event struct {
 
 // record appends the event and fsyncs it before the action runs, so even a
 // SIGKILL the process sends itself is in the history.
-func record(ctx context.Context, f firing) error {
+func record(ctx context.Context, fired firing) error {
 	events.mu.Lock()
 	defer events.mu.Unlock()
 
@@ -352,12 +352,12 @@ func record(ctx context.Context, f firing) error {
 		events.file = file
 	}
 
-	fired := event{
+	entry := event{
 		TS: time.Now().UTC(), Service: events.config.Service, Instance: events.config.Instance, PID: os.Getpid(),
-		Failpoint: f.name, Action: f.rule.Action, Arg: f.rule.Arg, CorrelationID: correlation.From(ctx), Hit: f.hit, Fire: f.fire,
+		Failpoint: fired.name, Action: fired.rule.Action, Arg: fired.rule.Arg, CorrelationID: correlation.From(ctx), Hit: fired.hit, Fire: fired.fire,
 	}
 
-	line, err := json.Marshal(fired)
+	line, err := json.Marshal(entry)
 	if err != nil {
 		return err
 	}

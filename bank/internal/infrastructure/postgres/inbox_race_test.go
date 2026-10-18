@@ -33,11 +33,11 @@ func (p takingPartner) Status(context.Context, transfer.EndToEndID) (application
 // it until the lock timeout, and the event ends deferred on a lock error; one
 // that first takes the event back leaves it to the other processor at once.
 func TestInbox_ResyncLeavesAnEventAnotherProcessorTook(t *testing.T) {
-	p := newOutboxBank(t)
-	intake, processor := newInbox(p, statusAnswer(transfer.PartnerReturned))
+	fixture := newOutboxBank(t)
+	intake, processor := newInbox(fixture, statusAnswer(transfer.PartnerReturned))
 	drainInbox(t, processor)
 
-	created := p.sentTransfer(t, 4_000)
+	created := fixture.sentTransfer(t, 4_000)
 	again := application.PartnerEvent{ID: newEventID(), Type: application.EventReturned, EndToEndID: created.EndToEndID, AmountCents: 4_000}
 	receive(t, intake, again)
 
@@ -46,7 +46,7 @@ func TestInbox_ResyncLeavesAnEventAnotherProcessorTook(t *testing.T) {
 	takeTheEvent := func() {
 		var err error
 
-		other, err = p.bank.pool.Begin(context.Background())
+		other, err = fixture.bank.pool.Begin(context.Background())
 		if err == nil {
 			_, err = other.Exec(context.Background(), `SELECT id FROM inbox_events WHERE event_id = $1 FOR UPDATE`, again.ID)
 		}
@@ -56,7 +56,7 @@ func TestInbox_ResyncLeavesAnEventAnotherProcessorTook(t *testing.T) {
 		}
 	}
 
-	_, racing := newInbox(p, takingPartner{take: takeTheEvent})
+	_, racing := newInbox(fixture, takingPartner{take: takeTheEvent})
 	processed := make(chan error, 1)
 
 	go func() {
@@ -100,7 +100,7 @@ func TestInbox_ResyncLeavesAnEventAnotherProcessorTook(t *testing.T) {
 
 	var outcome string
 
-	err = p.bank.pool.QueryRow(t.Context(), `SELECT coalesce(outcome, '') FROM inbox_events WHERE event_id = $1`, again.ID).Scan(&outcome)
+	err = fixture.bank.pool.QueryRow(t.Context(), `SELECT coalesce(outcome, '') FROM inbox_events WHERE event_id = $1`, again.ID).Scan(&outcome)
 	if err != nil {
 		t.Fatalf("the event, still the other processor's, was marked %q (%v)", outcome, err)
 	}

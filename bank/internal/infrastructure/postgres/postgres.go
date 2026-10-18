@@ -32,15 +32,15 @@ type PoolConfig struct {
 // NewPool creates a lazily connecting pool; reachability is reported by the
 // health endpoint instead of blocking startup, since the database may be down
 // under chaos.
-func NewPool(ctx context.Context, cfg PoolConfig) (*pgxpool.Pool, error) {
-	poolConfig, err := pgxpool.ParseConfig(cfg.DatabaseURL)
+func NewPool(ctx context.Context, configuration PoolConfig) (*pgxpool.Pool, error) {
+	poolConfig, err := pgxpool.ParseConfig(configuration.DatabaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("parsing database url: %w", err)
 	}
 
-	poolConfig.MaxConns = cfg.MaxConnections
+	poolConfig.MaxConns = configuration.MaxConnections
 
-	if cfg.IsRelaxed {
+	if configuration.IsRelaxed {
 		poolConfig.ConnConfig.RuntimeParams["synchronous_commit"] = "off"
 	}
 

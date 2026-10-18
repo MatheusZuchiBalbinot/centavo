@@ -107,7 +107,7 @@ func NewRegistry() *Registry {
 // one. Setting the same mode again only extends its life: the lab renews it
 // like a lease, without restarting the outage window or the sequence of lies.
 func (r *Registry) Set(config Config, now time.Time) error {
-	m, err := newMode(config, now)
+	current, err := newMode(config, now)
 	if err != nil {
 		return err
 	}
@@ -119,12 +119,12 @@ func (r *Registry) Set(config Config, now time.Time) error {
 
 	isRenewal := isActive && reflect.DeepEqual(existing.config, config) && now.Before(existing.expiresAt)
 	if isRenewal {
-		existing.expiresAt = m.expiresAt
+		existing.expiresAt = current.expiresAt
 
 		return nil
 	}
 
-	r.active[config.ParticipantID] = m
+	r.active[config.ParticipantID] = current
 
 	return nil
 }
@@ -154,18 +154,18 @@ func draw[T any](d Decider, honest T, fn func(m *mode) T) T {
 	d.registry.mu.Lock()
 	defer d.registry.mu.Unlock()
 
-	m, isActive := d.registry.active[d.participant]
+	current, isActive := d.registry.active[d.participant]
 	if !isActive {
 		return honest
 	}
 
-	if d.now.After(m.expiresAt) {
+	if d.now.After(current.expiresAt) {
 		delete(d.registry.active, d.participant)
 
 		return honest
 	}
 
-	return fn(m)
+	return fn(current)
 }
 
 // Outage reports whether the partner is down for this participant now.
@@ -175,13 +175,13 @@ func (d Decider) Outage() (OutageMode, bool) {
 		isDown bool
 	}
 
-	result := draw(d, answer{}, func(m *mode) answer {
-		isDown := m.hasOutage && d.now.Before(m.outageUntil)
+	result := draw(d, answer{}, func(current *mode) answer {
+		isDown := current.hasOutage && d.now.Before(current.outageUntil)
 		if !isDown {
 			return answer{}
 		}
 
-		return answer{mode: m.config.Outage.Mode, isDown: true}
+		return answer{mode: current.config.Outage.Mode, isDown: true}
 	})
 
 	return result.mode, result.isDown
@@ -190,33 +190,33 @@ func (d Decider) Outage() (OutageMode, bool) {
 // TimeoutAfterProcess reports whether to process the transfer, then answer too
 // late.
 func (d Decider) TimeoutAfterProcess() bool {
-	return draw(d, false, func(m *mode) bool { return m.draws.Float64() < m.config.TimeoutAfterProcess })
+	return draw(d, false, func(current *mode) bool { return current.draws.Float64() < current.config.TimeoutAfterProcess })
 }
 
 // ErrorAfterProcess reports whether to process the transfer, then answer 500.
 func (d Decider) ErrorAfterProcess() bool {
-	return draw(d, false, func(m *mode) bool { return m.draws.Float64() < m.config.ErrorAfterProcess })
+	return draw(d, false, func(current *mode) bool { return current.draws.Float64() < current.config.ErrorAfterProcess })
 }
 
 // DoubleProcess reports whether to settle the transfer twice, the partner's own
 // bug.
 func (d Decider) DoubleProcess() bool {
-	return draw(d, false, func(m *mode) bool { return m.draws.Float64() < m.config.DoubleProcess })
+	return draw(d, false, func(current *mode) bool { return current.draws.Float64() < current.config.DoubleProcess })
 }
 
 // Reject reports whether to refuse a transfer that was accepted.
 func (d Decider) Reject() bool {
-	return draw(d, false, func(m *mode) bool { return m.draws.Float64() < m.config.RejectRate })
+	return draw(d, false, func(current *mode) bool { return current.draws.Float64() < current.config.RejectRate })
 }
 
 // ReturnAfterSettle returns when to give a settled transfer back, if at all.
 func (d Decider) ReturnAfterSettle() *time.Time {
-	return draw(d, (*time.Time)(nil), func(m *mode) *time.Time {
-		if m.draws.Float64() >= m.config.ReturnAfterSettle {
+	return draw(d, (*time.Time)(nil), func(current *mode) *time.Time {
+		if current.draws.Float64() >= current.config.ReturnAfterSettle {
 			return nil
 		}
 
-		at := d.now.Add(between(m.draws, returnDelayMin, returnDelayMax))
+		at := d.now.Add(between(current.draws, returnDelayMin, returnDelayMax))
 
 		return &at
 	})
@@ -224,12 +224,12 @@ func (d Decider) ReturnAfterSettle() *time.Time {
 
 // SettleDelay is how long until the transfer settles or is rejected.
 func (d Decider) SettleDelay() time.Duration {
-	return draw(d, HonestSettleDelay, func(m *mode) time.Duration {
-		if m.settleMax == 0 {
+	return draw(d, HonestSettleDelay, func(current *mode) time.Duration {
+		if current.settleMax == 0 {
 			return HonestSettleDelay
 		}
 
-		return between(m.draws, m.settleMin, m.settleMax)
+		return between(current.draws, current.settleMin, current.settleMax)
 	})
 }
 
@@ -237,7 +237,7 @@ func (d Decider) SettleDelay() time.Duration {
 func (d Decider) Plan(event truth.Event, now time.Time) []truth.PlannedDelivery {
 	honest := []truth.PlannedDelivery{{EventID: event.ID, At: now}}
 
-	return draw(d, honest, func(m *mode) []truth.PlannedDelivery { return m.plan(event, now) })
+	return draw(d, honest, func(current *mode) []truth.PlannedDelivery { return current.plan(event, now) })
 }
 
 func (m *mode) plan(event truth.Event, now time.Time) []truth.PlannedDelivery {
@@ -301,14 +301,14 @@ func newMode(config Config, now time.Time) (*mode, error) {
 
 	source := mathrand.NewPCG(seed, seed^streamSalt)
 	draws := mathrand.New(source) //nolint:gosec // G404: lies must replay from the seed.
-	m := &mode{config: config, expiresAt: now.Add(ttl), draws: draws}
+	current := &mode{config: config, expiresAt: now.Add(ttl), draws: draws}
 
-	err = m.parseDurations(now)
+	err = current.parseDurations(now)
 	if err != nil {
 		return nil, err
 	}
 
-	return m, nil
+	return current, nil
 }
 
 func (m *mode) parseDurations(now time.Time) error {

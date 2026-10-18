@@ -17,9 +17,9 @@ const (
 )
 
 // New builds a server with the timeouts.
-func New(addr string, handler http.Handler) *http.Server {
+func New(address string, handler http.Handler) *http.Server {
 	return &http.Server{
-		Addr: addr, Handler: handler, ReadHeaderTimeout: readHeaderTimeout, WriteTimeout: writeTimeout,
+		Addr: address, Handler: handler, ReadHeaderTimeout: readHeaderTimeout, WriteTimeout: writeTimeout,
 	}
 }
 

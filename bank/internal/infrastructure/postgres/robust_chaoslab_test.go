@@ -177,14 +177,14 @@ func TestBalance_ConcurrentDebits_WithoutBalanceLocking(t *testing.T) {
 // (`inbox.after_apply_before_mark`). The effect and the mark share the
 // transaction, so the next pass applies it once.
 func TestInbox_CrashBetweenApplyAndMark_AppliesOnce(t *testing.T) {
-	p := newOutboxBank(t)
-	intake, processor := newInbox(p, statusAnswer(transfer.PartnerSettled))
+	fixture := newOutboxBank(t)
+	intake, processor := newInbox(fixture, statusAnswer(transfer.PartnerSettled))
 	drainInbox(t, processor)
 
-	account := p.bank.newCustomer(t)
-	p.bank.fund(t, account, 10_000)
-	created := p.createPixOut(t, account, 4_500)
-	p.markSent(t, created.TransferID)
+	account := fixture.bank.newCustomer(t)
+	fixture.bank.fund(t, account, 10_000)
+	created := fixture.createPixOut(t, account, 4_500)
+	fixture.markSent(t, created.TransferID)
 	settled := application.PartnerEvent{ID: "evt_fp06_" + created.EndToEndID.String(), Type: application.EventSettled, EndToEndID: created.EndToEndID, AmountCents: 4_500}
 
 	err := intake.Apply(correlation.With(t.Context(), settled.ID), settled)
@@ -205,19 +205,19 @@ func TestInbox_CrashBetweenApplyAndMark_AppliesOnce(t *testing.T) {
 
 	drainInbox(t, processor)
 
-	pending := countRows(t, p, `SELECT count(*) FROM inbox_events WHERE event_id = $1 AND status = 'pending'`, settled.ID)
+	pending := countRows(t, fixture, `SELECT count(*) FROM inbox_events WHERE event_id = $1 AND status = 'pending'`, settled.ID)
 	if pending != 1 {
 		t.Fatal("the crashed event left the inbox")
 	}
 
-	_, err = p.bank.pool.Exec(t.Context(), `UPDATE inbox_events SET next_attempt_at = now() WHERE event_id = $1`, settled.ID)
+	_, err = fixture.bank.pool.Exec(t.Context(), `UPDATE inbox_events SET next_attempt_at = now() WHERE event_id = $1`, settled.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	drainInbox(t, processor)
 
-	settlements := countRows(t, p, `SELECT count(*) FROM ledger_transactions WHERE external_transfer_id = $1 AND kind = 'pix_out_settle'`, uuid.UUID(created.TransferID))
+	settlements := countRows(t, fixture, `SELECT count(*) FROM ledger_transactions WHERE external_transfer_id = $1 AND kind = 'pix_out_settle'`, uuid.UUID(created.TransferID))
 	if settlements != 1 {
 		t.Fatalf("%d settlements after a crash between apply and mark, want 1", settlements)
 	}
@@ -261,32 +261,32 @@ func TestReconciliation_CrashMidBatch_AppliesEachEntryOnce(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			useSchema(t, tc.schema)
 
-			p := newOutboxBank(t)
-			t.Cleanup(func() { renumberRebookedItems(t, p) })
-			statement := newStatement(t, p)
-			created := p.sentTransfer(t, 1_000)
-			other := p.sentTransfer(t, 300)
+			fixture := newOutboxBank(t)
+			t.Cleanup(func() { renumberRebookedItems(t, fixture) })
+			statement := newStatement(t, fixture)
+			created := fixture.sentTransfer(t, 1_000)
+			other := fixture.sentTransfer(t, 300)
 			statement.add(application.StatementSettlement, created.EndToEndID, 1_000, "")
 			statement.add(application.StatementSettlement, created.EndToEndID, 1_000, "")
 			statement.add(application.StatementSettlement, other.EndToEndID, 300, "")
 
-			suspenseBefore := p.systemBalance(t, ledger.SuspenseAccountID())
+			suspenseBefore := fixture.systemBalance(t, ledger.SuspenseAccountID())
 
 			armFP08(t)
 
-			err := p.reconciler(statement, tc.policy).RunOnce(t.Context())
+			err := fixture.reconciler(statement, tc.policy).RunOnce(t.Context())
 			if !errors.Is(err, failpoint.ErrSynthetic) {
 				t.Fatalf("the crash did not stop the batch: %v", err)
 			}
 
 			failpoint.DisarmAll()
 
-			err = p.reconciler(statement, tc.policy).RunOnce(t.Context())
+			err = fixture.reconciler(statement, tc.policy).RunOnce(t.Context())
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			owed := suspenseBefore - p.systemBalance(t, ledger.SuspenseAccountID())
+			owed := suspenseBefore - fixture.systemBalance(t, ledger.SuspenseAccountID())
 			if owed != tc.wantOwed {
 				t.Fatalf("suspense moved by %d, want %d", owed, tc.wantOwed)
 			}
@@ -297,10 +297,10 @@ func TestReconciliation_CrashMidBatch_AppliesEachEntryOnce(t *testing.T) {
 // renumberRebookedItems moves the items the naive variant booked twice out of
 // the way of reconciliation's unique partner_seq, so the robust schema comes
 // back.
-func renumberRebookedItems(t *testing.T, p pixBank) {
+func renumberRebookedItems(t *testing.T, fixture pixBank) {
 	t.Helper()
 
-	_, err := p.bank.pool.Exec(context.Background(), `
+	_, err := fixture.bank.pool.Exec(context.Background(), `
 UPDATE reconciliation_items SET partner_seq = -id
 WHERE id NOT IN (SELECT min(id) FROM reconciliation_items GROUP BY partner_seq)`)
 	if err != nil {
@@ -353,22 +353,22 @@ func TestFencing_ZombieReconcilerWriteIsRejected(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			useSchema(t, tc.schema)
 
-			p := newOutboxBank(t)
-			t.Cleanup(func() { renumberRebookedItems(t, p) })
-			statement := newStatement(t, p)
-			created := p.sentTransfer(t, 800)
+			fixture := newOutboxBank(t)
+			t.Cleanup(func() { renumberRebookedItems(t, fixture) })
+			statement := newStatement(t, fixture)
+			created := fixture.sentTransfer(t, 800)
 			statement.add(application.StatementSettlement, created.EndToEndID, 800, "")
 			statement.add(application.StatementSettlement, created.EndToEndID, 800, "")
 
-			suspenseBefore := p.systemBalance(t, ledger.SuspenseAccountID())
+			suspenseBefore := fixture.systemBalance(t, ledger.SuspenseAccountID())
 
 			successorTakesOver := func() {
-				_, err := p.bank.pool.Exec(t.Context(), `UPDATE worker_leases SET expires_at = now() - interval '1 second' WHERE resource = 'reconciler'`)
+				_, err := fixture.bank.pool.Exec(t.Context(), `UPDATE worker_leases SET expires_at = now() - interval '1 second' WHERE resource = 'reconciler'`)
 				if err != nil {
 					t.Error(err)
 				}
 
-				err = p.reconcilerWith(statement, tc.lease, "worker-b").RunOnce(t.Context())
+				err = fixture.reconcilerWith(statement, tc.lease, "worker-b").RunOnce(t.Context())
 				if err != nil {
 					t.Error(err)
 				}
@@ -377,9 +377,9 @@ func TestFencing_ZombieReconcilerWriteIsRejected(t *testing.T) {
 			zombie := pausingStatement{statement: statement, meantime: sync.OnceFunc(successorTakesOver)}
 
 			// The fenced zombie fails its write; the naive one succeeds.
-			_ = p.reconcilerWith(zombie, tc.lease, "worker-a").RunOnce(t.Context())
+			_ = fixture.reconcilerWith(zombie, tc.lease, "worker-a").RunOnce(t.Context())
 
-			owed := suspenseBefore - p.systemBalance(t, ledger.SuspenseAccountID())
+			owed := suspenseBefore - fixture.systemBalance(t, ledger.SuspenseAccountID())
 			if owed != tc.wantOwed {
 				t.Fatalf("suspense moved by %d, want %d", owed, tc.wantOwed)
 			}
@@ -402,14 +402,14 @@ func TestLease_ExpiryUsesDatabaseClock(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			p := newOutboxBank(t)
-			p.releaseSweeperLease(t)
+			fixture := newOutboxBank(t)
+			fixture.releaseSweeperLease(t)
 			t.Cleanup(clock.ClearSkew)
 
 			acquire := func(owner string) bool {
 				var isHeld bool
 
-				err := p.unitOfWork.Run(t.Context(), func(ctx context.Context, stores application.Stores) error {
+				err := fixture.unitOfWork.Run(t.Context(), func(ctx context.Context, stores application.Stores) error {
 					var err error
 
 					_, isHeld, err = tc.lease.Acquire(ctx, stores, application.Lease{Resource: application.LeaseSweeper, Holder: owner}, application.SweeperLeaseTTL)
@@ -449,9 +449,9 @@ func TestLease_ExpiryUsesDatabaseClock(t *testing.T) {
 func TestReconciliation_FailpointsMatchThePixCorrelation(t *testing.T) {
 	for _, name := range []failpoint.Name{failpoint.ReconAfterComputeBeforeApply, failpoint.ReconMidApply, failpoint.LeaseAfterCheckBeforeWrite} {
 		t.Run(string(name), func(t *testing.T) {
-			p := newOutboxBank(t)
-			statement := newStatement(t, p)
-			created := p.sentTransfer(t, 1_000)
+			fixture := newOutboxBank(t)
+			statement := newStatement(t, fixture)
+			created := fixture.sentTransfer(t, 1_000)
 			next := statement.entries[len(statement.entries)-1].Seq + 1
 			statement.entries = append(statement.entries, application.StatementEntry{Seq: next, Kind: application.StatementSettlement, EndToEndID: created.EndToEndID, AmountCents: 1_000, CorrelationID: "r0001-p01-000001"})
 
@@ -466,7 +466,7 @@ func TestReconciliation_FailpointsMatchThePixCorrelation(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			err = p.reconciler(statement, application.AtomicBatches{}).RunOnce(t.Context())
+			err = fixture.reconciler(statement, application.AtomicBatches{}).RunOnce(t.Context())
 			if !errors.Is(err, failpoint.ErrSynthetic) {
 				t.Fatalf("%s did not fire for the round's PIX: %v", name, err)
 			}

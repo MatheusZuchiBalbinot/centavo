@@ -15,14 +15,14 @@ func TestLoad_ValidEnvironment(t *testing.T) {
 	vars := map[string]string{"CENTAVO_ENV": "chaoslab", "CENTAVO_DEFENSES": "robust,-outbox", "DATABASE_URL": testDatabaseURL}
 	lookup := lookupFrom(vars)
 
-	cfg, err := config.Load(lookup)
+	configuration, err := config.Load(lookup)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	isExpectedConfig := cfg.Env == config.EnvChaoslab && cfg.DatabaseURL == testDatabaseURL && !cfg.Defenses.IsEnabled(defenses.Outbox)
+	isExpectedConfig := configuration.Env == config.EnvChaoslab && configuration.DatabaseURL == testDatabaseURL && !configuration.Defenses.IsEnabled(defenses.Outbox)
 	if !isExpectedConfig {
-		t.Fatalf("unexpected config: %+v", cfg)
+		t.Fatalf("unexpected config: %+v", configuration)
 	}
 }
 
@@ -30,13 +30,13 @@ func TestLoad_DefensesDefaultToRobust(t *testing.T) {
 	vars := map[string]string{"CENTAVO_ENV": "local", "DATABASE_URL": testDatabaseURL}
 	lookup := lookupFrom(vars)
 
-	cfg, err := config.Load(lookup)
+	configuration, err := config.Load(lookup)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if !cfg.Defenses.IsRobust() {
-		t.Fatalf("defenses = %s, want robust", cfg.Defenses)
+	if !configuration.Defenses.IsRobust() {
+		t.Fatalf("defenses = %s, want robust", configuration.Defenses)
 	}
 }
 
@@ -94,9 +94,9 @@ func TestValidateBuild(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			cfg := config.Config{Env: testCase.env, Defenses: testCase.profile, DatabaseURL: testDatabaseURL, Chaos: testCase.chaos}
+			configuration := config.Config{Env: testCase.env, Defenses: testCase.profile, DatabaseURL: testDatabaseURL, Chaos: testCase.chaos}
 
-			err := config.ValidateBuild(cfg, testCase.isChaosBuild)
+			err := config.ValidateBuild(configuration, testCase.isChaosBuild)
 			if !errors.Is(err, testCase.wantErr) {
 				t.Fatalf("error = %v, want %v", err, testCase.wantErr)
 			}
@@ -107,13 +107,13 @@ func TestValidateBuild(t *testing.T) {
 func TestLoad_ReadsTheChaosSeed(t *testing.T) {
 	vars := map[string]string{"CENTAVO_ENV": "chaoslab", "DATABASE_URL": testDatabaseURL, "CENTAVO_CHAOS_SEED": "0x5eed0142"}
 
-	cfg, err := config.Load(lookupFrom(vars))
+	configuration, err := config.Load(lookupFrom(vars))
 	if err != nil {
-		t.Fatalf("got %+v, %v", cfg.Chaos, err)
+		t.Fatalf("got %+v, %v", configuration.Chaos, err)
 	}
 
-	if cfg.Chaos.Seed != 0x5eed0142 {
-		t.Fatalf("got %+v, %v", cfg.Chaos, err)
+	if configuration.Chaos.Seed != 0x5eed0142 {
+		t.Fatalf("got %+v, %v", configuration.Chaos, err)
 	}
 
 	vars["CENTAVO_CHAOS_SEED"] = "seed"

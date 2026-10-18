@@ -175,23 +175,23 @@ func parseSeed(raw string) (uint64, error) {
 // chaoslab builds: chaos code never runs in production, production never runs a
 // naive variant or takes chaos configuration, and the chaos port has a real
 // secret.
-func ValidateBuild(cfg Config, isChaosBuild bool) error {
-	isChaosBuildInProduction := isChaosBuild && cfg.Env == EnvProduction
+func ValidateBuild(configuration Config, isChaosBuild bool) error {
+	isChaosBuildInProduction := isChaosBuild && configuration.Env == EnvProduction
 	if isChaosBuildInProduction {
 		return ErrChaosBuildInProduction
 	}
 
-	isWeakenedProductionBuild := !isChaosBuild && !cfg.Defenses.IsRobust()
+	isWeakenedProductionBuild := !isChaosBuild && !configuration.Defenses.IsRobust()
 	if isWeakenedProductionBuild {
-		return fmt.Errorf("%w: got %q", ErrProductionBuildProfile, cfg.Defenses)
+		return fmt.Errorf("%w: got %q", ErrProductionBuildProfile, configuration.Defenses)
 	}
 
-	hasChaosConfig := cfg.Chaos.FailpointSpec != ""
+	hasChaosConfig := configuration.Chaos.FailpointSpec != ""
 	if !isChaosBuild && hasChaosConfig {
 		return ErrChaosConfigProduction
 	}
 
-	hasWeakToken := isChaosBuild && len(cfg.Chaos.Token) < minChaosTokenLength
+	hasWeakToken := isChaosBuild && len(configuration.Chaos.Token) < minChaosTokenLength
 	if hasWeakToken {
 		return ErrWeakChaosToken
 	}

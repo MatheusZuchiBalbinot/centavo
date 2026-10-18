@@ -36,21 +36,21 @@ func TestPocket_LostUpdateOverdraws(t *testing.T) {
 	second := b.upcomingOp()
 	b.operation(history.FunctionTransfer, transferArgs{From: alice, To: bob, AmountCents: 60}, history.TypeOK, writeValue{TransactionID: "tx-lost-2"})
 
-	s := b.snapshot()
-	s.Transactions = append(s.Transactions,
+	state := b.snapshot()
+	state.Transactions = append(state.Transactions,
 		snapshot.Transaction{ID: "tx-lost-1", Kind: snapshot.TransactionInternalTransfer, ClientRef: first},
 		snapshot.Transaction{ID: "tx-lost-2", Kind: snapshot.TransactionInternalTransfer, ClientRef: second},
 	)
-	s.Entries = append(s.Entries,
+	state.Entries = append(state.Entries,
 		snapshot.Entry{ID: 100, TransactionID: "tx-lost-1", AccountID: alice, AmountCents: -60, AccountSeq: 2, BalanceAfterCents: 40},
 		snapshot.Entry{ID: 101, TransactionID: "tx-lost-2", AccountID: alice, AmountCents: -60, AccountSeq: 2, BalanceAfterCents: 40},
 		snapshot.Entry{ID: 102, TransactionID: "tx-lost-1", AccountID: bob, AmountCents: 60, AccountSeq: 1, BalanceAfterCents: 60},
 		snapshot.Entry{ID: 103, TransactionID: "tx-lost-2", AccountID: bob, AmountCents: 60, AccountSeq: 2, BalanceAfterCents: 120},
 	)
-	s.Balances = setBalance(s.Balances, alice, 40, 2)
-	s.Balances = setBalance(s.Balances, bob, 120, 2)
+	state.Balances = setBalance(state.Balances, alice, 40, 2)
+	state.Balances = setBalance(state.Balances, bob, 120, 2)
 
-	result := Evaluate(b.records, s)
+	result := Evaluate(b.records, state)
 
 	assertBreaks(t, result, RuleI1bSequence, RuleI1bChain, RuleI1bMaterialized, RuleI4RealBalance)
 }
@@ -65,11 +65,11 @@ func TestPocket_DebitWithoutCredit(t *testing.T) {
 	b.deposit(alice, 1_000)
 	b.transfer(alice, bob, 300)
 
-	s := b.snapshot()
-	s.Entries = s.Entries[:len(s.Entries)-1]
-	s.Balances = setBalance(s.Balances, bob, 0, 0)
+	state := b.snapshot()
+	state.Entries = state.Entries[:len(state.Entries)-1]
+	state.Balances = setBalance(state.Balances, bob, 0, 0)
 
-	result := Evaluate(b.records, s)
+	result := Evaluate(b.records, state)
 
 	assertBreaks(t, result, RuleI1aZeroSum)
 }
@@ -228,16 +228,16 @@ func TestPocket_ResolvedDepositsCloseTheDepositTermExactly(t *testing.T) {
 
 	// Resolve voided the deposit, yet the ledger applied it: the deposit term
 	// and convergence both catch it.
-	s := b.snapshot()
-	s.Transactions = append(s.Transactions, snapshot.Transaction{ID: "tx-x", Kind: snapshot.TransactionDeposit, ClientRef: op})
-	s.Entries = append(s.Entries,
+	state := b.snapshot()
+	state.Transactions = append(state.Transactions, snapshot.Transaction{ID: "tx-x", Kind: snapshot.TransactionDeposit, ClientRef: op})
+	state.Entries = append(state.Entries,
 		snapshot.Entry{ID: 900, TransactionID: "tx-x", AccountID: alice, AmountCents: 500, AccountSeq: 1, BalanceAfterCents: 500},
 		snapshot.Entry{ID: 901, TransactionID: "tx-x", AccountID: externalCash, AmountCents: -500, AccountSeq: 1, BalanceAfterCents: -500},
 	)
-	s.Balances = setBalance(s.Balances, alice, 500, 1)
-	s.Balances = setBalance(s.Balances, externalCash, -500, 1)
+	state.Balances = setBalance(state.Balances, alice, 500, 1)
+	state.Balances = setBalance(state.Balances, externalCash, -500, 1)
 
-	assertBreaks(t, Evaluate(b.records, s), RuleI1cDeposits, RuleI3Convergence)
+	assertBreaks(t, Evaluate(b.records, state), RuleI1cDeposits, RuleI3Convergence)
 }
 
 func TestPocket_FailThatWasApplied(t *testing.T) {

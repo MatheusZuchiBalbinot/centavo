@@ -96,22 +96,22 @@ type errorEnvelope struct {
 
 // attempt sends the request once and classifies what came back. parse turns a
 // 2xx body into the value the history records, or fails when fields are missing.
-func (c bankClient) attempt(ctx context.Context, req request, timeout time.Duration, parse parseFunc) attemptResult {
+func (c bankClient) attempt(ctx context.Context, call request, timeout time.Duration, parse parseFunc) attemptResult {
 	started := time.Now()
 
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	httpRequest, err := http.NewRequestWithContext(ctx, req.method, c.baseURL+req.path, bytes.NewReader(req.body))
+	httpRequest, err := http.NewRequestWithContext(ctx, call.method, c.baseURL+call.path, bytes.NewReader(call.body))
 	if err != nil {
 		return attemptResult{verdict: verdictGiveUp, outcome: outcome{Kind: outcomeUnexpected}}
 	}
 
 	httpRequest.Header.Set("Content-Type", "application/json")
-	httpRequest.Header.Set("X-Correlation-Id", req.correlationID)
+	httpRequest.Header.Set("X-Correlation-Id", call.correlationID)
 
-	if req.key != "" {
-		httpRequest.Header.Set("Idempotency-Key", req.key)
+	if call.key != "" {
+		httpRequest.Header.Set("Idempotency-Key", call.key)
 	}
 
 	response, err := c.http.Do(httpRequest)

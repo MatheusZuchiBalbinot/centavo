@@ -89,10 +89,10 @@ type Nemesis struct {
 
 // New builds the nemesis of a round.
 func New(config Config) *Nemesis {
-	n := &Nemesis{config: config, http: &http.Client{Timeout: requestTimeout}, started: time.Now().UTC(), toxiproxyURL: toxiproxyURL}
-	n.failpoints = newFailpointController(n)
+	bot := &Nemesis{config: config, http: &http.Client{Timeout: requestTimeout}, started: time.Now().UTC(), toxiproxyURL: toxiproxyURL}
+	bot.failpoints = newFailpointController(bot)
 
-	return n
+	return bot
 }
 
 // Preflight is the safety rule that a chaoslab build refuses to run in

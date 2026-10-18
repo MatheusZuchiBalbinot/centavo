@@ -19,11 +19,11 @@ import (
 // for the round's correlation ids, so a relay without the transfer's client_ref
 // in its context never reaches the window.
 func TestNaiveRelay_FailpointMatchesTheTransfersClientRef(t *testing.T) {
-	p := newPixBank(t)
-	account := p.bank.newCustomer(t)
-	p.bank.fund(t, account, 10_000)
-	created := p.createPixOut(t, account, 3_000)
-	clientRef := p.status(t, created.TransferID).Transfer.ClientRef
+	fixture := newPixBank(t)
+	account := fixture.bank.newCustomer(t)
+	fixture.bank.fund(t, account, 10_000)
+	created := fixture.createPixOut(t, account, 3_000)
+	clientRef := fixture.status(t, created.TransferID).Transfer.ClientRef
 
 	failpoint.DisarmAll()
 	failpoint.ConfigureEvents(failpoint.EventsConfig{Dir: t.TempDir(), Service: "bank-worker", Instance: "test"})
@@ -38,14 +38,14 @@ func TestNaiveRelay_FailpointMatchesTheTransfersClientRef(t *testing.T) {
 
 	var calls atomic.Int32
 
-	relay := application.NewNaiveRelay(p.unitOfWork, fakePartner(t, http.StatusAccepted, &calls), application.OverwriteTransitions{})
+	relay := application.NewNaiveRelay(fixture.unitOfWork, fakePartner(t, http.StatusAccepted, &calls), application.OverwriteTransitions{})
 
 	err = relay.Relay(t.Context(), created.TransferID)
 	if !errors.Is(err, failpoint.ErrSynthetic) {
 		t.Fatalf("relay error %v, want the injected one", err)
 	}
 
-	view := p.status(t, created.TransferID)
+	view := fixture.status(t, created.TransferID)
 	isStuckAfterTheCall := calls.Load() == 1 && view.Transfer.Status == transfer.StatusCreated
 	if !isStuckAfterTheCall {
 		t.Fatalf("%d calls, status %s: relay.after_partner_call_before_save did not stop the relay after the partner call", calls.Load(), view.Transfer.Status)

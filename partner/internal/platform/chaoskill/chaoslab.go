@@ -42,9 +42,9 @@ func KillMain(binary string) error {
 			continue
 		}
 
-		args := bytes.Split(bytes.TrimRight(cmdline, "\x00"), []byte{0})
+		fields := bytes.Split(bytes.TrimRight(cmdline, "\x00"), []byte{0})
 
-		isMain := len(args) >= 2 && string(args[0]) == binary && string(args[1]) == "serve"
+		isMain := len(fields) >= 2 && string(fields[0]) == binary && string(fields[1]) == "serve"
 		if isMain {
 			return syscall.Kill(pid, syscall.SIGKILL)
 		}

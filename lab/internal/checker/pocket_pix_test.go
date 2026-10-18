@@ -109,20 +109,20 @@ func (p *pixRound) evaluate() Result {
 func TestPocketPix_SettledTransferPasses(t *testing.T) {
 	t.Parallel()
 
-	p := newPixRound(t)
-	alice := p.createAccount()
-	p.deposit(alice, 10_000)
+	fixture := newPixRound(t)
+	alice := fixture.createAccount()
+	fixture.deposit(alice, 10_000)
 
-	settled := p.pixOut(alice, 4_500)
-	p.step(settled, statusCreated, statusSent)
-	p.step(settled, statusSent, statusConfirmed)
-	p.partnerSays(settled, truthSettled, entrySettlement)
+	settled := fixture.pixOut(alice, 4_500)
+	fixture.step(settled, statusCreated, statusSent)
+	fixture.step(settled, statusSent, statusConfirmed)
+	fixture.partnerSays(settled, truthSettled, entrySettlement)
 
-	refused := p.pixOut(alice, 1_000)
-	p.step(refused, statusCreated, statusFailed)
-	p.partnerSays(refused, truthRejected)
+	refused := fixture.pixOut(alice, 1_000)
+	fixture.step(refused, statusCreated, statusFailed)
+	fixture.partnerSays(refused, truthRejected)
 
-	assertPasses(t, p.evaluate())
+	assertPasses(t, fixture.evaluate())
 }
 
 // TestPocketPix_DuplicateWebhookSettlesTwice: a webhook applied twice settles
@@ -130,16 +130,16 @@ func TestPocketPix_SettledTransferPasses(t *testing.T) {
 func TestPocketPix_DuplicateWebhookSettlesTwice(t *testing.T) {
 	t.Parallel()
 
-	p := newPixRound(t)
-	alice := p.createAccount()
-	p.deposit(alice, 10_000)
+	fixture := newPixRound(t)
+	alice := fixture.createAccount()
+	fixture.deposit(alice, 10_000)
 
-	transfer := p.pixOut(alice, 4_500)
-	p.step(transfer, statusCreated, statusConfirmed)
-	p.step(transfer, statusConfirmed, statusConfirmed)
-	p.partnerSays(transfer, truthSettled, entrySettlement)
+	transfer := fixture.pixOut(alice, 4_500)
+	fixture.step(transfer, statusCreated, statusConfirmed)
+	fixture.step(transfer, statusConfirmed, statusConfirmed)
+	fixture.partnerSays(transfer, truthSettled, entrySettlement)
 
-	assertBreaks(t, p.evaluate(), RuleI7Path, RuleI7Postings, RuleI6Settlements, RuleI5Transit)
+	assertBreaks(t, fixture.evaluate(), RuleI7Path, RuleI7Postings, RuleI6Settlements, RuleI5Transit)
 }
 
 // TestPocketPix_LostPublishLeavesTheTransferStuck: a publication lost after the
@@ -147,12 +147,12 @@ func TestPocketPix_DuplicateWebhookSettlesTwice(t *testing.T) {
 func TestPocketPix_LostPublishLeavesTheTransferStuck(t *testing.T) {
 	t.Parallel()
 
-	p := newPixRound(t)
-	alice := p.createAccount()
-	p.deposit(alice, 10_000)
-	p.pixOut(alice, 4_500)
+	fixture := newPixRound(t)
+	alice := fixture.createAccount()
+	fixture.deposit(alice, 10_000)
+	fixture.pixOut(alice, 4_500)
 
-	assertBreaks(t, p.evaluate(), RuleI5NotTerminal, RuleI5Transit)
+	assertBreaks(t, fixture.evaluate(), RuleI5NotTerminal, RuleI5Transit)
 }
 
 // TestPocketPix_TimeoutTakenAsFailureCreatesMoney: the partner paid, the bank
@@ -160,15 +160,15 @@ func TestPocketPix_LostPublishLeavesTheTransferStuck(t *testing.T) {
 func TestPocketPix_TimeoutTakenAsFailureCreatesMoney(t *testing.T) {
 	t.Parallel()
 
-	p := newPixRound(t)
-	alice := p.createAccount()
-	p.deposit(alice, 10_000)
+	fixture := newPixRound(t)
+	alice := fixture.createAccount()
+	fixture.deposit(alice, 10_000)
 
-	transfer := p.pixOut(alice, 4_500)
-	p.step(transfer, statusCreated, statusFailed)
-	p.partnerSays(transfer, truthSettled, entrySettlement)
+	transfer := fixture.pixOut(alice, 4_500)
+	fixture.step(transfer, statusCreated, statusFailed)
+	fixture.partnerSays(transfer, truthSettled, entrySettlement)
 
-	assertBreaks(t, p.evaluate(), RuleI7Authority, RuleI6Settlements, RuleI1cPartnerReserve)
+	assertBreaks(t, fixture.evaluate(), RuleI7Authority, RuleI6Settlements, RuleI1cPartnerReserve)
 }
 
 // TestPocketPix_RetryWithANewIDPaysTwice: the naive relay sends E<id>-1 and
@@ -176,21 +176,21 @@ func TestPocketPix_TimeoutTakenAsFailureCreatesMoney(t *testing.T) {
 func TestPocketPix_RetryWithANewIDPaysTwice(t *testing.T) {
 	t.Parallel()
 
-	p := newPixRound(t)
-	alice := p.createAccount()
-	p.deposit(alice, 10_000)
+	fixture := newPixRound(t)
+	alice := fixture.createAccount()
+	fixture.deposit(alice, 10_000)
 
-	transfer := p.pixOut(alice, 4_500)
-	p.step(transfer, statusCreated, statusSent)
-	p.step(transfer, statusSent, statusConfirmed)
+	transfer := fixture.pixOut(alice, 4_500)
+	fixture.step(transfer, statusCreated, statusSent)
+	fixture.step(transfer, statusSent, statusConfirmed)
 
 	for _, attempt := range []string{"-1", "-2"} {
 		retry := transfer
 		retry.EndToEndID = transfer.EndToEndID + attempt
-		p.partnerSays(retry, truthSettled, entrySettlement)
+		fixture.partnerSays(retry, truthSettled, entrySettlement)
 	}
 
-	assertBreaks(t, p.evaluate(), RuleI6Settlements, RuleI1cPartnerReserve)
+	assertBreaks(t, fixture.evaluate(), RuleI6Settlements, RuleI1cPartnerReserve)
 }
 
 // TestPocketPix_PartnerDoubleProcessing: the same end_to_end_id settled twice
@@ -198,15 +198,15 @@ func TestPocketPix_RetryWithANewIDPaysTwice(t *testing.T) {
 func TestPocketPix_PartnerDoubleProcessing(t *testing.T) {
 	t.Parallel()
 
-	p := newPixRound(t)
-	alice := p.createAccount()
-	p.deposit(alice, 10_000)
+	fixture := newPixRound(t)
+	alice := fixture.createAccount()
+	fixture.deposit(alice, 10_000)
 
-	transfer := p.pixOut(alice, 4_500)
-	p.step(transfer, statusCreated, statusConfirmed)
-	p.partnerSays(transfer, truthSettled, entrySettlement, entrySettlement)
+	transfer := fixture.pixOut(alice, 4_500)
+	fixture.step(transfer, statusCreated, statusConfirmed)
+	fixture.partnerSays(transfer, truthSettled, entrySettlement, entrySettlement)
 
-	assertBreaks(t, p.evaluate(), RuleI1cDoubleProcess, RuleI1cPartnerReserve)
+	assertBreaks(t, fixture.evaluate(), RuleI1cDoubleProcess, RuleI1cPartnerReserve)
 }
 
 // TestPocketPix_ReconciledDoubleProcessingPasses: the reconciliation booked the
@@ -215,39 +215,39 @@ func TestPocketPix_PartnerDoubleProcessing(t *testing.T) {
 func TestPocketPix_ReconciledDoubleProcessingPasses(t *testing.T) {
 	t.Parallel()
 
-	p := newPixRound(t)
-	alice := p.createAccount()
-	p.deposit(alice, 10_000)
+	fixture := newPixRound(t)
+	alice := fixture.createAccount()
+	fixture.deposit(alice, 10_000)
 
-	transfer := p.pixOut(alice, 4_500)
-	p.step(transfer, statusCreated, statusConfirmed)
-	p.partnerSays(transfer, truthSettled, entrySettlement, entrySettlement)
-	p.apply("", snapshot.TransactionReconciliationAdjustment, map[string]int64{settlement: 4_500, suspense: -4_500})
+	transfer := fixture.pixOut(alice, 4_500)
+	fixture.step(transfer, statusCreated, statusConfirmed)
+	fixture.partnerSays(transfer, truthSettled, entrySettlement, entrySettlement)
+	fixture.apply("", snapshot.TransactionReconciliationAdjustment, map[string]int64{settlement: 4_500, suspense: -4_500})
 
-	assertPasses(t, p.evaluate())
+	assertPasses(t, fixture.evaluate())
 }
 
 func TestPocketPix_IncomingCreditedOrNot(t *testing.T) {
 	t.Parallel()
 
-	p := newPixRound(t)
-	alice := p.createAccount()
+	fixture := newPixRound(t)
+	alice := fixture.createAccount()
 	e2e := "E00000000000000000000000000000abc"
 
-	p.operation(history.FunctionPixIn, pixInArgs{AccountID: alice, AmountCents: 900, EndToEndID: e2e}, history.TypeOK, map[string]bool{"accepted": true})
-	p.truth.Incoming = append(p.truth.Incoming, truthIncoming{EndToEndID: e2e, AccountID: alice, AmountCents: 900})
-	p.truth.Statement = append(p.truth.Statement, truthEntry{Seq: 1, Kind: entryIncoming, EndToEndID: e2e, AmountCents: 900})
+	fixture.operation(history.FunctionPixIn, pixInArgs{AccountID: alice, AmountCents: 900, EndToEndID: e2e}, history.TypeOK, map[string]bool{"accepted": true})
+	fixture.truth.Incoming = append(fixture.truth.Incoming, truthIncoming{EndToEndID: e2e, AccountID: alice, AmountCents: 900})
+	fixture.truth.Statement = append(fixture.truth.Statement, truthEntry{Seq: 1, Kind: entryIncoming, EndToEndID: e2e, AmountCents: 900})
 
-	assertBreaks(t, p.evaluate(), RuleI2PixInCredit, RuleI6Incoming, RuleI1cPartnerReserve)
+	assertBreaks(t, fixture.evaluate(), RuleI2PixInCredit, RuleI6Incoming, RuleI1cPartnerReserve)
 
-	credit := p.apply("", snapshot.TransactionPixInCredit, map[string]int64{alice: 900, settlement: -900})
-	p.snap.Incoming = append(p.snap.Incoming, snapshot.Incoming{ID: "in-1", EndToEndID: e2e, AccountID: alice, AmountCents: 900})
+	credit := fixture.apply("", snapshot.TransactionPixInCredit, map[string]int64{alice: 900, settlement: -900})
+	fixture.snap.Incoming = append(fixture.snap.Incoming, snapshot.Incoming{ID: "in-1", EndToEndID: e2e, AccountID: alice, AmountCents: 900})
 
-	for i := range p.snap.Transactions {
-		if p.snap.Transactions[i].ID == credit {
-			p.snap.Transactions[i].IncomingTransferID = "in-1"
+	for i := range fixture.snap.Transactions {
+		if fixture.snap.Transactions[i].ID == credit {
+			fixture.snap.Transactions[i].IncomingTransferID = "in-1"
 		}
 	}
 
-	assertPasses(t, p.evaluate())
+	assertPasses(t, fixture.evaluate())
 }

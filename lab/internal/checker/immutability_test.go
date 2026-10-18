@@ -31,11 +31,11 @@ func TestImmutability(t *testing.T) {
 			t.Parallel()
 
 			b := newRoundBuilder(t)
-			s := b.snapshot()
-			s.Bands = tc.bands
-			s.Meta.FirstTransactionID = tc.first
+			state := b.snapshot()
+			state.Bands = tc.bands
+			state.Meta.FirstTransactionID = tc.first
 
-			result := evaluate(indexOperations(b.records), s, outsideSources{previous: &before})
+			result := evaluate(indexOperations(b.records), state, outsideSources{previous: &before})
 			isBroken := len(rulesOf(result)) == 1 && rulesOf(result)[0] == RuleI8Bands
 
 			if isBroken != tc.shouldFail {

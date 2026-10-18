@@ -55,9 +55,9 @@ func shapesOf(function history.Function) (args, value any) {
 // of them runs.
 func (ops operations) validate() error {
 	for _, o := range ops.ordered {
-		args, value := shapesOf(o.function)
+		arguments, value := shapesOf(o.function)
 
-		err := decodeShape(o.args, args)
+		err := decodeShape(o.args, arguments)
 		if err != nil {
 			return fmt.Errorf("%w: %s %s arguments: %w", ErrMalformedHistory, o.op, o.function, err)
 		}

@@ -55,8 +55,8 @@ func main() {
 	os.Exit(run(os.Args[1:]))
 }
 
-func run(args []string) int {
-	if len(args) != 1 {
+func run(arguments []string) int {
+	if len(arguments) != 1 {
 		fmt.Fprintln(os.Stderr, "usage: partner serve | healthcheck | chaos-kill")
 
 		return exitUsage
@@ -65,9 +65,9 @@ func run(args []string) int {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	err := runCommand(ctx, args[0])
+	err := runCommand(ctx, arguments[0])
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "partner %s: %v\n", args[0], err)
+		fmt.Fprintf(os.Stderr, "partner %s: %v\n", arguments[0], err)
 
 		return exitError
 	}
@@ -89,12 +89,12 @@ func runCommand(ctx context.Context, command string) error {
 }
 
 func serve(ctx context.Context) error {
-	cfg, err := config.Load(os.LookupEnv)
+	configuration, err := config.Load(os.LookupEnv)
 	if err != nil {
 		return err
 	}
 
-	err = config.ValidateBuild(cfg, chaosbuild.IsEnabled())
+	err = config.ValidateBuild(configuration, chaosbuild.IsEnabled())
 	if err != nil {
 		return err
 	}
@@ -105,27 +105,27 @@ func serve(ctx context.Context) error {
 		logger.WarnContext(ctx, "chaoslab build: chaos code is compiled into this binary", "marker", chaosbuild.Sentinel(), "version", buildinfo.Version())
 	}
 
-	store, err := truth.Open(ctx, cfg.DBPath)
+	store, err := truth.Open(ctx, configuration.DBPath)
 	if err != nil {
 		return err
 	}
 	defer closeStore(store, logger)
 
 	registry := modes.NewRegistry()
-	participants := make([]engine.Participant, 0, len(cfg.Participants))
-	participantIDs := make([]string, 0, len(cfg.Participants))
+	participants := make([]engine.Participant, 0, len(configuration.Participants))
+	participantIDs := make([]string, 0, len(configuration.Participants))
 
-	for _, participant := range cfg.Participants {
+	for _, participant := range configuration.Participants {
 		participants = append(participants, engine.Participant{ID: participant.ID, WebhookURL: participant.WebhookURL})
 		participantIDs = append(participantIDs, participant.ID)
 	}
 
-	worker := engine.New(engine.Config{Store: store, Modes: registry, Participants: participants, Secret: []byte(cfg.WebhookSecret), Logger: logger})
+	worker := engine.New(engine.Config{Store: store, Modes: registry, Participants: participants, Secret: []byte(configuration.WebhookSecret), Logger: logger})
 	go worker.Run(ctx)
 
 	api := httpapi.NewAPI(httpapi.APIConfig{Store: store, Modes: registry, Participants: participantIDs, Logger: logger})
-	buildInfo := httpapi.BuildInfo{Version: buildinfo.Version(), IsChaosBuild: chaosbuild.IsEnabled(), Env: string(cfg.Env)}
-	adminHandler := httpapi.NewAdminHandler(buildInfo, api, chaos.Handler(cfg.ChaosToken, registry))
+	buildInfo := httpapi.BuildInfo{Version: buildinfo.Version(), IsChaosBuild: chaosbuild.IsEnabled(), Env: string(configuration.Env)}
+	adminHandler := httpapi.NewAdminHandler(buildInfo, api, chaos.Handler(configuration.ChaosToken, registry))
 	apiServer := httpserver.New(apiAddr, api.Handler())
 	adminServer := httpserver.New(adminAddr, adminHandler)
 

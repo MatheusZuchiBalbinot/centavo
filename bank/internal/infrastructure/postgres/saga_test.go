@@ -54,11 +54,11 @@ func newEventID() string {
 // apart. The second does not fit a confirmed transfer, so the processor asks
 // the partner, finds it settled, and posts nothing more.
 func TestTransfer_DuplicateEffectWithNewEventID_IsNoop(t *testing.T) {
-	p := newOutboxBank(t)
-	intake, processor := newInbox(p, statusAnswer(transfer.PartnerSettled))
+	fixture := newOutboxBank(t)
+	intake, processor := newInbox(fixture, statusAnswer(transfer.PartnerSettled))
 	drainInbox(t, processor)
 
-	created := p.sentTransfer(t, 4_000)
+	created := fixture.sentTransfer(t, 4_000)
 	first := application.PartnerEvent{ID: newEventID(), Type: application.EventSettled, EndToEndID: created.EndToEndID, AmountCents: 4_000}
 	second := first
 	second.ID = newEventID()
@@ -66,13 +66,13 @@ func TestTransfer_DuplicateEffectWithNewEventID_IsNoop(t *testing.T) {
 	receive(t, intake, first, second)
 	drainInbox(t, processor)
 
-	view := p.status(t, created.TransferID)
-	isSettledOnce := view.Transfer.Status == transfer.StatusConfirmed && p.settlements(t, created.TransferID, "pix_out_settle") == 1
+	view := fixture.status(t, created.TransferID)
+	isSettledOnce := view.Transfer.Status == transfer.StatusConfirmed && fixture.settlements(t, created.TransferID, "pix_out_settle") == 1
 	if !isSettledOnce {
-		t.Fatalf("status %s with %d settlements", view.Transfer.Status, p.settlements(t, created.TransferID, "pix_out_settle"))
+		t.Fatalf("status %s with %d settlements", view.Transfer.Status, fixture.settlements(t, created.TransferID, "pix_out_settle"))
 	}
 
-	if countRows(t, p, `SELECT count(*) FROM inbox_events WHERE event_id = $1 AND outcome = 'resynced'`, second.ID) != 1 {
+	if countRows(t, fixture, `SELECT count(*) FROM inbox_events WHERE event_id = $1 AND outcome = 'resynced'`, second.ID) != 1 {
 		t.Fatal("the second settlement was not resynced")
 	}
 }
@@ -81,37 +81,37 @@ func TestTransfer_DuplicateEffectWithNewEventID_IsNoop(t *testing.T) {
 // before "settled". The processor walks sent, confirmed, reversed, each
 // step with its own posting.
 func TestStateMachine_ReturnBeforeSettlement_WalksThePath(t *testing.T) {
-	p := newOutboxBank(t)
-	intake, processor := newInbox(p, statusAnswer(transfer.PartnerReturned))
+	fixture := newOutboxBank(t)
+	intake, processor := newInbox(fixture, statusAnswer(transfer.PartnerReturned))
 	drainInbox(t, processor)
 
-	created := p.sentTransfer(t, 2_500)
+	created := fixture.sentTransfer(t, 2_500)
 	returned := application.PartnerEvent{ID: newEventID(), Type: application.EventReturned, EndToEndID: created.EndToEndID, AmountCents: 2_500}
 	settled := application.PartnerEvent{ID: newEventID(), Type: application.EventSettled, EndToEndID: created.EndToEndID, AmountCents: 2_500}
 
 	receive(t, intake, returned, settled)
 	drainInbox(t, processor)
 
-	view := p.status(t, created.TransferID)
+	view := fixture.status(t, created.TransferID)
 	isWalked := view.Transfer.Status == transfer.StatusReversed &&
-		p.settlements(t, created.TransferID, "pix_out_settle") == 1 &&
-		p.settlements(t, created.TransferID, "pix_out_return") == 1
+		fixture.settlements(t, created.TransferID, "pix_out_settle") == 1 &&
+		fixture.settlements(t, created.TransferID, "pix_out_return") == 1
 	if !isWalked {
-		t.Fatalf("status %s, %d settlements, %d returns", view.Transfer.Status, p.settlements(t, created.TransferID, "pix_out_settle"), p.settlements(t, created.TransferID, "pix_out_return"))
+		t.Fatalf("status %s, %d settlements, %d returns", view.Transfer.Status, fixture.settlements(t, created.TransferID, "pix_out_settle"), fixture.settlements(t, created.TransferID, "pix_out_return"))
 	}
 }
 
 // TestStateMachine_ContradictionIsAConflict: the bank confirmed a transfer
 // the partner says it rejected. Nothing is undone automatically.
 func TestStateMachine_ContradictionIsAConflict(t *testing.T) {
-	p := newOutboxBank(t)
-	intake, processor := newInbox(p, statusAnswer(transfer.PartnerRejected))
+	fixture := newOutboxBank(t)
+	intake, processor := newInbox(fixture, statusAnswer(transfer.PartnerRejected))
 	drainInbox(t, processor)
 
-	created := p.sentTransfer(t, 1_000)
+	created := fixture.sentTransfer(t, 1_000)
 	settle := application.TransitionCommand{TransferID: created.TransferID, From: transfer.StatusSent, To: transfer.StatusConfirmed, Cause: "test"}
 
-	err := p.unitOfWork.Run(t.Context(), func(ctx context.Context, stores application.Stores) error {
+	err := fixture.unitOfWork.Run(t.Context(), func(ctx context.Context, stores application.Stores) error {
 		return application.GuardedTransitions{}.Move(ctx, stores, settle)
 	})
 	if err != nil {
@@ -122,8 +122,8 @@ func TestStateMachine_ContradictionIsAConflict(t *testing.T) {
 	receive(t, intake, rejected)
 	drainInbox(t, processor)
 
-	view := p.status(t, created.TransferID)
-	isParked := view.Transfer.Status == transfer.StatusConfirmed && countRows(t, p, `SELECT count(*) FROM inbox_events WHERE event_id = $1 AND status = 'conflict'`, rejected.ID) == 1
+	view := fixture.status(t, created.TransferID)
+	isParked := view.Transfer.Status == transfer.StatusConfirmed && countRows(t, fixture, `SELECT count(*) FROM inbox_events WHERE event_id = $1 AND status = 'conflict'`, rejected.ID) == 1
 	if !isParked {
 		t.Fatalf("status %s; the contradiction should be a conflict", view.Transfer.Status)
 	}
@@ -148,16 +148,16 @@ func (p pixBank) releaseSweeperLease(t *testing.T) {
 // TestSweeper_LostWebhook_TransferConvergesByPolling is a regression test: the
 // partner settled and its webhooks were lost. The sweeper asks and confirms.
 func TestSweeper_LostWebhook_TransferConvergesByPolling(t *testing.T) {
-	p := newOutboxBank(t)
-	p.releaseSweeperLease(t)
-	created := p.sentTransfer(t, 3_300)
+	fixture := newOutboxBank(t)
+	fixture.releaseSweeperLease(t)
+	created := fixture.sentTransfer(t, 3_300)
 
-	err := p.sweeper(statusAnswer(transfer.PartnerSettled), "worker-a").RunOnce(t.Context(), sweptNow)
+	err := fixture.sweeper(statusAnswer(transfer.PartnerSettled), "worker-a").RunOnce(t.Context(), sweptNow)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	view := p.status(t, created.TransferID)
+	view := fixture.status(t, created.TransferID)
 	last := view.Transitions[len(view.Transitions)-1]
 
 	isSwept := view.Transfer.Status == transfer.StatusConfirmed && last.Cause == "sweeper"
@@ -169,18 +169,18 @@ func TestSweeper_LostWebhook_TransferConvergesByPolling(t *testing.T) {
 // TestSweeper_LeavesAnUnknownCreatedTransferToTheOutbox: not_found in
 // created is the outbox's to resend; the sweeper never fails a transfer.
 func TestSweeper_LeavesAnUnknownCreatedTransferToTheOutbox(t *testing.T) {
-	p := newOutboxBank(t)
-	p.releaseSweeperLease(t)
-	account := p.bank.newCustomer(t)
-	p.bank.fund(t, account, 10_000)
-	created := p.createPixOut(t, account, 700)
+	fixture := newOutboxBank(t)
+	fixture.releaseSweeperLease(t)
+	account := fixture.bank.newCustomer(t)
+	fixture.bank.fund(t, account, 10_000)
+	created := fixture.createPixOut(t, account, 700)
 
-	err := p.sweeper(statusAnswer(transfer.PartnerNotFound), "worker-a").RunOnce(t.Context(), sweptNow)
+	err := fixture.sweeper(statusAnswer(transfer.PartnerNotFound), "worker-a").RunOnce(t.Context(), sweptNow)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if p.status(t, created.TransferID).Transfer.Status != transfer.StatusCreated {
+	if fixture.status(t, created.TransferID).Transfer.Status != transfer.StatusCreated {
 		t.Fatal("the sweeper moved a transfer the partner does not know")
 	}
 }
@@ -188,22 +188,22 @@ func TestSweeper_LeavesAnUnknownCreatedTransferToTheOutbox(t *testing.T) {
 // TestSweeper_OnlyTheLeaseHolderSweeps: a second worker finds the lease
 // taken and does nothing.
 func TestSweeper_OnlyTheLeaseHolderSweeps(t *testing.T) {
-	p := newOutboxBank(t)
-	p.releaseSweeperLease(t)
+	fixture := newOutboxBank(t)
+	fixture.releaseSweeperLease(t)
 
-	err := p.sweeper(statusAnswer(transfer.PartnerProcessing), "worker-a").RunOnce(t.Context(), time.Hour)
+	err := fixture.sweeper(statusAnswer(transfer.PartnerProcessing), "worker-a").RunOnce(t.Context(), time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	created := p.sentTransfer(t, 900)
+	created := fixture.sentTransfer(t, 900)
 
-	err = p.sweeper(statusAnswer(transfer.PartnerSettled), "worker-b").RunOnce(t.Context(), sweptNow)
+	err = fixture.sweeper(statusAnswer(transfer.PartnerSettled), "worker-b").RunOnce(t.Context(), sweptNow)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if p.status(t, created.TransferID).Transfer.Status != transfer.StatusSent {
+	if fixture.status(t, created.TransferID).Transfer.Status != transfer.StatusSent {
 		t.Fatal("a worker without the lease swept")
 	}
 }
@@ -213,29 +213,29 @@ func TestSweeper_OnlyTheLeaseHolderSweeps(t *testing.T) {
 // nothing; the next send, under the same end_to_end_id, gets the partner's
 // answer.
 func TestRelay_PartnerTimeout_NeverFailsTransfer(t *testing.T) {
-	p := newOutboxBank(t)
-	p.drainOutbox(t)
-	account := p.bank.newCustomer(t)
-	p.bank.fund(t, account, 10_000)
-	created := p.createPixOut(t, account, 6_000)
+	fixture := newOutboxBank(t)
+	fixture.drainOutbox(t)
+	account := fixture.bank.newCustomer(t)
+	fixture.bank.fund(t, account, 10_000)
+	created := fixture.createPixOut(t, account, 6_000)
 
 	var calls atomic.Int32
 
 	machine := application.GuardedTransitions{}
-	flaky := application.OutboxRelayConfig{UnitOfWork: p.unitOfWork, Partner: fakePartner(t, http.StatusInternalServerError, &calls), EndToEnd: application.FixedEndToEnd{}, Machine: machine, Doubt: application.RetryOnDoubt{}, Owner: "relay-a", LeaseTTL: application.OutboxLeaseTTL, Logger: discardLogger()}
+	flaky := application.OutboxRelayConfig{UnitOfWork: fixture.unitOfWork, Partner: fakePartner(t, http.StatusInternalServerError, &calls), EndToEnd: application.FixedEndToEnd{}, Machine: machine, Doubt: application.RetryOnDoubt{}, Owner: "relay-a", LeaseTTL: application.OutboxLeaseTTL, Logger: discardLogger()}
 
 	err := application.NewOutboxRelay(flaky).RunOnce(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if p.status(t, created.TransferID).Transfer.Status != transfer.StatusCreated {
+	if fixture.status(t, created.TransferID).Transfer.Status != transfer.StatusCreated {
 		t.Fatal("a doubtful answer moved the transfer")
 	}
 
-	assertChainedAndNeverNegative(t, p.bank, account, 4_000)
+	assertChainedAndNeverNegative(t, fixture.bank, account, 4_000)
 
-	_, err = p.bank.pool.Exec(t.Context(), `UPDATE outbox_messages SET next_attempt_at = now() WHERE aggregate_id = $1`, uuid.UUID(created.TransferID))
+	_, err = fixture.bank.pool.Exec(t.Context(), `UPDATE outbox_messages SET next_attempt_at = now() WHERE aggregate_id = $1`, uuid.UUID(created.TransferID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,7 +248,7 @@ func TestRelay_PartnerTimeout_NeverFailsTransfer(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if p.status(t, created.TransferID).Transfer.Status != transfer.StatusSent {
+	if fixture.status(t, created.TransferID).Transfer.Status != transfer.StatusSent {
 		t.Fatal("the resend after the doubt did not record the partner's answer")
 	}
 }
@@ -272,14 +272,14 @@ func (p pausingPartner) Status(context.Context, transfer.EndToEndID) (applicatio
 // The walk starts from the status under the lock, so the stale answer writes
 // nothing.
 func TestSweeper_StaleStatusAfterPause_DoesNotRegressState(t *testing.T) {
-	p := newOutboxBank(t)
-	p.releaseSweeperLease(t)
-	created := p.sentTransfer(t, 1_200)
+	fixture := newOutboxBank(t)
+	fixture.releaseSweeperLease(t)
+	created := fixture.sentTransfer(t, 1_200)
 
 	settleMeanwhile := func() {
 		settle := application.TransitionCommand{TransferID: created.TransferID, From: transfer.StatusSent, To: transfer.StatusConfirmed, Cause: "webhook"}
 
-		err := p.unitOfWork.Run(t.Context(), func(ctx context.Context, stores application.Stores) error {
+		err := fixture.unitOfWork.Run(t.Context(), func(ctx context.Context, stores application.Stores) error {
 			return application.GuardedTransitions{}.Move(ctx, stores, settle)
 		})
 		if err != nil {
@@ -289,13 +289,13 @@ func TestSweeper_StaleStatusAfterPause_DoesNotRegressState(t *testing.T) {
 
 	stale := pausingPartner{answer: transfer.PartnerProcessing, meantime: sync.OnceFunc(settleMeanwhile)}
 
-	err := p.sweeper(stale, "worker-a").RunOnce(t.Context(), sweptNow)
+	err := fixture.sweeper(stale, "worker-a").RunOnce(t.Context(), sweptNow)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	view := p.status(t, created.TransferID)
-	isUnexpected := view.Transfer.Status != transfer.StatusConfirmed || p.settlements(t, created.TransferID, "pix_out_settle") != 1
+	view := fixture.status(t, created.TransferID)
+	isUnexpected := view.Transfer.Status != transfer.StatusConfirmed || fixture.settlements(t, created.TransferID, "pix_out_settle") != 1
 	if isUnexpected {
 		t.Fatalf("status %s after a stale sweep", view.Transfer.Status)
 	}

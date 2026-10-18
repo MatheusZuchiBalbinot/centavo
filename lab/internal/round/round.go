@@ -390,19 +390,19 @@ func exportSnapshot(ctx context.Context, options Options, result Result) (snapsh
 		return snapshot.LedgerState{}, err
 	}
 
-	s, err := options.Export(ctx, export.Request{Round: result.ID, AccountIDs: accounts})
+	state, err := options.Export(ctx, export.Request{Round: result.ID, AccountIDs: accounts})
 	if err != nil {
 		return snapshot.LedgerState{}, err
 	}
 
-	err = snapshot.Write(result.Dir, s)
+	err = snapshot.Write(result.Dir, state)
 	if err != nil {
 		return snapshot.LedgerState{}, err
 	}
 
-	options.Logger.InfoContext(ctx, "ledger exported", "round", result.ID, "transactions", len(s.Transactions), "entries", len(s.Entries))
+	options.Logger.InfoContext(ctx, "ledger exported", "round", result.ID, "transactions", len(state.Transactions), "entries", len(state.Entries))
 
-	return snapshot.StateOf(s), nil
+	return snapshot.StateOf(state), nil
 }
 
 // createdAccounts lists the accounts the history says the round opened: the

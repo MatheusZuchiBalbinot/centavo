@@ -245,23 +245,23 @@ func (l ledger) systemID(code string) string {
 	return l.systemIDs[code]
 }
 
-func indexLedger(s snapshot.Snapshot) ledger {
+func indexLedger(state snapshot.Snapshot) ledger {
 	l := ledger{
 		accounts: map[string]snapshot.Account{}, balances: map[string]snapshot.Balance{},
 		transactions: map[string]snapshot.Transaction{}, byClientRef: map[string][]snapshot.Transaction{},
-		systemIDs: map[string]string{}, transfers: s.Transfers, transitions: map[string][]snapshot.Transition{},
+		systemIDs: map[string]string{}, transfers: state.Transfers, transitions: map[string][]snapshot.Transition{},
 		byTransfer: map[string][]snapshot.Transaction{}, byIncoming: map[string][]snapshot.Transaction{}, incomingByE2E: map[string][]snapshot.Incoming{},
 	}
 
-	for _, transition := range s.Transitions {
+	for _, transition := range state.Transitions {
 		l.transitions[transition.TransferID] = append(l.transitions[transition.TransferID], transition)
 	}
 
-	for _, incoming := range s.Incoming {
+	for _, incoming := range state.Incoming {
 		l.incomingByE2E[incoming.EndToEndID] = append(l.incomingByE2E[incoming.EndToEndID], incoming)
 	}
 
-	for _, account := range s.Accounts {
+	for _, account := range state.Accounts {
 		l.accounts[account.ID] = account
 		l.accountIDs = append(l.accountIDs, account.ID)
 
@@ -276,11 +276,11 @@ func indexLedger(s snapshot.Snapshot) ledger {
 		}
 	}
 
-	for _, balance := range s.Balances {
+	for _, balance := range state.Balances {
 		l.balances[balance.AccountID] = balance
 	}
 
-	for _, transaction := range s.Transactions {
+	for _, transaction := range state.Transactions {
 		l.transactions[transaction.ID] = transaction
 		l.transactionIDs = append(l.transactionIDs, transaction.ID)
 		l.byClientRef[transaction.ClientRef] = append(l.byClientRef[transaction.ClientRef], transaction)
@@ -297,8 +297,8 @@ func indexLedger(s snapshot.Snapshot) ledger {
 	// Nothing reads the snapshot's entries in their export order after this,
 	// so the second index sorts them in place: a long round keeps two copies
 	// of its entries instead of three.
-	l.entriesByTx = groupEntries(slices.Clone(s.Entries), transactionOfEntry)
-	l.entriesByAccount = groupEntries(s.Entries, accountOfEntry)
+	l.entriesByTx = groupEntries(slices.Clone(state.Entries), transactionOfEntry)
+	l.entriesByAccount = groupEntries(state.Entries, accountOfEntry)
 
 	return l
 }

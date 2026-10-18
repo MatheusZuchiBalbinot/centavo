@@ -36,10 +36,10 @@ type memoryLedger struct {
 }
 
 func newMemoryLedger() *memoryLedger {
-	m := &memoryLedger{positions: map[ledger.AccountID]ledger.Position{}, isCustomer: map[ledger.AccountID]bool{}}
-	m.positions[ledger.ExternalCashAccountID()] = ledger.Position{}
+	memory := &memoryLedger{positions: map[ledger.AccountID]ledger.Position{}, isCustomer: map[ledger.AccountID]bool{}}
+	memory.positions[ledger.ExternalCashAccountID()] = ledger.Position{}
 
-	return m
+	return memory
 }
 
 func (m *memoryLedger) clone() *memoryLedger {

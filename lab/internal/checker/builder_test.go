@@ -72,9 +72,9 @@ func (b *roundBuilder) upcomingTransaction() string {
 }
 
 // operation records an invoke and its completion, returning the op id.
-func (b *roundBuilder) operation(function history.Function, args any, result history.Type, value any) string {
+func (b *roundBuilder) operation(function history.Function, arguments any, result history.Type, value any) string {
 	op := b.newOp()
-	b.record(history.Record{Process: history.Client(1), Type: history.TypeInvoke, F: function, Op: op, Value: mustJSON(b.t, args)})
+	b.record(history.Record{Process: history.Client(1), Type: history.TypeInvoke, F: function, Op: op, Value: mustJSON(b.t, arguments)})
 
 	completion := history.Record{Process: history.Client(1), Type: result, F: function, Op: op}
 	if value != nil {
@@ -151,19 +151,19 @@ func (b *roundBuilder) resolveWith(op, key, outcome string) {
 
 // snapshot returns the export, with materialized balances that match the entries.
 func (b *roundBuilder) snapshot() snapshot.Snapshot {
-	s := b.snap
-	s.Balances = nil
+	state := b.snap
+	state.Balances = nil
 
-	for _, account := range s.Accounts {
+	for _, account := range state.Accounts {
 		current := b.positions[account.ID]
-		s.Balances = append(s.Balances, snapshot.Balance{AccountID: account.ID, BalanceCents: current.balance, LastEntrySeq: current.seq})
+		state.Balances = append(state.Balances, snapshot.Balance{AccountID: account.ID, BalanceCents: current.balance, LastEntrySeq: current.seq})
 	}
 
-	s.Accounts = slices.Clone(s.Accounts)
-	s.Transactions = slices.Clone(s.Transactions)
-	s.Entries = slices.Clone(s.Entries)
+	state.Accounts = slices.Clone(state.Accounts)
+	state.Transactions = slices.Clone(state.Transactions)
+	state.Entries = slices.Clone(state.Entries)
 
-	return s
+	return state
 }
 
 func (b *roundBuilder) evaluate() Result {

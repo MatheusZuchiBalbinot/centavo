@@ -196,12 +196,12 @@ const (
 )
 
 // percentile reads a sorted slice by the nearest-rank method.
-func percentile(sorted []float64, p int) float64 {
+func percentile(sorted []float64, percent int) float64 {
 	if len(sorted) == 0 {
 		return 0
 	}
 
-	rank := (p*len(sorted) + percentScale - 1) / percentScale
+	rank := (percent*len(sorted) + percentScale - 1) / percentScale
 
 	return sorted[max(rank-1, 0)]
 }

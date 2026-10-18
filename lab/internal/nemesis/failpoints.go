@@ -69,24 +69,24 @@ type failpointController struct {
 	events  []json.RawMessage
 }
 
-func newFailpointController(n *Nemesis) *failpointController {
-	c := &failpointController{n: n, offsets: map[string]int64{}}
+func newFailpointController(bot *Nemesis) *failpointController {
+	controller := &failpointController{n: bot, offsets: map[string]int64{}}
 
-	for _, fault := range n.config.Scenario.Faults {
+	for _, fault := range bot.config.Scenario.Faults {
 		if fault.Kind == scenarios.FaultFailpoint {
-			c.faults = append(c.faults, &armedFault{fault: fault})
+			controller.faults = append(controller.faults, &armedFault{fault: fault})
 		}
 	}
 
 	// Events written before this round belong to other rounds.
-	for _, path := range c.eventFiles() {
+	for _, path := range controller.eventFiles() {
 		info, err := os.Stat(path)
 		if err == nil {
-			c.offsets[path] = info.Size()
+			controller.offsets[path] = info.Size()
 		}
 	}
 
-	return c
+	return controller
 }
 
 type armRecord struct {

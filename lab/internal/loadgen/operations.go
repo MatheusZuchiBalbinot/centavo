@@ -89,61 +89,63 @@ type readStatementArgs struct {
 	Limit     int       `json:"limit"`
 }
 
-func createAccountOperation(args createAccountArgs) (operation, error) {
-	body, err := json.Marshal(args)
+func createAccountOperation(arguments createAccountArgs) (operation, error) {
+	body, err := json.Marshal(arguments)
 	if err != nil {
 		return operation{}, err
 	}
 
 	writeRequest := request{method: http.MethodPost, path: accountsPath, body: body}
 
-	return newOperation(history.FunctionCreateAccount, writeRequest, args, parseCreateAccount)
+	return newOperation(history.FunctionCreateAccount, writeRequest, arguments, parseCreateAccount)
 }
 
-func depositOperation(args depositArgs) (operation, error) {
-	body, err := json.Marshal(args)
+func depositOperation(arguments depositArgs) (operation, error) {
+	body, err := json.Marshal(arguments)
 	if err != nil {
 		return operation{}, err
 	}
 
 	writeRequest := request{method: http.MethodPost, path: depositsPath, body: body}
 
-	return newOperation(history.FunctionDeposit, writeRequest, args, parseDeposit)
+	return newOperation(history.FunctionDeposit, writeRequest, arguments, parseDeposit)
 }
 
-func transferOperation(args transferArgs) (operation, error) {
-	body, err := json.Marshal(transferBody{FromAccountID: args.From, ToAccountID: args.To, AmountCents: args.AmountCents})
+func transferOperation(arguments transferArgs) (operation, error) {
+	body, err := json.Marshal(transferBody{FromAccountID: arguments.From, ToAccountID: arguments.To, AmountCents: arguments.AmountCents})
 	if err != nil {
 		return operation{}, err
 	}
 
 	writeRequest := request{method: http.MethodPost, path: transfersPath, body: body}
 
-	return newOperation(history.FunctionTransfer, writeRequest, args, parseTransfer)
+	return newOperation(history.FunctionTransfer, writeRequest, arguments, parseTransfer)
 }
 
-func pixOutOperation(args pixOutArgs) (operation, error) {
-	body, err := json.Marshal(args)
+func pixOutOperation(arguments pixOutArgs) (operation, error) {
+	body, err := json.Marshal(arguments)
 	if err != nil {
 		return operation{}, err
 	}
 
 	writeRequest := request{method: http.MethodPost, path: externalTransfersPath, body: body}
 
-	return newOperation(history.FunctionPixOut, writeRequest, args, parsePixOut)
+	return newOperation(history.FunctionPixOut, writeRequest, arguments, parsePixOut)
 }
 
 // pixInOperation asks the partner to send a PIX in; it goes to the partner,
 // not to the bank, and carries no idempotency key: the end_to_end_id is it.
-func pixInOperation(args pixInArgs, participantID string) (operation, error) {
-	body, err := json.Marshal(pixInBody{ParticipantID: participantID, EndToEndID: args.EndToEndID, AccountID: args.AccountID, AmountCents: args.AmountCents})
+func pixInOperation(arguments pixInArgs, participantID string) (operation, error) {
+	body, err := json.Marshal(
+		pixInBody{ParticipantID: participantID, EndToEndID: arguments.EndToEndID, AccountID: arguments.AccountID, AmountCents: arguments.AmountCents},
+	)
 	if err != nil {
 		return operation{}, err
 	}
 
 	partnerRequest := request{method: http.MethodPost, path: incomingPath, body: body}
 
-	op, err := newOperation(history.FunctionPixIn, partnerRequest, args, parsePixIn)
+	op, err := newOperation(history.FunctionPixIn, partnerRequest, arguments, parsePixIn)
 	op.hasNoKey = true
 	op.isToPartner = true
 
@@ -156,30 +158,30 @@ func readPixOutOperation(transferID string) (operation, error) {
 	return newOperation(history.FunctionReadPixOut, readRequest, readPixOutArgs{TransferID: transferID}, parseReadPixOut)
 }
 
-func readBalanceOperation(args readBalanceArgs) (operation, error) {
-	readRequest := request{method: http.MethodGet, path: accountPath(string(args.AccountID))}
+func readBalanceOperation(arguments readBalanceArgs) (operation, error) {
+	readRequest := request{method: http.MethodGet, path: accountPath(string(arguments.AccountID))}
 
-	return newOperation(history.FunctionReadBalance, readRequest, args, parseReadBalance)
+	return newOperation(history.FunctionReadBalance, readRequest, arguments, parseReadBalance)
 }
 
-func readStatementOperation(args readStatementArgs) (operation, error) {
+func readStatementOperation(arguments readStatementArgs) (operation, error) {
 	query := url.Values{}
-	query.Set("after_seq", strconv.FormatInt(args.AfterSeq, 10))
-	query.Set("limit", strconv.Itoa(args.Limit))
+	query.Set("after_seq", strconv.FormatInt(arguments.AfterSeq, 10))
+	query.Set("limit", strconv.Itoa(arguments.Limit))
 
-	path := statementPath(string(args.AccountID)) + "?" + query.Encode()
+	path := statementPath(string(arguments.AccountID)) + "?" + query.Encode()
 	readRequest := request{method: http.MethodGet, path: path}
 
-	return newOperation(history.FunctionReadStatement, readRequest, args, parseReadStatement)
+	return newOperation(history.FunctionReadStatement, readRequest, arguments, parseReadStatement)
 }
 
-func newOperation(function history.Function, req request, args any, parse parseFunc) (operation, error) {
-	invokeValue, err := json.Marshal(args)
+func newOperation(function history.Function, call request, arguments any, parse parseFunc) (operation, error) {
+	invokeValue, err := json.Marshal(arguments)
 	if err != nil {
 		return operation{}, fmt.Errorf("encoding %s arguments: %w", function, err)
 	}
 
-	return operation{function: function, request: req, invokeValue: invokeValue, parse: parse}, nil
+	return operation{function: function, request: call, invokeValue: invokeValue, parse: parse}, nil
 }
 
 // isWrite tells which operations carry an Idempotency-Key.

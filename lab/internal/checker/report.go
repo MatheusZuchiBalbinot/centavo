@@ -89,17 +89,17 @@ func newReport(meta roundMeta, result Result, events chaosEvents, histories oper
 	return report
 }
 
-func failurePathOf(result Result, v Violation) FailurePath {
-	path := FailurePath{Violation: v, Ledger: []string{}}
+func failurePathOf(result Result, violation Violation) FailurePath {
+	path := FailurePath{Violation: violation, Ledger: []string{}}
 
 	transactionIDs := []string{}
-	for _, transaction := range result.ledger.byClientRef[v.Op] {
+	for _, transaction := range result.ledger.byClientRef[violation.Op] {
 		transactionIDs = append(transactionIDs, transaction.ID)
 	}
 
-	isExtraTransaction := v.TransactionID != "" && !slices.Contains(transactionIDs, v.TransactionID)
+	isExtraTransaction := violation.TransactionID != "" && !slices.Contains(transactionIDs, violation.TransactionID)
 	if isExtraTransaction {
-		transactionIDs = append(transactionIDs, v.TransactionID)
+		transactionIDs = append(transactionIDs, violation.TransactionID)
 	}
 
 	for _, id := range transactionIDs {
@@ -121,11 +121,11 @@ func failurePathOf(result Result, v Violation) FailurePath {
 		}
 	}
 
-	balance, hasBalance := result.ledger.balances[v.AccountID]
+	balance, hasBalance := result.ledger.balances[violation.AccountID]
 	if hasBalance {
 		path.Ledger = append(
 			path.Ledger,
-			fmt.Sprintf("account_balances conta=%s saldo=%d last_entry_seq=%d", v.AccountID, balance.BalanceCents, balance.LastEntrySeq),
+			fmt.Sprintf("account_balances conta=%s saldo=%d last_entry_seq=%d", violation.AccountID, balance.BalanceCents, balance.LastEntrySeq),
 		)
 	}
 
@@ -204,12 +204,12 @@ func renderMarkdown(report Report) string {
 
 func writeFirstViolation(b *strings.Builder, report Report) {
 	path := report.FailurePaths[0]
-	v := path.Violation
+	violation := path.Violation
 
-	fmt.Fprintf(b, "\n## Primeira violação: %s, %s\n\n%s\n\n", v.Invariant, v.Rule, v.Message)
+	fmt.Fprintf(b, "\n## Primeira violação: %s, %s\n\n%s\n\n", violation.Invariant, violation.Rule, violation.Message)
 
-	if v.Op != "" {
-		fmt.Fprintf(b, "Operação %s, iniciada em %s.\n", v.Op, formatTime(v.TimeNS))
+	if violation.Op != "" {
+		fmt.Fprintf(b, "Operação %s, iniciada em %s.\n", violation.Op, formatTime(violation.TimeNS))
 	}
 
 	if len(path.History) > 0 {
@@ -281,12 +281,12 @@ func statusText(invariant InvariantResult) string {
 	}
 }
 
-func exampleOf(v Violation) string {
-	if v.Op != "" {
-		return v.Op
+func exampleOf(violation Violation) string {
+	if violation.Op != "" {
+		return violation.Op
 	}
 
-	return v.AccountID
+	return violation.AccountID
 }
 
 func recordDetail(record history.Record) string {

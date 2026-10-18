@@ -78,8 +78,8 @@ type evaluation struct {
 	unresolved []string
 }
 
-func (e *evaluation) add(v Violation) {
-	e.violations = append(e.violations, v)
+func (e *evaluation) add(violation Violation) {
+	e.violations = append(e.violations, violation)
 }
 
 // checkZeroSum is I1a: every transaction of the round has at least two entries
@@ -535,8 +535,7 @@ func (e *evaluation) checkPhantoms() {
 		}
 
 		violation := Violation{
-			Invariant: InvariantI2, Rule: RuleI2Phantom, TimeNS: e.ops.timeOf(transaction.ClientRef),
-			Op: transaction.ClientRef, TransactionID: id,
+			Invariant: InvariantI2, Rule: RuleI2Phantom, TimeNS: e.ops.timeOf(transaction.ClientRef), Op: transaction.ClientRef, TransactionID: id,
 			Message: fmt.Sprintf(
 				"transação %s (%s) com client_ref %q não corresponde a nenhuma operação desse tipo no histórico",
 				id, transaction.Kind, transaction.ClientRef,

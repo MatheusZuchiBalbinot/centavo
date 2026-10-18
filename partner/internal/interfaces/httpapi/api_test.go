@@ -60,19 +60,19 @@ func transferBody(e2e, key string) string {
 }
 
 func TestSubmit_IsIdempotentByEndToEndID(t *testing.T) {
-	p := newPartner(t)
+	fixture := newPartner(t)
 	e2e := "E0192f1c5a1b2c3d4"
 
-	first := call(t, p.api, http.MethodPost, "/v1/transfers", transferBody(e2e, "dest-0001"))
-	again := call(t, p.api, http.MethodPost, "/v1/transfers", transferBody(e2e, "dest-0001"))
+	first := call(t, fixture.api, http.MethodPost, "/v1/transfers", transferBody(e2e, "dest-0001"))
+	again := call(t, fixture.api, http.MethodPost, "/v1/transfers", transferBody(e2e, "dest-0001"))
 
 	isIdempotent := first.Code == http.StatusAccepted && again.Code == http.StatusOK && strings.Contains(again.Body.String(), `"status":"processing"`)
 	if !isIdempotent {
 		t.Fatalf("first %d %s, again %d %s", first.Code, first.Body, again.Code, again.Body)
 	}
 
-	status := call(t, p.api, http.MethodGet, "/v1/transfers/"+e2e, "")
-	missing := call(t, p.api, http.MethodGet, "/v1/transfers/E00000000deadbeef", "")
+	status := call(t, fixture.api, http.MethodGet, "/v1/transfers/"+e2e, "")
+	missing := call(t, fixture.api, http.MethodGet, "/v1/transfers/E00000000deadbeef", "")
 
 	isUnexpected := status.Code != http.StatusOK || missing.Code != http.StatusNotFound || !strings.Contains(missing.Body.String(), "not_found")
 	if isUnexpected {
@@ -81,57 +81,57 @@ func TestSubmit_IsIdempotentByEndToEndID(t *testing.T) {
 }
 
 func TestSubmit_RefusesUnknownDestinationKeys(t *testing.T) {
-	p := newPartner(t)
+	fixture := newPartner(t)
 
-	refused := call(t, p.api, http.MethodPost, "/v1/transfers", transferBody("E0192f1c5a1b2c3d5", "invalid-0001"))
+	refused := call(t, fixture.api, http.MethodPost, "/v1/transfers", transferBody("E0192f1c5a1b2c3d5", "invalid-0001"))
 	isUnexpected := refused.Code != http.StatusUnprocessableEntity || !strings.Contains(refused.Body.String(), `"status":"rejected"`)
 	if isUnexpected {
 		t.Fatalf("got %d %s", refused.Code, refused.Body)
 	}
 
-	malformed := call(t, p.api, http.MethodPost, "/v1/transfers", `{"end_to_end_id": "x"}`)
+	malformed := call(t, fixture.api, http.MethodPost, "/v1/transfers", `{"end_to_end_id": "x"}`)
 	if malformed.Code != http.StatusBadRequest {
 		t.Fatalf("malformed: %d", malformed.Code)
 	}
 }
 
 func TestOutage_AnswersServiceUnavailable(t *testing.T) {
-	p := newPartner(t)
+	fixture := newPartner(t)
 
-	err := p.registry.Set(modes.Config{ParticipantID: participant, TTL: "1m", Outage: &modes.OutageConfig{Until: "+1m", Mode: modes.OutageServiceUnavailable}}, time.Now().UTC())
+	err := fixture.registry.Set(modes.Config{ParticipantID: participant, TTL: "1m", Outage: &modes.OutageConfig{Until: "+1m", Mode: modes.OutageServiceUnavailable}}, time.Now().UTC())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	response := call(t, p.api, http.MethodPost, "/v1/transfers", transferBody("E0192f1c5a1b2c3d6", "dest-0001"))
+	response := call(t, fixture.api, http.MethodPost, "/v1/transfers", transferBody("E0192f1c5a1b2c3d6", "dest-0001"))
 	if response.Code != http.StatusServiceUnavailable {
 		t.Fatalf("got %d", response.Code)
 	}
 
-	p.registry.Clear()
+	fixture.registry.Clear()
 
-	response = call(t, p.api, http.MethodPost, "/v1/transfers", transferBody("E0192f1c5a1b2c3d6", "dest-0001"))
+	response = call(t, fixture.api, http.MethodPost, "/v1/transfers", transferBody("E0192f1c5a1b2c3d6", "dest-0001"))
 	if response.Code != http.StatusAccepted {
 		t.Fatalf("after the outage: %d (the refused submission must not have been recorded)", response.Code)
 	}
 }
 
 func TestIncomingAndTruth_ShowTheStatementTheBankReconcilesAgainst(t *testing.T) {
-	p := newPartner(t)
+	fixture := newPartner(t)
 
-	created := call(t, p.admin, http.MethodPost, "/internal/incoming", `{"participant_id": "`+participant+`", "end_to_end_id": "E0192f1c5a1b2c3d7", "account_id": "acc-1", "amount_cents": 900}`)
+	created := call(t, fixture.admin, http.MethodPost, "/internal/incoming", `{"participant_id": "`+participant+`", "end_to_end_id": "E0192f1c5a1b2c3d7", "account_id": "acc-1", "amount_cents": 900}`)
 	if created.Code != http.StatusCreated {
 		t.Fatalf("incoming: %d %s", created.Code, created.Body)
 	}
 
-	statement := call(t, p.api, http.MethodGet, "/v1/statements?participant_id="+participant, "")
+	statement := call(t, fixture.api, http.MethodGet, "/v1/statements?participant_id="+participant, "")
 	if !strings.Contains(statement.Body.String(), `"kind":"incoming"`) {
 		t.Fatalf("statement: %s", statement.Body)
 	}
 
 	var export truth.Export
 
-	err := json.Unmarshal(call(t, p.admin, http.MethodGet, "/internal/truth?participant_id="+participant, "").Body.Bytes(), &export)
+	err := json.Unmarshal(call(t, fixture.admin, http.MethodGet, "/internal/truth?participant_id="+participant, "").Body.Bytes(), &export)
 	if err != nil {
 		t.Fatalf("truth: %+v, %v", export, err)
 	}
@@ -141,7 +141,7 @@ func TestIncomingAndTruth_ShowTheStatementTheBankReconcilesAgainst(t *testing.T)
 		t.Fatalf("truth: %+v, %v", export, err)
 	}
 
-	unknown := call(t, p.api, http.MethodGet, "/v1/statements?participant_id=someone-else", "")
+	unknown := call(t, fixture.api, http.MethodGet, "/v1/statements?participant_id=someone-else", "")
 	if unknown.Code != http.StatusBadRequest {
 		t.Fatalf("statement of an unknown participant: %d", unknown.Code)
 	}
@@ -150,7 +150,7 @@ func TestIncomingAndTruth_ShowTheStatementTheBankReconcilesAgainst(t *testing.T)
 // TestEngine_SettlesAndDeliversSignedWebhooks runs the partner end to end:
 // submit, settle by the engine, webhook to the bank with a valid signature.
 func TestEngine_SettlesAndDeliversSignedWebhooks(t *testing.T) {
-	p := newPartner(t)
+	fixture := newPartner(t)
 	secret := []byte(strings.Repeat("s", 32))
 
 	var (
@@ -176,10 +176,10 @@ func TestEngine_SettlesAndDeliversSignedWebhooks(t *testing.T) {
 	}))
 	defer bank.Close()
 
-	worker := engine.New(engine.Config{Store: p.store, Modes: p.registry, Participants: []engine.Participant{{ID: participant, WebhookURL: bank.URL}}, Secret: secret, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	worker := engine.New(engine.Config{Store: fixture.store, Modes: fixture.registry, Participants: []engine.Participant{{ID: participant, WebhookURL: bank.URL}}, Secret: secret, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	go worker.Run(t.Context())
 
-	call(t, p.api, http.MethodPost, "/v1/transfers", transferBody("E0192f1c5a1b2c3d8", "dest-0001"))
+	call(t, fixture.api, http.MethodPost, "/v1/transfers", transferBody("E0192f1c5a1b2c3d8", "dest-0001"))
 
 	deadline := time.Now().Add(5 * time.Second)
 
@@ -221,7 +221,7 @@ func hasValidSignature(header string, body, secret []byte) bool {
 // the bank's webhook path: they match the PIX's correlation id, which only
 // reaches the bank if the partner sends it back.
 func TestEngine_EchoesTheCorrelationIDOnWebhooks(t *testing.T) {
-	p := newPartner(t)
+	fixture := newPartner(t)
 	secret := []byte(strings.Repeat("s", 32))
 	echoed := make(chan string, 2)
 
@@ -230,17 +230,17 @@ func TestEngine_EchoesTheCorrelationIDOnWebhooks(t *testing.T) {
 	}))
 	defer bank.Close()
 
-	worker := engine.New(engine.Config{Store: p.store, Modes: p.registry, Participants: []engine.Participant{{ID: participant, WebhookURL: bank.URL}}, Secret: secret, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	worker := engine.New(engine.Config{Store: fixture.store, Modes: fixture.registry, Participants: []engine.Participant{{ID: participant, WebhookURL: bank.URL}}, Secret: secret, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	go worker.Run(t.Context())
 
 	submit := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/transfers", strings.NewReader(transferBody("E0192f1c5a1b2c3d9", "dest-0001")))
 	submit.Header.Set("X-Correlation-Id", "r0001-p01-000001")
-	p.api.ServeHTTP(httptest.NewRecorder(), submit)
+	fixture.api.ServeHTTP(httptest.NewRecorder(), submit)
 
 	incomingBody := `{"participant_id": "` + participant + `", "end_to_end_id": "E0192f1c5a1b2c3da", "account_id": "acc-1", "amount_cents": 900}`
 	incoming := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/internal/incoming", strings.NewReader(incomingBody))
 	incoming.Header.Set("X-Correlation-Id", "r0001-p02-000001")
-	p.admin.ServeHTTP(httptest.NewRecorder(), incoming)
+	fixture.admin.ServeHTTP(httptest.NewRecorder(), incoming)
 
 	got := map[string]bool{}
 
@@ -261,7 +261,7 @@ func TestEngine_EchoesTheCorrelationIDOnWebhooks(t *testing.T) {
 // TestErrors_AnswerAStableCode: every refusal carries a machine-readable code
 // and the rule the request broke, never the decoder's detail.
 func TestErrors_AnswerAStableCode(t *testing.T) {
-	p := newPartner(t)
+	fixture := newPartner(t)
 
 	cases := []struct {
 		name       string
@@ -278,7 +278,7 @@ func TestErrors_AnswerAStableCode(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			recorder := call(t, p.api, tc.method, tc.path, tc.body)
+			recorder := call(t, fixture.api, tc.method, tc.path, tc.body)
 
 			var body struct {
 				Error struct {

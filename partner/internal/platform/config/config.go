@@ -99,13 +99,13 @@ func Load(lookup LookupFunc) (Config, error) {
 // ValidateBuild enforces the safety rule that a chaoslab build refuses to run
 // in production: the lying modes of a chaoslab build never run in production,
 // and the chaos port has a real secret.
-func ValidateBuild(cfg Config, isChaosBuild bool) error {
-	isChaosBuildInProduction := isChaosBuild && cfg.Env == EnvProduction
+func ValidateBuild(configuration Config, isChaosBuild bool) error {
+	isChaosBuildInProduction := isChaosBuild && configuration.Env == EnvProduction
 	if isChaosBuildInProduction {
 		return ErrChaosBuildInProduction
 	}
 
-	hasWeakToken := isChaosBuild && len(cfg.ChaosToken) < minSecretLength
+	hasWeakToken := isChaosBuild && len(configuration.ChaosToken) < minSecretLength
 	if hasWeakToken {
 		return ErrWeakChaosToken
 	}

@@ -36,12 +36,12 @@ func TestLockOrder_SystemBalancesBeforeTheCustomer(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			p := newPixBank(t)
-			account := p.bank.newCustomer(t)
-			p.bank.fund(t, account, 10_000)
-			write := tc.write(t, p, account)
+			fixture := newPixBank(t)
+			account := fixture.bank.newCustomer(t)
+			fixture.bank.fund(t, account, 10_000)
+			write := tc.write(t, fixture, account)
 
-			other, err := p.bank.pool.Begin(t.Context())
+			other, err := fixture.bank.pool.Begin(t.Context())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -58,7 +58,7 @@ func TestLockOrder_SystemBalancesBeforeTheCustomer(t *testing.T) {
 				written <- write(context.Background())
 			}()
 
-			waitForALockWait(t, p)
+			waitForALockWait(t, fixture)
 
 			_, err = other.Exec(t.Context(), `UPDATE account_balances SET updated_at = now() WHERE account_id = $1`, uuid.UUID(account))
 			if err != nil {
@@ -78,28 +78,28 @@ func TestLockOrder_SystemBalancesBeforeTheCustomer(t *testing.T) {
 	}
 }
 
-func reservePixOut(t *testing.T, p pixBank, account ledger.AccountID) func(context.Context) error {
+func reservePixOut(t *testing.T, fixture pixBank, account ledger.AccountID) func(context.Context) error {
 	key := newKey()
 	input := application.PixOutInput{AccountID: account, Amount: amountOf(t, 1_000), DestinationKey: "dest-0001", Write: application.WriteContext{Key: key, CorrelationID: string(key)}}
 
 	return func(ctx context.Context) error {
-		return p.unitOfWork.Run(ctx, func(ctx context.Context, stores application.Stores) error {
+		return fixture.unitOfWork.Run(ctx, func(ctx context.Context, stores application.Stores) error {
 			operationID, err := ledger.NewOperationID()
 			if err != nil {
 				return err
 			}
 
-			_, err = p.create.Apply(ctx, stores, operationID, input)
+			_, err = fixture.create.Apply(ctx, stores, operationID, input)
 
 			return err
 		})
 	}
 }
 
-func creditIncomingPix(_ *testing.T, p pixBank, account ledger.AccountID) func(context.Context) error {
+func creditIncomingPix(_ *testing.T, fixture pixBank, account ledger.AccountID) func(context.Context) error {
 	event := application.PartnerEvent{ID: "evt_" + uuid.NewString(), Type: application.EventIncoming, EndToEndID: transfer.EndToEndID("E" + uuid.NewString()), AmountCents: 700, AccountID: account.String()}
 
 	return func(ctx context.Context) error {
-		return p.webhook.Apply(ctx, event)
+		return fixture.webhook.Apply(ctx, event)
 	}
 }

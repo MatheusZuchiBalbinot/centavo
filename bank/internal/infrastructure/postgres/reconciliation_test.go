@@ -43,22 +43,22 @@ func (f *fakeStatement) add(kind application.StatementKind, endToEndID transfer.
 
 // newStatement moves the cursor past everything reconciled so far and
 // starts the test's statement right after it.
-func newStatement(t *testing.T, p pixBank) *fakeStatement {
+func newStatement(t *testing.T, fixture pixBank) *fakeStatement {
 	t.Helper()
 
 	var base int64
 
-	err := p.bank.pool.QueryRow(t.Context(), `SELECT greatest(coalesce(max(partner_seq), 0), (SELECT last_partner_seq FROM reconciliation_cursor)) + $1 FROM reconciliation_items`, seqGap).Scan(&base)
+	err := fixture.bank.pool.QueryRow(t.Context(), `SELECT greatest(coalesce(max(partner_seq), 0), (SELECT last_partner_seq FROM reconciliation_cursor)) + $1 FROM reconciliation_items`, seqGap).Scan(&base)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = p.bank.pool.Exec(t.Context(), `UPDATE reconciliation_cursor SET last_partner_seq = $1`, base)
+	_, err = fixture.bank.pool.Exec(t.Context(), `UPDATE reconciliation_cursor SET last_partner_seq = $1`, base)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = p.bank.pool.Exec(t.Context(), `UPDATE worker_leases SET holder = NULL, expires_at = NULL WHERE resource = 'reconciler'`)
+	_, err = fixture.bank.pool.Exec(t.Context(), `UPDATE worker_leases SET holder = NULL, expires_at = NULL WHERE resource = 'reconciler'`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,15 +99,15 @@ func (p pixBank) reconcile(t *testing.T, statement application.PartnerStatementR
 // TestReconciliation_MissingSettlement_ConfirmsTheTransfer: the webhook was
 // lost and the sweeper has not run; the statement shows the settlement.
 func TestReconciliation_MissingSettlement_ConfirmsTheTransfer(t *testing.T) {
-	p := newOutboxBank(t)
-	statement := newStatement(t, p)
-	created := p.sentTransfer(t, 2_200)
+	fixture := newOutboxBank(t)
+	statement := newStatement(t, fixture)
+	created := fixture.sentTransfer(t, 2_200)
 	statement.add(application.StatementSettlement, created.EndToEndID, 2_200, "")
 
-	p.reconcile(t, statement)
+	fixture.reconcile(t, statement)
 
-	view := p.status(t, created.TransferID)
-	isUnexpected := view.Transfer.Status != transfer.StatusConfirmed || p.settlements(t, created.TransferID, "pix_out_settle") != 1
+	view := fixture.status(t, created.TransferID)
+	isUnexpected := view.Transfer.Status != transfer.StatusConfirmed || fixture.settlements(t, created.TransferID, "pix_out_settle") != 1
 	if isUnexpected {
 		t.Fatalf("status %s after reconciling a settlement", view.Transfer.Status)
 	}
@@ -117,34 +117,34 @@ func TestReconciliation_MissingSettlement_ConfirmsTheTransfer(t *testing.T) {
 // test: the partner settled the same PIX twice. The second settlement left the
 // reserve too, and suspense holds what the partner owes back.
 func TestReconciliation_PartnerDoubleSettlement_BooksSuspense(t *testing.T) {
-	p := newOutboxBank(t)
-	statement := newStatement(t, p)
-	created := p.sentTransfer(t, 1_500)
+	fixture := newOutboxBank(t)
+	statement := newStatement(t, fixture)
+	created := fixture.sentTransfer(t, 1_500)
 	statement.add(application.StatementSettlement, created.EndToEndID, 1_500, "")
 	statement.add(application.StatementSettlement, created.EndToEndID, 1_500, "")
 
-	suspenseBefore := p.systemBalance(t, ledger.SuspenseAccountID())
-	p.reconcile(t, statement)
+	suspenseBefore := fixture.systemBalance(t, ledger.SuspenseAccountID())
+	fixture.reconcile(t, statement)
 
-	owed := suspenseBefore - p.systemBalance(t, ledger.SuspenseAccountID())
-	isUnexpected := owed != 1_500 || p.settlements(t, created.TransferID, "pix_out_settle") != 1
+	owed := suspenseBefore - fixture.systemBalance(t, ledger.SuspenseAccountID())
+	isUnexpected := owed != 1_500 || fixture.settlements(t, created.TransferID, "pix_out_settle") != 1
 	if isUnexpected {
-		t.Fatalf("suspense moved by %d, %d settlements", owed, p.settlements(t, created.TransferID, "pix_out_settle"))
+		t.Fatalf("suspense moved by %d, %d settlements", owed, fixture.settlements(t, created.TransferID, "pix_out_settle"))
 	}
 }
 
 // TestReconciliation_MissingIncoming_CreditsOnce: a PIX in whose webhook
 // never came is credited by the reconciliation, once, even if run again.
 func TestReconciliation_MissingIncoming_CreditsOnce(t *testing.T) {
-	p := newOutboxBank(t)
-	statement := newStatement(t, p)
-	account := p.bank.newCustomer(t)
+	fixture := newOutboxBank(t)
+	statement := newStatement(t, fixture)
+	account := fixture.bank.newCustomer(t)
 	statement.add(application.StatementIncoming, transfer.EndToEndID("E"+uuid.NewString()[:8]+"0000cccc"), 640, account.String())
 
-	p.reconcile(t, statement)
-	p.reconcile(t, statement)
+	fixture.reconcile(t, statement)
+	fixture.reconcile(t, statement)
 
-	assertChainedAndNeverNegative(t, p.bank, account, 640)
+	assertChainedAndNeverNegative(t, fixture.bank, account, 640)
 }
 
 // TestReconciliation_BatchTakesItsTransfersBeforeAnyBalance reproduces the
@@ -153,14 +153,14 @@ func TestReconciliation_MissingIncoming_CreditsOnce(t *testing.T) {
 // booked an earlier entry first holds that balance while it waits on the
 // transfer; one that takes the batch's transfers first waits holding none.
 func TestReconciliation_BatchTakesItsTransfersBeforeAnyBalance(t *testing.T) {
-	p := newOutboxBank(t)
-	statement := newStatement(t, p)
-	first := p.sentTransfer(t, 1_000)
-	second := p.sentTransfer(t, 300)
+	fixture := newOutboxBank(t)
+	statement := newStatement(t, fixture)
+	first := fixture.sentTransfer(t, 1_000)
+	second := fixture.sentTransfer(t, 300)
 	statement.add(application.StatementSettlement, first.EndToEndID, 1_000, "")
 	statement.add(application.StatementSettlement, second.EndToEndID, 300, "")
 
-	writer, err := p.bank.pool.Begin(t.Context())
+	writer, err := fixture.bank.pool.Begin(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,10 +174,10 @@ func TestReconciliation_BatchTakesItsTransfersBeforeAnyBalance(t *testing.T) {
 	reconciled := make(chan error, 1)
 
 	go func() {
-		reconciled <- p.reconciler(statement, application.AtomicBatches{}).RunOnce(context.Background())
+		reconciled <- fixture.reconciler(statement, application.AtomicBatches{}).RunOnce(context.Background())
 	}()
 
-	waitForALockWait(t, p)
+	waitForALockWait(t, fixture)
 
 	_, err = writer.Exec(t.Context(), `UPDATE account_balances SET updated_at = now() WHERE account_id = $1`, uuid.UUID(ledger.PixOutTransitAccountID()))
 	if err != nil {
@@ -197,7 +197,7 @@ func TestReconciliation_BatchTakesItsTransfersBeforeAnyBalance(t *testing.T) {
 
 // waitForALockWait returns once some session waits on a lock: the reconciler
 // reached the transfer the test holds.
-func waitForALockWait(t *testing.T, p pixBank) {
+func waitForALockWait(t *testing.T, fixture pixBank) {
 	t.Helper()
 
 	deadline := time.Now().Add(5 * time.Second)
@@ -205,7 +205,7 @@ func waitForALockWait(t *testing.T, p pixBank) {
 	for time.Now().Before(deadline) {
 		var waiting int
 
-		err := p.bank.pool.QueryRow(t.Context(), `SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND datname = current_database()`).Scan(&waiting)
+		err := fixture.bank.pool.QueryRow(t.Context(), `SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND datname = current_database()`).Scan(&waiting)
 		if err != nil {
 			t.Fatal(err)
 		}

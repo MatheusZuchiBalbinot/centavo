@@ -186,8 +186,8 @@ func runWith(ctx context.Context, config Config, policy retryPolicy) (Result, er
 	tokens := make(chan struct{})
 	go emitTokens(loadCtx, config.Workload.RatePerSecond, tokens)
 
-	runLoad := func(c *client, ctx context.Context) error {
-		return c.load(ctx, loadCtx, tokens)
+	runLoad := func(worker *client, ctx context.Context) error {
+		return worker.load(ctx, loadCtx, tokens)
 	}
 
 	err = forEachClient(ctx, clients, runLoad)
@@ -352,13 +352,13 @@ func (c *client) prepare(ctx context.Context) error {
 	return nil
 }
 
-func mustSucceed[Args any](ctx context.Context, c *client, build func(Args) (operation, error), args Args) (json.RawMessage, error) {
-	op, err := build(args)
+func mustSucceed[Args any](ctx context.Context, worker *client, build func(Args) (operation, error), arguments Args) (json.RawMessage, error) {
+	op, err := build(arguments)
 	if err != nil {
 		return nil, err
 	}
 
-	result, err := c.execute(ctx, op)
+	result, err := worker.execute(ctx, op)
 	if err != nil {
 		return nil, err
 	}
@@ -404,9 +404,9 @@ func (c *client) nextOperation() (operation, error) {
 		return pixOutOperation(pixOutArgs{AccountID: pickOne(c.picks, accounts), AmountCents: amount, DestinationKey: drawDestinationKey(c.picks)})
 	case history.FunctionPixIn:
 		amount := drawCents(c.amounts, minDepositCents, maxDepositCents)
-		args := pixInArgs{AccountID: pickOne(c.picks, accounts), AmountCents: amount, EndToEndID: incomingEndToEndID(c.run.config.Round, c.process, c.seq+1)}
+		arguments := pixInArgs{AccountID: pickOne(c.picks, accounts), AmountCents: amount, EndToEndID: incomingEndToEndID(c.run.config.Round, c.process, c.seq+1)}
 
-		return pixInOperation(args, c.run.config.ParticipantID)
+		return pixInOperation(arguments, c.run.config.ParticipantID)
 	case history.FunctionTransfer:
 		from, to := pickPair(c.picks, accounts)
 		amount := drawCents(c.amounts, minTransferCents, maxTransferCents)
@@ -466,11 +466,11 @@ func (c *client) invoke(op operation) (string, request, error) {
 	c.seq++
 	opID := fmt.Sprintf("%s-p%02d-%06d", c.run.config.Round, c.process, c.seq)
 
-	req := op.request
-	req.correlationID = opID
+	call := op.request
+	call.correlationID = opID
 
 	if op.isWrite() {
-		req.key = cmp.Or(op.reusedKey, opID)
+		call.key = cmp.Or(op.reusedKey, opID)
 		c.lastWrite = ""
 	}
 
@@ -485,13 +485,13 @@ func (c *client) invoke(op operation) (string, request, error) {
 
 	_, err := c.run.config.History.AppendDurable(invoke)
 
-	return opID, req, err
+	return opID, call, err
 }
 
 // execute records the invoke, retries like a polite client and records how
 // the operation ended. It only returns an error when the history itself fails.
 func (c *client) execute(ctx context.Context, op operation) (attemptResult, error) {
-	opID, req, err := c.invoke(op)
+	opID, call, err := c.invoke(op)
 	if err != nil {
 		return attemptResult{}, err
 	}
@@ -503,7 +503,7 @@ func (c *client) execute(ctx context.Context, op operation) (attemptResult, erro
 	defer cancel()
 
 	for attempt := 1; ; attempt++ {
-		result := c.run.targetOf(op).attempt(opCtx, req, policy.attemptTimeout, op.parse)
+		result := c.run.targetOf(op).attempt(opCtx, call, policy.attemptTimeout, op.parse)
 
 		shouldRetry := result.verdict == verdictRetry && attempt <= policy.maxRetries
 		if !shouldRetry {
@@ -531,7 +531,7 @@ const duplicateCopies = 2
 // twice in parallel. One success is a success; two definitive failures are a
 // failure; anything else is info.
 func (c *client) executeTwice(ctx context.Context, op operation) error {
-	opID, req, err := c.invoke(op)
+	opID, call, err := c.invoke(op)
 	if err != nil {
 		return err
 	}
@@ -546,7 +546,7 @@ func (c *client) executeTwice(ctx context.Context, op operation) error {
 
 	for i := range results {
 		wg.Go(func() {
-			results[i] = c.run.targetOf(op).attempt(opCtx, req, c.policy.attemptTimeout, op.parse)
+			results[i] = c.run.targetOf(op).attempt(opCtx, call, c.policy.attemptTimeout, op.parse)
 		})
 	}
 

@@ -94,8 +94,8 @@ func main() {
 	os.Exit(run(os.Args[1:]))
 }
 
-func run(args []string) int {
-	if len(args) == 0 {
+func run(arguments []string) int {
+	if len(arguments) == 0 {
 		fmt.Fprintln(os.Stderr, usage)
 
 		return exitUsage
@@ -104,14 +104,14 @@ func run(args []string) int {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	err := runCommand(ctx, args[0], args[1:])
+	err := runCommand(ctx, arguments[0], arguments[1:])
 	if err == nil {
 		return exitOK
 	}
 
-	fmt.Fprintf(os.Stderr, "lab %s: %v\n", args[0], err)
+	fmt.Fprintf(os.Stderr, "lab %s: %v\n", arguments[0], err)
 
-	return exitCodeOf(args[0], err)
+	return exitCodeOf(arguments[0], err)
 }
 
 func exitCodeOf(command string, err error) int {
@@ -131,16 +131,16 @@ func exitCodeOf(command string, err error) int {
 	}
 }
 
-func runCommand(ctx context.Context, command string, args []string) error {
+func runCommand(ctx context.Context, command string, arguments []string) error {
 	switch command {
 	case commandServe:
 		return serve(ctx)
 	case commandRun:
-		return runRound(ctx, args)
+		return runRound(ctx, arguments)
 	case commandCheck:
-		return runCheck(args)
+		return runCheck(arguments)
 	case commandExportReplay:
-		return exportReplay(args)
+		return exportReplay(arguments)
 	case commandHealthcheck:
 		return probeHealth(ctx)
 	default:
@@ -192,7 +192,7 @@ type runFlags struct {
 	duration time.Duration
 }
 
-func parseRunFlags(args []string) (runFlags, error) {
+func parseRunFlags(arguments []string) (runFlags, error) {
 	var parsed runFlags
 
 	flags := flag.NewFlagSet(commandRun, flag.ContinueOnError)
@@ -201,7 +201,7 @@ func parseRunFlags(args []string) (runFlags, error) {
 	flags.StringVar(&parsed.seed, "seed", "", "round seed; random when empty")
 	flags.DurationVar(&parsed.duration, "duration", 0, "overrides the scenario duration")
 
-	err := flags.Parse(args)
+	err := flags.Parse(arguments)
 	if err != nil {
 		return runFlags{}, fmt.Errorf("%w: %w", errUsage, err)
 	}
@@ -214,8 +214,8 @@ func parseRunFlags(args []string) (runFlags, error) {
 	return parsed, nil
 }
 
-func runRound(ctx context.Context, args []string) error {
-	flags, err := parseRunFlags(args)
+func runRound(ctx context.Context, arguments []string) error {
+	flags, err := parseRunFlags(arguments)
 	if err != nil {
 		return err
 	}
@@ -340,12 +340,12 @@ func checkInSubprocess(ctx context.Context, roundDir string) (checker.Verdict, e
 	}
 }
 
-func runCheck(args []string) error {
+func runCheck(arguments []string) error {
 	flags := flag.NewFlagSet(commandCheck, flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	roundDir := flags.String("round", "", "round directory")
 
-	err := flags.Parse(args)
+	err := flags.Parse(arguments)
 	if err != nil {
 		return errUsage
 	}
@@ -367,13 +367,13 @@ func runCheck(args []string) error {
 
 // exportReplay writes the replay of an archived round, the file the replay page
 // plays.
-func exportReplay(args []string) error {
+func exportReplay(arguments []string) error {
 	flags := flag.NewFlagSet(commandExportReplay, flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	roundDir := flags.String("round", "", "round directory")
 	out := flags.String("out", "", "where to write the replay (default: replay.json in the round)")
 
-	err := flags.Parse(args)
+	err := flags.Parse(arguments)
 	if err != nil {
 		return errUsage
 	}

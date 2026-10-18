@@ -110,59 +110,59 @@ func Take(ctx context.Context, pool *pgxpool.Pool, request Request) (snapshot.Sn
 	// Read-only: rolling back is how the snapshot ends.
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	s := snapshot.Snapshot{Meta: snapshot.Meta{Round: request.Round, TakenAt: time.Now().UTC()}}
+	state := snapshot.Snapshot{Meta: snapshot.Meta{Round: request.Round, TakenAt: time.Now().UTC()}}
 
-	s.Accounts, err = collect(ctx, tx, accountsSQL, scanAccount, request.AccountIDs)
+	state.Accounts, err = collect(ctx, tx, accountsSQL, scanAccount, request.AccountIDs)
 	if err != nil {
 		return snapshot.Snapshot{}, err
 	}
 
-	s.Balances, err = collect(ctx, tx, balancesSQL, scanBalance, request.AccountIDs)
+	state.Balances, err = collect(ctx, tx, balancesSQL, scanBalance, request.AccountIDs)
 	if err != nil {
 		return snapshot.Snapshot{}, err
 	}
 
-	s.Transactions, err = collect(ctx, tx, transactionsSQL, scanTransaction, request.Round, request.AccountIDs)
+	state.Transactions, err = collect(ctx, tx, transactionsSQL, scanTransaction, request.Round, request.AccountIDs)
 	if err != nil {
 		return snapshot.Snapshot{}, err
 	}
 
-	s.Transfers, err = collect(ctx, tx, transfersSQL, scanTransfer, request.Round)
+	state.Transfers, err = collect(ctx, tx, transfersSQL, scanTransfer, request.Round)
 	if err != nil {
 		return snapshot.Snapshot{}, err
 	}
 
-	s.Transitions, err = collect(ctx, tx, transitionsSQL, scanTransition, request.Round)
+	state.Transitions, err = collect(ctx, tx, transitionsSQL, scanTransition, request.Round)
 	if err != nil {
 		return snapshot.Snapshot{}, err
 	}
 
-	s.Incoming, err = collect(ctx, tx, incomingSQL, scanIncoming, request.AccountIDs)
+	state.Incoming, err = collect(ctx, tx, incomingSQL, scanIncoming, request.AccountIDs)
 	if err != nil {
 		return snapshot.Snapshot{}, err
 	}
 
-	s.Entries, err = collect(ctx, tx, entriesSQL, scanEntry, request.AccountIDs, request.Round)
+	state.Entries, err = collect(ctx, tx, entriesSQL, scanEntry, request.AccountIDs, request.Round)
 	if err != nil {
 		return snapshot.Snapshot{}, err
 	}
 
-	s.Bands, err = collect(ctx, tx, bandsSQL, scanBand)
+	state.Bands, err = collect(ctx, tx, bandsSQL, scanBand)
 	if err != nil {
 		return snapshot.Snapshot{}, err
 	}
 
-	err = tx.QueryRow(ctx, firstTransactionSQL).Scan(&s.Meta.FirstTransactionID)
+	err = tx.QueryRow(ctx, firstTransactionSQL).Scan(&state.Meta.FirstTransactionID)
 	if err != nil {
 		return snapshot.Snapshot{}, fmt.Errorf("exporting: %w", err)
 	}
 
-	return s, nil
+	return state, nil
 }
 
 // collect reads every row of one export query.
-func collect[T any](ctx context.Context, tx pgx.Tx, sql string, scan pgx.RowToFunc[T], args ...any) ([]T, error) { //nolint:revive // args mirror pgx.Tx.Query
-	rows, err := tx.Query(ctx, sql, args...)
+func collect[T any](ctx context.Context, tx pgx.Tx, sql string, scan pgx.RowToFunc[T], values ...any) ([]T, error) { //nolint:revive // as in pgx.Tx.Query
+	rows, err := tx.Query(ctx, sql, values...)
 	if err != nil {
 		return nil, fmt.Errorf("exporting: %w", err)
 	}

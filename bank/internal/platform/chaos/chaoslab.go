@@ -207,13 +207,13 @@ func isMainProcess(pid int, binary string) bool {
 		return false
 	}
 
-	args := bytes.Split(bytes.TrimRight(cmdline, "\x00"), []byte{0})
-	isOtherCommand := len(args) < 2 || string(args[0]) != binary
+	fields := bytes.Split(bytes.TrimRight(cmdline, "\x00"), []byte{0})
+	isOtherCommand := len(fields) < 2 || string(fields[0]) != binary
 	if isOtherCommand {
 		return false
 	}
 
-	role := string(args[1])
+	role := string(fields[1])
 
 	return role == "api" || role == "worker" || role == "serve"
 }

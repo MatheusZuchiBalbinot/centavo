@@ -18,8 +18,8 @@ type Process struct {
 }
 
 // Client is the logical client number n.
-func Client(n int) Process {
-	return Process{client: n}
+func Client(number int) Process {
+	return Process{client: number}
 }
 
 // Nemesis is the chaos bot.

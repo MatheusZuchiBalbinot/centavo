@@ -199,7 +199,7 @@ var tables = []table{
 }
 
 // Write stores the snapshot in roundDir/export.
-func Write(roundDir string, s Snapshot) error {
+func Write(roundDir string, state Snapshot) error {
 	dir := filepath.Join(roundDir, Dir)
 
 	err := os.MkdirAll(dir, fsmode.PrivateDir)
@@ -208,13 +208,13 @@ func Write(roundDir string, s Snapshot) error {
 	}
 
 	for _, t := range tables {
-		err := writeTable(filepath.Join(dir, t.file), t.header, t.rows(&s))
+		err := writeTable(filepath.Join(dir, t.file), t.header, t.rows(&state))
 		if err != nil {
 			return err
 		}
 	}
 
-	meta, err := json.MarshalIndent(s.Meta, "", "  ")
+	meta, err := json.MarshalIndent(state.Meta, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encoding export meta: %w", err)
 	}
@@ -302,63 +302,63 @@ func readTable(path string, header []string, load func([]string) error) error {
 	}
 }
 
-func accountRows(s *Snapshot) [][]string {
-	rows := make([][]string, 0, len(s.Accounts))
-	for _, a := range s.Accounts {
+func accountRows(state *Snapshot) [][]string {
+	rows := make([][]string, 0, len(state.Accounts))
+	for _, a := range state.Accounts {
 		rows = append(rows, []string{a.ID, string(a.Kind), a.SystemCode})
 	}
 
 	return rows
 }
 
-func balanceRows(s *Snapshot) [][]string {
-	rows := make([][]string, 0, len(s.Balances))
-	for _, b := range s.Balances {
+func balanceRows(state *Snapshot) [][]string {
+	rows := make([][]string, 0, len(state.Balances))
+	for _, b := range state.Balances {
 		rows = append(rows, []string{b.AccountID, itoa(b.BalanceCents), itoa(b.LastEntrySeq)})
 	}
 
 	return rows
 }
 
-func transactionRows(s *Snapshot) [][]string {
-	rows := make([][]string, 0, len(s.Transactions))
-	for _, t := range s.Transactions {
+func transactionRows(state *Snapshot) [][]string {
+	rows := make([][]string, 0, len(state.Transactions))
+	for _, t := range state.Transactions {
 		rows = append(rows, []string{t.ID, string(t.Kind), t.ClientRef, t.CorrelationID, t.ExternalTransferID, t.IncomingTransferID})
 	}
 
 	return rows
 }
 
-func entryRows(s *Snapshot) [][]string {
-	rows := make([][]string, 0, len(s.Entries))
-	for _, e := range s.Entries {
+func entryRows(state *Snapshot) [][]string {
+	rows := make([][]string, 0, len(state.Entries))
+	for _, e := range state.Entries {
 		rows = append(rows, []string{itoa(e.ID), e.TransactionID, e.AccountID, itoa(e.AmountCents), itoa(e.AccountSeq), itoa(e.BalanceAfterCents)})
 	}
 
 	return rows
 }
 
-func transferRows(s *Snapshot) [][]string {
-	rows := make([][]string, 0, len(s.Transfers))
-	for _, t := range s.Transfers {
+func transferRows(state *Snapshot) [][]string {
+	rows := make([][]string, 0, len(state.Transfers))
+	for _, t := range state.Transfers {
 		rows = append(rows, []string{t.ID, t.EndToEndID, t.ClientRef, t.AccountID, itoa(t.AmountCents), string(t.Status), itoa(t.StatusSeq), t.FailureCode})
 	}
 
 	return rows
 }
 
-func transitionRows(s *Snapshot) [][]string {
-	rows := make([][]string, 0, len(s.Transitions))
-	for _, t := range s.Transitions {
+func transitionRows(state *Snapshot) [][]string {
+	rows := make([][]string, 0, len(state.Transitions))
+	for _, t := range state.Transitions {
 		rows = append(rows, []string{t.TransferID, itoa(t.Seq), string(t.From), string(t.To), t.Cause, t.LedgerTransactionID})
 	}
 
 	return rows
 }
 
-func incomingRows(s *Snapshot) [][]string {
-	rows := make([][]string, 0, len(s.Incoming))
-	for _, i := range s.Incoming {
+func incomingRows(state *Snapshot) [][]string {
+	rows := make([][]string, 0, len(state.Incoming))
+	for _, i := range state.Incoming {
 		rows = append(rows, []string{i.ID, i.EndToEndID, i.AccountID, itoa(i.AmountCents)})
 	}
 
@@ -423,7 +423,7 @@ const (
 	colEntryBalanceAfter
 )
 
-func loadTransfer(s *Snapshot, record []string) error {
+func loadTransfer(state *Snapshot, record []string) error {
 	numbers, err := atois(record[colTransferAmount], record[colTransferStatusSeq])
 	if err != nil {
 		return err
@@ -434,12 +434,12 @@ func loadTransfer(s *Snapshot, record []string) error {
 		AccountID: record[colTransferAccount], AmountCents: numbers[0], Status: TransferStatus(record[colTransferStatus]),
 		StatusSeq: numbers[1], FailureCode: record[colTransferFailure],
 	}
-	s.Transfers = append(s.Transfers, transfer)
+	state.Transfers = append(state.Transfers, transfer)
 
 	return nil
 }
 
-func loadTransition(s *Snapshot, record []string) error {
+func loadTransition(state *Snapshot, record []string) error {
 	numbers, err := atois(record[colTransitionSeq])
 	if err != nil {
 		return err
@@ -450,55 +450,54 @@ func loadTransition(s *Snapshot, record []string) error {
 		To: TransferStatus(record[colTransitionTo]), Cause: record[colTransitionCause], LedgerTransactionID: record[colTransitionLedger],
 	}
 
-	s.Transitions = append(s.Transitions, transition)
+	state.Transitions = append(state.Transitions, transition)
 
 	return nil
 }
 
-func loadIncoming(s *Snapshot, record []string) error {
+func loadIncoming(state *Snapshot, record []string) error {
 	numbers, err := atois(record[colIncomingAmount])
 	if err != nil {
 		return err
 	}
 
 	incoming := Incoming{ID: record[colIncomingID], EndToEndID: record[colIncomingEndToEnd], AccountID: record[colIncomingAccount], AmountCents: numbers[0]}
-	s.Incoming = append(s.Incoming, incoming)
+	state.Incoming = append(state.Incoming, incoming)
 
 	return nil
 }
 
-func loadAccount(s *Snapshot, record []string) error {
+func loadAccount(state *Snapshot, record []string) error {
 	account := Account{ID: record[colAccountID], Kind: AccountKind(record[colAccountKind]), SystemCode: record[colAccountCode]}
-	s.Accounts = append(s.Accounts, account)
+	state.Accounts = append(state.Accounts, account)
 
 	return nil
 }
 
-func loadBalance(s *Snapshot, record []string) error {
+func loadBalance(state *Snapshot, record []string) error {
 	numbers, err := atois(record[colBalanceCents], record[colBalanceLastSeq])
 	if err != nil {
 		return err
 	}
 
 	balance := Balance{AccountID: record[colBalanceAccount], BalanceCents: numbers[0], LastEntrySeq: numbers[1]}
-	s.Balances = append(s.Balances, balance)
+	state.Balances = append(state.Balances, balance)
 
 	return nil
 }
 
-func loadTransaction(s *Snapshot, record []string) error {
+func loadTransaction(state *Snapshot, record []string) error {
 	transaction := Transaction{
 		ID: record[colTransactionID], Kind: TransactionKind(record[colTransactionKind]), ClientRef: record[colTransactionClientRef],
-		CorrelationID: record[colTransactionCorrelation], ExternalTransferID: record[colTransactionExternal],
-		IncomingTransferID: record[colTransactionIncoming],
+		CorrelationID: record[colTransactionCorrelation], ExternalTransferID: record[colTransactionExternal], IncomingTransferID: record[colTransactionIncoming],
 	}
 
-	s.Transactions = append(s.Transactions, transaction)
+	state.Transactions = append(state.Transactions, transaction)
 
 	return nil
 }
 
-func loadEntry(s *Snapshot, record []string) error {
+func loadEntry(state *Snapshot, record []string) error {
 	numbers, err := atois(record[colEntryID], record[colEntryAmount], record[colEntrySeq], record[colEntryBalanceAfter])
 	if err != nil {
 		return err
@@ -511,27 +510,27 @@ func loadEntry(s *Snapshot, record []string) error {
 		ID: numbers[0], TransactionID: unique.Make(record[colEntryTransaction]).Value(), AccountID: unique.Make(record[colEntryAccount]).Value(),
 		AmountCents: numbers[1], AccountSeq: numbers[2], BalanceAfterCents: numbers[3],
 	}
-	s.Entries = append(s.Entries, entry)
+	state.Entries = append(state.Entries, entry)
 
 	return nil
 }
 
-func bandRows(s *Snapshot) [][]string {
-	rows := make([][]string, 0, len(s.Bands))
-	for _, b := range s.Bands {
+func bandRows(state *Snapshot) [][]string {
+	rows := make([][]string, 0, len(state.Bands))
+	for _, b := range state.Bands {
 		rows = append(rows, []string{itoa(b.Band), itoa(b.Count), itoa(b.SumCents), itoa(b.Hash)})
 	}
 
 	return rows
 }
 
-func loadBand(s *Snapshot, record []string) error {
+func loadBand(state *Snapshot, record []string) error {
 	numbers, err := atois(record...)
 	if err != nil {
 		return err
 	}
 
-	s.Bands = append(s.Bands, Band{Band: numbers[0], Count: numbers[1], SumCents: numbers[2], Hash: numbers[3]})
+	state.Bands = append(state.Bands, Band{Band: numbers[0], Count: numbers[1], SumCents: numbers[2], Hash: numbers[3]})
 
 	return nil
 }
@@ -563,8 +562,8 @@ type LedgerState struct {
 }
 
 // StateOf is the state the snapshot leaves behind.
-func StateOf(s Snapshot) LedgerState {
-	return LedgerState{FirstTransactionID: s.Meta.FirstTransactionID, Bands: append([]Band{}, s.Bands...)}
+func StateOf(state Snapshot) LedgerState {
+	return LedgerState{FirstTransactionID: state.Meta.FirstTransactionID, Bands: append([]Band{}, state.Bands...)}
 }
 
 // WriteState stores a ledger state.

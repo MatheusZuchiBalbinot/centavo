@@ -70,8 +70,8 @@ func main() {
 	os.Exit(run(os.Args[1:]))
 }
 
-func run(args []string) int {
-	if len(args) != 1 {
+func run(arguments []string) int {
+	if len(arguments) != 1 {
 		fmt.Fprintln(os.Stderr, "usage: bank api | worker | migrate | healthcheck | chaos-kill")
 
 		return exitUsage
@@ -80,7 +80,7 @@ func run(args []string) int {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	selectedRole := role(args[0])
+	selectedRole := role(arguments[0])
 
 	err := runRole(ctx, selectedRole)
 	if err != nil {
@@ -101,35 +101,38 @@ func runRole(ctx context.Context, selectedRole role) error {
 		return chaos.KillMain(binaryPath)
 	}
 
-	cfg, err := config.Load(os.LookupEnv)
+	configuration, err := config.Load(os.LookupEnv)
 	if err != nil {
 		return err
 	}
 
-	err = config.ValidateBuild(cfg, chaosbuild.IsEnabled())
+	err = config.ValidateBuild(configuration, chaosbuild.IsEnabled())
 	if err != nil {
 		return err
 	}
 
-	logger := newLogger(selectedRole, cfg)
+	logger := newLogger(selectedRole, configuration)
 	announceBuild(ctx, logger)
 
 	// healthcheck and chaos-kill returned above, before any configuration.
 	//exhaustive:ignore
 	switch selectedRole {
 	case roleAPI:
-		return serveAPI(ctx, cfg, logger)
+		return serveAPI(ctx, configuration, logger)
 	case roleWorker:
-		return serveWorker(ctx, cfg, logger)
+		return serveWorker(ctx, configuration, logger)
 	case roleMigrate:
-		return migrate(ctx, cfg, logger)
+		return migrate(ctx, configuration, logger)
 	default:
 		return fmt.Errorf("unknown role %q", selectedRole)
 	}
 }
 
-func serveAPI(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
-	poolConfig := postgres.PoolConfig{DatabaseURL: cfg.DatabaseURL, MaxConnections: apiMaxConnections, IsRelaxed: !cfg.Defenses.IsEnabled(defenses.DurableDB)}
+func serveAPI(ctx context.Context, configuration config.Config, logger *slog.Logger) error {
+	poolConfig := postgres.PoolConfig{
+		DatabaseURL: configuration.DatabaseURL, MaxConnections: apiMaxConnections,
+		IsRelaxed: !configuration.Defenses.IsEnabled(defenses.DurableDB),
+	}
 
 	pool, err := postgres.NewPool(ctx, poolConfig)
 	if err != nil {
@@ -137,19 +140,19 @@ func serveAPI(ctx context.Context, cfg config.Config, logger *slog.Logger) error
 	}
 	defer pool.Close()
 
-	buildInfo := newBuildInfo(roleAPI, cfg)
+	buildInfo := newBuildInfo(roleAPI, configuration)
 	adminHandler := httpapi.NewAdminHandler(buildInfo, pool)
-	err = checkSchema(ctx, pool, cfg, logger)
+	err = checkSchema(ctx, pool, configuration, logger)
 	if err != nil {
 		return err
 	}
 
-	err = cfg.Partner.RequireWebhookSecret()
+	err = configuration.Partner.RequireWebhookSecret()
 	if err != nil {
 		return err
 	}
 
-	useCases, err := newUseCases(pool, cfg)
+	useCases, err := newUseCases(pool, configuration)
 	if err != nil {
 		return err
 	}
@@ -158,7 +161,7 @@ func serveAPI(ctx context.Context, cfg config.Config, logger *slog.Logger) error
 	apiServer := httpserver.New(apiAddr, apiHandler)
 	adminServer := httpserver.New(adminAddr, adminHandler)
 
-	servers, err := withChaos(roleAPI, cfg, apiServer, adminServer)
+	servers, err := withChaos(roleAPI, configuration, apiServer, adminServer)
 	if err != nil {
 		return err
 	}
@@ -168,8 +171,8 @@ func serveAPI(ctx context.Context, cfg config.Config, logger *slog.Logger) error
 	return httpserver.Run(ctx, servers...)
 }
 
-func newUseCases(pool *pgxpool.Pool, cfg config.Config) (httpapi.UseCases, error) {
-	profile := cfg.Defenses
+func newUseCases(pool *pgxpool.Pool, configuration config.Config) (httpapi.UseCases, error) {
+	profile := configuration.Defenses
 	store := postgres.NewLedgerStore(pool)
 
 	moneyDependencies, err := newMoneyDependencies(pool, profile)
@@ -195,7 +198,7 @@ func newUseCases(pool *pgxpool.Pool, cfg config.Config) (httpapi.UseCases, error
 		Pix: httpapi.PixUseCases{
 			Create: application.NewCreatePixOut(moneyDependencies.Locker, publication), Publisher: publication,
 			Get: application.NewGetExternalTransfer(store), Webhook: newWebhook(profile, moneyDependencies.UnitOfWork, newStateMachine(profile)),
-			WebhookSecret: []byte(cfg.Partner.WebhookSecret),
+			WebhookSecret: []byte(configuration.Partner.WebhookSecret),
 		},
 	}
 
@@ -283,8 +286,11 @@ func newMoneyDependencies(pool *pgxpool.Pool, profile defenses.Profile) (applica
 	return deps, nil
 }
 
-func serveWorker(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
-	poolConfig := postgres.PoolConfig{DatabaseURL: cfg.DatabaseURL, MaxConnections: workerMaxConnections, IsRelaxed: !cfg.Defenses.IsEnabled(defenses.DurableDB)}
+func serveWorker(ctx context.Context, configuration config.Config, logger *slog.Logger) error {
+	poolConfig := postgres.PoolConfig{
+		DatabaseURL: configuration.DatabaseURL, MaxConnections: workerMaxConnections,
+		IsRelaxed: !configuration.Defenses.IsEnabled(defenses.DurableDB),
+	}
 
 	pool, err := postgres.NewPool(ctx, poolConfig)
 	if err != nil {
@@ -292,25 +298,25 @@ func serveWorker(ctx context.Context, cfg config.Config, logger *slog.Logger) er
 	}
 	defer pool.Close()
 
-	err = checkSchema(ctx, pool, cfg, logger)
+	err = checkSchema(ctx, pool, configuration, logger)
 	if err != nil {
 		return err
 	}
 
-	buildInfo := newBuildInfo(roleWorker, cfg)
+	buildInfo := newBuildInfo(roleWorker, configuration)
 	adminHandler := httpapi.NewAdminHandler(buildInfo, pool)
 	adminServer := httpserver.New(adminAddr, adminHandler)
 
-	servers, err := withChaos(roleWorker, cfg, adminServer)
+	servers, err := withChaos(roleWorker, configuration, adminServer)
 	if err != nil {
 		return err
 	}
 
-	if cfg.Defenses.IsEnabled(defenses.Idempotency) {
+	if configuration.Defenses.IsEnabled(defenses.Idempotency) {
 		go workers.CleanKeys(ctx, postgres.NewLedgerStore(pool), logger)
 	}
 
-	err = startSaga(ctx, pool, cfg, logger)
+	err = startSaga(ctx, pool, configuration, logger)
 	if err != nil {
 		return err
 	}
@@ -339,39 +345,39 @@ type sagaDependencies struct {
 // startSaga starts the worker's PIX loops, each in the variant the profile
 // picks: the relay (outbox, partner_idempotency, resilient_client), the inbox
 // processor (inbox) and the sweeper (recovery).
-func startSaga(ctx context.Context, pool *pgxpool.Pool, cfg config.Config, logger *slog.Logger) error {
-	err := cfg.Partner.RequireEndpoint()
+func startSaga(ctx context.Context, pool *pgxpool.Pool, configuration config.Config, logger *slog.Logger) error {
+	err := configuration.Partner.RequireEndpoint()
 	if err != nil {
 		return err
 	}
 
-	moneyDependencies, err := newMoneyDependencies(pool, cfg.Defenses)
+	moneyDependencies, err := newMoneyDependencies(pool, configuration.Defenses)
 	if err != nil {
 		return err
 	}
 
 	saga := sagaDependencies{
-		unitOfWork: moneyDependencies.UnitOfWork, machine: newStateMachine(cfg.Defenses), partner: newPartner(cfg),
-		owner: cmp.Or(cfg.Chaos.Instance, instanceName()), logger: logger,
+		unitOfWork: moneyDependencies.UnitOfWork, machine: newStateMachine(configuration.Defenses), partner: newPartner(configuration),
+		owner: cmp.Or(configuration.Chaos.Instance, instanceName()), logger: logger,
 	}
 
-	startRelay(ctx, pool, cfg.Defenses, saga)
+	startRelay(ctx, pool, configuration.Defenses, saga)
 
-	if cfg.Defenses.IsEnabled(defenses.Inbox) {
+	if configuration.Defenses.IsEnabled(defenses.Inbox) {
 		processorConfig := application.InboxProcessorConfig{UnitOfWork: saga.unitOfWork, Machine: saga.machine, Partner: saga.partner, Logger: logger}
 		go application.NewInboxProcessor(processorConfig).Run(ctx)
 	}
 
-	if cfg.Defenses.IsEnabled(defenses.Recovery) {
+	if configuration.Defenses.IsEnabled(defenses.Recovery) {
 		sweeperConfig := application.SweeperConfig{
-			UnitOfWork: saga.unitOfWork, Lease: newLeasePolicy(cfg.Defenses), Machine: saga.machine, Partner: saga.partner, Owner: saga.owner, Logger: logger,
+			UnitOfWork: saga.unitOfWork, Lease: newLeasePolicy(configuration.Defenses), Machine: saga.machine, Partner: saga.partner, Owner: saga.owner, Logger: logger,
 		}
 		go application.NewSweeper(sweeperConfig).Run(ctx)
 	}
 
 	reconcilerConfig := application.ReconcilerConfig{
-		UnitOfWork: saga.unitOfWork, Lease: newLeasePolicy(cfg.Defenses), Machine: saga.machine,
-		Statement: saga.partner, Policy: newBatchPolicy(cfg.Defenses), Owner: saga.owner, Logger: logger,
+		UnitOfWork: saga.unitOfWork, Lease: newLeasePolicy(configuration.Defenses), Machine: saga.machine,
+		Statement: saga.partner, Policy: newBatchPolicy(configuration.Defenses), Owner: saga.owner, Logger: logger,
 	}
 	go application.NewReconciler(reconcilerConfig).Run(ctx, application.ReconcileInterval)
 
@@ -400,10 +406,10 @@ func newBatchPolicy(profile defenses.Profile) application.BatchPolicy {
 
 // newPartner picks resilient_client's circuit breaker around the partner
 // client.
-func newPartner(cfg config.Config) partner {
-	client := partnerclient.New(cfg.Partner.BaseURL, cfg.Partner.ParticipantID)
+func newPartner(configuration config.Config) partner {
+	client := partnerclient.New(configuration.Partner.BaseURL, configuration.Partner.ParticipantID)
 
-	if cfg.Defenses.IsEnabled(defenses.ResilientClient) {
+	if configuration.Defenses.IsEnabled(defenses.ResilientClient) {
 		return partnerclient.NewBreaker(client)
 	}
 
@@ -459,10 +465,10 @@ func relayPendingOnBoot(ctx context.Context, relay application.NaiveRelay, logge
 
 // withChaos arms the chaos controls and adds the chaos port; a production
 // build gets back exactly the servers it passed in.
-func withChaos(selectedRole role, cfg config.Config, servers ...*http.Server) ([]*http.Server, error) {
+func withChaos(selectedRole role, configuration config.Config, servers ...*http.Server) ([]*http.Server, error) {
 	chaosConfig := chaos.Config{
-		Token: cfg.Chaos.Token, FailpointSpec: cfg.Chaos.FailpointSpec, Seed: cfg.Chaos.Seed,
-		Service: "bank-" + string(selectedRole), Instance: cmp.Or(cfg.Chaos.Instance, instanceName()),
+		Token: configuration.Chaos.Token, FailpointSpec: configuration.Chaos.FailpointSpec, Seed: configuration.Chaos.Seed,
+		Service: "bank-" + string(selectedRole), Instance: cmp.Or(configuration.Chaos.Instance, instanceName()),
 	}
 
 	err := chaos.Setup(chaosConfig)
@@ -478,23 +484,23 @@ func withChaos(selectedRole role, cfg config.Config, servers ...*http.Server) ([
 	return append(servers, chaosServer), nil
 }
 
-func migrate(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
+func migrate(ctx context.Context, configuration config.Config, logger *slog.Logger) error {
 	baseMigrations, err := migrations.Base()
 	if err != nil {
 		return fmt.Errorf("loading base migrations: %w", err)
 	}
 
-	err = postgres.MigrateBase(ctx, cfg.DatabaseURL, baseMigrations, logger)
+	err = postgres.MigrateBase(ctx, configuration.DatabaseURL, baseMigrations, logger)
 	if err != nil {
 		return err
 	}
 
-	defenseMigrations, err := defenseMigrationsOf(cfg.Defenses)
+	defenseMigrations, err := defenseMigrationsOf(configuration.Defenses)
 	if err != nil {
 		return err
 	}
 
-	return postgres.MigrateDefenses(ctx, cfg.DatabaseURL, defenseMigrations, logger)
+	return postgres.MigrateDefenses(ctx, configuration.DatabaseURL, defenseMigrations, logger)
 }
 
 // defenseMigrationsOf lists the defenses that have constraints of their own.
@@ -518,20 +524,20 @@ func defenseMigrationsOf(profile defenses.Profile) ([]postgres.DefenseMigrations
 // checkSchema is the startup validation. A mismatch refuses to start; an
 // unreachable database does not, because under chaos it comes back, and bank
 // migrate already ran before.
-func checkSchema(ctx context.Context, pool *pgxpool.Pool, cfg config.Config, logger *slog.Logger) error {
-	err := checkDurability(ctx, pool, cfg, logger)
+func checkSchema(ctx context.Context, pool *pgxpool.Pool, configuration config.Config, logger *slog.Logger) error {
+	err := checkDurability(ctx, pool, configuration, logger)
 	if err != nil {
 		return err
 	}
 
-	return checkDefenseSchema(ctx, pool, cfg, logger)
+	return checkDefenseSchema(ctx, pool, configuration, logger)
 }
 
 // checkDurability is durable_db's startup check: a robust bank refuses to run
 // on connections that acknowledge commits before they are durable. As with the
 // schema, an unreachable database is only a warning.
-func checkDurability(ctx context.Context, pool *pgxpool.Pool, cfg config.Config, logger *slog.Logger) error {
-	if !cfg.Defenses.IsEnabled(defenses.DurableDB) {
+func checkDurability(ctx context.Context, pool *pgxpool.Pool, configuration config.Config, logger *slog.Logger) error {
+	if !configuration.Defenses.IsEnabled(defenses.DurableDB) {
 		return nil
 	}
 
@@ -547,8 +553,8 @@ func checkDurability(ctx context.Context, pool *pgxpool.Pool, cfg config.Config,
 	return nil
 }
 
-func checkDefenseSchema(ctx context.Context, pool *pgxpool.Pool, cfg config.Config, logger *slog.Logger) error {
-	defenseMigrations, err := defenseMigrationsOf(cfg.Defenses)
+func checkDefenseSchema(ctx context.Context, pool *pgxpool.Pool, configuration config.Config, logger *slog.Logger) error {
+	defenseMigrations, err := defenseMigrationsOf(configuration.Defenses)
 	if err != nil {
 		return err
 	}
@@ -587,19 +593,19 @@ func probeHealth(ctx context.Context) error {
 	return nil
 }
 
-func newBuildInfo(selectedRole role, cfg config.Config) httpapi.BuildInfo {
+func newBuildInfo(selectedRole role, configuration config.Config) httpapi.BuildInfo {
 	return httpapi.BuildInfo{
 		Service: "bank-" + string(selectedRole), Version: buildinfo.Version(), IsChaosBuild: chaosbuild.IsEnabled(),
-		Env: string(cfg.Env), Defenses: cfg.Defenses.String(),
+		Env: string(configuration.Env), Defenses: configuration.Defenses.String(),
 		// Notes explain combinations that weaken another defense.
-		DefenseNotes: cfg.Defenses.Notes(),
+		DefenseNotes: configuration.Defenses.Notes(),
 	}
 }
 
-func newLogger(selectedRole role, cfg config.Config) *slog.Logger {
+func newLogger(selectedRole role, configuration config.Config) *slog.Logger {
 	handler := slog.NewJSONHandler(os.Stdout, nil)
 
-	return slog.New(handler).With("service", "bank-"+string(selectedRole), "instance", instanceName(), "defenses", cfg.Defenses.String())
+	return slog.New(handler).With("service", "bank-"+string(selectedRole), "instance", instanceName(), "defenses", configuration.Defenses.String())
 }
 
 // instanceName is the container hostname, which tells instances apart in the logs.
