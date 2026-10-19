@@ -1,40 +1,84 @@
 .labNow {
-  display: grid;
-  gap: var(--space-3);
-  align-content: start;
-  padding: 1.25rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 18px;
+  border: 1px solid color-mix(in oklch, var(--primary) 24%, var(--border));
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in oklch, var(--primary) 16%, transparent), transparent 42%),
+    var(--surface);
+  box-shadow: var(--inset-highlight);
 }
 
-.title {
-  font-size: var(--step-1);
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.eyebrow {
+  color: var(--primary);
+  font-size: var(--text-2xs);
   font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-lg);
+  background: color-mix(in oklch, var(--primary) 14%, transparent);
+  color: var(--primary);
+}
+
+.figure {
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.figureLabel {
+  color: var(--muted);
+  font-size: var(--text-sm);
 }
 
 .figures {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0.35rem var(--space-4);
-  font-size: 0.9rem;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
 }
 
 .figures dt {
-  color: var(--steel);
+  color: var(--faint);
+  font-size: var(--text-xs);
 }
 
 .figures dd {
-  font-weight: 650;
-  text-align: right;
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  font-weight: 600;
 }
 
 .figures dd[data-tone='ok'] {
-  color: var(--money);
+  color: var(--success);
 }
 
 .figures dd[data-tone='broken'] {
-  color: var(--broken);
+  color: var(--danger);
 }
 
 .note {
-  color: var(--steel);
-  font-size: var(--step--1);
+  margin-top: auto;
+  padding-top: 10px;
+  color: var(--faint);
+  font-size: var(--text-xs);
 }

@@ -10,7 +10,7 @@ export default function NotFoundPage(): React.JSX.Element {
 
   return (
     <>
-      <h1 id={PAGE_HEADING_ID} tabIndex={-1}>
+      <h1 id={PAGE_HEADING_ID} className="page-title" tabIndex={-1}>
         {messages.notFound.headline}
       </h1>
       <p>

@@ -1,11 +1,8 @@
-import { formatDuration } from '../../../domain/duration';
+import { formatClock } from '../../../domain/duration';
 import { PHASES } from '../../../domain/phase';
 import type { Phase } from '../../../domain/phase';
-import { format } from '../../../i18n/format';
 import { messages } from '../../../i18n/pt-BR';
 import styles from './RoundPage.module.css';
-
-const FULL = 1;
 
 type PhaseStepperProps = {
   readonly phase: Phase;
@@ -13,7 +10,10 @@ type PhaseStepperProps = {
   readonly durationSeconds: number;
 };
 
-// PhaseStepper is the round's four steps; the attack's bar fills with time.
+type StepState = 'done' | 'current' | 'upcoming';
+
+// PhaseStepper is the round's four steps as segments, the way the pyle shows
+// an instance group: done ones filled, the current one moving.
 export default function PhaseStepper({ phase, elapsedSeconds, durationSeconds }: PhaseStepperProps): React.JSX.Element {
   const current = PHASES.indexOf(phase);
 
@@ -24,33 +24,32 @@ export default function PhaseStepper({ phase, elapsedSeconds, durationSeconds }:
           key={step}
           phase={step}
           state={stateOf(index, current, phase)}
-          progress={progressOf(step, phase, elapsedSeconds, durationSeconds)}
-          when={whenOf(step, elapsedSeconds, durationSeconds)}
+          elapsedSeconds={elapsedSeconds}
+          durationSeconds={durationSeconds}
         />
       ))}
     </ol>
   );
 }
 
-type StepState = 'done' | 'current' | 'upcoming';
-
 type PhaseStepProps = {
   readonly phase: Phase;
   readonly state: StepState;
-  readonly progress: number;
-  readonly when: string;
+  readonly elapsedSeconds: number;
+  readonly durationSeconds: number;
 };
 
-function PhaseStep({ phase, state, progress, when }: PhaseStepProps): React.JSX.Element {
-  const copy = messages.round.phases[phase];
+function PhaseStep({ phase, state, elapsedSeconds, durationSeconds }: PhaseStepProps): React.JSX.Element {
+  const isAttackNow = phase === 'attack' && state === 'current';
+  const fill = isAttackNow ? percentOf(elapsedSeconds, durationSeconds) : null;
 
   return (
     <li className={styles.step} data-state={state} aria-current={state === 'current' ? 'step' : undefined}>
-      <span className={styles.stepTrack}>
-        <span className={styles.stepFill} style={{ width: `${Math.round(progress * 100)}%` }} />
+      <span className={styles.stepBar}>
+        {fill === null ? null : <span className={styles.stepFill} style={{ width: `${fill}%` }} />}
       </span>
-      <span className={styles.stepName}>{copy.name}</span>
-      <span className={styles.stepWhen}>{stepLabel(state, when)}</span>
+      <span className={styles.stepName}>{messages.round.phases[phase].name}</span>
+      <span className={styles.stepWhen}>{whenOf(phase, state, elapsedSeconds, durationSeconds)}</span>
     </li>
   );
 }
@@ -66,44 +65,26 @@ function stateOf(index: number, current: number, phase: Phase): StepState {
   return index === current ? 'current' : 'upcoming';
 }
 
-function progressOf(step: Phase, phase: Phase, elapsedSeconds: number, durationSeconds: number): number {
-  const stepIndex = PHASES.indexOf(step);
-  const currentIndex = PHASES.indexOf(phase);
-
-  const isPast = stepIndex < currentIndex || phase === 'verdict';
-
-  if (isPast) {
-    return FULL;
+function percentOf(elapsedSeconds: number, durationSeconds: number): number {
+  if (durationSeconds <= 0) {
+    return 100;
   }
 
-  if (stepIndex > currentIndex) {
-    return 0;
-  }
-
-  const isUntimed = step !== 'attack' || durationSeconds <= 0;
-
-  if (isUntimed) {
-    return FULL;
-  }
-
-  return Math.min(FULL, elapsedSeconds / durationSeconds);
+  return Math.min(100, Math.round((elapsedSeconds / durationSeconds) * 100));
 }
 
-function whenOf(step: Phase, elapsedSeconds: number, durationSeconds: number): string {
-  if (step !== 'attack') {
-    return messages.round.phases[step].when;
-  }
-
-  return format(messages.round.phases.attack.when, {
-    elapsed: formatDuration(Math.min(elapsedSeconds, durationSeconds)),
-    total: formatDuration(durationSeconds),
-  });
-}
-
-function stepLabel(state: StepState, when: string): string {
+function whenOf(step: Phase, state: StepState, elapsedSeconds: number, durationSeconds: number): string {
   if (state === 'done') {
     return messages.round.phaseDone;
   }
 
-  return state === 'current' ? `${messages.round.phaseNow} · ${when}` : when;
+  if (state === 'upcoming') {
+    return messages.round.phaseNext;
+  }
+
+  if (step === 'attack') {
+    return `${formatClock(Math.min(elapsedSeconds, durationSeconds))} / ${formatClock(durationSeconds)}`;
+  }
+
+  return messages.round.phaseNow;
 }

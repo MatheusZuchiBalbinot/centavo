@@ -21,11 +21,11 @@ export default function LivePage(): React.JSX.Element {
 
   return (
     <>
-      <h1 id={PAGE_HEADING_ID} tabIndex={-1}>
+      <h1 id={PAGE_HEADING_ID} className="page-title" tabIndex={-1}>
         {isPreparing ? messages.live.preparing : messages.live.headline}
       </h1>
       {isPreparing ? null : (
-        <p>
+        <p className="page-desc">
           {messages.live.detail} <Link to={ROUTES.home}>{messages.live.back}</Link>
         </p>
       )}

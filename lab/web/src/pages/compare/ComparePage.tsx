@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router';
 import { isRoundId } from '../../api/ids';
 import type { RoundId } from '../../api/ids';
 import type { Replay } from '../../api/replay';
-import { Tag } from '../../components/ui/Tag';
+import VerdictBadge from '../../components/VerdictBadge';
 import { expectationOf, headlineOf } from '../../domain/headline';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { PAGE_HEADING_ID } from '../../hooks/useRouteFocus';
@@ -12,14 +12,11 @@ import { messages } from '../../i18n/pt-BR';
 import { roundPath } from '../../routes';
 import NotFoundPage from '../not-found/NotFoundPage';
 import Guarantees from '../round/components/Guarantees';
-import MoneyBoard from '../round/components/MoneyBoard';
-import Timeline from '../round/components/Timeline';
+import RoundChart from '../round/components/RoundChart';
+import RoundTiles from '../round/components/RoundTiles';
 import styles from './ComparePage.module.css';
 import { useTwoReplays } from './useTwoReplays';
-
-// Half a page wide, the chart draws on a narrower canvas so its text stays
-// the same size.
-const HALF_TIMELINE_WIDTH = 560;
+import type { TwoReplays } from './useTwoReplays';
 
 export default function ComparePage(): React.JSX.Element {
   const { left, right } = useParams();
@@ -39,25 +36,32 @@ function Comparison({ left, right }: { left: RoundId; right: RoundId }): React.J
   useDocumentTitle(format(messages.compare.title, { left, right }));
 
   return (
-    <div className={styles.page}>
-      <h1 id={PAGE_HEADING_ID} className={styles.headline} tabIndex={-1}>
-        {messages.compare.headline}
-      </h1>
+    <>
+      <header className="page-header">
+        <div>
+          <h1 id={PAGE_HEADING_ID} className="page-title" tabIndex={-1}>
+            {messages.compare.headline}
+          </h1>
+          <p className="page-desc">{messages.compare.lead}</p>
+        </div>
+      </header>
       <ComparisonBody replays={replays} left={left} right={right} />
-    </div>
+    </>
   );
 }
 
-type ComparisonBodyProps = {
-  readonly replays: ReturnType<typeof useTwoReplays>;
-  readonly left: RoundId;
-  readonly right: RoundId;
-};
-
-function ComparisonBody({ replays, left, right }: ComparisonBodyProps): React.JSX.Element {
+function ComparisonBody({
+  replays,
+  left,
+  right,
+}: {
+  replays: TwoReplays;
+  left: RoundId;
+  right: RoundId;
+}): React.JSX.Element {
   switch (replays.kind) {
     case 'loading':
-      return <p className={styles.note}>{messages.compare.loading}</p>;
+      return <p className="muted">{messages.compare.loading}</p>;
     case 'failed':
       return <p role="alert">{format(messages.compare.failed, { left, right })}</p>;
     case 'ready':
@@ -72,31 +76,32 @@ function ComparisonBody({ replays, left, right }: ComparisonBodyProps): React.JS
 
 function RoundColumn({ replay }: { replay: Replay }): React.JSX.Element {
   const headline = headlineOf({ replay, phase: 'verdict', elapsedSeconds: 0, reading: null });
+  const titleId = `${replay.round}-title`;
 
   return (
-    <article
-      className={styles.column}
-      data-verdict={replay.verdict ?? 'none'}
-      aria-labelledby={`${replay.round}-title`}
-    >
-      <header className={styles.columnHead}>
-        <p className={styles.columnName}>
-          <Link to={roundPath(replay.round)}>{format(messages.compare.open, { round: replay.round })}</Link> ·{' '}
-          {replay.scenario}
-        </p>
-        <h2 id={`${replay.round}-title`} className={styles.columnHeadline}>
+    <article className={styles.column} aria-labelledby={titleId}>
+      <header className={styles.columnHead} data-verdict={replay.verdict ?? 'none'}>
+        <div className={styles.columnTop}>
+          <Link to={roundPath(replay.round)} className="mono">
+            {replay.round}
+          </Link>
+          <span className="faint mono">{replay.scenario}</span>
+          <VerdictBadge verdict={replay.verdict} />
+        </div>
+        <h2 id={titleId} className={styles.columnHeadline}>
           {headline}
         </h2>
-        <p className={styles.note}>{expectationOf(replay.defenses)}</p>
-        <Tag tone={replay.verdict === 'pass' ? 'ok' : 'broken'}>
-          {replay.verdict === null ? messages.verdict.none : messages.verdict[replay.verdict]}
-        </Tag>
+        <p className="muted">{expectationOf(replay.defenses)}</p>
       </header>
-      <MoneyBoard replay={replay} reading={null} isFinished />
-      <section className={styles.chartSheet} aria-label={messages.round.chartTitle}>
-        <Timeline replay={replay} nowSeconds={null} width={HALF_TIMELINE_WIDTH} />
-      </section>
-      <Guarantees checks={replay.checks} reading={null} isFinished={false} />
+      <RoundTiles replay={replay} reading={null} isFinished />
+      <RoundChart
+        replay={replay}
+        isLive={false}
+        nowSeconds={null}
+        ageSeconds={null}
+        titleId={`${replay.round}-chart`}
+      />
+      <Guarantees checks={replay.checks} reading={null} isFinished={false} titleId={`${replay.round}-guarantees`} />
     </article>
   );
 }

@@ -150,14 +150,20 @@ describe('the home page', () => {
     expect(within(alert).getByText(/Muitas rodadas começaram na última hora/)).toBeInTheDocument();
   });
 
-  it('tells each recent round in one sentence and passes axe', async () => {
+  it('lists the recent rounds with their verdicts and passes axe', async () => {
     answerFetch(homeAnswers({ status: 'idle' }));
 
     const { container } = renderHome();
 
-    expect(await screen.findByText('Passou: 9 ataques, nenhuma garantia quebrada.')).toBeInTheDocument();
-    expect(screen.getByText('Quebrou depois de 13 ataques.')).toBeInTheDocument();
-    expect(screen.getByText('Passou sem ataques: tudo conferido.')).toBeInTheDocument();
+    const table = await screen.findByRole('table', { name: 'Rodadas terminadas, da mais nova para a mais antiga' });
+    const rows = within(table).getAllByRole('row');
+
+    expect(rows).toHaveLength(4);
+    expect(within(rows[1] as HTMLElement).getByRole('link', { name: 'r0003' })).toHaveAttribute(
+      'href',
+      '/rounds/r0003',
+    );
+    expect(within(rows[2] as HTMLElement).getByText('Quebrou')).toBeInTheDocument();
     expect(screen.getByText('18.583')).toBeInTheDocument();
     await expectNoAxeViolations(container);
   });

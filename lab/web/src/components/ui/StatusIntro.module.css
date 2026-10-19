@@ -1,0 +1,118 @@
+.intro {
+  --intro-color: var(--primary);
+
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 20px 22px;
+  border: 1px solid color-mix(in oklch, var(--intro-color) 26%, var(--border));
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(circle at 0% 50%, color-mix(in oklch, var(--intro-color) 15%, transparent), transparent 34%),
+    var(--surface);
+  box-shadow: var(--inset-highlight);
+}
+
+.intro[data-tone='healthy'] {
+  --intro-color: var(--success);
+}
+
+.intro[data-tone='warning'] {
+  --intro-color: var(--warning);
+}
+
+.intro[data-tone='danger'] {
+  --intro-color: var(--danger);
+}
+
+.signal {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: color-mix(in oklch, var(--intro-color) 12%, transparent);
+  color: var(--intro-color);
+}
+
+.ring {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--intro-color);
+  border-radius: 50%;
+}
+
+.ring span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--intro-color);
+  box-shadow: 0 0 0 5px color-mix(in oklch, var(--intro-color) 15%, transparent);
+}
+
+/* Live: the ring sends out a wave every two seconds. */
+.intro[data-live='true'] .ring {
+  animation: ring-wave 2s ease-out infinite;
+}
+
+@keyframes ring-wave {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--intro-color) 50%, transparent);
+  }
+
+  80% {
+    box-shadow: 0 0 0 14px transparent;
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+.body {
+  min-width: 0;
+}
+
+.eyebrow {
+  margin-bottom: 4px;
+  color: var(--intro-color);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.title {
+  margin-bottom: 4px;
+  font-size: var(--text-display);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  text-wrap: balance;
+}
+
+.description {
+  max-width: 78ch;
+  color: var(--muted);
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid color-mix(in oklch, var(--intro-color) 18%, var(--border));
+}
+
+@media (max-width: 760px) {
+  .intro {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    padding: 16px;
+  }
+}

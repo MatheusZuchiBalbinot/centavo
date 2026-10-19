@@ -1,20 +1,18 @@
+import { GitCompare } from 'lucide-react';
 import { useState } from 'react';
-import { Link } from 'react-router';
 
 import type { RoundId } from '../../api/ids';
-import type { RoundSummary } from '../../api/rounds';
+import RoundsTable from '../../components/RoundsTable';
+import type { RoundPicking } from '../../components/RoundsTable';
 import { Button, LinkButton } from '../../components/ui/Button';
-import { Tag } from '../../components/ui/Tag';
-import type { TagTone } from '../../components/ui/Tag';
-import { totalAttacks } from '../../domain/attacks';
-import { formatDuration } from '../../domain/duration';
+import { Card } from '../../components/ui/Card';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { PAGE_HEADING_ID } from '../../hooks/useRouteFocus';
 import { format } from '../../i18n/format';
 import { messages } from '../../i18n/pt-BR';
-import { comparePath, roundPath } from '../../routes';
-import styles from './RoundsPage.module.css';
+import { comparePath } from '../../routes';
 import { useRoundPages } from './useRoundPages';
+import type { RoundPages } from './useRoundPages';
 
 // Comparing takes exactly two rounds.
 const ROUNDS_COMPARED = 2;
@@ -29,132 +27,80 @@ export default function RoundsPage(): React.JSX.Element {
     setPicked((current) => togglePick(current, round));
   }
 
+  const picking: RoundPicking = { picked, limit: ROUNDS_COMPARED, onToggle: handleToggle };
+
   return (
-    <div className={styles.page}>
-      <h1 id={PAGE_HEADING_ID} className={styles.headline} tabIndex={-1}>
-        {messages.rounds.headline}
-      </h1>
-      <p className={styles.lead}>{messages.rounds.lead}</p>
-      <CompareBar picked={picked} />
-      <RoundsBody pages={pages} picked={picked} onToggle={handleToggle} />
-    </div>
+    <>
+      <header className="page-header">
+        <div>
+          <h1 id={PAGE_HEADING_ID} className="page-title" tabIndex={-1}>
+            {messages.rounds.headline}
+          </h1>
+          <p className="page-desc">{messages.rounds.lead}</p>
+        </div>
+        <div className="page-actions">
+          <CompareButton picked={picked} />
+        </div>
+      </header>
+      <Card
+        title={messages.rounds.listTitle}
+        titleId="rounds-title"
+        bodyClassName=""
+        aside={<span className="card-note">{format(messages.rounds.pickedNote, { count: picked.length })}</span>}
+      >
+        <RoundsBody pages={pages} picking={picking} />
+      </Card>
+    </>
   );
 }
 
-function CompareBar({ picked }: { picked: readonly RoundId[] }): React.JSX.Element {
+function CompareButton({ picked }: { picked: readonly RoundId[] }): React.JSX.Element {
   const [left, right] = picked;
+  const icon = <GitCompare size={16} aria-hidden="true" />;
 
   if (left === undefined || right === undefined) {
-    return <p className={styles.hint}>{messages.rounds.compareHint}</p>;
+    return (
+      <Button variant="primary" disabled>
+        {icon}
+        {messages.rounds.compare}
+      </Button>
+    );
   }
 
   return (
-    <LinkButton to={comparePath(left, right)} variant="primary" className={styles.compare}>
+    <LinkButton to={comparePath(left, right)} variant="primary">
+      {icon}
       {messages.rounds.compare}
     </LinkButton>
   );
 }
 
-type RoundsBodyProps = {
-  readonly pages: ReturnType<typeof useRoundPages>;
-  readonly picked: readonly RoundId[];
-  readonly onToggle: (round: RoundId) => void;
-};
-
-function RoundsBody({ pages, picked, onToggle }: RoundsBodyProps): React.JSX.Element {
+function RoundsBody({ pages, picking }: { pages: RoundPages; picking: RoundPicking }): React.JSX.Element {
   switch (pages.kind) {
     case 'loading':
-      return <p className={styles.hint}>{messages.rounds.loading}</p>;
+      return <p className="card-body muted">{messages.rounds.loading}</p>;
     case 'failed':
-      return <p role="alert">{messages.rounds.failed}</p>;
+      return (
+        <p className="card-body" role="alert">
+          {messages.rounds.failed}
+        </p>
+      );
     case 'ready':
-      return <RoundsTable pages={pages} picked={picked} onToggle={onToggle} />;
+      return pages.rounds.length === 0 ? (
+        <p className="card-body muted">{messages.rounds.empty}</p>
+      ) : (
+        <>
+          <RoundsTable rounds={pages.rounds} picking={picking} />
+          {pages.hasMore ? (
+            <div className="card-body">
+              <Button onClick={pages.loadMore} disabled={pages.isLoadingMore}>
+                {messages.rounds.more}
+              </Button>
+            </div>
+          ) : null}
+        </>
+      );
   }
-}
-
-type RoundsTableProps = {
-  readonly pages: Extract<ReturnType<typeof useRoundPages>, { kind: 'ready' }>;
-  readonly picked: readonly RoundId[];
-  readonly onToggle: (round: RoundId) => void;
-};
-
-function RoundsTable({ pages, picked, onToggle }: RoundsTableProps): React.JSX.Element {
-  if (pages.rounds.length === 0) {
-    return <p className={styles.hint}>{messages.rounds.empty}</p>;
-  }
-
-  return (
-    <>
-      <div className={styles.tableWrap}>
-        <table className={styles.table}>
-          <caption className="visually-hidden">{messages.rounds.caption}</caption>
-          <thead>
-            <tr>
-              <th scope="col">{messages.rounds.pick}</th>
-              <th scope="col">{messages.rounds.round}</th>
-              <th scope="col">{messages.rounds.scenario}</th>
-              <th scope="col">{messages.rounds.duration}</th>
-              <th scope="col" className={styles.number}>
-                {messages.rounds.operations}
-              </th>
-              <th scope="col" className={styles.number}>
-                {messages.rounds.attacks}
-              </th>
-              <th scope="col">{messages.rounds.verdict}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pages.rounds.map((round) => (
-              <RoundRow key={round.round} round={round} picked={picked} onToggle={onToggle} />
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {pages.hasMore ? (
-        <Button onClick={pages.loadMore} disabled={pages.isLoadingMore} className={styles.more}>
-          {messages.rounds.more}
-        </Button>
-      ) : null}
-    </>
-  );
-}
-
-type RoundRowProps = {
-  readonly round: RoundSummary;
-  readonly picked: readonly RoundId[];
-  readonly onToggle: (round: RoundId) => void;
-};
-
-function RoundRow({ round, picked, onToggle }: RoundRowProps): React.JSX.Element {
-  const isPicked = picked.includes(round.round);
-  const isFull = picked.length >= ROUNDS_COMPARED && !isPicked;
-
-  return (
-    <tr data-picked={isPicked}>
-      <td>
-        <input
-          type="checkbox"
-          className={styles.checkbox}
-          checked={isPicked}
-          disabled={isFull}
-          aria-label={format(messages.rounds.pickLabel, { round: round.round })}
-          onChange={() => onToggle(round.round)}
-        />
-      </td>
-      <th scope="row">
-        <Link to={roundPath(round.round)}>{round.round}</Link>
-      </th>
-      <td>{round.scenario}</td>
-      <td>{formatDuration(round.seconds)}</td>
-      <td className={styles.number}>{round.operations.toLocaleString('pt-BR')}</td>
-      <td className={styles.number}>{totalAttacks(round.counters).toLocaleString('pt-BR')}</td>
-      <td>
-        <Tag tone={toneOf(round)}>
-          {round.verdict === null ? messages.verdict.none : messages.verdict[round.verdict]}
-        </Tag>
-      </td>
-    </tr>
-  );
 }
 
 function togglePick(current: readonly RoundId[], round: RoundId): readonly RoundId[] {
@@ -163,17 +109,4 @@ function togglePick(current: readonly RoundId[], round: RoundId): readonly Round
   }
 
   return [...current, round].slice(-ROUNDS_COMPARED);
-}
-
-function toneOf(round: RoundSummary): TagTone {
-  switch (round.verdict) {
-    case 'pass':
-      return 'ok';
-    case 'fail':
-      return 'broken';
-    case 'inconclusive':
-      return 'running';
-    case null:
-      return 'neutral';
-  }
 }

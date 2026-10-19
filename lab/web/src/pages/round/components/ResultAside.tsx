@@ -1,8 +1,8 @@
 import type { Replay } from '../../../api/replay';
 import { reportPath } from '../../../api/routes';
+import { Badge } from '../../../components/ui/Badge';
 import { LinkButton } from '../../../components/ui/Button';
-import { Sheet } from '../../../components/ui/Sheet';
-import { Tag } from '../../../components/ui/Tag';
+import { Card } from '../../../components/ui/Card';
 import { brokenCount } from '../../../domain/guarantees';
 import { disabledDefenses } from '../../../domain/headline';
 import { format } from '../../../i18n/format';
@@ -25,10 +25,7 @@ export default function ResultAside({ replay }: ResultAsideProps): React.JSX.Ele
 
   return (
     <div className={styles.side}>
-      <Sheet as="section" className={styles.sideCard} aria-labelledby="expected-title">
-        <h2 id="expected-title" className={styles.sectionTitle}>
-          {messages.round.expectedTitle}
-        </h2>
+      <Card title={messages.round.expectedTitle} titleId="expected-title">
         <dl className={styles.expectedList}>
           <div>
             <dt>{messages.round.expectedLabel}</dt>
@@ -36,8 +33,8 @@ export default function ResultAside({ replay }: ResultAsideProps): React.JSX.Ele
           </div>
           <div>
             <dt>{messages.round.actualLabel}</dt>
-            <dd>
-              <Tag tone={replay.verdict === 'pass' ? 'ok' : 'broken'}>{verdictLabel(replay)}</Tag>{' '}
+            <dd className={styles.actual}>
+              <Badge tone={replay.verdict === 'pass' ? 'success' : 'danger'}>{verdictLabel(replay)}</Badge>
               {format(messages.round.brokenCount, { count: broken })}
             </dd>
           </div>
@@ -45,20 +42,17 @@ export default function ResultAside({ replay }: ResultAsideProps): React.JSX.Ele
         <p className={styles.match} data-match={isMatch}>
           {matchText(isMatch, isControl)}
         </p>
-      </Sheet>
-      <Sheet as="section" className={styles.sideCard} aria-labelledby="next-title">
-        <h2 id="next-title" className={styles.sectionTitle}>
-          {messages.round.nextTitle}
-        </h2>
+      </Card>
+      <Card title={messages.round.nextTitle} titleId="next-title">
         <div className={styles.actions}>
           <LinkButton to={ROUTES.home} variant="primary">
             {messages.round.again}
           </LinkButton>
-          <a className={styles.reportLink} href={reportPath(replay.round)}>
+          <a className="btn" href={reportPath(replay.round)}>
             {messages.round.report}
           </a>
         </div>
-      </Sheet>
+      </Card>
     </div>
   );
 }

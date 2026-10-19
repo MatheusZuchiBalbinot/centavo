@@ -14,6 +14,9 @@ export type FeedItem = {
   readonly number: number | null;
   readonly what: string;
   readonly expected: string;
+  // code is the fault's technical name (a failpoint, a toxic), shown apart
+  // so the sentence stays readable.
+  readonly code: string;
 };
 
 // feedOf tells every event of the round, newest first, numbering the attacks
@@ -51,7 +54,27 @@ export function describeEvent(event: RoundEvent): { what: string; expected: stri
 function itemOf(event: RoundEvent, index: number, number: number | null): FeedItem {
   const { what, expected } = describeEvent(event);
 
-  return { key: `${event.tMs}-${index}`, tMs: event.tMs, tone: toneOf(event), number, what, expected };
+  return {
+    key: `${event.tMs}-${index}`,
+    tMs: event.tMs,
+    tone: toneOf(event),
+    number,
+    what,
+    expected,
+    code: codeOf(event),
+  };
+}
+
+// The kinds whose detail is a code name rather than words.
+const CODE_KINDS: ReadonlySet<RoundEvent['kind']> = new Set([
+  'failpoint_fired',
+  'network',
+  'arm_partner_modes',
+  'database',
+]);
+
+function codeOf(event: RoundEvent): string {
+  return CODE_KINDS.has(event.kind) ? event.detail : '';
 }
 
 function toneOf(event: RoundEvent): FeedTone {

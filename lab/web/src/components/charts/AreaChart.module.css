@@ -1,0 +1,136 @@
+.frame {
+  position: relative;
+}
+
+.svg {
+  display: block;
+  overflow: visible;
+}
+
+.grid {
+  stroke: var(--border);
+  stroke-dasharray: 2 4;
+}
+
+.tick {
+  fill: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.areaTop {
+  stop-color: var(--series-blue);
+  stop-opacity: 0.3;
+}
+
+.areaBottom {
+  stop-color: var(--series-blue);
+  stop-opacity: 0;
+}
+
+.line {
+  fill: none;
+  stroke: var(--series-blue);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.band rect {
+  fill: color-mix(in oklch, var(--success) 9%, transparent);
+  stroke: color-mix(in oklch, var(--success) 30%, transparent);
+  stroke-dasharray: 3 3;
+}
+
+.band text {
+  fill: var(--success);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+}
+
+.marker line {
+  stroke: color-mix(in oklch, var(--warning) 55%, transparent);
+  stroke-dasharray: 3 4;
+}
+
+.marker rect {
+  fill: var(--warning-soft);
+  stroke: color-mix(in oklch, var(--warning) 60%, transparent);
+}
+
+.marker text {
+  fill: var(--warning);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+}
+
+.ring {
+  fill: var(--surface);
+}
+
+.dot {
+  fill: var(--series-blue);
+}
+
+.endLabel {
+  fill: var(--fg);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+}
+
+/* The newest sample breathes while the round is live. */
+.pulse {
+  fill: var(--series-blue);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pulse 2s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(3.4);
+  }
+}
+
+.crosshair line {
+  stroke: var(--border-strong);
+}
+
+.crosshair circle {
+  fill: var(--fg);
+}
+
+.tooltip {
+  position: absolute;
+  top: 0;
+  display: grid;
+  gap: 1px;
+  padding: 5px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--elevated);
+  box-shadow: var(--shadow);
+  font-size: var(--text-2xs);
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.tooltipTime {
+  color: var(--faint);
+  font-family: var(--font-mono);
+}
+
+.tooltip strong {
+  font-family: var(--font-mono);
+}

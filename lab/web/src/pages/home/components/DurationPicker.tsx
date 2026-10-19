@@ -11,6 +11,7 @@ type DurationPickerProps = {
   readonly onSelect: (seconds: number) => void;
 };
 
+// DurationPicker is a native radio group drawn as one segmented track.
 export default function DurationPicker({
   durationsSeconds,
   selected,

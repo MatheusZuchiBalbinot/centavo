@@ -1,5 +1,7 @@
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 
+import { LinkButton } from '../../components/ui/Button';
+import { StatusIntro } from '../../components/ui/StatusIntro';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { useLabReading } from '../../hooks/useLabReading';
 import { PAGE_HEADING_ID } from '../../hooks/useRouteFocus';
@@ -9,10 +11,10 @@ import Composer from './components/Composer';
 import LabNow from './components/LabNow';
 import RecentRounds from './components/RecentRounds';
 import styles from './HomePage.module.css';
-import type { StartChoice } from './hooks/useStartRound';
 import { useAttackMenu } from './hooks/useAttackMenu';
 import { useRecentRounds } from './hooks/useRecentRounds';
 import { useStartRound } from './hooks/useStartRound';
+import type { StartChoice } from './hooks/useStartRound';
 
 export default function HomePage(): React.JSX.Element {
   useDocumentTitle(messages.titles.home);
@@ -40,19 +42,34 @@ export default function HomePage(): React.JSX.Element {
   }
 
   return (
-    <>
+    <div className={styles.page}>
       <div className={styles.hero}>
-        <div className={styles.intro}>
-          <h1 id={PAGE_HEADING_ID} className={styles.headline} tabIndex={-1}>
-            {messages.home.headline}
-          </h1>
-          <p className={styles.lead}>{messages.home.lead}</p>
-        </div>
+        <StatusIntro
+          tone={isBusy ? 'info' : 'healthy'}
+          isLive={isBusy}
+          eyebrow={isBusy ? messages.home.eyebrowBusy : messages.home.eyebrowFree}
+          title={messages.home.headline}
+          titleId={PAGE_HEADING_ID}
+          headingLevel={1}
+          description={<p>{messages.home.lead}</p>}
+          footer={
+            isBusy ? (
+              <LinkButton to={ROUTES.live} variant="primary">
+                {messages.home.watch}
+              </LinkButton>
+            ) : (
+              <span className={styles.heroHint}>{messages.home.hint}</span>
+            )
+          }
+        />
         <LabNow rounds={rounds} />
       </div>
       <MenuSection menu={menu} isBusy={isBusy} isStarting={isStarting} onStart={handleStart} />
       <RecentRounds rounds={rounds} />
-    </>
+      <p className={styles.more}>
+        <Link to={ROUTES.rounds}>{messages.home.allRounds}</Link>
+      </p>
+    </div>
   );
 }
 
@@ -66,13 +83,9 @@ type MenuSectionProps = {
 function MenuSection({ menu, isBusy, isStarting, onStart }: MenuSectionProps): React.JSX.Element {
   switch (menu.kind) {
     case 'loading':
-      return <p className={styles.note}>{messages.composer.loading}</p>;
+      return <p className="muted">{messages.composer.loading}</p>;
     case 'failed':
-      return (
-        <p className={styles.note} role="alert">
-          {messages.composer.menuFailed}
-        </p>
-      );
+      return <p role="alert">{messages.composer.menuFailed}</p>;
     case 'ready':
       return <Composer menu={menu.menu} isBusy={isBusy} isStarting={isStarting} onStart={onStart} />;
   }

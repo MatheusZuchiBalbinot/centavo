@@ -1,9 +1,9 @@
+import { Zap } from 'lucide-react';
 import { useState } from 'react';
 
 import type { AttackMenu } from '../../../api/attacks';
 import type { AttackId } from '../../../api/ids';
 import { Button } from '../../../components/ui/Button';
-import { Sheet } from '../../../components/ui/Sheet';
 import { messages } from '../../../i18n/pt-BR';
 import type { StartChoice } from '../hooks/useStartRound';
 import AttackPicker from './AttackPicker';
@@ -44,12 +44,15 @@ export default function Composer({ menu, isBusy, isStarting, onStart }: Composer
   }
 
   return (
-    <Sheet as="section" className={styles.composer} aria-labelledby="composer-title">
+    <section className="card" aria-labelledby="composer-title">
+      <div className="card-header">
+        <h2 id="composer-title" className="card-title">
+          {messages.composer.title}
+        </h2>
+        <span className="card-note">{messages.composer.startHint}</span>
+      </div>
       <form className={styles.form} onSubmit={handleSubmit}>
         <div className={styles.steps}>
-          <h2 id="composer-title" className="visually-hidden">
-            {messages.composer.title}
-          </h2>
           <fieldset className={styles.step}>
             <legend className={styles.stepTitle}>
               <span className={styles.stepNumber}>1</span>
@@ -80,20 +83,22 @@ export default function Composer({ menu, isBusy, isStarting, onStart }: Composer
           </div>
         </div>
         <aside className={styles.preview} aria-labelledby="preview-title">
-          <h2 id="preview-title" className={styles.previewTitle}>
-            {messages.preview.title}
-          </h2>
-          <RoundPreview attack={selectedAttack} durationSeconds={selectedDuration} />
-          <div className={styles.startRow}>
-            {isBusy ? <p className={styles.busy}>{messages.composer.busy}</p> : null}
-            <Button type="submit" variant="primary" size="big" disabled={isLocked}>
-              {isStarting ? messages.composer.starting : messages.composer.start}
-            </Button>
-            <p className={styles.hint}>{messages.composer.startHint}</p>
+          <div className={styles.previewSticky}>
+            <h2 id="preview-title" className={styles.previewTitle}>
+              {messages.preview.title}
+            </h2>
+            <RoundPreview attack={selectedAttack} durationSeconds={selectedDuration} />
+            <div className={styles.startRow}>
+              {isBusy ? <p className={styles.busy}>{messages.composer.busy}</p> : null}
+              <Button type="submit" variant="primary" size="large" disabled={isLocked}>
+                <Zap size={16} aria-hidden="true" />
+                {isStarting ? messages.composer.starting : messages.composer.start}
+              </Button>
+            </div>
           </div>
         </aside>
       </form>
-    </Sheet>
+    </section>
   );
 }
 

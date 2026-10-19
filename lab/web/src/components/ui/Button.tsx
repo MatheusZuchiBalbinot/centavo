@@ -1,15 +1,20 @@
 import { Link } from 'react-router';
 import type { LinkProps } from 'react-router';
 
-import styles from './Button.module.css';
-
 type Variant = 'primary' | 'secondary' | 'danger';
-type Size = 'regular' | 'big';
+type Size = 'regular' | 'large';
 
 type Look = { readonly variant?: Variant; readonly size?: Size };
 
 type ButtonProps = Look & React.ButtonHTMLAttributes<HTMLButtonElement>;
 type LinkButtonProps = Look & LinkProps;
+
+const VARIANT_CLASS: Readonly<Record<Variant, string>> = {
+  primary: 'btn-primary',
+  secondary: '',
+  danger: 'btn-danger',
+};
+const SIZE_CLASS: Readonly<Record<Size, string>> = { regular: '', large: 'btn-lg' };
 
 export function Button({
   variant = 'secondary',
@@ -31,5 +36,5 @@ export function LinkButton({
 }
 
 function classOf(look: Required<Look>, extra: string | undefined): string {
-  return [styles.button, styles[look.variant], styles[look.size], extra].filter(Boolean).join(' ');
+  return ['btn', VARIANT_CLASS[look.variant], SIZE_CLASS[look.size], extra].filter(Boolean).join(' ');
 }
