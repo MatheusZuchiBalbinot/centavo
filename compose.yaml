@@ -117,6 +117,8 @@ services:
   bank-api:
     <<: *chaos-target
     image: centavo-bank:local-chaoslab
+    # Built by bank-migrate; it exists only locally, so never pull it.
+    pull_policy: never
     command: ["api"]
     environment:
       <<: *bank-env
@@ -136,6 +138,8 @@ services:
   bank-worker-1:
     <<: *chaos-target
     image: centavo-bank:local-chaoslab
+    # Built by bank-migrate; it exists only locally, so never pull it.
+    pull_policy: never
     command: ["worker"]
     environment:
       <<: *bank-env
@@ -156,6 +160,8 @@ services:
   bank-worker-2:
     <<: *chaos-target
     image: centavo-bank:local-chaoslab
+    # Built by bank-migrate; it exists only locally, so never pull it.
+    pull_policy: never
     command: ["worker"]
     environment:
       <<: *bank-env
