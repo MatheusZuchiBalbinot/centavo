@@ -89,7 +89,8 @@ func (s reconciliationStore) InsertItem(ctx context.Context, item application.Re
 func (s reconciliationStore) CountItems(ctx context.Context, endToEndID transfer.EndToEndID, kind application.StatementKind) (int, error) {
 	var count int
 
-	err := scanRow(ctx, s.db, newStatement("counting reconciliation items", countItemsSQL, endToEndID, string(kind)), &count)
+	query := newStatement("counting reconciliation items", countItemsSQL, endToEndID, string(kind))
+	err := scanRow(ctx, s.db, query, &count)
 
 	return count, err
 }

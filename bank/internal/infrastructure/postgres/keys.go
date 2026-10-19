@@ -88,7 +88,8 @@ func (s keyStore) ClaimKey(ctx context.Context, claim application.KeyClaim) (ide
 
 // TouchKey writes a new version of the key's row with the same values.
 func (s keyStore) TouchKey(ctx context.Context, key idempotency.Key) error {
-	_, err := execute(ctx, s.db, newStatement("touching idempotency key", touchKeySQL, string(key)))
+	query := newStatement("touching idempotency key", touchKeySQL, string(key))
+	_, err := execute(ctx, s.db, query)
 
 	return keyError(err)
 }
@@ -97,7 +98,8 @@ func (s keyStore) TouchKey(ctx context.Context, key idempotency.Key) error {
 func (s keyStore) VoidKey(ctx context.Context, key idempotency.Key) (idempotency.Record, bool, error) {
 	var inserted string
 
-	isVoided, err := scanOptionalRow(ctx, s.db, newStatement("voiding idempotency key", voidKeySQL, string(key)), &inserted)
+	query := newStatement("voiding idempotency key", voidKeySQL, string(key))
+	isVoided, err := scanOptionalRow(ctx, s.db, query, &inserted)
 	if err != nil {
 		return idempotency.Record{}, false, keyError(err)
 	}
@@ -123,7 +125,8 @@ func (s keyStore) CompleteKey(ctx context.Context, key idempotency.Key, operatio
 func (s keyStore) IsClientRefApplied(ctx context.Context, key idempotency.Key) (bool, error) {
 	var isApplied bool
 
-	err := scanRow(ctx, s.db, newStatement("looking up client_ref", clientRefAppliedSQL, string(key)), &isApplied)
+	query := newStatement("looking up client_ref", clientRefAppliedSQL, string(key))
+	err := scanRow(ctx, s.db, query, &isApplied)
 
 	return isApplied, err
 }

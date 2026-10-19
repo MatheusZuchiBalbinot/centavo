@@ -37,17 +37,22 @@ func (d *DB) Truth(ctx context.Context, participantID string, since time.Time) (
 
 	var err error
 
-	export.Transfers, err = queryRows(ctx, d.db, newStatement("exporting transfers", exportTransfersSQL, participantID, since.UnixNano()), scanTransferView)
+	sinceNanos := since.UnixNano()
+	transfersQuery := newStatement("exporting transfers", exportTransfersSQL, participantID, sinceNanos)
+	statementQuery := newStatement("exporting the statement", statementSinceSQL, participantID, sinceNanos)
+	incomingQuery := newStatement("exporting incoming", exportIncomingSQL, participantID, sinceNanos)
+
+	export.Transfers, err = queryRows(ctx, d.db, transfersQuery, scanTransferView)
 	if err != nil {
 		return truth.Export{}, err
 	}
 
-	export.Statement, err = queryRows(ctx, d.db, newStatement("exporting the statement", statementSinceSQL, participantID, since.UnixNano()), scanStatementEntry)
+	export.Statement, err = queryRows(ctx, d.db, statementQuery, scanStatementEntry)
 	if err != nil {
 		return truth.Export{}, err
 	}
 
-	export.Incoming, err = queryRows(ctx, d.db, newStatement("exporting incoming", exportIncomingSQL, participantID, since.UnixNano()), scanIncomingView)
+	export.Incoming, err = queryRows(ctx, d.db, incomingQuery, scanIncomingView)
 	if err != nil {
 		return truth.Export{}, err
 	}

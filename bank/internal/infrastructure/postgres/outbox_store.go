@@ -145,7 +145,8 @@ func (s outboxStore) FinishOutbox(ctx context.Context, id, token int64) (bool, e
 // LockExternalTransfer locks the transfer until the transaction ends and
 // returns it.
 func (s outboxStore) LockExternalTransfer(ctx context.Context, id transfer.ID) (application.ExternalTransfer, error) {
-	return readExternalTransfer(ctx, s.db, newStatement("locking external transfer", lockExternalTransferSQL, uuid.UUID(id)))
+	query := newStatement("locking external transfer", lockExternalTransferSQL, uuid.UUID(id))
+	return readExternalTransfer(ctx, s.db, query)
 }
 
 // AdvanceStatus changes the status if the sequence is still the one seen.
@@ -220,14 +221,16 @@ func (s inboxStore) ClaimInbox(ctx context.Context) (application.InboxEvent, boo
 
 // FinishInbox closes the event with its outcome.
 func (s inboxStore) FinishInbox(ctx context.Context, id int64, status application.InboxStatus, outcome string) error {
-	_, err := execute(ctx, s.db, newStatement("finishing inbox event", finishInboxSQL, id, string(status), outcome))
+	query := newStatement("finishing inbox event", finishInboxSQL, id, string(status), outcome)
+	_, err := execute(ctx, s.db, query)
 
 	return err
 }
 
 // DeferInbox puts the event back for a later attempt.
 func (s inboxStore) DeferInbox(ctx context.Context, id int64, delay time.Duration, reason string) error {
-	_, err := execute(ctx, s.db, newStatement("deferring inbox event", deferInboxSQL, id, delay.Milliseconds(), reason))
+	query := newStatement("deferring inbox event", deferInboxSQL, id, delay.Milliseconds(), reason)
+	_, err := execute(ctx, s.db, query)
 
 	return err
 }

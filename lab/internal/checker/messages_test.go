@@ -52,7 +52,9 @@ func portugueseLiterals(t *testing.T, path string) []string {
 
 	ast.Inspect(file, func(node ast.Node) bool {
 		literal, isLiteral := node.(*ast.BasicLit)
-		if isLiteral && literal.Kind == token.STRING && portugueseLetters.MatchString(literal.Value) {
+
+		isPortugueseText := isLiteral && literal.Kind == token.STRING && portugueseLetters.MatchString(literal.Value)
+		if isPortugueseText {
 			found = append(found, fset.Position(literal.Pos()).String())
 		}
 

@@ -17,8 +17,8 @@ type statement struct {
 }
 
 // newStatement binds a statement's parameters.
-func newStatement(step, sql string, args ...any) statement {
-	return statement{step: step, sql: sql, args: args}
+func newStatement(step, sql string, values ...any) statement {
+	return statement{step: step, sql: sql, args: values}
 }
 
 // execute runs a write and reports how many rows it touched.

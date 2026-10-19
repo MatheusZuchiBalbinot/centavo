@@ -162,7 +162,8 @@ func (s ledgerRows) FindCustomer(ctx context.Context, id ledger.AccountID) (ledg
 // ReadCustomerPosition reads a customer's balance and last entry position,
 // without locking the row.
 func (s ledgerRows) ReadCustomerPosition(ctx context.Context, id ledger.AccountID) (ledger.Position, error) {
-	return s.readPosition(ctx, newStatement("reading customer position", readCustomerPositionSQL, uuid.UUID(id)))
+	query := newStatement("reading customer position", readCustomerPositionSQL, uuid.UUID(id))
+	return s.readPosition(ctx, query)
 }
 
 // OverwritePosition stores a position the caller computed.
@@ -175,7 +176,8 @@ func (s ledgerRows) OverwritePosition(ctx context.Context, id ledger.AccountID, 
 
 // IncrementBalance adds delta in the database and returns the new position.
 func (s ledgerRows) IncrementBalance(ctx context.Context, id ledger.AccountID, delta money.Cents) (ledger.Position, error) {
-	return s.readPosition(ctx, newStatement("incrementing balance", incrementBalanceSQL, uuid.UUID(id), int64(delta)))
+	query := newStatement("incrementing balance", incrementBalanceSQL, uuid.UUID(id), int64(delta))
+	return s.readPosition(ctx, query)
 }
 
 // InsertTransaction appends a ledger transaction header.

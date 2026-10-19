@@ -122,7 +122,8 @@ func (s pixStore) InsertTransition(ctx context.Context, transition application.T
 
 // FindExternalTransfer reads a transfer and its state history.
 func (s pixStore) FindExternalTransfer(ctx context.Context, id transfer.ID) (application.ExternalTransfer, []application.TransitionRecord, error) {
-	external, err := readExternalTransfer(ctx, s.db, newStatement("reading external transfer", findExternalTransferSQL, uuid.UUID(id)))
+	query := newStatement("reading external transfer", findExternalTransferSQL, uuid.UUID(id))
+	external, err := readExternalTransfer(ctx, s.db, query)
 	if err != nil {
 		return application.ExternalTransfer{}, nil, err
 	}
@@ -139,7 +140,8 @@ func (s pixStore) FindExternalTransferByEndToEnd(ctx context.Context, endToEndID
 
 // ClaimAttempt is the naive relay's compare-and-set on the end_to_end_id.
 func (s pixStore) ClaimAttempt(ctx context.Context, id transfer.ID, seen, next transfer.EndToEndID) (bool, error) {
-	claimed, err := execute(ctx, s.db, newStatement("claiming an attempt", claimAttemptSQL, uuid.UUID(id), seen, next))
+	query := newStatement("claiming an attempt", claimAttemptSQL, uuid.UUID(id), seen, next)
+	claimed, err := execute(ctx, s.db, query)
 
 	return claimed == 1, err
 }
@@ -244,7 +246,8 @@ func readExternalTransfer(ctx context.Context, db querier, st statement) (applic
 }
 
 func (s pixStore) transitionsOf(ctx context.Context, id transfer.ID) ([]application.TransitionRecord, error) {
-	transitions, err := queryRows(ctx, s.db, newStatement("reading transitions", transitionsSQL, uuid.UUID(id)), scanTransition)
+	query := newStatement("reading transitions", transitionsSQL, uuid.UUID(id))
+	transitions, err := queryRows(ctx, s.db, query, scanTransition)
 	if err != nil {
 		return nil, err
 	}

@@ -124,14 +124,6 @@ func TestLoad_ReadsTheChaosSeed(t *testing.T) {
 	}
 }
 
-func lookupFrom(vars map[string]string) config.LookupFunc {
-	return func(key string) (string, bool) {
-		value, isSet := vars[key]
-
-		return value, isSet
-	}
-}
-
 // TestLoad_RefusesTheExampleSecrets: a password or a secret left at its
 // .env.example value is public, and the process does not start on it.
 func TestLoad_RefusesTheExampleSecrets(t *testing.T) {
@@ -147,5 +139,13 @@ func TestLoad_RefusesTheExampleSecrets(t *testing.T) {
 				t.Fatalf("err = %v, want ErrExampleSecret", err)
 			}
 		})
+	}
+}
+
+func lookupFrom(vars map[string]string) config.LookupFunc {
+	return func(key string) (string, bool) {
+		value, isSet := vars[key]
+
+		return value, isSet
 	}
 }

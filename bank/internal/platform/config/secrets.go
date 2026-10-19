@@ -26,7 +26,12 @@ func refuseExampleSecrets(secrets ...string) error {
 // passwordOf is the password of a database URL, empty when it has none.
 func passwordOf(databaseURL string) string {
 	parsed, err := url.Parse(databaseURL)
-	if err != nil || parsed.User == nil {
+	if err != nil {
+		// An unparsable URL has no password to compare; the driver refuses it.
+		return ""
+	}
+
+	if parsed.User == nil {
 		return ""
 	}
 

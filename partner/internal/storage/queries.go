@@ -56,7 +56,8 @@ func (d *DB) Statement(ctx context.Context, participantID string, afterSeq int64
 
 // DueDeliveries lists pending deliveries whose time came.
 func (d *DB) DueDeliveries(ctx context.Context, now time.Time, limit int) ([]truth.Delivery, error) {
-	return queryRows(ctx, d.db, newStatement("listing due deliveries", dueDeliveriesSQL, now.UnixNano(), limit), scanDelivery)
+	query := newStatement("listing due deliveries", dueDeliveriesSQL, now.UnixNano(), limit)
+	return queryRows(ctx, d.db, query, scanDelivery)
 }
 
 // MarkDelivered closes a delivery.
@@ -97,7 +98,8 @@ func (d *DB) LastStatementSeq(ctx context.Context, participantID string) (int64,
 }
 
 func (d *DB) recordAttempt(ctx context.Context, id int64, next time.Time, status truth.DeliveryStatus) error {
-	_, err := execute(ctx, d.db, newStatement("recording a delivery attempt", recordAttemptSQL, next.UnixNano(), status, id))
+	query := newStatement("recording a delivery attempt", recordAttemptSQL, next.UnixNano(), status, id)
+	_, err := execute(ctx, d.db, query)
 
 	return err
 }
