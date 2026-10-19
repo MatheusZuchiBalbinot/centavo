@@ -28,6 +28,7 @@ const (
 	codeOutcomeUnknown         errorCode = "OUTCOME_UNKNOWN"
 	codeTemporarilyUnavailable errorCode = "TEMPORARILY_UNAVAILABLE"
 	codeInternal               errorCode = "INTERNAL"
+	codeRateLimited            errorCode = "RATE_LIMITED"
 )
 
 const (
@@ -38,6 +39,9 @@ const (
 
 // errValidation marks malformed input; the wrapped text tells the client what.
 var errValidation = errors.New("invalid request")
+
+// errRateLimited means the route's limiter is empty; nothing of the request ran.
+var errRateLimited = errors.New("too many requests; retry later with the same key")
 
 // errorMappings is the only place where an error becomes an HTTP status.
 var errorMappings = []errorMapping{
@@ -56,6 +60,7 @@ var errorMappings = []errorMapping{
 	{target: idempotency.ErrKeyMismatch, status: http.StatusUnprocessableEntity, code: codeKeyMismatch},
 	{target: idempotency.ErrOperationVoided, status: http.StatusConflict, code: codeOperationVoided},
 	{target: idempotency.ErrRequestInProgress, status: http.StatusConflict, code: codeRequestInProgress},
+	{target: errRateLimited, status: http.StatusTooManyRequests, code: codeRateLimited},
 	{target: application.ErrOutcomeUnknown, status: http.StatusServiceUnavailable, code: codeOutcomeUnknown},
 	{target: application.ErrTransient, status: http.StatusServiceUnavailable, code: codeTemporarilyUnavailable},
 	{target: application.ErrUnavailable, status: http.StatusServiceUnavailable, code: codeTemporarilyUnavailable},

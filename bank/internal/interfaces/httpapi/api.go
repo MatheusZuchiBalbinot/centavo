@@ -86,17 +86,19 @@ type statementLineResponse struct {
 // NewAPIHandler serves the client API (8080).
 func NewAPIHandler(useCases UseCases, logger *slog.Logger) http.Handler {
 	api := apiHandlers{useCases: useCases, logger: logger}
+	// The limits count real time, never the clock the chaos lab can skew.
+	limits := newRateLimits(time.Now)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST "+accountsEndpoint, api.openAccount)
+	mux.HandleFunc("POST "+accountsEndpoint, api.limited(limits.writes, api.openAccount))
 	mux.HandleFunc("GET "+accountEndpoint, api.getAccount)
 	mux.HandleFunc("GET "+statementEndpoint, api.getStatement)
-	mux.HandleFunc("POST "+depositsEndpoint, api.deposit)
-	mux.HandleFunc("POST "+transfersEndpoint, api.transfer)
-	mux.HandleFunc("POST "+resolveEndpoint, api.resolve)
-	mux.HandleFunc("POST "+pixOutEndpoint, api.pixOut)
+	mux.HandleFunc("POST "+depositsEndpoint, api.limited(limits.writes, api.deposit))
+	mux.HandleFunc("POST "+transfersEndpoint, api.limited(limits.writes, api.transfer))
+	mux.HandleFunc("POST "+resolveEndpoint, api.limited(limits.resolve, api.resolve))
+	mux.HandleFunc("POST "+pixOutEndpoint, api.limited(limits.writes, api.pixOut))
 	mux.HandleFunc("GET "+externalTransferEndpoint, api.getPixOut)
-	mux.HandleFunc("POST "+partnerWebhookEndpoint, api.webhook)
+	mux.HandleFunc("POST "+partnerWebhookEndpoint, api.limited(limits.webhook, api.webhook))
 
 	return withSecurityHeaders(withRequestContext(mux, logger))
 }
