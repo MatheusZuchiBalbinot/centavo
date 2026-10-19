@@ -12,6 +12,7 @@ const (
 	eventHealStarted   = "cura começou"
 	eventHealCompleted = "cura terminou"
 	eventNetwork       = "rede: %s em %v"
+	eventNetworkEnd    = "rede normalizada em %v"
 	eventFailover      = "failover: réplica promovida"
 	eventProcessState  = "%s: %s"
 	eventDefense       = "defesa em %s: %s (%d)"

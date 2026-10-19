@@ -9,6 +9,9 @@ export const ROUTES = {
   compare: '/compare/:left/:right',
 } as const;
 
+// Query parameters the pages read; written here and nowhere else.
+export const QUERY = { arena: 'arena' } as const;
+
 export function roundPath(round: RoundId): string {
   return `${ROUTES.rounds}/${encodeURIComponent(round)}`;
 }

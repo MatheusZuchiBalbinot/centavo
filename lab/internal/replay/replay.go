@@ -31,6 +31,12 @@ const (
 	familyState     EventFamily = "state"
 )
 
+// The phases of a network episode in the history.
+const (
+	networkStart = "start"
+	networkEnd   = "end"
+)
+
 // The percentiles the panel draws, and the scale they are written in.
 const (
 	medianPercentile = 50
@@ -304,14 +310,24 @@ func (b *Builder) feedNemesis(record history.Record) {
 	}
 }
 
+// feedNetwork counts a network episode when it starts; its end comes too,
+// marked with the subject "end", so the map knows when the link is back.
 func (b *Builder) feedNetwork(record history.Record, value nemesisValue) {
-	if value.Phase != "start" {
+	target := strings.Join(value.Proxies, ", ")
+
+	if value.Phase == networkEnd {
+		b.addEvent(record, Event{Family: familyNetwork, Target: target, Detail: value.Toxic, Subject: networkEnd, Text: fmt.Sprintf(eventNetworkEnd, value.Proxies)})
+
+		return
+	}
+
+	if value.Phase != networkStart {
 		return
 	}
 
 	b.replay.Counters.Network++
 	text := fmt.Sprintf(eventNetwork, value.Toxic, value.Proxies)
-	b.addEvent(record, Event{Family: familyNetwork, Target: strings.Join(value.Proxies, ", "), Detail: value.Toxic, Text: text})
+	b.addEvent(record, Event{Family: familyNetwork, Target: target, Detail: value.Toxic, Text: text})
 }
 
 func (b *Builder) feedFailover(record history.Record, value nemesisValue) {

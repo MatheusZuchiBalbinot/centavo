@@ -8,6 +8,7 @@ import { expectationOf, headlineOf } from './headline';
 import { phaseOf } from './phase';
 import { initialRoundState, mergeSeconds, reduceRound } from './roundState';
 import { overlaps, rangeOfLabel } from './highlight';
+import { narrate } from './narrator';
 import { clusterMarkers, spanOf } from './timeline';
 
 describe('reduceRound', () => {
@@ -184,5 +185,29 @@ describe('defenses in the feed', () => {
     const odd = { ...anEvent(1, 'defense', 'bank-api'), detail: 'new.defense' };
 
     expect(feedOf([odd])[0]?.what).toBe('O banco registrou uma defesa (new.defense).');
+  });
+});
+
+describe('narrate', () => {
+  it('tells the last attack and waits for the defense, then tells the defense', () => {
+    const kill = anEvent(10_000, 'kill', 'bank-worker-1');
+    const resumed = { ...anEvent(14_000, 'defense', 'bank-worker-2'), detail: 'outbox.resumed', count: 3 };
+
+    const waiting = narrate([kill, resumed], 12_000, 'attack');
+    expect(waiting.now).toBe('Derrubei o bank-worker-1.');
+    expect(waiting.defense).toMatchObject({ isWaiting: true });
+
+    const defended = narrate([kill, resumed], 15_000, 'attack');
+    expect(defended.defense).toEqual({
+      text: 'O bank-worker-2 retomou 3 PIX de uma tentativa anterior.',
+      isWaiting: false,
+    });
+  });
+
+  it('falls back to the phase once the attack is old', () => {
+    expect(narrate([anEvent(1_000, 'kill')], 60_000, 'heal')).toEqual({
+      now: 'Os ataques pararam: o banco termina o que ficou pendente.',
+      defense: null,
+    });
   });
 });

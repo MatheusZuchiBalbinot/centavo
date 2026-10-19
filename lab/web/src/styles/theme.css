@@ -30,6 +30,11 @@
   --warning-soft: oklch(0.34 0.05 78);
   --danger-soft: oklch(0.32 0.07 25);
   --danger-soft-active: oklch(0.37 0.09 25);
+  /* A frozen process and a lying partner, in the arena. */
+  --ice: oklch(0.8 0.08 230);
+  --ice-soft: oklch(0.32 0.05 230);
+  --violet: oklch(0.7 0.15 300);
+  --violet-soft: oklch(0.3 0.06 300);
 
   /* What the lab's states mean, on top of the palette. */
   --money: var(--success);

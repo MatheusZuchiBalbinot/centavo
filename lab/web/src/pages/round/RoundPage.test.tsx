@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -50,8 +50,8 @@ const running = {
 
 const allHeld = ['I1', 'I2', 'I3', 'I4', 'I5', 'I6', 'I7', 'I8'].map((id) => ({ id, status: 'ok', violations: 0 }));
 
-function renderRound(): ReturnType<typeof render> {
-  const router = createMemoryRouter(appRoutes, { initialEntries: ['/rounds/r0007'] });
+function renderRound(entry = '/rounds/r0007'): ReturnType<typeof render> {
+  const router = createMemoryRouter(appRoutes, { initialEntries: [entry] });
 
   return render(<RouterProvider router={router} />);
 }
@@ -190,5 +190,47 @@ describe('the round page', () => {
     expect(screen.getByText('I1')).toBeInTheDocument();
     expect(screen.getByText('semente 0x5eed')).toBeInTheDocument();
     expect(window.localStorage.getItem('centavo.viewMode')).toBe('"technical"');
+  });
+
+  it('opens the arena from its link, draws the attack on the map, and closes it', async () => {
+    installFakeEventSource();
+    answerFetch({ [API_ROUTES.lab]: { status: 200, body: running } });
+    const user = userEvent.setup();
+
+    renderRound('/rounds/r0007?arena=1');
+
+    act(() => {
+      stream().send('snapshot', snapshot);
+    });
+
+    const arena = screen.getByRole('dialog', { name: /O banco está sob ataque/ });
+
+    expect(within(arena).getByRole('button', { name: 'API: derrubado' })).toBeInTheDocument();
+    expect(within(arena).getByRole('group', { name: 'Mapa do sistema' })).toBeInTheDocument();
+    await expectNoAxeViolations(arena);
+
+    await user.click(within(arena).getByRole('button', { name: 'Fechar' }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Abrir a arena' }));
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('stamps the verdict on the arena when the round ends', () => {
+    installFakeEventSource();
+    answerFetch({ [API_ROUTES.lab]: { status: 200, body: { status: 'idle' } } });
+
+    renderRound('/rounds/r0007?arena=1');
+
+    act(() => {
+      stream().send('finished', { ...snapshot, verdict: 'pass', checks: allHeld });
+    });
+
+    const arena = screen.getByRole('dialog');
+
+    expect(within(arena).getByText('Passou')).toBeInTheDocument();
+    expect(within(arena).getByText('um ataque · R$ 0,00 · 8 de 8 garantias')).toBeInTheDocument();
   });
 });

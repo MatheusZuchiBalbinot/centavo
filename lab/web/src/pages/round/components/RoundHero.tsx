@@ -1,5 +1,6 @@
 import type { RoundId } from '../../../api/ids';
 import type { Replay } from '../../../api/replay';
+import { Button } from '../../../components/ui/Button';
 import { Glossed } from '../../../components/ui/Glossed';
 import { StatusIntro } from '../../../components/ui/StatusIntro';
 import { useViewMode } from '../../../hooks/viewModeContext';
@@ -20,6 +21,7 @@ type RoundHeroProps = {
   readonly headline: string;
   readonly elapsedSeconds: number;
   readonly isConnected: boolean;
+  readonly onOpenArena: () => void;
 };
 
 // RoundHero opens the round: where it is, in one sentence, what it is doing
@@ -31,6 +33,7 @@ export default function RoundHero({
   headline,
   elapsedSeconds,
   isConnected,
+  onOpenArena,
 }: RoundHeroProps): React.JSX.Element {
   const isFinished = phase === 'verdict';
   const isTechnical = useViewMode().mode === 'technical';
@@ -67,7 +70,12 @@ export default function RoundHero({
       footer={
         <div className={styles.heroFooter}>
           <PhaseStepper phase={phase} elapsedSeconds={elapsedSeconds} durationSeconds={replay.durationSeconds} />
-          <RoundActions round={round} isFinished={isFinished} />
+          <div className={styles.actionsRow}>
+            <Button variant="primary" onClick={onOpenArena}>
+              {messages.arena.open}
+            </Button>
+            <RoundActions round={round} isFinished={isFinished} />
+          </div>
         </div>
       }
     />

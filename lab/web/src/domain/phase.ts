@@ -37,15 +37,23 @@ const NOT_ATTACKS: ReadonlySet<RoundEvent['kind']> = new Set([
 ]);
 
 export function isAttackEvent(event: RoundEvent): boolean {
-  return !NOT_ATTACKS.has(event.kind);
+  return !NOT_ATTACKS.has(event.kind) && !isNetworkEnd(event);
+}
+
+// isNetworkEnd is a network fault going away: the map heals the link, and
+// nothing else tells it.
+export function isNetworkEnd(event: RoundEvent): boolean {
+  return event.kind === 'network' && event.subject === 'end';
 }
 
 export function isDefenseEvent(event: RoundEvent): boolean {
   return event.kind === 'defense';
 }
 
+// isStateEvent is what only the map shows: a process changing state, or a
+// network fault going away.
 export function isStateEvent(event: RoundEvent): boolean {
-  return event.kind === 'process_state';
+  return event.kind === 'process_state' || isNetworkEnd(event);
 }
 
 export function isHealStart(event: RoundEvent): boolean {
