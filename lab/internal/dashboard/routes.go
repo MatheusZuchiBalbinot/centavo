@@ -7,6 +7,7 @@ const (
 	replayRoute  = "/api/replay/{round}"
 	reportRoute  = "/rounds/{round}/" + reportMDFile
 	staticRoute  = "/"
+	apiPrefix    = "/api/"
 	labRoute     = "/api/lab"
 	stopRoute    = "/api/lab/stop"
 	attacksRoute = "/api/attacks"

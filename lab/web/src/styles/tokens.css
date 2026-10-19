@@ -1,0 +1,70 @@
+:root {
+  --paper: #eef2f6;
+  --sheet: #ffffff;
+  --sheet-tint: #f6f8fb;
+  --ink: #14213d;
+  --steel: #4f5d74;
+  --rule: #cfd7e2;
+  --money: #1c7a4c;
+  --money-wash: #e2f2e9;
+  --refused: #a8660e;
+  --refused-wash: #fbf0dc;
+  --broken: #b42318;
+  --broken-wash: #fbe5e2;
+  --focus: #2f5bd3;
+  --heal: #dfe7f1;
+  --bar-background: #14213d;
+  --bar-ink: #e7ecf4;
+  --bar-muted: #b9c4d6;
+  --bar-pill: #22325a;
+  --bar-live: #4fc98a;
+  --bar-running: #ffb547;
+
+  --display: 'Fraunces Variable', Georgia, serif;
+  --text: 'Public Sans Variable', system-ui, sans-serif;
+
+  --step--2: 0.78rem;
+  --step--1: 0.86rem;
+  --step-0: 1rem;
+  --step-1: 1.12rem;
+  --step-2: 1.5rem;
+  --step-3: 2.3rem;
+  --step-4: 2.6rem;
+  --step-5: 3.6rem;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2.25rem;
+  --space-7: 3.5rem;
+
+  --radius-control: 0.5rem;
+  --radius-sheet: 0.875rem;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0f1828;
+    --sheet: #16213a;
+    --sheet-tint: #1a2744;
+    --ink: #e7ecf4;
+    --steel: #a7b3c6;
+    --rule: #2c3a55;
+    --money: #4fc98a;
+    --money-wash: #15372a;
+    --refused: #e7a64a;
+    --refused-wash: #3a2c14;
+    --broken: #f07a6c;
+    --broken-wash: #3d1c1a;
+    --focus: #8fb0ff;
+    --heal: #1d2b47;
+    --bar-background: #0a1222;
+    --bar-pill: #1b2846;
+
+    color-scheme: dark;
+  }
+}

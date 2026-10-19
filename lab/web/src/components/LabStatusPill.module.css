@@ -1,0 +1,28 @@
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  background: var(--bar-pill);
+  color: var(--bar-ink);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pill::before {
+  content: '';
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--bar-muted);
+}
+
+.pill[data-tone='free']::before {
+  background: var(--bar-live);
+}
+
+.pill[data-tone='busy']::before {
+  background: var(--bar-running);
+  box-shadow: 0 0 0 4px rgb(255 181 71 / 25%);
+}

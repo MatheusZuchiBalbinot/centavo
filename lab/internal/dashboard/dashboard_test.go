@@ -195,3 +195,30 @@ func writeRound(t *testing.T, roundsDir, round, report string) {
 		}
 	}
 }
+
+func TestPanel_ServesThePageForAppRoutesButNotForMissingFiles(t *testing.T) {
+	t.Parallel()
+
+	handler := dashboard.NewHandler(dashboard.Config{Live: noReading, RoundsDir: t.TempDir()})
+
+	testCases := []struct {
+		path        string
+		status      int
+		contentType string
+	}{
+		{"/", http.StatusOK, "text/html"},
+		{"/rounds/r0004", http.StatusOK, "text/html"},
+		{"/assets/missing.js", http.StatusNotFound, "text/plain"},
+		{"/api/nothing-here", http.StatusNotFound, "application/json"},
+	}
+
+	for _, tc := range testCases {
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, httptest.NewRequestWithContext(t.Context(), http.MethodGet, tc.path, nil))
+
+		isExpected := recorder.Code == tc.status && strings.HasPrefix(recorder.Header().Get("Content-Type"), tc.contentType)
+		if !isExpected {
+			t.Fatalf("%s: %d %s, want %d %s", tc.path, recorder.Code, recorder.Header().Get("Content-Type"), tc.status, tc.contentType)
+		}
+	}
+}

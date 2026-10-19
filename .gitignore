@@ -8,3 +8,7 @@ coverage.*
 *.md
 /plans/
 /.claude/
+
+# The panel's dependencies and build; the lab image builds them itself.
+/lab/web/node_modules/
+/lab/internal/dashboard/web/app/

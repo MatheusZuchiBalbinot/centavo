@@ -1,5 +1,16 @@
 # syntax=docker/dockerfile:1
 
+# The panel is static files, built once on the build platform.
+FROM --platform=$BUILDPLATFORM node:22.23.3-trixie-slim@sha256:154ba2f4d6fec323d28e4f4bb86bba4677f1223391a1979cf521304e03a98dfa AS web
+
+WORKDIR /src/web
+
+COPY web/package.json web/package-lock.json web/.npmrc ./
+RUN npm ci --no-audit --no-fund
+
+COPY web/ ./
+RUN npm run build
+
 # Cross-compiles on the build platform (no emulation) for every target platform.
 FROM --platform=$BUILDPLATFORM golang:1.26.9-trixie@sha256:f06b7122f888680048afb247c4e5f49c0069eb6c4c1ccae0f3f4834527a8d22c AS build
 
@@ -13,6 +24,7 @@ COPY go.* ./
 RUN go mod download
 
 COPY . .
+COPY --from=web /src/internal/dashboard/web/app ./internal/dashboard/web/app
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOWORK=off \
     go build -trimpath \
     -ldflags "-s -w -X centavo/lab/internal/platform/buildinfo.version=$VERSION" \

@@ -3,9 +3,7 @@
 package dashboard
 
 import (
-	"embed"
 	"encoding/json"
-	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -20,12 +18,9 @@ const HealthPath = "/internal/health"
 
 const reportMDFile = "report.md"
 
-//go:embed static
-var staticFiles embed.FS
-
 // securityHeaders lock the page down: no inline script, no framing, no sniffing.
 var securityHeaders = map[string]string{
-	"Content-Security-Policy": "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; " +
+	"Content-Security-Policy": "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; font-src 'self'; " +
 		"base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
 	"X-Content-Type-Options": "nosniff", "Referrer-Policy": "strict-origin-when-cross-origin",
 	"Permissions-Policy": "camera=(), microphone=(), geolocation=()",
@@ -63,12 +58,6 @@ type panelHandlers struct {
 
 // NewHandler serves the panel port (8090).
 func NewHandler(config Config) http.Handler {
-	static, err := fs.Sub(staticFiles, "static")
-	if err != nil {
-		// The directory is embedded at build time; Sub only fails on a bad name.
-		panic(err)
-	}
-
 	panel := panelHandlers{config: config, tracker: newTracker(config.RoundsDir), streams: make(chan struct{}, maxStreams)}
 
 	mux := http.NewServeMux()
@@ -77,7 +66,8 @@ func NewHandler(config Config) http.Handler {
 	mux.HandleFunc("GET "+liveRoute, panel.live)
 	mux.HandleFunc("GET "+replayRoute, panel.replay)
 	mux.HandleFunc("GET "+reportRoute, panel.report)
-	mux.Handle("GET "+staticRoute, http.FileServerFS(static))
+	mux.Handle("GET "+staticRoute, newAppHandler())
+	mux.HandleFunc("GET "+apiPrefix, panel.apiNotFound)
 	mux.HandleFunc("GET "+roundsRoute, panel.rounds)
 	mux.HandleFunc("GET "+eventsRoute, panel.events)
 
