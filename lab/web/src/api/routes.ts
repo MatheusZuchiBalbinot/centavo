@@ -6,8 +6,6 @@ export const API_ROUTES = {
   stop: '/api/lab/stop',
   attacks: '/api/attacks',
   rounds: '/api/rounds',
-  live: '/api/live',
-  status: '/api/status',
 } as const;
 
 export function roundEventsPath(round: RoundId): string {

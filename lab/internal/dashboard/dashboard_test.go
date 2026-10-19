@@ -6,7 +6,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 
@@ -18,19 +17,6 @@ type healthBody struct {
 	Service string `json:"service"`
 	Version string `json:"version"`
 	Status  string `json:"status"`
-}
-
-type statusBody struct {
-	Live struct {
-		Checks []struct {
-			State string `json:"state"`
-		} `json:"checks"`
-	} `json:"live"`
-	LastRound *struct {
-		Round     string `json:"round"`
-		Verdict   string `json:"verdict"`
-		ReportURL string `json:"report_url"`
-	} `json:"last_round"`
 }
 
 func TestHealth_ReportsVersion(t *testing.T) {
@@ -56,55 +42,6 @@ func TestHealth_ReportsVersion(t *testing.T) {
 	isExpectedBody := body.Service == "lab" && body.Version == "test" && body.Status == "ok"
 	if !isExpectedBody {
 		t.Fatalf("unexpected body: %+v", body)
-	}
-}
-
-func TestStatus_PaintsTheLiveChecks(t *testing.T) {
-	t.Parallel()
-
-	negative := int64(-2_000)
-	zero := int64(0)
-
-	cases := []struct {
-		name       string
-		reading    audit.Reading
-		hasReading bool
-		want       []string
-	}{
-		{name: "before the first reading", want: []string{"unknown", "unknown"}},
-		{name: "database down", reading: audit.Reading{IsUnavailable: true}, hasReading: true, want: []string{"unknown", "unknown"}},
-		{name: "healthy", reading: audit.Reading{SumCents: 0, MinCustomerCents: &zero}, hasReading: true, want: []string{"ok", "ok"}},
-		{name: "money created and overdraft", reading: audit.Reading{SumCents: 150, MinCustomerCents: &negative}, hasReading: true, want: []string{"violated", "violated"}},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			live := func() (audit.Reading, bool) { return tc.reading, tc.hasReading }
-			status := getStatus(t, dashboard.Config{Live: live, RoundsDir: t.TempDir()})
-
-			got := []string{status.Live.Checks[0].State, status.Live.Checks[1].State}
-			if !slices.Equal(got, tc.want) {
-				t.Fatalf("states %v, want %v", got, tc.want)
-			}
-		})
-	}
-}
-
-func TestStatus_ShowsTheNewestVerifiedRound(t *testing.T) {
-	t.Parallel()
-
-	roundsDir := t.TempDir()
-	writeRound(t, roundsDir, "r0009", `{"round": "r0009", "verdict": "pass"}`)
-	writeRound(t, roundsDir, "r0010", `{"round": "r0010", "verdict": "fail"}`)
-	writeRound(t, roundsDir, "r0011", "")
-
-	status := getStatus(t, dashboard.Config{Live: noReading, RoundsDir: roundsDir})
-
-	isNewestWithReport := status.LastRound != nil && status.LastRound.Round == "r0010" && status.LastRound.Verdict == "fail" && status.LastRound.ReportURL == "/rounds/r0010/report.md"
-	if !isNewestWithReport {
-		t.Fatalf("last round: %+v", status.LastRound)
 	}
 }
 
@@ -151,22 +88,6 @@ func TestPanel_SendsSecurityHeadersAndThePage(t *testing.T) {
 	if !strings.Contains(recorder.Body.String(), `<html lang="pt-BR">`) {
 		t.Fatalf("page body: %s", recorder.Body)
 	}
-}
-
-func getStatus(t *testing.T, config dashboard.Config) statusBody {
-	t.Helper()
-
-	recorder := httptest.NewRecorder()
-	dashboard.NewHandler(config).ServeHTTP(recorder, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/status", nil))
-
-	var body statusBody
-
-	err := json.Unmarshal(recorder.Body.Bytes(), &body)
-	if err != nil {
-		t.Fatalf("status body %q: %v", recorder.Body, err)
-	}
-
-	return body
 }
 
 func noReading() (audit.Reading, bool) {

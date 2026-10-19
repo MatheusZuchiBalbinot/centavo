@@ -18,7 +18,7 @@ export type RoundSecond = {
 };
 
 // What the nemesis did, as the history names it.
-export type EventKind =
+type EventKind =
   | 'kill'
   | 'freeze'
   | 'failpoint_fired'
@@ -38,7 +38,7 @@ export type RoundEvent = {
   readonly duration: string;
 };
 
-export type GuaranteeStatus = 'ok' | 'failed' | 'not_checked';
+type GuaranteeStatus = 'ok' | 'failed' | 'not_checked';
 
 export type GuaranteeCheck = { readonly id: string; readonly status: GuaranteeStatus; readonly violations: number };
 

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { fetchAttackMenu } from '../../../api/attacks';
 import type { AttackMenu } from '../../../api/attacks';
 
-export type MenuReading =
+type MenuReading =
   { readonly kind: 'loading' } | { readonly kind: 'ready'; readonly menu: AttackMenu } | { readonly kind: 'failed' };
 
 // useAttackMenu reads the lab's attack menu once.

@@ -6,27 +6,31 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
 
-	"centavo/lab/internal/replay"
-
 	"centavo/lab/internal/checker"
+	"centavo/lab/internal/replay"
 )
 
-// Bounds of what the panel sends and keeps.
+// Bounds of what the panel keeps.
 const (
-	// liveWindow is how much of the current round the live charts show.
-	liveWindow = 10 * time.Minute
-	// maxRoundsListed is the length of the round list.
-	maxRoundsListed = 20
 	// maxSummaries bounds the cache of finished rounds' counters.
 	maxSummaries = 1_000
 	// launchTolerance absorbs clock rounding between the panel noting a
 	// start and the round writing its own.
 	launchTolerance = 2 * time.Second
 )
+
+// A round is finished once the checker has written its report.
+const reportJSONFile = "report.json"
+
+// roundDirPattern matches a round's directory, r0001; only such names are
+// ever joined to the rounds directory.
+var roundDirPattern = regexp.MustCompile(`^r(\d{4,})$`)
 
 // summary is what the headline adds up from one finished round.
 type summary struct {
@@ -41,29 +45,12 @@ type summary struct {
 	ReportURL  string          `json:"report_url"`
 }
 
-// headline is the panel's top line.
-type headline struct {
-	ChaosSeconds  int `json:"chaos_seconds"`
-	Kills         int `json:"kills"`
-	Rounds        int `json:"rounds"`
-	FailedRounds  int `json:"failed_rounds"`
-	Failovers     int `json:"failovers"`
-	NetworkFaults int `json:"network_faults"`
-}
-
-type liveResponse struct {
-	Current  *replay.Replay `json:"current"`
-	Headline headline       `json:"headline"`
-	Rounds   []summary      `json:"rounds"`
-}
-
-// tracker follows the round being written and remembers finished ones.
+// tracker reads the rounds directory for the panel and remembers the
+// finished rounds' summaries, so a long list is parsed once.
 type tracker struct {
 	roundsDir string
 
 	mu        sync.Mutex
-	current   string
-	follower  *follower
 	summaries map[string]summary
 }
 
@@ -76,55 +63,6 @@ type follower struct {
 
 func newTracker(roundsDir string) *tracker {
 	return &tracker{roundsDir: roundsDir, summaries: map[string]summary{}}
-}
-
-// live reads what was appended to the newest round's history since the last
-// call, so a long round is parsed once, not on every poll.
-func (t *tracker) live() (liveResponse, error) {
-	entries, err := os.ReadDir(t.roundsDir)
-	if errors.Is(err, fs.ErrNotExist) {
-		return liveResponse{Rounds: []summary{}}, nil
-	}
-
-	if err != nil {
-		return liveResponse{}, fmt.Errorf("listing rounds: %w", err)
-	}
-
-	ids := roundsNewestFirst(entries)
-
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	response := liveResponse{Rounds: []summary{}}
-
-	if len(ids) > 0 {
-		current, err := t.follow(ids[0])
-		if err != nil {
-			return liveResponse{}, err
-		}
-
-		response.Current = current
-	}
-
-	response.Headline, response.Rounds = t.summarize(ids)
-
-	return response, nil
-}
-
-func (t *tracker) follow(id string) (*replay.Replay, error) {
-	if id != t.current {
-		t.current = id
-		t.follower = newFollower(filepath.Join(t.roundsDir, id))
-	}
-
-	current, err := t.follower.advance()
-	if current == nil {
-		return nil, err
-	}
-
-	current.Seconds = lastSeconds(current.Seconds, int(liveWindow/time.Second))
-
-	return current, nil
 }
 
 func newFollower(dir string) *follower {
@@ -166,45 +104,6 @@ func (f *follower) advance() (*replay.Replay, error) {
 	current := f.builder.Replay().WithManifest(manifest)
 
 	return &current, nil
-}
-
-func lastSeconds(seconds []replay.Second, keep int) []replay.Second {
-	if len(seconds) <= keep {
-		return seconds
-	}
-
-	return seconds[len(seconds)-keep:]
-}
-
-// summarize adds up the finished rounds, reading each one's history once.
-func (t *tracker) summarize(ids []string) (headline, []summary) {
-	var (
-		total  headline
-		listed []summary
-	)
-
-	for _, id := range ids {
-		round, isFinished := t.summaryOf(id)
-		if !isFinished {
-			continue
-		}
-
-		total.Rounds++
-		total.ChaosSeconds += round.Seconds
-		total.Kills += round.Counters.Kills + round.Counters.FailpointFires
-		total.Failovers += round.Counters.Failovers
-		total.NetworkFaults += round.Counters.Network
-
-		if round.Verdict == checker.VerdictFail {
-			total.FailedRounds++
-		}
-
-		if len(listed) < maxRoundsListed {
-			listed = append(listed, round)
-		}
-	}
-
-	return total, append([]summary{}, listed...)
 }
 
 // roundStartedSince is the newest round when it started at or after since,
@@ -339,4 +238,32 @@ func (t *tracker) summaryOf(id string) (summary, bool) {
 	}
 
 	return round, true
+}
+
+// roundsNewestFirst lists the round directories, highest number first.
+func roundsNewestFirst(entries []os.DirEntry) []string {
+	type numbered struct {
+		id     string
+		number int
+	}
+
+	var rounds []numbered
+
+	for _, entry := range entries {
+		isRound := entry.IsDir() && roundDirPattern.MatchString(entry.Name())
+		if !isRound {
+			continue
+		}
+
+		rounds = append(rounds, numbered{id: entry.Name(), number: roundNumberOf(entry.Name())})
+	}
+
+	slices.SortFunc(rounds, func(a, b numbered) int { return b.number - a.number })
+
+	ids := make([]string, 0, len(rounds))
+	for _, round := range rounds {
+		ids = append(ids, round.id)
+	}
+
+	return ids
 }

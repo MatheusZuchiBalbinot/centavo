@@ -1,26 +1,5 @@
 import type { RoundSecond } from '../api/replay';
 
-// The geometry of the timeline, in viewBox units.
-export const TIMELINE = {
-  width: 900,
-  left: 92,
-  right: 12,
-  attackTop: 6,
-  attackHeight: 34,
-  barsTop: 52,
-  barsHeight: 140,
-  latencyTop: 208,
-  latencyHeight: 44,
-  axisTop: 270,
-  height: 286,
-  markerRadius: 10,
-  markerStagger: 7,
-} as const;
-
-// A long round would draw more bars than the chart has room for; past this
-// many, seconds are added up into buckets.
-const MAX_BARS = 450;
-
 // Tick spacing of the time axis, by how long the round lasts.
 const TICKS = [
   { upTo: 120, every: 15 },
@@ -31,7 +10,7 @@ const TICKS = [
 
 const DEFAULT_TICK_SECONDS = 60;
 
-export type TimelineSpanInput = {
+type TimelineSpanInput = {
   readonly durationSeconds: number;
   readonly seconds: readonly RoundSecond[];
   readonly lastEventSeconds: number;
@@ -57,62 +36,9 @@ export function ticksOf(span: number): readonly number[] {
   return ticks;
 }
 
-// A bucket is one bar: one second, or several added up.
-export type Bucket = {
-  readonly t: number;
-  readonly width: number;
-  readonly ok: number;
-  readonly fail: number;
-  readonly info: number;
-  readonly p50Ms: number;
-};
-
-// bucketsOf groups the seconds so the chart never draws more than MAX_BARS
-// bars; each bucket keeps the totals and the typical latency of its seconds.
-export function bucketsOf(seconds: readonly RoundSecond[], span: number): readonly Bucket[] {
-  const size = Math.max(1, Math.ceil(span / MAX_BARS));
-  const buckets = new Map<number, RoundSecond[]>();
-
-  for (const second of seconds) {
-    const start = Math.floor(second.t / size) * size;
-    const bucket = buckets.get(start) ?? [];
-
-    bucket.push(second);
-    buckets.set(start, bucket);
-  }
-
-  return [...buckets.entries()].map(([start, members]) => bucketOf(start, size, members));
-}
-
-function bucketOf(start: number, size: number, members: readonly RoundSecond[]): Bucket {
-  const totals = members.reduce(addSecond, { ok: 0, fail: 0, info: 0, p50Ms: 0 });
-
-  // Bars show answers per second, so a bucket of several seconds is averaged.
-  return {
-    t: start,
-    width: size,
-    ok: totals.ok / members.length,
-    fail: totals.fail / members.length,
-    info: totals.info / members.length,
-    p50Ms: totals.p50Ms / members.length,
-  };
-}
-
-function addSecond(
-  totals: { ok: number; fail: number; info: number; p50Ms: number },
-  second: RoundSecond,
-): { ok: number; fail: number; info: number; p50Ms: number } {
-  return {
-    ok: totals.ok + second.ok,
-    fail: totals.fail + second.fail,
-    info: totals.info + second.info,
-    p50Ms: totals.p50Ms + second.p50Ms,
-  };
-}
-
 // A marker on the timeline: one attack, or several that landed too close to
 // tell apart, labeled with the range of their numbers.
-export type Marker = { readonly x: number; readonly label: string; readonly first: number };
+type Marker = { readonly x: number; readonly label: string; readonly first: number };
 
 // clusterMarkers merges attacks closer than minGap in viewBox units, so
 // their numbers stay readable; positions are in the order the attacks

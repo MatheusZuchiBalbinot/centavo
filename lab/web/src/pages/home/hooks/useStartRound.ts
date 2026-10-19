@@ -11,7 +11,7 @@ import { messages } from '../../../i18n/pt-BR';
 
 export type StartChoice = { readonly attack: AttackId; readonly durationSeconds: number };
 
-export type StartRound = { readonly isStarting: boolean; readonly start: (choice: StartChoice) => Promise<boolean> };
+type StartRound = { readonly isStarting: boolean; readonly start: (choice: StartChoice) => Promise<boolean> };
 
 // useStartRound asks the lab for a round and says how it went in a toast.
 export function useStartRound(): StartRound {

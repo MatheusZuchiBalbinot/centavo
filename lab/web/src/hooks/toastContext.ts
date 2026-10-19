@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react';
 
 // error and broken interrupt (role="alert"); the others wait their turn.
-export type ToastTone = 'info' | 'attack' | 'error' | 'broken';
+type ToastTone = 'info' | 'attack' | 'error' | 'broken';
 
 export type ToastInput = { readonly tone: ToastTone; readonly title: string; readonly detail?: string };
 

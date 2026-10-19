@@ -18,7 +18,7 @@ export type LabState =
       readonly startedAt: Date;
     };
 
-export type StartRoundInput = { readonly attack: AttackId; readonly durationSeconds: number };
+type StartRoundInput = { readonly attack: AttackId; readonly durationSeconds: number };
 
 export function fetchLabState(signal?: AbortSignal): Promise<ApiResult<LabState>> {
   return getJSON(API_ROUTES.lab, parseLabState, signal);

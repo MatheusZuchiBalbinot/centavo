@@ -19,61 +19,6 @@ var historyLines = strings.Join([]string{
 	`{"index":2,"round":"r0001","time_ns":1500000000,"wall":"x","process":"nemesis","type":"info","f":"kill","value":{"target":"bank-api"}}`,
 }, "\n") + "\n"
 
-type liveBody struct {
-	Current *struct {
-		Round   string `json:"round"`
-		Seconds []struct {
-			OK int `json:"ok"`
-		} `json:"seconds"`
-		Events []struct {
-			Family string `json:"family"`
-		} `json:"events"`
-	} `json:"current"`
-	Headline struct {
-		Kills        int `json:"kills"`
-		Rounds       int `json:"rounds"`
-		FailedRounds int `json:"failed_rounds"`
-	} `json:"headline"`
-	Rounds []struct {
-		Round      string `json:"round"`
-		Operations int    `json:"operations"`
-	} `json:"rounds"`
-}
-
-func TestLive_FollowsTheCurrentRoundAndAddsUpTheFinishedOnes(t *testing.T) {
-	t.Parallel()
-
-	roundsDir := t.TempDir()
-	writeLiveRound(t, roundsDir, "r0001", `{"verdict":"fail","invariants":[]}`)
-	writeLiveRound(t, roundsDir, "r0002", "")
-	handler := dashboard.NewHandler(dashboard.Config{Live: noReading, RoundsDir: roundsDir})
-
-	var live liveBody
-
-	code := get(t, handler, "/api/live", &live)
-	isUnexpected := code != http.StatusOK || live.Current == nil
-	if isUnexpected {
-		t.Fatalf("status %d, current %+v", code, live.Current)
-	}
-
-	isCurrent := live.Current.Round == "r0002" && len(live.Current.Seconds) == 1 && live.Current.Seconds[0].OK == 1 && len(live.Current.Events) == 1
-	if !isCurrent {
-		t.Fatalf("current round: %+v", live.Current)
-	}
-
-	isAddedUp := live.Headline.Rounds == 1 && live.Headline.FailedRounds == 1 && live.Headline.Kills == 1 && len(live.Rounds) == 1 && live.Rounds[0].Operations == 1
-	if !isAddedUp {
-		t.Fatalf("headline %+v, rounds %+v", live.Headline, live.Rounds)
-	}
-
-	appendTo(t, filepath.Join(roundsDir, "r0002", "history.jsonl"), `{"index":3,"round":"r0002","time_ns":2100000000,"wall":"x","process":"nemesis","type":"info","f":"heal_start"}`+"\n")
-	get(t, handler, "/api/live", &live)
-
-	if len(live.Current.Events) != 2 {
-		t.Fatalf("the line appended later was not read: %+v", live.Current.Events)
-	}
-}
-
 func TestReplay_ServesOnlyRoundDirectories(t *testing.T) {
 	t.Parallel()
 

@@ -29,7 +29,7 @@ export type RoundSummary = {
 
 export type RoundsPage = { readonly rounds: readonly RoundSummary[]; readonly nextCursor: RoundId | null };
 
-export type RoundsQuery = { readonly limit: number; readonly cursor?: RoundId | null };
+type RoundsQuery = { readonly limit: number; readonly cursor?: RoundId | null };
 
 export function fetchRounds(query: RoundsQuery, signal?: AbortSignal): Promise<ApiResult<RoundsPage>> {
   const params = new URLSearchParams({ limit: String(query.limit) });
@@ -41,7 +41,7 @@ export function fetchRounds(query: RoundsQuery, signal?: AbortSignal): Promise<A
   return getJSON(`${API_ROUTES.rounds}?${params.toString()}`, parseRoundsPage, signal);
 }
 
-export function parseRoundsPage(body: unknown): RoundsPage | null {
+function parseRoundsPage(body: unknown): RoundsPage | null {
   if (!isObject(body) || !Array.isArray(body.rounds)) {
     return null;
   }

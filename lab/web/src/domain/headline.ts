@@ -12,7 +12,7 @@ import type { Phase } from './phase';
 const PROFILE_SEPARATOR = ',';
 const DISABLED_PREFIX = '-';
 
-export type HeadlineInput = {
+type HeadlineInput = {
   readonly replay: Replay;
   readonly phase: Phase;
   readonly elapsedSeconds: number;

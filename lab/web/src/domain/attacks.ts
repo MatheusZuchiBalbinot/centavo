@@ -4,7 +4,7 @@ import type { ChaosCounters } from '../api/rounds';
 import { format } from '../i18n/format';
 import { messages } from '../i18n/pt-BR';
 
-export type AttackCopy = {
+type AttackCopy = {
   readonly name: string;
   readonly detail: string;
   readonly family: string;

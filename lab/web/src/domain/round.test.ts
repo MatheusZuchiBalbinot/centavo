@@ -7,7 +7,7 @@ import { guaranteeView } from './guarantees';
 import { expectationOf, headlineOf } from './headline';
 import { phaseOf } from './phase';
 import { initialRoundState, mergeSeconds, reduceRound } from './roundState';
-import { bucketsOf, clusterMarkers, spanOf } from './timeline';
+import { clusterMarkers, spanOf } from './timeline';
 
 describe('reduceRound', () => {
   it('follows a round from its snapshot to its verdict, counting what came after the snapshot', () => {
@@ -128,13 +128,12 @@ describe('expectationOf', () => {
   });
 });
 
-describe('timeline', () => {
-  it('covers the planned attack and buckets long rounds into few bars', () => {
-    const seconds = Array.from({ length: 1_000 }, (_, t) => aSecond(t));
-
+describe('spanOf', () => {
+  it('covers the planned attack, or more when the cure runs past it', () => {
     expect(spanOf({ durationSeconds: 300, seconds: [aSecond(0)], lastEventSeconds: 0, nowSeconds: null })).toBe(300);
-    expect(bucketsOf(seconds, 1_000).length).toBeLessThanOrEqual(450);
-    expect(bucketsOf(seconds, 1_000)[0]?.ok).toBe(20);
+    expect(spanOf({ durationSeconds: 180, seconds: [aSecond(239)], lastEventSeconds: 200, nowSeconds: null })).toBe(
+      240,
+    );
   });
 });
 

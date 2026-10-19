@@ -90,11 +90,6 @@ func (w *Writer) AppendDurable(record Record) (Record, error) {
 	return written, nil
 }
 
-// Elapsed is the monotonic time since the round started, as records show it.
-func (w *Writer) Elapsed() time.Duration {
-	return time.Since(w.started)
-}
-
 // Close syncs what is left and closes the file.
 func (w *Writer) Close() error {
 	w.mu.Lock()

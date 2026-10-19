@@ -3,7 +3,7 @@ import { format } from '../i18n/format';
 import { messages } from '../i18n/pt-BR';
 import { isAttackEvent } from './phase';
 
-export type FeedTone = 'attack' | 'heal' | 'other';
+type FeedTone = 'attack' | 'heal' | 'other';
 
 // A feed item says what happened and what should follow from it. Attacks of
 // the same kind in a row are one item: a burst of the same failpoint reads

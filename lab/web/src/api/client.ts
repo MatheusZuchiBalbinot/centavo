@@ -1,7 +1,7 @@
 import { isObject, isString } from './guards';
 
 // The codes the lab answers with, plus two the client itself detects.
-export type ApiErrorCode =
+type ApiErrorCode =
   | 'invalid_request'
   | 'unsupported_media_type'
   | 'body_too_large'
@@ -22,7 +22,7 @@ export type ApiFailure = { readonly code: ApiErrorCode; readonly status: number 
 export type ApiResult<T> = { readonly ok: true; readonly data: T } | { readonly ok: false; readonly error: ApiFailure };
 
 // parse turns the lab's JSON into the app's type, or null when it does not fit.
-export type Parser<T> = (body: unknown) => T | null;
+type Parser<T> = (body: unknown) => T | null;
 
 const KNOWN_CODES: ReadonlySet<string> = new Set<ApiErrorCode>([
   'invalid_request',

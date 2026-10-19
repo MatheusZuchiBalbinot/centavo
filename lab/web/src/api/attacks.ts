@@ -13,7 +13,7 @@ export function fetchAttackMenu(signal?: AbortSignal): Promise<ApiResult<AttackM
   return getJSON(API_ROUTES.attacks, parseAttackMenu, signal);
 }
 
-export function parseAttackMenu(body: unknown): AttackMenu | null {
+function parseAttackMenu(body: unknown): AttackMenu | null {
   if (!isObject(body)) {
     return null;
   }

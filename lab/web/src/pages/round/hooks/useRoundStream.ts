@@ -6,7 +6,7 @@ import type { StreamMessage } from '../../../api/roundStream';
 import { initialRoundState, reduceRound } from '../../../domain/roundState';
 import type { RoundState } from '../../../domain/roundState';
 
-export type RoundStream = {
+type RoundStream = {
   readonly state: RoundState;
   readonly isConnected: boolean;
   // lastMessageAt is when the stream last said anything, for "há 2 s".

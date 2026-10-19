@@ -2,8 +2,6 @@ package dashboard
 
 // Routes of the panel.
 const (
-	statusRoute  = "/api/status"
-	liveRoute    = "/api/live"
 	replayRoute  = "/api/replay/{round}"
 	reportRoute  = "/rounds/{round}/" + reportMDFile
 	staticRoute  = "/"

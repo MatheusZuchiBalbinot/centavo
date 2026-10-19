@@ -9,9 +9,9 @@ export type ChartPoint = { readonly at: number; readonly value: number };
 
 // A moment on the time axis worth pointing at: an attack, numbered as in the
 // feed.
-export type ChartMarker = { readonly at: number };
+type ChartMarker = { readonly at: number };
 
-export type ChartBand = { readonly from: number; readonly to: number; readonly label: string };
+type ChartBand = { readonly from: number; readonly to: number; readonly label: string };
 
 type AreaChartProps = {
   readonly points: readonly ChartPoint[];

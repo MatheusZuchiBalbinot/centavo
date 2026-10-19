@@ -6,7 +6,7 @@ import type { RoundSummary } from '../../../api/rounds';
 // The home page sums up this many rounds and shows the newest few.
 const ROUNDS_READ = 100;
 
-export type RoundsReading =
+type RoundsReading =
   | { readonly kind: 'loading' }
   | { readonly kind: 'ready'; readonly rounds: readonly RoundSummary[] }
   | { readonly kind: 'failed' };

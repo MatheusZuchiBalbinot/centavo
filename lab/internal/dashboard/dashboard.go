@@ -1,5 +1,6 @@
-// Package dashboard serves the lab panel. This is the minimal invariants page:
-// the live auditor's checks and the verdict of the last round.
+// Package dashboard serves the lab panel: the React app, the API that starts
+// and stops rounds, the list of finished rounds, their replays and reports,
+// and the live stream of the round being played.
 package dashboard
 
 import (
@@ -62,8 +63,6 @@ func NewHandler(config Config) http.Handler {
 
 	mux := http.NewServeMux()
 	mux.Handle("GET "+HealthPath, healthHandler{response: healthResponse{Service: "lab", Version: config.Version, Status: "ok"}})
-	mux.HandleFunc("GET "+statusRoute, panel.status)
-	mux.HandleFunc("GET "+liveRoute, panel.live)
 	mux.HandleFunc("GET "+replayRoute, panel.replay)
 	mux.HandleFunc("GET "+reportRoute, panel.report)
 	mux.Handle("GET "+staticRoute, newAppHandler())
@@ -97,19 +96,6 @@ func withSecurityHeaders(next http.Handler) http.Handler {
 
 func (h healthHandler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, h.response)
-}
-
-// live is the current round, the headline and the round list.
-func (p panelHandlers) live(w http.ResponseWriter, r *http.Request) {
-	response, err := p.tracker.live()
-	if err != nil {
-		p.writeError(w, r, err)
-
-		return
-	}
-
-	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, http.StatusOK, response)
 }
 
 // rounds lists the finished rounds, newest first, a page at a time; the
@@ -160,26 +146,6 @@ func (p panelHandlers) replay(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, built)
-}
-
-func (p panelHandlers) status(w http.ResponseWriter, r *http.Request) {
-	live := waitingStatus()
-
-	reading, hasReading := p.config.Live()
-	if hasReading {
-		live = liveStatusOf(reading)
-	}
-
-	response := statusResponse{Live: live}
-
-	round, err := latestRound(p.config.RoundsDir)
-	if err != nil {
-		p.config.Logger.WarnContext(r.Context(), "reading the last round", "error", err)
-	}
-
-	response.LastRound = round
-	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, http.StatusOK, response)
 }
 
 // report serves report.md as plain text; the round id is checked against the

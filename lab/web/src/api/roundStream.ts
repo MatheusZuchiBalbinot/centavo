@@ -13,7 +13,7 @@ export type StreamMessage =
   | { readonly type: 'auditor'; readonly reading: AuditorReading }
   | { readonly type: 'finished'; readonly replay: Replay };
 
-export type StreamHandlers = {
+type StreamHandlers = {
   readonly onMessage: (message: StreamMessage) => void;
   readonly onConnectionChange: (isConnected: boolean) => void;
 };
@@ -58,7 +58,7 @@ export function openRoundStream(round: RoundId, handlers: StreamHandlers): () =>
   };
 }
 
-export function parseMessage(type: string, data: string): StreamMessage | null {
+function parseMessage(type: string, data: string): StreamMessage | null {
   const body = parseJSON(data);
 
   switch (type) {
