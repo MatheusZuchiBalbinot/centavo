@@ -37,9 +37,19 @@ const correlationHeader = "X-Correlation-Id"
 // endToEndPattern accepts the bank's ids, E plus hex and an optional attempt.
 var endToEndPattern = regexp.MustCompile(`^E[0-9a-fA-F-]{8,80}$`)
 
+// TruthReader is what the API reads from the truth.
+type TruthReader interface {
+	Get(ctx context.Context, endToEndID string) (truth.Transfer, error)
+	Statement(ctx context.Context, participantID string, afterSeq int64, limit int) ([]truth.StatementEntry, error)
+	Truth(ctx context.Context, participantID string, since time.Time) (truth.Export, error)
+	PendingDeliveries(ctx context.Context) (int, error)
+	LastStatementSeq(ctx context.Context, participantID string) (int64, error)
+}
+
 // API serves the partner's client API (8081) and its admin port (9092).
 type API struct {
-	store        *truth.Store
+	intake       truth.Intake
+	reads        TruthReader
 	modes        *modes.Registry
 	participants map[string]bool
 	logger       *slog.Logger
@@ -47,7 +57,8 @@ type API struct {
 
 // APIConfig wires the handlers.
 type APIConfig struct {
-	Store        *truth.Store
+	Intake       truth.Intake
+	Reads        TruthReader
 	Modes        *modes.Registry
 	Participants []string
 	Logger       *slog.Logger
@@ -92,7 +103,7 @@ func NewAPI(config APIConfig) API {
 		participants[participant] = true
 	}
 
-	return API{store: config.Store, modes: config.Modes, participants: participants, logger: config.Logger}
+	return API{intake: config.Intake, reads: config.Reads, modes: config.Modes, participants: participants, logger: config.Logger}
 }
 
 // Handler serves POST /v1/transfers, GET /v1/transfers/{e2e} and GET /v1/statements.
@@ -131,7 +142,7 @@ func (a API) submit(w http.ResponseWriter, r *http.Request) {
 	transfer := newTransfer(request, decider, now)
 	transfer.CorrelationID = correlationOf(r)
 
-	result, err := a.store.Submit(r.Context(), transfer)
+	result, err := a.intake.Submit(r.Context(), transfer)
 	if err != nil {
 		writeError(w, r, a.logger, fmt.Errorf("recording a transfer: %w", err))
 
@@ -194,7 +205,7 @@ func newTransfer(request submitRequest, decider modes.Decider, now time.Time) tr
 func (a API) status(w http.ResponseWriter, r *http.Request) {
 	e2e := r.PathValue("e2e")
 
-	transfer, err := a.store.Get(r.Context(), e2e)
+	transfer, err := a.reads.Get(r.Context(), e2e)
 	if err != nil {
 		writeError(w, r, a.logger, err)
 
@@ -233,7 +244,7 @@ func (a API) statement(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entries, err := a.store.Statement(r.Context(), participant, afterSeq, limit)
+	entries, err := a.reads.Statement(r.Context(), participant, afterSeq, limit)
 	if err != nil {
 		writeError(w, r, a.logger, err)
 
@@ -272,7 +283,7 @@ func (a API) incoming(w http.ResponseWriter, r *http.Request) {
 	}
 	decider := a.modes.For(request.ParticipantID, now)
 
-	isNew, err := a.store.AddIncoming(r.Context(), truth.IncomingCommand{Incoming: incoming, EventID: engine.NewEventID(), Planner: decider.Plan})
+	isNew, err := a.intake.AddIncoming(r.Context(), truth.IncomingCommand{Incoming: incoming, EventID: engine.NewEventID(), Planner: decider.Plan})
 	if err != nil {
 		writeError(w, r, a.logger, err)
 
@@ -298,7 +309,7 @@ func (a API) truthExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	export, err := a.store.Truth(r.Context(), participant, since)
+	export, err := a.reads.Truth(r.Context(), participant, since)
 	if err != nil {
 		writeError(w, r, a.logger, err)
 
@@ -322,14 +333,14 @@ func sinceOf(r *http.Request) (time.Time, error) {
 // pending is what the lab's quiescence waits on: webhooks still to deliver
 // and, for a participant, the statement entry its reconciliation must reach.
 func (a API) pending(w http.ResponseWriter, r *http.Request) {
-	count, err := a.store.PendingDeliveries(r.Context())
+	count, err := a.reads.PendingDeliveries(r.Context())
 	if err != nil {
 		writeError(w, r, a.logger, err)
 
 		return
 	}
 
-	lastSeq, err := a.store.LastStatementSeq(r.Context(), r.URL.Query().Get("participant_id"))
+	lastSeq, err := a.reads.LastStatementSeq(r.Context(), r.URL.Query().Get("participant_id"))
 	if err != nil {
 		writeError(w, r, a.logger, err)
 

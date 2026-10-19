@@ -18,6 +18,7 @@ import (
 	"centavo/partner/internal/engine"
 	"centavo/partner/internal/interfaces/httpapi"
 	"centavo/partner/internal/modes"
+	"centavo/partner/internal/storage"
 	"centavo/partner/internal/truth"
 )
 
@@ -26,7 +27,7 @@ const participant = "centavo-robust"
 type partnerFixture struct {
 	api      http.Handler
 	admin    http.Handler
-	store    *truth.Store
+	store    *storage.DB
 	registry *modes.Registry
 }
 
@@ -147,7 +148,7 @@ func TestEngine_SettlesAndDeliversSignedWebhooks(t *testing.T) {
 	}))
 	defer bank.Close()
 
-	worker := engine.New(engine.Config{Store: fixture.store, Modes: fixture.registry, Participants: []engine.Participant{{ID: participant, WebhookURL: bank.URL}}, Secret: secret, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	worker := engine.New(engine.Config{Queue: fixture.store, Saga: truth.NewSaga(fixture.store), Modes: fixture.registry, Participants: []engine.Participant{{ID: participant, WebhookURL: bank.URL}}, Secret: secret, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	go worker.Run(t.Context())
 
 	call(t, fixture.api, http.MethodPost, "/v1/transfers", transferBody("E0192f1c5a1b2c3d8", "dest-0001"))
@@ -188,7 +189,7 @@ func TestEngine_EchoesTheCorrelationIDOnWebhooks(t *testing.T) {
 	}))
 	defer bank.Close()
 
-	worker := engine.New(engine.Config{Store: fixture.store, Modes: fixture.registry, Participants: []engine.Participant{{ID: participant, WebhookURL: bank.URL}}, Secret: secret, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	worker := engine.New(engine.Config{Queue: fixture.store, Saga: truth.NewSaga(fixture.store), Modes: fixture.registry, Participants: []engine.Participant{{ID: participant, WebhookURL: bank.URL}}, Secret: secret, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	go worker.Run(t.Context())
 
 	submit := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/transfers", strings.NewReader(transferBody("E0192f1c5a1b2c3d9", "dest-0001")))
@@ -261,7 +262,7 @@ func TestErrors_AnswerAStableCode(t *testing.T) {
 func newPartner(t *testing.T) partnerFixture {
 	t.Helper()
 
-	store, err := truth.Open(t.Context(), filepath.Join(t.TempDir(), "truth.db"))
+	store, err := storage.Open(t.Context(), filepath.Join(t.TempDir(), "truth.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +270,8 @@ func newPartner(t *testing.T) partnerFixture {
 	t.Cleanup(func() { _ = store.Close() })
 
 	registry := modes.NewRegistry()
-	api := httpapi.NewAPI(httpapi.APIConfig{Store: store, Modes: registry, Participants: []string{participant}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	apiConfig := httpapi.APIConfig{Intake: truth.NewIntake(store), Reads: store, Modes: registry, Participants: []string{participant}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	api := httpapi.NewAPI(apiConfig)
 
 	return partnerFixture{api: api.Handler(), admin: httpapi.NewAdminHandler(httpapi.BuildInfo{}, api, nil), store: store, registry: registry}
 }

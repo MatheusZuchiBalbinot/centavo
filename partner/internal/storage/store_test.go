@@ -1,4 +1,4 @@
-package truth_test
+package storage_test
 
 import (
 	"context"
@@ -8,10 +8,18 @@ import (
 	"testing"
 	"time"
 
+	"centavo/partner/internal/storage"
 	"centavo/partner/internal/truth"
 )
 
 var epoch = time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)
+
+// truthStore is the truth with its use cases, the way the partner wires it.
+type truthStore struct {
+	*storage.DB
+	truth.Saga
+	truth.Intake
+}
 
 func TestSubmit_IsIdempotentByEndToEndID(t *testing.T) {
 	t.Parallel()
@@ -219,12 +227,7 @@ func TestOpen_AddsTheColumnsOfANewerSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	store, err := truth.Open(t.Context(), path)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Cleanup(func() { _ = store.Close() })
+	store := openStoreAt(t, path)
 
 	transfer := truth.Transfer{EndToEndID: "E-old", ParticipantID: "centavo-robust", AmountCents: 100, DestinationKey: "dest-0001", Status: truth.StatusProcessing, SettleAt: epoch, CreatedAt: epoch, CorrelationID: "r0001-p01-000001"}
 
@@ -325,20 +328,26 @@ func honest(event truth.Event, now time.Time) []truth.PlannedDelivery {
 	return []truth.PlannedDelivery{{EventID: event.ID, At: now}}
 }
 
-func openStore(t *testing.T) *truth.Store {
+func openStore(t *testing.T) truthStore {
 	t.Helper()
 
-	store, err := truth.Open(t.Context(), filepath.Join(t.TempDir(), "truth.db"))
+	return openStoreAt(t, filepath.Join(t.TempDir(), "truth.db"))
+}
+
+func openStoreAt(t *testing.T, path string) truthStore {
+	t.Helper()
+
+	db, err := storage.Open(t.Context(), path)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	t.Cleanup(func() { _ = store.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 
-	return store
+	return truthStore{DB: db, Saga: truth.NewSaga(db), Intake: truth.NewIntake(db)}
 }
 
-func submit(t *testing.T, store *truth.Store, e2e string, isDouble bool) truth.SubmitResult {
+func submit(t *testing.T, store truthStore, e2e string, isDouble bool) truth.SubmitResult {
 	t.Helper()
 
 	transfer := truth.Transfer{EndToEndID: e2e, ParticipantID: "centavo-robust", AmountCents: 4_500, DestinationKey: "dest-0001", Status: truth.StatusProcessing, IsDoubleProcessed: isDouble, SettleAt: epoch, CreatedAt: epoch}

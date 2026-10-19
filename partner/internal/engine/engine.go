@@ -41,9 +41,20 @@ type Participant struct {
 	WebhookURL string
 }
 
+// Queue is what the engine reads and records about due work: the transfers
+// waiting for a decision and the webhooks waiting to be delivered.
+type Queue interface {
+	Due(ctx context.Context, now time.Time, limit int) ([]truth.Transfer, error)
+	DueDeliveries(ctx context.Context, now time.Time, limit int) ([]truth.Delivery, error)
+	MarkDelivered(ctx context.Context, id int64) error
+	Reschedule(ctx context.Context, id int64, next time.Time) error
+	Abandon(ctx context.Context, id int64, at time.Time) error
+}
+
 // Engine decides transfers and delivers webhooks.
 type Engine struct {
-	store        *truth.Store
+	queue        Queue
+	saga         truth.Saga
 	modes        *modes.Registry
 	participants map[string]Participant
 	secret       []byte
@@ -53,7 +64,8 @@ type Engine struct {
 
 // Config wires an engine.
 type Config struct {
-	Store        *truth.Store
+	Queue        Queue
+	Saga         truth.Saga
 	Modes        *modes.Registry
 	Participants []Participant
 	Secret       []byte
@@ -68,7 +80,7 @@ func New(config Config) *Engine {
 	}
 
 	return &Engine{
-		store: config.Store, modes: config.Modes, participants: participants, secret: config.Secret,
+		queue: config.Queue, saga: config.Saga, modes: config.Modes, participants: participants, secret: config.Secret,
 		http: &http.Client{Timeout: deliveryTimeout}, logger: config.Logger,
 	}
 }
@@ -116,7 +128,7 @@ func Sign(secret []byte, at time.Time, body []byte) string {
 func (e *Engine) decideDue(ctx context.Context) {
 	now := time.Now().UTC()
 
-	due, err := e.store.Due(ctx, now, batchSize)
+	due, err := e.queue.Due(ctx, now, batchSize)
 	if err != nil {
 		e.logger.WarnContext(ctx, "listing due transfers", "error", err)
 
@@ -135,26 +147,26 @@ func (e *Engine) decide(ctx context.Context, transfer truth.Transfer, now time.T
 	decider := e.modes.For(transfer.ParticipantID, now)
 
 	if transfer.Status == truth.StatusSettled {
-		return e.store.Return(ctx, truth.ReturnCommand{EndToEndID: transfer.EndToEndID, Now: now, EventID: NewEventID(), Planner: decider.Plan})
+		return e.saga.Return(ctx, truth.ReturnCommand{EndToEndID: transfer.EndToEndID, Now: now, EventID: NewEventID(), Planner: decider.Plan})
 	}
 
 	if decider.Reject() {
 		rejectCommand := truth.RejectCommand{EndToEndID: transfer.EndToEndID, Reason: declinedReason, Now: now, EventID: NewEventID(), Planner: decider.Plan}
 
-		return e.store.Reject(ctx, rejectCommand)
+		return e.saga.Reject(ctx, rejectCommand)
 	}
 
 	settleCommand := truth.SettleCommand{
 		EndToEndID: transfer.EndToEndID, Now: now, ReturnAt: decider.ReturnAfterSettle(), EventID: NewEventID(), Planner: decider.Plan,
 	}
 
-	return e.store.Settle(ctx, settleCommand)
+	return e.saga.Settle(ctx, settleCommand)
 }
 
 func (e *Engine) deliverDue(ctx context.Context) {
 	now := time.Now().UTC()
 
-	due, err := e.store.DueDeliveries(ctx, now, batchSize)
+	due, err := e.queue.DueDeliveries(ctx, now, batchSize)
 	if err != nil {
 		e.logger.WarnContext(ctx, "listing due deliveries", "error", err)
 
@@ -171,7 +183,7 @@ func (e *Engine) deliverDue(ctx context.Context) {
 func (e *Engine) deliver(ctx context.Context, delivery truth.Delivery, now time.Time) {
 	err := e.send(ctx, delivery, now)
 	if err == nil {
-		e.record(ctx, e.store.MarkDelivered(ctx, delivery.ID))
+		e.record(ctx, e.queue.MarkDelivered(ctx, delivery.ID))
 
 		return
 	}
@@ -183,12 +195,12 @@ func (e *Engine) deliver(ctx context.Context, delivery truth.Delivery, now time.
 	e.logger.InfoContext(ctx, "webhook delivery failed", "event_id", delivery.EventID, "attempt", attempt, "abandoned", isLastAttempt, "error", err)
 
 	if isLastAttempt {
-		e.record(ctx, e.store.Abandon(ctx, delivery.ID, next))
+		e.record(ctx, e.queue.Abandon(ctx, delivery.ID, next))
 
 		return
 	}
 
-	e.record(ctx, e.store.Reschedule(ctx, delivery.ID, next))
+	e.record(ctx, e.queue.Reschedule(ctx, delivery.ID, next))
 }
 
 func (e *Engine) send(ctx context.Context, delivery truth.Delivery, now time.Time) error {

@@ -25,6 +25,7 @@ import (
 	"centavo/partner/internal/platform/chaoskill"
 	"centavo/partner/internal/platform/config"
 	"centavo/partner/internal/platform/httpserver"
+	"centavo/partner/internal/storage"
 	"centavo/partner/internal/truth"
 )
 
@@ -105,7 +106,7 @@ func serve(ctx context.Context) error {
 		logger.WarnContext(ctx, "chaoslab build: chaos code is compiled into this binary", "marker", chaosbuild.Sentinel(), "version", buildinfo.Version())
 	}
 
-	store, err := truth.Open(ctx, configuration.DBPath)
+	store, err := storage.Open(ctx, configuration.DBPath)
 	if err != nil {
 		return err
 	}
@@ -120,10 +121,15 @@ func serve(ctx context.Context) error {
 		participantIDs = append(participantIDs, participant.ID)
 	}
 
-	worker := engine.New(engine.Config{Store: store, Modes: registry, Participants: participants, Secret: []byte(configuration.WebhookSecret), Logger: logger})
+	engineConfig := engine.Config{
+		Queue: store, Saga: truth.NewSaga(store), Modes: registry, Participants: participants,
+		Secret: []byte(configuration.WebhookSecret), Logger: logger,
+	}
+	worker := engine.New(engineConfig)
 	go worker.Run(ctx)
 
-	api := httpapi.NewAPI(httpapi.APIConfig{Store: store, Modes: registry, Participants: participantIDs, Logger: logger})
+	apiConfig := httpapi.APIConfig{Intake: truth.NewIntake(store), Reads: store, Modes: registry, Participants: participantIDs, Logger: logger}
+	api := httpapi.NewAPI(apiConfig)
 	buildInfo := httpapi.BuildInfo{Version: buildinfo.Version(), IsChaosBuild: chaosbuild.IsEnabled(), Env: string(configuration.Env)}
 	adminHandler := httpapi.NewAdminHandler(buildInfo, api, chaos.Handler(configuration.ChaosToken, registry))
 	apiServer := httpserver.New(apiAddr, api.Handler())
@@ -134,7 +140,7 @@ func serve(ctx context.Context) error {
 	return httpserver.Run(ctx, apiServer, adminServer)
 }
 
-func closeStore(store *truth.Store, logger *slog.Logger) {
+func closeStore(store *storage.DB, logger *slog.Logger) {
 	err := store.Close()
 	if err != nil {
 		logger.Warn("closing the truth", "error", err)
