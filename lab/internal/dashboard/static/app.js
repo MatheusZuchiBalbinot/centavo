@@ -2,55 +2,18 @@
 
 // The panel. Three modes on one page: live (the default), ?replay=<file> plays
 // an exported round, and ?compare=<round>,<round> puts two finished rounds side
-// by side.
+// by side. Every text comes from messages.js.
 
 const REFRESH_MS = 2000;
+const FRAME_INTERVAL_MS = 250;
+const MS_PER_SECOND = 1000;
+const SECONDS_PER_MINUTE = 60;
+const SECONDS_PER_HOUR = 3600;
+const CLOCK_DIGITS = 2;
 const SVG = 'http://www.w3.org/2000/svg';
-const CHART = { width: 600, height: 140 };
+const CHART = Object.freeze({ width: 600, height: 140, padding: 4 });
 const TIMELINE_LENGTH = 40;
-
-const STATE_TEXT = {
-  ok: 'ok',
-  violated: 'violada',
-  unknown: 'aguarda',
-  failed: 'falhou',
-  not_checked: 'não verificada',
-  pass: 'PASSOU',
-  fail: 'FALHOU',
-  inconclusive: 'INCONCLUSIVA',
-};
-
-const INVARIANT_LABELS = {
-  I1: 'conservação do dinheiro',
-  I2: 'exatamente uma vez',
-  I3: 'indeterminadas resolvidas',
-  I4: 'saldo nunca negativo',
-  I5: 'toda saga termina',
-  I6: 'concorda com o parceiro',
-  I7: 'só transições válidas',
-  I8: 'o passado não muda',
-};
-
-const FAMILY_TEXT = {
-  process: 'processo',
-  failpoint: 'failpoint',
-  network: 'rede',
-  database: 'banco',
-  clock: 'relógio',
-  partner: 'parceiro',
-  heal: 'cura',
-};
-
-const COUNTER_TEXT = [
-  ['kills', 'processos mortos'],
-  ['failpoint_fires', 'failpoints disparados'],
-  ['network_episodes', 'falhas de rede'],
-  ['database_faults', 'falhas do banco'],
-  ['freezes', 'congelamentos'],
-  ['failovers', 'failovers'],
-  ['clock_skews', 'relógios desviados'],
-  ['resolved', 'indeterminadas resolvidas'],
-];
+const COMPARED_ROUNDS = 2;
 
 function element(tag, text, attributes) {
   const node = document.createElement(tag);
@@ -76,47 +39,66 @@ function svgElement(tag, attributes) {
   return node;
 }
 
+function twoDigits(value) {
+  return String(value).padStart(CLOCK_DIGITS, '0');
+}
+
 function formatDuration(seconds) {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
+  const hours = Math.floor(seconds / SECONDS_PER_HOUR);
+  const minutes = Math.floor((seconds % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE);
 
   if (hours > 0) {
-    return hours + 'h' + String(minutes).padStart(2, '0') + 'min';
+    return format(MESSAGES.durationHours, { hours, minutes: twoDigits(minutes) });
   }
 
-  return minutes + ' min';
+  return format(MESSAGES.durationMinutes, { minutes });
 }
 
 function formatClock(milliseconds) {
-  const seconds = Math.floor(milliseconds / 1000);
+  const seconds = Math.floor(milliseconds / MS_PER_SECOND);
 
-  return Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0');
+  return Math.floor(seconds / SECONDS_PER_MINUTE) + ':' + twoDigits(seconds % SECONDS_PER_MINUTE);
 }
 
 function formatNumber(value) {
-  return value.toLocaleString('pt-BR');
+  return value.toLocaleString(LOCALE);
+}
+
+function stateText(state) {
+  return MESSAGES.state[state] || state;
+}
+
+function setStrip(text) {
+  document.getElementById('strip').textContent = text;
 }
 
 // lineChart draws one polyline per series; the caption and the text summary
 // carry the numbers, so the chart is never the only way to read them.
 function lineChart(container, seconds, series) {
   const svg = svgElement('svg', { viewBox: '0 0 ' + CHART.width + ' ' + CHART.height, role: 'img', preserveAspectRatio: 'none' });
-  const peak = Math.max(1, ...seconds.flatMap((second) => series.map((one) => second[one.key])));
+  const values = seconds.flatMap((second) => series.map((one) => second[one.key]));
+  const peak = Math.max(1, ...values);
   const step = seconds.length > 1 ? CHART.width / (seconds.length - 1) : CHART.width;
   const summary = [];
 
   for (const one of series) {
-    const points = seconds.map((second, index) => (index * step).toFixed(1) + ',' + (CHART.height - (second[one.key] / peak) * (CHART.height - 4)).toFixed(1));
+    const points = seconds.map((second, index) => pointOf(index * step, second[one.key], peak));
     svg.append(svgElement('polyline', { points: points.join(' '), class: 'series series-' + one.label, fill: 'none' }));
 
     const last = seconds.length > 0 ? seconds[seconds.length - 1][one.key] : 0;
     summary.push(one.label + ' ' + formatNumber(Math.round(last)));
   }
 
-  svg.setAttribute('aria-label', 'último segundo: ' + summary.join(', '));
+  svg.setAttribute('aria-label', format(MESSAGES.chartLastSecond, { summary: summary.join(', ') }));
 
   const legend = element('p', summary.join(' · '), { class: 'legend' });
   container.replaceChildren(svg, legend);
+}
+
+function pointOf(x, value, peak) {
+  const y = CHART.height - (value / peak) * (CHART.height - CHART.padding);
+
+  return x.toFixed(1) + ',' + y.toFixed(1);
 }
 
 function renderTimeline(events, uptoMillis) {
@@ -126,7 +108,7 @@ function renderTimeline(events, uptoMillis) {
   list.replaceChildren();
 
   if (visible.length === 0) {
-    list.append(element('li', 'Nenhuma falha injetada ainda.'));
+    list.append(element('li', MESSAGES.noFaultsYet));
 
     return;
   }
@@ -134,7 +116,7 @@ function renderTimeline(events, uptoMillis) {
   for (const event of visible) {
     const item = element('li', undefined, { 'data-family': event.family });
     item.append(element('time', formatClock(event.t_ms)));
-    item.append(element('span', FAMILY_TEXT[event.family] || event.family, { class: 'family' }));
+    item.append(element('span', MESSAGES.families[event.family] || event.family, { class: 'family' }));
     item.append(element('span', event.text));
     list.append(item);
   }
@@ -143,7 +125,7 @@ function renderTimeline(events, uptoMillis) {
 function renderCounters(container, counters) {
   container.replaceChildren();
 
-  for (const [key, label] of COUNTER_TEXT) {
+  for (const [key, label] of MESSAGES.counters) {
     const row = element('div');
     row.append(element('dt', label));
     row.append(element('dd', formatNumber(counters[key] || 0)));
@@ -154,48 +136,43 @@ function renderCounters(container, counters) {
 function renderChecks(container, checks, verdict) {
   container.replaceChildren();
 
-  for (const id of Object.keys(INVARIANT_LABELS)) {
+  for (const id of Object.keys(MESSAGES.invariants)) {
     const check = checks.find((one) => one.id === id);
     const state = check ? check.state || check.status : 'unknown';
     const item = element('li', undefined, { class: 'check', 'data-state': state });
-    item.append(element('strong', id + ' ' + INVARIANT_LABELS[id]));
-    item.append(element('span', STATE_TEXT[state] || state));
+    item.append(element('strong', id + ' ' + MESSAGES.invariants[id]));
+    item.append(element('span', stateText(state)));
 
-    if (check && check.violations > 0) {
-      item.append(element('span', check.violations + ' violação(ões)'));
+    const hasViolations = check && check.violations > 0;
+    if (hasViolations) {
+      item.append(element('span', format(MESSAGES.violations, { count: check.violations })));
     }
 
     container.append(item);
   }
 
   if (verdict) {
-    container.append(element('li', 'Veredito da rodada: ' + (STATE_TEXT[verdict] || verdict), { class: 'check verdict', 'data-state': verdict }));
+    const text = format(MESSAGES.roundVerdict, { verdict: stateText(verdict) });
+    container.append(element('li', text, { class: 'check verdict', 'data-state': verdict }));
   }
 }
 
 // renderReplay paints one round up to a point in time.
 function renderReplay(root, round, uptoMillis) {
-  const seconds = round.seconds.filter((second) => second.t * 1000 <= uptoMillis);
+  const seconds = round.seconds.filter((second) => second.t * MS_PER_SECOND <= uptoMillis);
+  const throughput = root.querySelector('[data-chart="throughput"]') || document.getElementById('throughput');
+  const latency = root.querySelector('[data-chart="latency"]') || document.getElementById('latency');
 
-  lineChart(root.querySelector('[data-chart="throughput"]') || document.getElementById('throughput'), seconds, [
-    { key: 'ok', label: 'ok' },
-    { key: 'fail', label: 'fail' },
-    { key: 'info', label: 'info' },
-  ]);
-  lineChart(root.querySelector('[data-chart="latency"]') || document.getElementById('latency'), seconds, [
-    { key: 'p50_ms', label: 'p50' },
-    { key: 'p99_ms', label: 'p99' },
-  ]);
+  lineChart(throughput, seconds, [{ key: 'ok', label: 'ok' }, { key: 'fail', label: 'fail' }, { key: 'info', label: 'info' }]);
+  lineChart(latency, seconds, [{ key: 'p50_ms', label: 'p50' }, { key: 'p99_ms', label: 'p99' }]);
 }
 
 function renderStrip(round, mode) {
-  const strip = document.getElementById('strip');
-
   if (!round) {
     return;
   }
 
-  strip.textContent = mode + ' · rodada ' + round.round + ' · cenário ' + round.scenario + ' · semente ' + round.seed;
+  setStrip(format(MESSAGES.strip, { mode, round: round.round, scenario: round.scenario, seed: round.seed }));
 }
 
 function renderHeadline(headline) {
@@ -203,7 +180,7 @@ function renderHeadline(headline) {
   document.getElementById('kills').textContent = formatNumber(headline.kills);
 
   const failed = document.getElementById('failed-rounds');
-  failed.textContent = formatNumber(headline.failed_rounds) + ' de ' + formatNumber(headline.rounds);
+  failed.textContent = format(MESSAGES.failedOf, { failed: formatNumber(headline.failed_rounds), total: formatNumber(headline.rounds) });
   failed.setAttribute('data-state', headline.failed_rounds > 0 ? 'fail' : 'ok');
 }
 
@@ -218,10 +195,10 @@ function renderRounds(rounds) {
     row.append(element('td', formatDuration(round.seconds)));
     row.append(element('td', formatNumber(round.operations)));
     row.append(element('td', formatNumber(round.fails)));
-    row.append(element('td', STATE_TEXT[round.verdict] || round.verdict, { 'data-state': round.verdict }));
+    row.append(element('td', stateText(round.verdict), { 'data-state': round.verdict }));
 
     const link = element('td');
-    link.append(element('a', 'relatório de ' + round.round, { href: round.report_url }));
+    link.append(element('a', format(MESSAGES.reportOf, { round: round.round }), { href: round.report_url }));
     row.append(link);
     body.append(row);
   }
@@ -237,6 +214,20 @@ async function getJSON(url) {
   return response.json();
 }
 
+// liveChecks is the auditor's live checks, then the invariants of the last
+// finished round that the auditor does not cover.
+function liveChecks(status) {
+  const last = status.last_round;
+
+  if (!last) {
+    return status.live.checks;
+  }
+
+  const isNotLive = (one) => !status.live.checks.some((live) => live.id === one.id);
+
+  return status.live.checks.concat(last.invariants.filter(isNotLive));
+}
+
 async function refreshLive() {
   try {
     const [live, status] = await Promise.all([getJSON('api/live'), getJSON('api/status')]);
@@ -245,99 +236,123 @@ async function refreshLive() {
     renderRounds(live.rounds);
 
     if (live.current) {
-      renderStrip(live.current, 'ao vivo');
+      renderStrip(live.current, MESSAGES.modeLive);
       renderReplay(document, live.current, Number.MAX_SAFE_INTEGER);
       renderTimeline(live.current.events, Number.MAX_SAFE_INTEGER);
       renderCounters(document.getElementById('counters'), live.current.counters);
     }
 
     const last = status.last_round;
-    const checks = status.live.checks.concat(last ? last.invariants.filter((one) => !status.live.checks.some((live) => live.id === one.id)) : []);
-    renderChecks(document.getElementById('checks'), checks, last && live.current && last.round === live.current.round ? last.verdict : undefined);
+    const isCurrentRoundDone = Boolean(last && live.current && last.round === live.current.round);
+    renderChecks(document.getElementById('checks'), liveChecks(status), isCurrentRoundDone ? last.verdict : undefined);
   } catch (error) {
-    document.getElementById('strip').textContent = 'O painel perdeu contato com o laboratório; tentando de novo.';
+    setStrip(MESSAGES.lostContact);
   }
 }
 
 // playReplay plays an exported round at the chosen speed.
 async function playReplay(url) {
   const round = await getJSON(url);
-  const total = round.seconds.length * 1000;
+  const total = round.seconds.length * MS_PER_SECOND;
   const play = document.getElementById('play');
   const speed = document.getElementById('speed');
-  let position = 0;
-  let isPlaying = true;
-  let last = performance.now();
+  const player = { position: 0, isPlaying: true, last: performance.now() };
 
   document.getElementById('player').hidden = false;
   document.getElementById('rounds-section').hidden = true;
-  renderStrip(round, 'replay');
+  renderStrip(round, MESSAGES.modeReplay);
   renderCounters(document.getElementById('counters'), round.counters);
 
-  play.addEventListener('click', () => {
-    isPlaying = !isPlaying;
-    play.textContent = isPlaying ? 'Pausar' : 'Continuar';
-    play.setAttribute('aria-pressed', String(!isPlaying));
-  });
+  function togglePlay() {
+    player.isPlaying = !player.isPlaying;
+    play.textContent = player.isPlaying ? MESSAGES.pause : MESSAGES.resume;
+  }
 
   function frame(now) {
-    if (isPlaying) {
-      position = Math.min(total, position + (now - last) * Number(speed.value));
+    if (player.isPlaying) {
+      player.position = Math.min(total, player.position + (now - player.last) * Number(speed.value));
     }
 
-    last = now;
-    renderReplay(document, round, position);
-    renderTimeline(round.events, position);
-    document.getElementById('clock').textContent = formatClock(position) + ' de ' + formatClock(total);
+    player.last = now;
+    renderReplay(document, round, player.position);
+    renderTimeline(round.events, player.position);
+    document.getElementById('clock').textContent = format(MESSAGES.clockOf, { position: formatClock(player.position), total: formatClock(total) });
 
-    const isDone = position >= total;
+    const isDone = player.position >= total;
     renderChecks(document.getElementById('checks'), isDone ? round.checks || [] : [], isDone ? round.verdict : undefined);
 
     if (!isDone) {
-      setTimeout(() => requestAnimationFrame(frame), 250);
+      setTimeout(requestNextFrame, FRAME_INTERVAL_MS);
     }
   }
 
+  function requestNextFrame() {
+    requestAnimationFrame(frame);
+  }
+
+  play.textContent = MESSAGES.pause;
+  play.addEventListener('click', togglePlay);
   requestAnimationFrame(frame);
 }
 
 // compareRounds puts two finished rounds side by side: usually the same
 // seed with the naive and the robust profile.
 async function compareRounds(ids) {
-  const rounds = await Promise.all(ids.map((id) => getJSON('api/replay/' + encodeURIComponent(id))));
+  const urls = ids.map((id) => 'api/replay/' + encodeURIComponent(id));
+  const rounds = await Promise.all(urls.map(getJSON));
   const columns = document.getElementById('columns');
   const template = document.getElementById('column-main');
+  const described = rounds.map((round) => format(MESSAGES.sideBySideRound, { round: round.round, scenario: round.scenario, seed: round.seed }));
 
   columns.classList.add('side-by-side');
   columns.replaceChildren();
-  document.getElementById('strip').textContent = 'lado a lado · ' + rounds.map((round) => round.round + ' (' + round.scenario + ', semente ' + round.seed + ')').join(' e ');
+  setStrip(format(MESSAGES.sideBySide, { rounds: described.join(MESSAGES.sideBySideJoin) }));
 
-  rounds.forEach((round, index) => {
-    const column = template.cloneNode(true);
-    column.id = 'column-' + index;
-    column.setAttribute('aria-labelledby', 'column-title-' + index);
-    column.querySelector('h2').id = 'column-title-' + index;
-    column.querySelector('h2').textContent = 'Rodada ' + round.round + ': ' + (STATE_TEXT[round.verdict] || round.verdict);
-    column.setAttribute('data-state', round.verdict);
+  rounds.forEach((round, index) => columns.append(renderColumn(template, round, index)));
+}
 
-    for (const node of column.querySelectorAll('[id]')) {
-      if (node !== column) {
-        node.removeAttribute('id');
-      }
+// renderColumn copies the main column for one compared round.
+function renderColumn(template, round, index) {
+  const column = template.cloneNode(true);
+  const title = column.querySelector('h2');
+
+  column.id = 'column-' + index;
+  column.setAttribute('aria-labelledby', 'column-title-' + index);
+  column.setAttribute('data-state', round.verdict);
+  title.id = 'column-title-' + index;
+  title.textContent = format(MESSAGES.columnTitle, { round: round.round, verdict: stateText(round.verdict) });
+
+  for (const node of column.querySelectorAll('[id]')) {
+    if (node !== title) {
+      node.removeAttribute('id');
     }
+  }
 
-    column.querySelectorAll('.chart')[0].setAttribute('data-chart', 'throughput');
-    column.querySelectorAll('.chart')[1].setAttribute('data-chart', 'latency');
-    column.querySelector('.player').remove();
-    columns.append(column);
+  const [throughput, latency] = column.querySelectorAll('.chart');
+  throughput.setAttribute('data-chart', 'throughput');
+  latency.setAttribute('data-chart', 'latency');
+  column.querySelector('.player').remove();
 
-    renderReplay(column, round, Number.MAX_SAFE_INTEGER);
-    renderCounters(column.querySelector('.counters'), round.counters);
-    renderChecks(column.querySelector('.checks'), round.checks || [], round.verdict);
+  renderReplay(column, round, Number.MAX_SAFE_INTEGER);
+  renderCounters(column.querySelector('.counters'), round.counters);
+  renderChecks(column.querySelector('.checks'), round.checks || [], round.verdict);
 
-    const timeline = column.querySelector('.timeline');
-    timeline.replaceChildren(...round.events.slice(-TIMELINE_LENGTH).reverse().map((event) => element('li', formatClock(event.t_ms) + ' ' + event.text, { 'data-family': event.family })));
-  });
+  const events = round.events.slice(-TIMELINE_LENGTH).reverse();
+  column.querySelector('.timeline').replaceChildren(...events.map(timelineItem));
+
+  return column;
+}
+
+function timelineItem(event) {
+  return element('li', formatClock(event.t_ms) + ' ' + event.text, { 'data-family': event.family });
+}
+
+function showReplayError(file) {
+  setStrip(format(MESSAGES.replayFailed, { file }));
+}
+
+function showCompareError(rounds) {
+  setStrip(format(MESSAGES.compareFailed, { rounds }));
 }
 
 function start() {
@@ -346,13 +361,13 @@ function start() {
   const compare = params.get('compare');
 
   if (replayFile) {
-    playReplay(replayFile).catch(() => { document.getElementById('strip').textContent = 'Não foi possível carregar o replay ' + replayFile + '.'; });
+    playReplay(replayFile).catch(() => showReplayError(replayFile));
 
     return;
   }
 
   if (compare) {
-    compareRounds(compare.split(',').slice(0, 2)).catch(() => { document.getElementById('strip').textContent = 'Não foi possível carregar as rodadas ' + compare + '.'; });
+    compareRounds(compare.split(',').slice(0, COMPARED_ROUNDS)).catch(() => showCompareError(compare));
 
     return;
   }

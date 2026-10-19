@@ -93,6 +93,9 @@ jobs:
       - name: production binaries have no chaos code
         run: ./scripts/check-production-binary.sh
 
+      - name: panel messages
+        run: node --test lab/internal/dashboard/webtest/messages.test.mjs
+
   images:
     name: image (${{ matrix.module }} ${{ matrix.variant }})
     runs-on: ubuntu-latest
