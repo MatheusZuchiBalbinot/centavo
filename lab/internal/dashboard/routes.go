@@ -11,6 +11,7 @@ const (
 	stopRoute    = "/api/lab/stop"
 	attacksRoute = "/api/attacks"
 	roundsRoute  = "/api/rounds"
+	eventsRoute  = "/api/rounds/{round}/events"
 )
 
 // reportURLOf is where the panel serves a round's report.

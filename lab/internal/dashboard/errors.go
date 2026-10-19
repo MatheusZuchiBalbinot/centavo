@@ -41,6 +41,7 @@ var (
 	errLabIdle          = apiError{http.StatusConflict, "lab_idle", "no round is running"}
 	errUnknownAttack    = apiError{http.StatusUnprocessableEntity, "unknown_attack", "the attack is not on the menu"}
 	errInvalidDuration  = apiError{http.StatusUnprocessableEntity, "invalid_duration", "the duration is not one the panel offers"}
+	errTooManyStreams   = apiError{http.StatusServiceUnavailable, "too_many_streams", "too many people are watching; try again in a moment"}
 	errInternal         = apiError{http.StatusInternalServerError, "internal", "the lab could not answer; its log has the details"}
 )
 

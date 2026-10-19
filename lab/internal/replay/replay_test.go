@@ -34,7 +34,8 @@ func TestBuilder_CountsSecondsLatencyAndChaos(t *testing.T) {
 		t.Fatalf("seconds: %+v", replay.Seconds)
 	}
 
-	isChaos := replay.Counters.Kills == 1 && len(replay.Events) == 1 && replay.Events[0].TMillis == 2000 && replay.Events[0].Family == "process"
+	isChaos := replay.Counters.Kills == 1 && len(replay.Events) == 1 && replay.Events[0].TMillis == 2000 && replay.Events[0].Family == "process" &&
+		replay.Events[0].Kind == history.FunctionKill && replay.Events[0].Target == "bank-worker-1"
 	if !isChaos {
 		t.Fatalf("counters %+v, events %+v", replay.Counters, replay.Events)
 	}

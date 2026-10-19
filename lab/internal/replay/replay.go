@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"centavo/lab/internal/checker"
@@ -69,11 +70,17 @@ type Second struct {
 // EventFamily groups the timeline's events; the panel colors them by family.
 type EventFamily string
 
-// Event is one entry of the chaos timeline.
+// Event is one entry of the chaos timeline. Kind, Target, Detail and
+// Duration are the facts, for a client that words the event itself; Text is
+// the same event already worded.
 type Event struct {
-	TMillis int64       `json:"t_ms"`
-	Family  EventFamily `json:"family"`
-	Text    string      `json:"text"`
+	TMillis  int64            `json:"t_ms"`
+	Family   EventFamily      `json:"family"`
+	Kind     history.Function `json:"kind"`
+	Target   string           `json:"target,omitempty"`
+	Detail   string           `json:"detail,omitempty"`
+	Duration string           `json:"duration,omitempty"`
+	Text     string           `json:"text"`
 }
 
 // Counters add up the chaos of the round.
@@ -228,12 +235,15 @@ func percentile(sorted []float64, percent int) float64 {
 	return sorted[max(rank-1, 0)]
 }
 
-func (b *Builder) addEvent(record history.Record, family EventFamily, text string) {
+// addEvent stamps the event with the record's time and kind.
+func (b *Builder) addEvent(record history.Record, event Event) {
 	if len(b.replay.Events) >= maxEvents {
 		return
 	}
 
-	b.replay.Events = append(b.replay.Events, Event{TMillis: record.TimeNS / int64(time.Millisecond), Family: family, Text: text})
+	event.TMillis = record.TimeNS / int64(time.Millisecond)
+	event.Kind = record.F
+	b.replay.Events = append(b.replay.Events, event)
 }
 
 func (b *Builder) feedNemesis(record history.Record) {
@@ -249,30 +259,33 @@ func (b *Builder) feedNemesis(record history.Record) {
 	switch record.F {
 	case history.FunctionKill:
 		counters.Kills++
-		b.addEvent(record, familyProcess, eventKilled+value.Target)
+		b.addEvent(record, Event{Family: familyProcess, Target: value.Target, Text: eventKilled + value.Target})
 	case history.FunctionFailpointFired:
 		counters.FailpointFires++
-		b.addEvent(record, familyFailpoint, fmt.Sprintf(eventFailpoint, value.Failpoint, value.Action, value.Instance))
+		text := fmt.Sprintf(eventFailpoint, value.Failpoint, value.Action, value.Instance)
+		b.addEvent(record, Event{Family: familyFailpoint, Target: value.Instance, Detail: value.Failpoint, Text: text})
 	case history.FunctionFreeze:
 		counters.Freezes++
-		b.addEvent(record, familyProcess, fmt.Sprintf(eventFrozen, value.Target, value.Duration))
+		text := fmt.Sprintf(eventFrozen, value.Target, value.Duration)
+		b.addEvent(record, Event{Family: familyProcess, Target: value.Target, Duration: value.Duration, Text: text})
 	case history.FunctionNetwork:
 		b.feedNetwork(record, value)
 	case history.FunctionDatabase:
 		counters.Database++
-		b.addEvent(record, familyDatabase, eventDatabase+value.Action)
+		b.addEvent(record, Event{Family: familyDatabase, Detail: value.Action, Text: eventDatabase + value.Action})
 	case history.FunctionFailover:
 		b.feedFailover(record, value)
 	case history.FunctionSkewClock:
 		counters.ClockSkews++
-		b.addEvent(record, familyClock, fmt.Sprintf(eventClock, value.Targets, value.Offset))
+		text := fmt.Sprintf(eventClock, value.Targets, value.Offset)
+		b.addEvent(record, Event{Family: familyClock, Target: strings.Join(value.Targets, ", "), Detail: value.Offset, Text: text})
 	case history.FunctionArmPartner:
 		counters.PartnerLies++
-		b.addEvent(record, familyPartner, eventPartnerLies+value.Fault)
+		b.addEvent(record, Event{Family: familyPartner, Detail: value.Fault, Text: eventPartnerLies + value.Fault})
 	case history.FunctionHealStart:
-		b.addEvent(record, familyHeal, eventHealStarted)
+		b.addEvent(record, Event{Family: familyHeal, Text: eventHealStarted})
 	case history.FunctionHealComplete:
-		b.addEvent(record, familyHeal, eventHealCompleted)
+		b.addEvent(record, Event{Family: familyHeal, Text: eventHealCompleted})
 	}
 }
 
@@ -282,7 +295,8 @@ func (b *Builder) feedNetwork(record history.Record, value nemesisValue) {
 	}
 
 	b.replay.Counters.Network++
-	b.addEvent(record, familyNetwork, fmt.Sprintf(eventNetwork, value.Toxic, value.Proxies))
+	text := fmt.Sprintf(eventNetwork, value.Toxic, value.Proxies)
+	b.addEvent(record, Event{Family: familyNetwork, Target: strings.Join(value.Proxies, ", "), Detail: value.Toxic, Text: text})
 }
 
 func (b *Builder) feedFailover(record history.Record, value nemesisValue) {
@@ -291,5 +305,5 @@ func (b *Builder) feedFailover(record history.Record, value nemesisValue) {
 	}
 
 	b.replay.Counters.Failovers++
-	b.addEvent(record, familyDatabase, eventFailover)
+	b.addEvent(record, Event{Family: familyDatabase, Text: eventFailover})
 }

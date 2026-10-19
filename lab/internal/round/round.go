@@ -194,9 +194,12 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	}
 
 	// A target that fails the preflight is never touched, not even to cure it.
+	// round.json keeps the error, so whoever follows the round sees it ended.
 	err = bot.Preflight(ctx)
 	if err != nil {
-		return Result{ID: id, Dir: dir}, errors.Join(err, writer.Close())
+		manifestErr := writeManifest(dir, newManifest(options, Result{ID: id, Dir: dir}, startedAt, err))
+
+		return Result{ID: id, Dir: dir}, errors.Join(err, writer.Close(), manifestErr)
 	}
 
 	// Written again with the profile the preflight learned, for the panel.

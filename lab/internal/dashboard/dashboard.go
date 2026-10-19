@@ -57,6 +57,8 @@ type healthHandler struct {
 type panelHandlers struct {
 	config  Config
 	tracker *tracker
+	// streams holds one slot per open round stream.
+	streams chan struct{}
 }
 
 // NewHandler serves the panel port (8090).
@@ -67,7 +69,7 @@ func NewHandler(config Config) http.Handler {
 		panic(err)
 	}
 
-	panel := panelHandlers{config: config, tracker: newTracker(config.RoundsDir)}
+	panel := panelHandlers{config: config, tracker: newTracker(config.RoundsDir), streams: make(chan struct{}, maxStreams)}
 
 	mux := http.NewServeMux()
 	mux.Handle("GET "+HealthPath, healthHandler{response: healthResponse{Service: "lab", Version: config.Version, Status: "ok"}})
@@ -77,6 +79,7 @@ func NewHandler(config Config) http.Handler {
 	mux.HandleFunc("GET "+reportRoute, panel.report)
 	mux.Handle("GET "+staticRoute, http.FileServerFS(static))
 	mux.HandleFunc("GET "+roundsRoute, panel.rounds)
+	mux.HandleFunc("GET "+eventsRoute, panel.events)
 
 	if config.Runner != nil {
 		handleControl(mux, control{panel: panel, runner: config.Runner, limiter: newWindowLimiter(roundStartLimit)})

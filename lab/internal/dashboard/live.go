@@ -60,9 +60,15 @@ type tracker struct {
 
 	mu        sync.Mutex
 	current   string
-	builder   *replay.Builder
-	offset    int64
+	follower  *follower
 	summaries map[string]summary
+}
+
+// follower reads a round's history as it grows, parsing each byte once.
+type follower struct {
+	dir     string
+	builder *replay.Builder
+	offset  int64
 }
 
 func newTracker(roundsDir string) *tracker {
@@ -103,40 +109,58 @@ func (t *tracker) live() (liveResponse, error) {
 }
 
 func (t *tracker) follow(id string) (*replay.Replay, error) {
-	dir := filepath.Join(t.roundsDir, id)
+	if id != t.current {
+		t.current = id
+		t.follower = newFollower(filepath.Join(t.roundsDir, id))
+	}
 
-	manifest, err := replay.ReadManifest(dir)
+	current, err := t.follower.advance()
+	if current == nil {
+		return nil, err
+	}
+
+	current.Seconds = lastSeconds(current.Seconds, int(liveWindow/time.Second))
+
+	return current, nil
+}
+
+func newFollower(dir string) *follower {
+	return &follower{dir: dir}
+}
+
+// advance reads what was appended since the last call and returns the round
+// so far, or nil while the round has no round.json or history yet.
+func (f *follower) advance() (*replay.Replay, error) {
+	manifest, err := replay.ReadManifest(f.dir)
 	if err != nil {
 		// The round directory exists before its round.json.
 		return nil, nil
 	}
 
-	if id != t.current {
-		t.current, t.offset = id, 0
-		t.builder = replay.NewBuilder(manifest.Round, manifest.Scenario, manifest.Seed)
+	if f.builder == nil {
+		f.builder = replay.NewBuilder(manifest.Round, manifest.Scenario, manifest.Seed)
 	}
 
-	file, err := os.Open(filepath.Join(dir, replay.HistoryFile)) //nolint:gosec // G304: id matched roundDirPattern.
+	file, err := os.Open(filepath.Join(f.dir, replay.HistoryFile))
 	if err != nil {
 		return nil, nil
 	}
 
 	defer file.Close()
 
-	_, err = file.Seek(t.offset, 0)
+	_, err = file.Seek(f.offset, 0)
 	if err != nil {
 		return nil, err
 	}
 
-	consumed, err := replay.FeedFrom(t.builder, file)
-	t.offset += consumed
+	consumed, err := replay.FeedFrom(f.builder, file)
+	f.offset += consumed
 
 	if err != nil {
 		return nil, err
 	}
 
-	current := t.builder.Replay().WithManifest(manifest)
-	current.Seconds = lastSeconds(current.Seconds, int(liveWindow/time.Second))
+	current := f.builder.Replay().WithManifest(manifest)
 
 	return &current, nil
 }
