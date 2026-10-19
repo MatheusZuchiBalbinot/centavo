@@ -10,76 +10,74 @@
 </head>
 <body>
   <a class="skip-link" href="#main">Pular para o conteúdo</a>
-  <header class="banner">
-    <p><strong>Laboratório de caos.</strong> Todas as falhas desta página são injetadas de propósito, num banco que não move dinheiro de verdade.</p>
-    <p class="strip" id="strip" aria-live="polite">Aguardando a primeira rodada.</p>
+
+  <header class="lab-bar">
+    <p class="brand">Centavo</p>
+    <p class="lab-notice" id="lab-notice"></p>
+    <p class="mode" id="mode"></p>
   </header>
 
   <main id="main" tabindex="-1">
-    <h1 id="title">Centavo: o banco que apanha de propósito</h1>
+    <div class="rounds" id="rounds-view" aria-live="polite"></div>
 
-    <section class="headline" aria-labelledby="headline-title">
-      <h2 id="headline-title" class="visually-hidden">Resumo de todas as rodadas</h2>
-      <dl>
-        <div><dt>sob caos</dt><dd id="chaos-time">0 min</dd></div>
-        <div><dt>processos derrubados</dt><dd id="kills">0</dd></div>
-        <div><dt>rodadas com violação</dt><dd id="failed-rounds" data-state="ok">0</dd></div>
-      </dl>
+    <section class="history" id="history" aria-labelledby="history-title">
+      <h2 id="history-title"></h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr id="history-head"></tr></thead>
+          <tbody id="history-rows"></tbody>
+        </table>
+      </div>
     </section>
+  </main>
 
-    <div class="columns" id="columns">
-      <section class="column" id="column-main" aria-labelledby="column-main-title">
-        <h2 id="column-main-title">Rodada atual</h2>
+  <template id="round-template">
+    <article class="round">
+      <header class="round-head">
+        <p class="round-id" data-field="round-id"></p>
+        <h1 class="headline" data-field="headline"></h1>
+        <p class="scenario" data-field="scenario"></p>
+        <p class="expectation" data-field="expectation"></p>
+      </header>
 
-        <div class="player" id="player" hidden>
-          <button type="button" id="play">Pausar</button>
-          <label for="speed">Velocidade</label>
-          <select id="speed">
+      <div class="player" data-field="player" hidden>
+        <button type="button" data-field="play"></button>
+        <label><span data-field="speed-label"></span>
+          <select data-field="speed">
             <option value="1">1x</option>
             <option value="10" selected>10x</option>
             <option value="30">30x</option>
             <option value="60">60x</option>
           </select>
-          <span id="clock" aria-live="off">0:00</span>
-        </div>
+        </label>
+        <span class="clock" data-field="clock"></span>
+      </div>
 
-        <div class="grid">
-          <section aria-labelledby="timeline-title">
-            <h3 id="timeline-title">Linha do tempo do caos</h3>
-            <ol class="timeline" id="timeline"></ol>
-          </section>
-
-          <section aria-labelledby="charts-title">
-            <h3 id="charts-title">O que os clientes viram</h3>
-            <figure>
-              <figcaption>Operações por segundo: ok, fail e info</figcaption>
-              <div class="chart" id="throughput"></div>
-            </figure>
-            <figure>
-              <figcaption>Latência vista pelo cliente, p50 e p99 (ms)</figcaption>
-              <div class="chart" id="latency"></div>
-            </figure>
-            <h3>Contadores</h3>
-            <dl class="counters" id="counters"></dl>
-          </section>
-
-          <section aria-labelledby="checks-title">
-            <h3 id="checks-title">Invariantes</h3>
-            <ul class="checks" id="checks" aria-live="polite"></ul>
-          </section>
-        </div>
+      <section class="phases">
+        <h2 class="visually-hidden" data-field="phases-title"></h2>
+        <ol data-field="phases"></ol>
       </section>
-    </div>
 
-    <section aria-labelledby="rounds-title" id="rounds-section">
-      <h2 id="rounds-title">Rodadas</h2>
-      <table>
-        <thead>
-          <tr><th scope="col">Rodada</th><th scope="col">Cenário</th><th scope="col">Duração</th><th scope="col">Operações</th><th scope="col">Falhas</th><th scope="col">Veredito</th><th scope="col">Relatório</th></tr>
-        </thead>
-        <tbody id="rounds"></tbody>
-      </table>
-    </section>
-  </main>
+      <section class="track">
+        <h2 data-field="track-title"></h2>
+        <div class="track-chart" data-field="track"></div>
+        <ul class="legend" data-field="legend"></ul>
+        <ol class="events" data-field="events"></ol>
+      </section>
+
+      <div class="state">
+        <section class="money" data-field="money-section">
+          <h2 data-field="money-title"></h2>
+          <p class="money-detail" data-field="money-detail"></p>
+          <dl data-field="money"></dl>
+        </section>
+
+        <section class="guarantees">
+          <h2 data-field="guarantees-title"></h2>
+          <ul data-field="guarantees"></ul>
+        </section>
+      </div>
+    </article>
+  </template>
 </body>
 </html>
