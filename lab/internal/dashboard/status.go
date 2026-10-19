@@ -74,14 +74,14 @@ type lastRound struct {
 
 // waitingStatus is the live panel before the auditor's first reading.
 func waitingStatus() liveStatus {
-	return liveStatus{Checks: unknownChecks("aguardando a primeira leitura")}
+	return liveStatus{Checks: unknownChecks(textWaiting)}
 }
 
 func liveStatusOf(reading audit.Reading) liveStatus {
 	at := reading.At
 
 	if reading.IsUnavailable {
-		return liveStatus{At: &at, Checks: unknownChecks("o banco de dados não respondeu")}
+		return liveStatus{At: &at, Checks: unknownChecks(textDatabaseDown)}
 	}
 
 	return liveStatus{At: &at, Checks: []checkStatus{sumCheck(reading), floorCheck(reading)}}
@@ -89,33 +89,33 @@ func liveStatusOf(reading audit.Reading) liveStatus {
 
 func unknownChecks(detail string) []checkStatus {
 	return []checkStatus{
-		{ID: "I1", Label: "Conservação: soma de todos os saldos", State: stateUnknown, Detail: detail},
-		{ID: "I4", Label: "Saldo de cliente nunca negativo", State: stateUnknown, Detail: detail},
+		{ID: "I1", Label: labelConservation, State: stateUnknown, Detail: detail},
+		{ID: "I4", Label: labelFloor, State: stateUnknown, Detail: detail},
 	}
 }
 
 func sumCheck(reading audit.Reading) checkStatus {
-	check := checkStatus{ID: "I1", Label: "Conservação: soma de todos os saldos", State: stateOK, Detail: "zero, como exige a partida dobrada"}
+	check := checkStatus{ID: "I1", Label: labelConservation, State: stateOK, Detail: detailZeroSum}
 
 	if reading.SumCents != 0 {
 		check.State = stateViolated
-		check.Detail = fmt.Sprintf("%s: dinheiro criado ou destruído", formatCents(reading.SumCents))
+		check.Detail = fmt.Sprintf(detailMoneyMoved, formatCents(reading.SumCents))
 	}
 
 	return check
 }
 
 func floorCheck(reading audit.Reading) checkStatus {
-	check := checkStatus{ID: "I4", Label: "Saldo de cliente nunca negativo", State: stateOK}
+	check := checkStatus{ID: "I4", Label: labelFloor, State: stateOK}
 
 	if reading.MinCustomerCents == nil {
-		check.Detail = "nenhuma conta de cliente ainda"
+		check.Detail = detailNoCustomers
 
 		return check
 	}
 
 	minimum := *reading.MinCustomerCents
-	check.Detail = "menor saldo: " + formatCents(minimum)
+	check.Detail = detailLowestBalance + formatCents(minimum)
 
 	if minimum < 0 {
 		check.State = stateViolated

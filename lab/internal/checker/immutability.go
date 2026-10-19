@@ -41,7 +41,7 @@ func (e *evaluation) checkImmutability(previous *snapshot.LedgerState, bands []s
 		}
 
 		message := fmt.Sprintf(
-			"a faixa %d do ledger mudou desde a rodada anterior: %d lançamentos e soma %d antes, %d e %d agora",
+			msgI8Bands,
 			before.Band,
 			before.Count,
 			before.SumCents,

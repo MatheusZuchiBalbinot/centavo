@@ -51,14 +51,14 @@ var invariantsOfThisVersion = []struct {
 	isChecked bool
 	note      string
 }{
-	{id: InvariantI1, isChecked: true, note: "I1a e I1b completas; I1c com os termos D, R e S, por rodada"},
+	{id: InvariantI1, isChecked: true, note: noteI1},
 	{id: InvariantI2, isChecked: true},
-	{id: InvariantI3, isChecked: true, note: "no máximo uma vez, convergência pelo resolve e estabilidade numa amostra"},
+	{id: InvariantI3, isChecked: true, note: noteI3},
 	{id: InvariantI4, isChecked: true},
-	{id: InvariantI5, isChecked: true, note: "transferências terminais e trânsito zero depois da quiescência"},
-	{id: InvariantI6, isChecked: true, note: "comparação direta com a verdade do parceiro"},
+	{id: InvariantI5, isChecked: true, note: noteI5},
+	{id: InvariantI6, isChecked: true, note: noteI6},
 	{id: InvariantI7, isChecked: true},
-	{id: InvariantI8, isChecked: true, note: "todas as faixas completas da rodada anterior, recalculadas a cada rodada"},
+	{id: InvariantI8, isChecked: true, note: noteI8},
 }
 
 // Verdict is the outcome of a round.

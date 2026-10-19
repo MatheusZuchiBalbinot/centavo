@@ -110,7 +110,7 @@ func failurePathOf(result Result, violation Violation) FailurePath {
 			path.Ledger = append(
 				path.Ledger,
 				fmt.Sprintf(
-					"ledger_entries id=%d conta=%s valor=%d account_seq=%d balance_after=%d",
+					reportLedgerEntry,
 					entry.ID,
 					entry.AccountID,
 					entry.AmountCents,
@@ -125,7 +125,7 @@ func failurePathOf(result Result, violation Violation) FailurePath {
 	if hasBalance {
 		path.Ledger = append(
 			path.Ledger,
-			fmt.Sprintf("account_balances conta=%s saldo=%d last_entry_seq=%d", violation.AccountID, balance.BalanceCents, balance.LastEntrySeq),
+			fmt.Sprintf(reportBalance, violation.AccountID, balance.BalanceCents, balance.LastEntrySeq),
 		)
 	}
 
@@ -178,22 +178,22 @@ func writeReports(roundDir string, report Report) error {
 func renderMarkdown(report Report) string {
 	var b strings.Builder
 
-	fmt.Fprintf(&b, "# Rodada %s: %s\n\n", report.Round, verdictTitle(report))
+	fmt.Fprintf(&b, reportTitle, report.Round, verdictTitle(report))
 
 	ops := report.Operations
-	b.WriteString("| Campo | Valor |\n| --- | --- |\n")
-	fmt.Fprintf(&b, "| Cenário | %s |\n", orDash(report.Scenario))
-	fmt.Fprintf(&b, "| Semente | %s |\n", orDash(report.Seed))
-	fmt.Fprintf(&b, "| Duração | %s |\n", orDash(report.Duration))
-	fmt.Fprintf(&b, "| Operações | %d (ok %d, fail %d, info %d, abertas %d) |\n", ops.Total, ops.OK, ops.Fail, ops.Info, ops.Open)
-	fmt.Fprintf(&b, "| Verificador | versão %s |\n", report.CheckerVersion)
+	b.WriteString(reportFieldsHeader)
+	fmt.Fprintf(&b, reportScenario, orDash(report.Scenario))
+	fmt.Fprintf(&b, reportSeed, orDash(report.Seed))
+	fmt.Fprintf(&b, reportDuration, orDash(report.Duration))
+	fmt.Fprintf(&b, reportOperations, ops.Total, ops.OK, ops.Fail, ops.Info, ops.Open)
+	fmt.Fprintf(&b, reportChecker, report.CheckerVersion)
 
 	if len(report.FailurePaths) > 0 {
 		writeFirstViolation(&b, report)
 		writeViolationSummary(&b, report)
 	}
 
-	b.WriteString("\n## Invariantes\n\n| Id | Resultado | Observação |\n| --- | --- | --- |\n")
+	b.WriteString(reportInvariantsHeader)
 
 	for _, invariant := range report.Invariants {
 		fmt.Fprintf(&b, "| %s | %s | %s |\n", invariant.ID, statusText(invariant), invariant.Note)
@@ -206,14 +206,14 @@ func writeFirstViolation(b *strings.Builder, report Report) {
 	path := report.FailurePaths[0]
 	violation := path.Violation
 
-	fmt.Fprintf(b, "\n## Primeira violação: %s, %s\n\n%s\n\n", violation.Invariant, violation.Rule, violation.Message)
+	fmt.Fprintf(b, reportFirstViolation, violation.Invariant, violation.Rule, violation.Message)
 
 	if violation.Op != "" {
-		fmt.Fprintf(b, "Operação %s, iniciada em %s.\n", violation.Op, formatTime(violation.TimeNS))
+		fmt.Fprintf(b, reportOperation, violation.Op, formatTime(violation.TimeNS))
 	}
 
 	if len(path.History) > 0 {
-		b.WriteString("\n### Histórico da operação\n\n| t | Registro | Detalhe |\n| --- | --- | --- |\n")
+		b.WriteString(reportHistoryHeader)
 
 		for _, record := range path.History {
 			fmt.Fprintf(b, "| %s | %s | %s |\n", formatTime(record.TimeNS), record.Type, recordDetail(record))
@@ -221,7 +221,7 @@ func writeFirstViolation(b *strings.Builder, report Report) {
 	}
 
 	if len(path.Events) > 0 {
-		b.WriteString("\n### Falhas injetadas nesta operação\n\n")
+		b.WriteString(reportFailpointsHeader)
 
 		for _, event := range path.Events {
 			fmt.Fprintf(b, "- `%s`\n", event)
@@ -229,7 +229,7 @@ func writeFirstViolation(b *strings.Builder, report Report) {
 	}
 
 	if len(path.Ledger) > 0 {
-		b.WriteString("\n### Linhas do ledger\n\n")
+		b.WriteString(reportLedgerHeader)
 
 		for _, line := range path.Ledger {
 			fmt.Fprintf(b, "- `%s`\n", line)
@@ -237,12 +237,12 @@ func writeFirstViolation(b *strings.Builder, report Report) {
 	}
 
 	if report.Scenario != "" {
-		fmt.Fprintf(b, "\n### Reproduzir\n\n```text\nlab run --scenario %s --seed %s --duration %s\n```\n", report.Scenario, report.Seed, report.Duration)
+		fmt.Fprintf(b, reportReproduce, report.Scenario, report.Seed, report.Duration)
 	}
 }
 
 func writeViolationSummary(b *strings.Builder, report Report) {
-	b.WriteString("\n## Resumo das violações\n\n| Regra | Quantidade | Exemplo |\n| --- | --- | --- |\n")
+	b.WriteString(reportSummaryHeader)
 
 	for _, rule := range slices.Sorted(maps.Keys(report.ViolationsByRule)) {
 		fmt.Fprintf(b, "| %s | %d | %s |\n", rule, report.ViolationsByRule[rule], orDash(report.ExampleByRule[rule]))
@@ -251,11 +251,11 @@ func writeViolationSummary(b *strings.Builder, report Report) {
 
 func verdictTitle(report Report) string {
 	if report.Verdict == VerdictPass {
-		return "PASSOU"
+		return verdictPassed
 	}
 
 	if report.Verdict == VerdictInconclusive {
-		return fmt.Sprintf("INCONCLUSIVA (%d operações sem resolve)", len(report.Unresolved))
+		return fmt.Sprintf(verdictInconclusive, len(report.Unresolved))
 	}
 
 	var failed []string
@@ -265,7 +265,7 @@ func verdictTitle(report Report) string {
 		}
 	}
 
-	return fmt.Sprintf("FALHOU (%s)", strings.Join(failed, ", "))
+	return fmt.Sprintf(verdictFailed, strings.Join(failed, ", "))
 }
 
 func statusText(invariant InvariantResult) string {
@@ -273,9 +273,9 @@ func statusText(invariant InvariantResult) string {
 	case StatusOK:
 		return "ok"
 	case StatusFailed:
-		return fmt.Sprintf("falhou (%d)", invariant.Violations)
+		return fmt.Sprintf(statusFailedCount, invariant.Violations)
 	case StatusNotChecked:
-		return "não verificada"
+		return statusNotChecked
 	default:
 		return string(invariant.Status)
 	}
@@ -294,7 +294,7 @@ func recordDetail(record history.Record) string {
 	case len(record.Error) > 0:
 		return "`" + string(record.Error) + "`"
 	case len(record.Outcome) > 0:
-		return fmt.Sprintf("tentativa %d: `%s`", record.N, record.Outcome)
+		return fmt.Sprintf(reportAttempt, record.N, record.Outcome)
 	case len(record.Value) > 0:
 		return "`" + string(record.Value) + "`"
 	default:
@@ -306,7 +306,7 @@ func recordDetail(record history.Record) string {
 // Portuguese report.
 func formatTime(timeNS int64) string {
 	if timeNS == unknownTime {
-		return "antes da rodada"
+		return textBeforeRound
 	}
 
 	seconds := fmt.Sprintf("%.1f", float64(timeNS)/float64(time.Second))

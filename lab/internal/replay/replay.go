@@ -242,30 +242,30 @@ func (b *Builder) feedNemesis(record history.Record) {
 	switch record.F {
 	case history.FunctionKill:
 		counters.Kills++
-		b.addEvent(record, familyProcess, "processo morto: "+value.Target)
+		b.addEvent(record, familyProcess, eventKilled+value.Target)
 	case history.FunctionFailpointFired:
 		counters.FailpointFires++
-		b.addEvent(record, familyFailpoint, fmt.Sprintf("failpoint %s (%s) em %s", value.Failpoint, value.Action, value.Instance))
+		b.addEvent(record, familyFailpoint, fmt.Sprintf(eventFailpoint, value.Failpoint, value.Action, value.Instance))
 	case history.FunctionFreeze:
 		counters.Freezes++
-		b.addEvent(record, familyProcess, fmt.Sprintf("contêiner congelado: %s por %s", value.Target, value.Duration))
+		b.addEvent(record, familyProcess, fmt.Sprintf(eventFrozen, value.Target, value.Duration))
 	case history.FunctionNetwork:
 		b.feedNetwork(record, value)
 	case history.FunctionDatabase:
 		counters.Database++
-		b.addEvent(record, familyDatabase, "banco de dados: "+value.Action)
+		b.addEvent(record, familyDatabase, eventDatabase+value.Action)
 	case history.FunctionFailover:
 		b.feedFailover(record, value)
 	case history.FunctionSkewClock:
 		counters.ClockSkews++
-		b.addEvent(record, familyClock, fmt.Sprintf("relógio desviado em %s: %s", value.Targets, value.Offset))
+		b.addEvent(record, familyClock, fmt.Sprintf(eventClock, value.Targets, value.Offset))
 	case history.FunctionArmPartner:
 		counters.PartnerLies++
-		b.addEvent(record, familyPartner, "o parceiro passa a mentir: "+value.Fault)
+		b.addEvent(record, familyPartner, eventPartnerLies+value.Fault)
 	case history.FunctionHealStart:
-		b.addEvent(record, familyHeal, "cura começou")
+		b.addEvent(record, familyHeal, eventHealStarted)
 	case history.FunctionHealComplete:
-		b.addEvent(record, familyHeal, "cura terminou")
+		b.addEvent(record, familyHeal, eventHealCompleted)
 	}
 }
 
@@ -275,7 +275,7 @@ func (b *Builder) feedNetwork(record history.Record, value nemesisValue) {
 	}
 
 	b.replay.Counters.Network++
-	b.addEvent(record, familyNetwork, fmt.Sprintf("rede: %s em %v", value.Toxic, value.Proxies))
+	b.addEvent(record, familyNetwork, fmt.Sprintf(eventNetwork, value.Toxic, value.Proxies))
 }
 
 func (b *Builder) feedFailover(record history.Record, value nemesisValue) {
@@ -284,5 +284,5 @@ func (b *Builder) feedFailover(record history.Record, value nemesisValue) {
 	}
 
 	b.replay.Counters.Failovers++
-	b.addEvent(record, familyDatabase, "failover: réplica promovida")
+	b.addEvent(record, familyDatabase, eventFailover)
 }
