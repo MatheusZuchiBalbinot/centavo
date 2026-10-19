@@ -37,8 +37,11 @@ type RoundRunner interface {
 	State() runner.State
 }
 
+// labResponse is what the lab is doing; Round appears once `lab run` has
+// allocated the round's id.
 type labResponse struct {
 	Status          runner.Status `json:"status"`
+	Round           string        `json:"round,omitempty"`
 	Attack          attacks.ID    `json:"attack,omitempty"`
 	Scenario        string        `json:"scenario,omitempty"`
 	DurationSeconds int           `json:"duration_seconds,omitempty"`
@@ -73,8 +76,15 @@ type control struct {
 }
 
 func (c control) lab(w http.ResponseWriter, _ *http.Request) {
+	state := c.runner.State()
+	response := labResponseOf(state)
+
+	if state.Status != runner.StatusIdle {
+		response.Round = c.panel.tracker.roundStartedSince(state.StartedAt)
+	}
+
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, http.StatusOK, labResponseOf(c.runner.State()))
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (c control) menu(w http.ResponseWriter, _ *http.Request) {

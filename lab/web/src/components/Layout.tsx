@@ -12,6 +12,7 @@ const MAIN_ID = 'main';
 
 export default function Layout(): React.JSX.Element {
   const reading = useLabState();
+  const isRunning = reading.kind === 'ready' && reading.state.status !== 'idle';
 
   useRouteFocus();
 
@@ -34,6 +35,11 @@ export default function Layout(): React.JSX.Element {
                 {messages.nav.home}
               </NavLink>
             </li>
+            {isRunning ? (
+              <li>
+                <NavLink to={ROUTES.live}>{messages.nav.live}</NavLink>
+              </li>
+            ) : null}
           </ul>
         </nav>
         <p className={styles.notice}>{messages.labNotice}</p>

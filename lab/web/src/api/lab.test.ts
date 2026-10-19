@@ -18,6 +18,7 @@ describe('parseLabState', () => {
 
     expect(state).toEqual({
       status: 'running',
+      round: null,
       attack: 'clock',
       scenario: 'clock-skew',
       durationSeconds: 300,

@@ -1,7 +1,10 @@
+import { useNavigate } from 'react-router';
+
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { useLabReading } from '../../hooks/useLabReading';
 import { PAGE_HEADING_ID } from '../../hooks/useRouteFocus';
 import { messages } from '../../i18n/pt-BR';
+import { ROUTES } from '../../routes';
 import Composer from './components/Composer';
 import LabNow from './components/LabNow';
 import RecentRounds from './components/RecentRounds';
@@ -19,12 +22,21 @@ export default function HomePage(): React.JSX.Element {
   const labStatus = lab.kind === 'ready' ? lab.state.status : lab.kind;
   const recent = useRecentRounds(labStatus);
   const { isStarting, start } = useStartRound();
+  const navigate = useNavigate();
 
   const isBusy = labStatus === 'running' || labStatus === 'stopping';
   const rounds = recent.kind === 'ready' ? recent.rounds : [];
 
+  async function startAndFollow(choice: StartChoice): Promise<void> {
+    const isStarted = await start(choice);
+
+    if (isStarted) {
+      await navigate(ROUTES.live);
+    }
+  }
+
   function handleStart(choice: StartChoice): void {
-    void start(choice);
+    void startAndFollow(choice);
   }
 
   return (

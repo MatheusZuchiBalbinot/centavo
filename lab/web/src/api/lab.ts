@@ -1,8 +1,8 @@
 import { getJSON, postJSON } from './client';
 import type { ApiResult } from './client';
 import { isNumber, isObject, isString } from './guards';
-import { isAttackId } from './ids';
-import type { AttackId } from './ids';
+import { isAttackId, isRoundId } from './ids';
+import type { AttackId, RoundId } from './ids';
 import { API_ROUTES } from './routes';
 
 // What the lab is doing; a round only exists while it runs or stops.
@@ -10,6 +10,8 @@ export type LabState =
   | { readonly status: 'idle' }
   | {
       readonly status: 'running' | 'stopping';
+      // round is null until the round has written its first file.
+      readonly round: RoundId | null;
       readonly attack: AttackId;
       readonly scenario: string;
       readonly durationSeconds: number;
@@ -37,7 +39,7 @@ export function parseLabState(body: unknown): LabState | null {
     return null;
   }
 
-  const { status, attack, scenario, duration_seconds: durationSeconds, started_at: startedAtText } = body;
+  const { status, round, attack, scenario, duration_seconds: durationSeconds, started_at: startedAtText } = body;
 
   if (status === 'idle') {
     return { status };
@@ -53,5 +55,5 @@ export function parseLabState(body: unknown): LabState | null {
     return null;
   }
 
-  return { status, attack, scenario, durationSeconds, startedAt };
+  return { status, round: isRoundId(round) ? round : null, attack, scenario, durationSeconds, startedAt };
 }

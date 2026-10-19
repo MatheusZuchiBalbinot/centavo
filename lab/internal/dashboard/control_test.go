@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -328,5 +330,48 @@ func TestRounds_PagesTheFinishedRoundsNewestFirst(t *testing.T) {
 		if code != http.StatusBadRequest {
 			t.Fatalf("%s: status %d, want 400", query, code)
 		}
+	}
+}
+
+func TestLab_NamesTheRoundOnceItHasStarted(t *testing.T) {
+	t.Parallel()
+
+	roundsDir := t.TempDir()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	rounds := &fakeRunner{isSingleRound: true}
+	handler := dashboard.NewHandler(dashboard.Config{Live: noReading, RoundsDir: roundsDir, Logger: logger, Runner: rounds})
+
+	// A round from before the panel's start is not this one.
+	writeLiveRound(t, roundsDir, "r0001", `{"verdict":"pass","invariants":[]}`)
+	startRound(t, handler, smokeStart)
+
+	type lab struct {
+		Status string `json:"status"`
+		Round  string `json:"round"`
+	}
+
+	var before lab
+
+	get(t, handler, "/api/lab", &before)
+
+	if before.Round != "" {
+		t.Fatalf("named %q before the round wrote round.json", before.Round)
+	}
+
+	startedAt := rounds.State().StartedAt.UTC().Format(time.RFC3339Nano)
+	writeRound(t, roundsDir, "r0002", "")
+
+	err := os.WriteFile(filepath.Join(roundsDir, "r0002", "round.json"), []byte(`{"round":"r0002","started_at":"`+startedAt+`"}`), 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var after lab
+
+	get(t, handler, "/api/lab", &after)
+
+	isNamed := after.Status == "running" && after.Round == "r0002"
+	if !isNamed {
+		t.Fatalf("lab after the round started: %+v", after)
 	}
 }

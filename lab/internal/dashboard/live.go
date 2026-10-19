@@ -23,6 +23,9 @@ const (
 	maxRoundsListed = 20
 	// maxSummaries bounds the cache of finished rounds' counters.
 	maxSummaries = 1_000
+	// launchTolerance absorbs clock rounding between the panel noting a
+	// start and the round writing its own.
+	launchTolerance = 2 * time.Second
 )
 
 // summary is what the headline adds up from one finished round.
@@ -202,6 +205,33 @@ func (t *tracker) summarize(ids []string) (headline, []summary) {
 	}
 
 	return total, append([]summary{}, listed...)
+}
+
+// roundStartedSince is the newest round when it started at or after since,
+// give or take the moment between launching `lab run` and its first write;
+// empty while that round has no round.json yet.
+func (t *tracker) roundStartedSince(since time.Time) string {
+	entries, err := os.ReadDir(t.roundsDir)
+	if err != nil {
+		return ""
+	}
+
+	ids := roundsNewestFirst(entries)
+	if len(ids) == 0 {
+		return ""
+	}
+
+	manifest, err := replay.ReadManifest(filepath.Join(t.roundsDir, ids[0]))
+	if err != nil {
+		return ""
+	}
+
+	isThisRound := !manifest.StartedAt.Before(since.Add(-launchTolerance))
+	if !isThisRound {
+		return ""
+	}
+
+	return ids[0]
 }
 
 // page returns up to size finished rounds older than cursor, newest first,
