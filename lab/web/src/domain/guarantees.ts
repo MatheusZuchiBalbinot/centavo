@@ -38,7 +38,13 @@ export function guaranteeView(
   return { kind: 'later' };
 }
 
-export function guaranteeCopy(id: GuaranteeId): { name: string; short: string; detail: string } {
+export function guaranteeCopy(id: GuaranteeId): {
+  name: string;
+  short: string;
+  detail: string;
+  why: string;
+  threats: string;
+} {
   return messages.guarantees[id];
 }
 

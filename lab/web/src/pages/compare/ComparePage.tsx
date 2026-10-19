@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 
 import { isRoundId } from '../../api/ids';
@@ -5,6 +6,7 @@ import type { RoundId } from '../../api/ids';
 import type { Replay } from '../../api/replay';
 import VerdictBadge from '../../components/VerdictBadge';
 import { expectationOf, headlineOf } from '../../domain/headline';
+import type { AttackRange } from '../../domain/highlight';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { PAGE_HEADING_ID } from '../../hooks/useRouteFocus';
 import { format } from '../../i18n/format';
@@ -75,6 +77,7 @@ function ComparisonBody({
 }
 
 function RoundColumn({ replay }: { replay: Replay }): React.JSX.Element {
+  const [highlight, setHighlight] = useState<AttackRange | null>(null);
   const headline = headlineOf({ replay, phase: 'verdict', elapsedSeconds: 0, reading: null });
   const titleId = `${replay.round}-title`;
 
@@ -100,6 +103,8 @@ function RoundColumn({ replay }: { replay: Replay }): React.JSX.Element {
         nowSeconds={null}
         ageSeconds={null}
         titleId={`${replay.round}-chart`}
+        highlight={highlight}
+        onHighlight={setHighlight}
       />
       <Guarantees checks={replay.checks} reading={null} isFinished={false} titleId={`${replay.round}-guarantees`} />
     </article>

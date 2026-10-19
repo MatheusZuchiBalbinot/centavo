@@ -7,6 +7,7 @@ import { guaranteeView } from './guarantees';
 import { expectationOf, headlineOf } from './headline';
 import { phaseOf } from './phase';
 import { initialRoundState, mergeSeconds, reduceRound } from './roundState';
+import { overlaps, rangeOfLabel } from './highlight';
 import { clusterMarkers, spanOf } from './timeline';
 
 describe('reduceRound', () => {
@@ -143,5 +144,16 @@ describe('clusterMarkers', () => {
 
     expect(markers.map((marker) => marker.label)).toEqual(['1–3', '4', '5–6']);
     expect(clusterMarkers([], 22)).toEqual([]);
+  });
+});
+
+describe('attack ranges', () => {
+  it('reads the shared labels and tells which ranges touch', () => {
+    expect(rangeOfLabel('10–14')).toEqual({ from: 10, to: 14 });
+    expect(rangeOfLabel('7')).toEqual({ from: 7, to: 7 });
+    expect(rangeOfLabel(null)).toBeNull();
+    expect(overlaps({ from: 10, to: 14 }, 14, 20)).toBe(true);
+    expect(overlaps({ from: 10, to: 14 }, 15, 20)).toBe(false);
+    expect(overlaps(null, 1, 2)).toBe(false);
   });
 });

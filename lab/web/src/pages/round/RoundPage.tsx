@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { useParams } from 'react-router';
 
 import { isRoundId } from '../../api/ids';
 import type { RoundId } from '../../api/ids';
 import type { Replay } from '../../api/replay';
 import { headlineOf } from '../../domain/headline';
+import type { AttackRange } from '../../domain/highlight';
 import { phaseOf } from '../../domain/phase';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { useNow } from '../../hooks/useNow';
@@ -37,6 +39,7 @@ export default function RoundPage(): React.JSX.Element {
 
 function FollowedRound({ round }: { round: RoundId }): React.JSX.Element {
   const { state, isConnected, lastMessageAt } = useRoundStream(round);
+  const [highlight, setHighlight] = useState<AttackRange | null>(null);
   const isFinished = state.kind === 'finished';
   const now = useNow(CLOCK_TICK_MS, !isFinished);
   const events = state.kind === 'connecting' ? [] : state.replay.events;
@@ -74,12 +77,25 @@ function FollowedRound({ round }: { round: RoundId }): React.JSX.Element {
       <RoundTiles replay={replay} reading={reading} isFinished={isFinished} />
       <div className={styles.grid}>
         <div className={styles.main}>
-          <RoundChart replay={replay} isLive={!isFinished} nowSeconds={nowSeconds} ageSeconds={ageSeconds} />
+          <RoundChart
+            replay={replay}
+            isLive={!isFinished}
+            nowSeconds={nowSeconds}
+            ageSeconds={ageSeconds}
+            highlight={highlight}
+            onHighlight={setHighlight}
+          />
           <Guarantees checks={replay.checks} reading={reading} isFinished={isFinished} />
         </div>
-        {isFinished ? <ResultAside replay={replay} /> : <EventFeed events={replay.events} isCalm={isCalm} />}
+        {isFinished ? (
+          <ResultAside replay={replay} />
+        ) : (
+          <EventFeed events={replay.events} isCalm={isCalm} highlight={highlight} onHighlight={setHighlight} />
+        )}
       </div>
-      {isFinished ? <EventFeed events={replay.events} isCalm={isCalm} /> : null}
+      {isFinished ? (
+        <EventFeed events={replay.events} isCalm={isCalm} highlight={highlight} onHighlight={setHighlight} />
+      ) : null}
     </article>
   );
 }

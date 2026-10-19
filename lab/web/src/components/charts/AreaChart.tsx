@@ -1,6 +1,9 @@
 import { useId, useRef, useState } from 'react';
 
+import { overlaps } from '../../domain/highlight';
+import type { AttackRange } from '../../domain/highlight';
 import { clusterMarkers, ticksOf } from '../../domain/timeline';
+import { useHoverRange } from '../../hooks/useHoverRange';
 import { useElementWidth } from '../../hooks/useElementWidth';
 import styles from './AreaChart.module.css';
 import { niceTicks, scaleLinear, scaleMaxOf } from './scale';
@@ -28,6 +31,11 @@ type AreaChartProps = {
   // cure re-reads every transfer at once, and scaled to it the attack would
   // be a flat line. Values above the axis are cut at the top.
   readonly scaleValues?: readonly number[];
+  // The attack markers are interactive: each says what it marks, and
+  // pointing at one lights the same attacks elsewhere on the page.
+  readonly describeMarker: (range: AttackRange) => string;
+  readonly highlight: AttackRange | null;
+  readonly onHighlight: (range: AttackRange | null) => void;
   readonly height?: number;
 };
 
@@ -56,6 +64,9 @@ export default function AreaChart({
   isLive,
   label,
   scaleValues,
+  describeMarker,
+  highlight,
+  onHighlight,
   height = DEFAULT_HEIGHT,
 }: AreaChartProps): React.JSX.Element {
   const frame = useRef<HTMLDivElement>(null);
@@ -85,7 +96,15 @@ export default function AreaChart({
   const hovered = hoverAt === null ? null : closestPoint(points, hoverAt);
 
   function handlePointerMove(event: React.PointerEvent<SVGSVGElement>): void {
-    const left = event.currentTarget.getBoundingClientRect().left;
+    const { left, top } = event.currentTarget.getBoundingClientRect();
+
+    // Over the marker row the attack's own tooltip speaks; the crosshair waits.
+    if (event.clientY - top < MARGIN.top) {
+      setHoverAt(null);
+
+      return;
+    }
+
     const at =
       domain.from + ((event.clientX - left - MARGIN.left) / (plotRight - MARGIN.left)) * (domain.to - domain.from);
 
@@ -146,7 +165,16 @@ export default function AreaChart({
         <path className={styles.area} d={area} fill={`url(#${gradientId})`} clipPath={`url(#${clipId})`} />
         <path className={styles.line} d={line} clipPath={`url(#${clipId})`} />
         {clusters.map((cluster) => (
-          <MarkerChip key={cluster.first} x={cluster.x} label={cluster.label} bottom={plotBottom} />
+          <MarkerChip
+            key={cluster.first}
+            x={cluster.x}
+            label={cluster.label}
+            range={{ from: cluster.first, to: cluster.last }}
+            bottom={plotBottom}
+            description={describeMarker({ from: cluster.first, to: cluster.last })}
+            isHot={overlaps(highlight, cluster.first, cluster.last)}
+            onHighlight={onHighlight}
+          />
         ))}
         {last ? <EndPoint x={x(last.at)} y={y(last.value)} label={formatValue(last.value)} isLive={isLive} /> : null}
         {hovered ? <Crosshair x={x(hovered.at)} y={y(hovered.value)} top={MARGIN.top} bottom={plotBottom} /> : null}
@@ -161,11 +189,33 @@ export default function AreaChart({
   );
 }
 
-function MarkerChip({ x, label, bottom }: { x: number; label: string; bottom: number }): React.JSX.Element {
+type MarkerChipProps = {
+  readonly x: number;
+  readonly label: string;
+  readonly range: AttackRange;
+  readonly bottom: number;
+  readonly description: string;
+  readonly isHot: boolean;
+  readonly onHighlight: (range: AttackRange | null) => void;
+};
+
+// MarkerChip is focusable, so a keyboard reaches each attack and its
+// tooltip the way a pointer does.
+function MarkerChip({ x, label, range, bottom, description, isHot, onHighlight }: MarkerChipProps): React.JSX.Element {
   const width = Math.max(MARKER_HEIGHT, label.length * MARKER_CHAR_PX + MARKER_PADDING_PX);
+  const ref = useRef<SVGGElement>(null);
+
+  useHoverRange(ref, range, onHighlight);
 
   return (
-    <g className={styles.marker}>
+    <g
+      ref={ref}
+      className={styles.marker}
+      data-hot={isHot}
+      data-tooltip={description}
+      tabIndex={0}
+      aria-label={description}
+    >
       <line x1={x} x2={x} y1={MARKER_ROW + MARKER_HEIGHT} y2={bottom} />
       <rect x={x - width / 2} y={MARKER_ROW} width={width} height={MARKER_HEIGHT} rx={MARKER_HEIGHT / 2} />
       <text x={x} y={MARKER_ROW + MARKER_HEIGHT / 2} textAnchor="middle" dominantBaseline="central">

@@ -24,6 +24,13 @@
   --tile-color: var(--danger);
 }
 
+.labelRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .label {
   color: var(--muted);
   font-size: var(--text-xs);

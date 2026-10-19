@@ -1,4 +1,5 @@
 import type { AttackId } from '../../../api/ids';
+import { Glossed } from '../../../components/ui/Glossed';
 import { attackCopy } from '../../../domain/attacks';
 import { formatDuration } from '../../../domain/duration';
 import { format } from '../../../i18n/format';
@@ -31,7 +32,7 @@ export default function RoundPreview({ attack, durationSeconds }: RoundPreviewPr
       </ol>
       <p className={styles.expect}>
         <strong>{preview.expectTitle}</strong>
-        {attackCopy(attack).expect}
+        <Glossed text={attackCopy(attack).expect} />
       </p>
     </>
   );

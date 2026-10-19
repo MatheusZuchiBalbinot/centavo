@@ -1,4 +1,5 @@
 import { act, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -134,5 +135,28 @@ describe('the round page', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Bateu com o esperado: a defesa faz falta, e a rodada prova isso.')).toBeInTheDocument();
     expect(screen.getByText('2 violação(ões)')).toBeInTheDocument();
+  });
+
+  it('narrows the feed to the cure and back', async () => {
+    installFakeEventSource();
+    answerFetch({ [API_ROUTES.lab]: { status: 200, body: { status: 'idle' } } });
+    const user = userEvent.setup();
+
+    renderRound();
+
+    const heal = { t_ms: 90_000, family: 'heal', kind: 'heal_start', text: 'cura começou' };
+
+    act(() => {
+      stream().send('snapshot', { ...snapshot, events: [...snapshot.events, heal] });
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Cura · 1' }));
+
+    expect(screen.queryByText('Derrubei o bank-api.')).not.toBeInTheDocument();
+    expect(screen.getByText('Os ataques pararam: começou a cura.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Tudo · 2' }));
+
+    expect(screen.getByText('Derrubei o bank-api.')).toBeInTheDocument();
   });
 });

@@ -38,7 +38,7 @@ export function ticksOf(span: number): readonly number[] {
 
 // A marker on the timeline: one attack, or several that landed too close to
 // tell apart, labeled with the range of their numbers.
-type Marker = { readonly x: number; readonly label: string; readonly first: number };
+type Marker = { readonly x: number; readonly label: string; readonly first: number; readonly last: number };
 
 // clusterMarkers merges attacks closer than minGap in viewBox units, so
 // their numbers stay readable; positions are in the order the attacks
@@ -62,5 +62,5 @@ export function clusterMarkers(positions: readonly number[], minGap: number): re
 function markerOf(positions: readonly number[], first: number, last: number): Marker {
   const label = first === last ? String(first + 1) : `${first + 1}–${last + 1}`;
 
-  return { x: positions[first] ?? 0, label, first: first + 1 };
+  return { x: positions[first] ?? 0, label, first: first + 1, last: last + 1 };
 }

@@ -34,23 +34,27 @@ export default function RoundTiles({ replay, reading, isFinished }: RoundTilesPr
         hint={isFinished ? messages.round.moneyHintDone : messages.round.moneyHintLive}
         trend={moneyTrend}
         tone={money.tone}
+        help={messages.tooltip.money}
       />
       <MetricTile
         label={isFinished ? messages.round.rateAverageLabel : messages.round.rateLabel}
         value={rateText(replay, latest, isFinished)}
         hint={format(messages.round.rateHint, { total: totals.all.toLocaleString('pt-BR') })}
+        help={messages.tooltip.rate}
         trend={operationsTrend}
       />
       <MetricTile
         label={messages.round.latencyLabel}
         value={latest ? `${Math.round(latest.p50Ms).toLocaleString('pt-BR')}${MS}` : '—'}
         hint={messages.round.latencyHint}
+        help={messages.tooltip.latency}
         trend={trendOf(replay.seconds, 'latency')}
       />
       <MetricTile
         label={messages.round.troubleLabel}
         value={totals.trouble.toLocaleString('pt-BR')}
         hint={messages.round.troubleHint}
+        help={messages.tooltip.trouble}
         trend={trendOf(replay.seconds, 'trouble')}
         tone={totals.trouble > 0 ? 'warning' : 'neutral'}
       />

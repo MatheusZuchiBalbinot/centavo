@@ -98,8 +98,10 @@
 }
 
 .stepName {
+  justify-self: start;
   font-size: var(--text-sm);
   font-weight: 600;
+  text-align: left;
 }
 
 .step[data-state='upcoming'] .stepName {
@@ -287,6 +289,11 @@
   font-size: var(--text-2xs);
   font-weight: 600;
   vertical-align: 1px;
+}
+
+.feedItem[data-hot='true'] {
+  background: color-mix(in oklch, var(--warning) 10%, transparent);
+  box-shadow: inset 3px 0 0 var(--warning);
 }
 
 .feedItem[data-tone='heal'] .feedMark {

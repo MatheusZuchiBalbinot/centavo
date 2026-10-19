@@ -1,6 +1,8 @@
 import type { Attack } from '../../../api/attacks';
 import type { AttackId } from '../../../api/ids';
 import { attackCopy } from '../../../domain/attacks';
+import { format } from '../../../i18n/format';
+import { messages } from '../../../i18n/pt-BR';
 import AttackIcon from './AttackIcon';
 import styles from './Composer.module.css';
 
@@ -25,6 +27,7 @@ export default function AttackPicker({
         <AttackCard
           key={attack.id}
           attack={attack.id}
+          scenarios={attack.scenarios}
           isChecked={attack.id === selected}
           isDisabled={isDisabled}
           onSelect={onSelect}
@@ -36,17 +39,22 @@ export default function AttackPicker({
 
 type AttackCardProps = {
   readonly attack: AttackId;
+  readonly scenarios: readonly string[];
   readonly isChecked: boolean;
   readonly isDisabled: boolean;
   readonly onSelect: (attack: AttackId) => void;
 };
 
-function AttackCard({ attack, isChecked, isDisabled, onSelect }: AttackCardProps): React.JSX.Element {
+function AttackCard({ attack, scenarios, isChecked, isDisabled, onSelect }: AttackCardProps): React.JSX.Element {
   const copy = attackCopy(attack);
   const detailId = `attack-${attack}-detail`;
 
   return (
-    <label className={styles.attack} data-checked={isChecked}>
+    <label
+      className={styles.attack}
+      data-checked={isChecked}
+      data-tooltip={format(messages.tooltip.scenarios, { scenarios: scenarios.join(', ') })}
+    >
       <input
         type="radio"
         name="attack"

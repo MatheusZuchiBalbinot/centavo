@@ -564,3 +564,43 @@ a {
     padding: 18px 14px 48px;
   }
 }
+
+/* ---------- Glossary terms ---------- */
+/* A term is a button so it takes focus and opens on tap; it reads as text. */
+
+.term {
+  padding: 0;
+  border: 0;
+  border-bottom: 1px dashed color-mix(in oklch, var(--primary) 70%, transparent);
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: help;
+}
+
+.term:hover,
+.term:focus-visible {
+  border-bottom-style: solid;
+  color: var(--fg);
+}
+
+/* A small "?" next to a number, for how it is computed. */
+.help-dot {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--faint);
+  font: 600 10px var(--font-sans);
+  cursor: help;
+}
+
+.help-dot:hover,
+.help-dot:focus-visible {
+  border-color: var(--primary);
+  color: var(--primary);
+}

@@ -1,5 +1,6 @@
 import type { RoundId } from '../../../api/ids';
 import type { Replay } from '../../../api/replay';
+import { Glossed } from '../../../components/ui/Glossed';
 import { StatusIntro } from '../../../components/ui/StatusIntro';
 import type { StatusTone } from '../../../components/ui/StatusIntro';
 import { expectationOf } from '../../../domain/headline';
@@ -46,8 +47,14 @@ export default function RoundHero({
       isLive={!isFinished}
       description={
         <>
-          {replay.description === '' ? null : <p>{replay.description}</p>}
-          <p className={styles.expectation}>{expectationOf(replay.defenses)}</p>
+          {replay.description === '' ? null : (
+            <p>
+              <Glossed text={replay.description} />
+            </p>
+          )}
+          <p className={styles.expectation}>
+            <Glossed text={expectationOf(replay.defenses)} />
+          </p>
           {replay.isStopped ? <p className={styles.notice}>{messages.round.stopped}</p> : null}
           {isConnected ? null : (
             <p className={styles.notice} role="status">

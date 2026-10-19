@@ -59,6 +59,27 @@
   stroke: color-mix(in oklch, var(--warning) 60%, transparent);
 }
 
+.marker {
+  cursor: help;
+  outline: none;
+}
+
+.marker[data-hot='true'] rect,
+.marker:focus-visible rect {
+  fill: var(--warning);
+  stroke: var(--warning);
+}
+
+.marker[data-hot='true'] text,
+.marker:focus-visible text {
+  fill: var(--primary-fg);
+}
+
+.marker[data-hot='true'] line {
+  stroke: var(--warning);
+  stroke-dasharray: none;
+}
+
 .marker text {
   fill: var(--warning);
   font-family: var(--font-mono);

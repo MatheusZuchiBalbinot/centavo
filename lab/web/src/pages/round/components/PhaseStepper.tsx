@@ -48,7 +48,13 @@ function PhaseStep({ phase, state, elapsedSeconds, durationSeconds }: PhaseStepP
       <span className={styles.stepBar}>
         {fill === null ? null : <span className={styles.stepFill} style={{ width: `${fill}%` }} />}
       </span>
-      <span className={styles.stepName}>{messages.round.phases[phase].name}</span>
+      <button
+        type="button"
+        className={`term ${styles.stepName ?? ''}`}
+        data-tooltip={messages.round.phases[phase].help}
+      >
+        {messages.round.phases[phase].name}
+      </button>
       <span className={styles.stepWhen}>{whenOf(phase, state, elapsedSeconds, durationSeconds)}</span>
     </li>
   );

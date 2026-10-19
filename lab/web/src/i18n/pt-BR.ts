@@ -148,6 +148,19 @@ export const messages = {
     network: 'O laboratório não respondeu. Confira se ele está de pé.',
     fallback: 'O laboratório recusou o pedido (código {code}).',
   },
+  tooltip: {
+    protects: 'Protege {guarantees}',
+    help: 'Como este número é calculado',
+    money:
+      'Um auditor soma todos os saldos do banco a cada 2 segundos, lendo o Postgres por fora do código do banco. Pela partida dobrada, a soma tem que ser zero.',
+    rate: 'Quantas operações os clientes robôs fizeram por segundo, concluídas ou não. No fim da rodada, a média de todos os segundos.',
+    latency:
+      'A mediana do tempo que o banco levou para responder no último segundo: metade das operações foi mais rápida que isso.',
+    trouble:
+      'Operações que o banco recusou ou que ficaram sem resposta. Sem resposta não quer dizer erro: na cura o banco esclarece cada uma.',
+    scenarios: 'Cenários desta família: {scenarios}.',
+    attackMarker: 'Ataques {label}, {time}: {what}',
+  },
   toasts: {
     region: 'Avisos',
     close: 'Fechar aviso',
@@ -160,42 +173,58 @@ export const messages = {
       name: 'Nenhum dinheiro some nem aparece',
       short: 'Nenhum dinheiro some',
       detail: 'Toda transação soma zero e cada saldo bate com os seus lançamentos.',
+      why: 'Se falhar, dinheiro é criado ou destruído: o pior erro que um banco pode ter.',
+      threats: 'Ameaçado por: workers zumbis, falhas no meio do commit, conciliação duplicada.',
     },
     I2: {
       name: 'Cada operação acontece uma vez',
       short: 'Cada PIX uma vez',
       detail: 'O que o cliente viu confirmado foi aplicado exatamente uma vez; o que foi recusado, nunca.',
+      why: 'Se falhar, o cliente é debitado duas vezes, ou um PIX recusado acaba aplicado.',
+      threats: 'Ameaçado por: repetições do cliente, rede caindo, workers derrubados.',
     },
     I3: {
       name: 'Respostas perdidas são esclarecidas',
       short: 'Sem resposta esclarecida',
       detail:
         'Uma operação que ficou sem resposta foi aplicada no máximo uma vez, e o banco diz a verdade quando perguntado.',
+      why: 'Se falhar, o cliente fica sem saber se o PIX passou, e o banco mente quando perguntado.',
+      threats: 'Ameaçado por: respostas que somem na rede, a API morrendo depois do commit.',
     },
     I4: {
       name: 'Nenhum cliente fica negativo',
       short: 'Ninguém negativo',
       detail: 'Nenhum saldo de cliente fica abaixo de zero, nem por um instante.',
+      why: 'Se falhar, um cliente gasta dinheiro que não tem.',
+      threats: 'Ameaçado por: PIX concorrentes na mesma conta, travas de saldo fora de ordem.',
     },
     I5: {
       name: 'Toda transferência termina',
       short: 'Todo PIX termina',
       detail: 'Depois dos ataques, nenhum PIX fica preso no meio do caminho.',
+      why: 'Se falhar, um PIX fica preso no meio, nem enviado nem devolvido.',
+      threats: 'Ameaçado por: workers derrubados, parceiro fora do ar, webhooks perdidos.',
     },
     I6: {
       name: 'O banco concorda com o parceiro',
       short: 'Banco e parceiro concordam',
       detail: 'O que o banco liquidou, devolveu e creditou é o que o parceiro diz que fez.',
+      why: 'Se falhar, o banco e o parceiro discordam sobre o dinheiro que passou entre eles.',
+      threats: 'Ameaçado por: o parceiro mentindo, webhooks perdidos ou duplicados.',
     },
     I7: {
       name: 'Só passos válidos',
       short: 'Só passos válidos',
       detail: 'Cada transferência segue a máquina de estados, um lançamento por passo.',
+      why: 'Se falhar, uma transferência pula um passo ou volta para trás.',
+      threats: 'Ameaçado por: eventos fora de ordem, dois workers no mesmo PIX.',
     },
     I8: {
       name: 'O passado não muda',
       short: 'O passado não muda',
       detail: 'Lançamentos de rodadas anteriores continuam idênticos.',
+      why: 'Se falhar, o histórico de rodadas anteriores foi reescrito.',
+      threats: 'Ameaçado por: failover do Postgres, gravações atrasadas.',
     },
     state: {
       ok: 'Mantida',
@@ -254,6 +283,8 @@ export const messages = {
     },
     someone: 'um processo',
     manyTargets: '{count} processos',
+    filterLabel: 'Mostrar no feed',
+    filters: { all: 'Tudo · {count}', attack: 'Ataques · {count}', heal: 'Cura · {count}', other: 'Outros · {count}' },
     times: '×{count}',
   },
   round: {
@@ -289,10 +320,26 @@ export const messages = {
     stopping: 'Parando o ataque; a cura vem a seguir.',
     phasesLabel: 'Fases da rodada',
     phases: {
-      attack: { name: 'Ataque', when: '{elapsed} de {total}' },
-      heal: { name: 'Cura', when: 'até alguns minutos' },
-      check: { name: 'Verificação', when: 'alguns segundos' },
-      verdict: { name: 'Veredito', when: 'no fim' },
+      attack: {
+        name: 'Ataque',
+        when: '{elapsed} de {total}',
+        help: 'Clientes robôs fazem PIX sem parar enquanto o laboratório derruba processos, corta a rede ou faz o parceiro mentir.',
+      },
+      heal: {
+        name: 'Cura',
+        when: 'até alguns minutos',
+        help: 'O laboratório desliga todas as falhas e espera o banco terminar o que ficou pendente.',
+      },
+      check: {
+        name: 'Verificação',
+        when: 'alguns segundos',
+        help: 'O verificador lê o histórico de tudo o que os clientes viram e o banco inteiro, e confere as oito garantias.',
+      },
+      verdict: {
+        name: 'Veredito',
+        when: 'no fim',
+        help: 'Passa quando as oito garantias se mantiveram; senão, mostra a primeira que quebrou.',
+      },
     },
     phaseNow: 'agora',
     phaseDone: 'concluída',

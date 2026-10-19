@@ -1,5 +1,6 @@
 import { useId } from 'react';
 
+import { messages } from '../../i18n/pt-BR';
 import styles from './MetricTile.module.css';
 
 export type MetricTone = 'neutral' | 'success' | 'warning' | 'danger';
@@ -11,6 +12,8 @@ type MetricTileProps = {
   // The recent values, oldest first; the tile draws them as a sparkline.
   readonly trend: readonly number[];
   readonly tone?: MetricTone;
+  // help says how the number is computed, behind a "?" next to the label.
+  readonly help?: string;
 };
 
 const BOX = 100;
@@ -22,10 +25,23 @@ export default function MetricTile({
   hint,
   trend,
   tone = 'neutral',
+  help,
 }: MetricTileProps): React.JSX.Element {
   return (
     <div className={styles.tile} data-tone={tone}>
-      <span className={styles.label}>{label}</span>
+      <span className={styles.labelRow}>
+        <span className={styles.label}>{label}</span>
+        {help === undefined ? null : (
+          <button
+            type="button"
+            className="help-dot"
+            data-tooltip={help}
+            aria-label={`${label}: ${messages.tooltip.help}`}
+          >
+            ?
+          </button>
+        )}
+      </span>
       <span className={styles.value}>{value}</span>
       <span className={styles.hint}>{hint}</span>
       <Sparkline values={trend} />

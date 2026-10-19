@@ -8,6 +8,7 @@ import { roundPath, ROUTES } from '../routes';
 import LabStatus from './LabStatus';
 import styles from './Layout.module.css';
 import { ToastProvider } from './ui/ToastProvider';
+import TooltipLayer from './ui/TooltipLayer';
 
 const MAIN_ID = 'main';
 const ICON_SIZE = 16;
@@ -82,6 +83,7 @@ export default function Layout(): React.JSX.Element {
           </main>
         </div>
       </div>
+      <TooltipLayer />
     </ToastProvider>
   );
 }
