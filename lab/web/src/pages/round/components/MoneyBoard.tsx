@@ -20,20 +20,22 @@ export default function MoneyBoard({ replay, reading, isFinished }: MoneyBoardPr
   const money = moneyOf(replay, reading, isFinished);
 
   return (
-    <section className={styles.board} aria-label={messages.round.board}>
-      <div className={styles.boardMoney} data-state={money.state}>
-        <p className={styles.boardLabel}>{messages.round.moneyLabel}</p>
-        <p className={styles.boardValue}>{money.text}</p>
-        <p className={styles.boardHint}>{isFinished ? messages.round.moneyHintDone : messages.round.moneyHintLive}</p>
-      </div>
-      <Figure
-        label={messages.round.operations}
-        value={operations}
-        hint={format(messages.round.operationsHint, { rate })}
-      />
-      <Figure label={messages.round.attacks} value={attacks} hint={messages.round.attacksHint} />
-      <Figure label={messages.round.unknown} value={totals.info} hint={messages.round.unknownHint} tone="refused" />
-    </section>
+    <div className={styles.boardContainer}>
+      <section className={styles.board} aria-label={messages.round.board}>
+        <div className={styles.boardMoney} data-state={money.state}>
+          <p className={styles.boardLabel}>{messages.round.moneyLabel}</p>
+          <p className={styles.boardValue}>{money.text}</p>
+          <p className={styles.boardHint}>{isFinished ? messages.round.moneyHintDone : messages.round.moneyHintLive}</p>
+        </div>
+        <Figure
+          label={messages.round.operations}
+          value={operations}
+          hint={format(messages.round.operationsHint, { rate })}
+        />
+        <Figure label={messages.round.attacks} value={attacks} hint={messages.round.attacksHint} />
+        <Figure label={messages.round.unknown} value={totals.info} hint={messages.round.unknownHint} tone="refused" />
+      </section>
+    </div>
   );
 }
 

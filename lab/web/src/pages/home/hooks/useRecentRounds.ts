@@ -21,7 +21,7 @@ export function useRecentRounds(refreshKey: string): RoundsReading {
     const controller = new AbortController();
 
     async function load(): Promise<void> {
-      const result = await fetchRounds(ROUNDS_READ, controller.signal);
+      const result = await fetchRounds({ limit: ROUNDS_READ }, controller.signal);
 
       if (controller.signal.aborted) {
         return;

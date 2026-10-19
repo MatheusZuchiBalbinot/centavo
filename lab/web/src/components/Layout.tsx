@@ -35,6 +35,9 @@ export default function Layout(): React.JSX.Element {
                 {messages.nav.home}
               </NavLink>
             </li>
+            <li>
+              <NavLink to={ROUTES.rounds}>{messages.nav.rounds}</NavLink>
+            </li>
             {isRunning ? (
               <li>
                 <NavLink to={ROUTES.live}>{messages.nav.live}</NavLink>

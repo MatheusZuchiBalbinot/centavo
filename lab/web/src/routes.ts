@@ -4,9 +4,15 @@ import type { RoundId } from './api/ids';
 export const ROUTES = {
   home: '/',
   live: '/live',
+  rounds: '/rounds',
   round: '/rounds/:round',
+  compare: '/compare/:left/:right',
 } as const;
 
 export function roundPath(round: RoundId): string {
-  return `/rounds/${encodeURIComponent(round)}`;
+  return `${ROUTES.rounds}/${encodeURIComponent(round)}`;
+}
+
+export function comparePath(left: RoundId, right: RoundId): string {
+  return `/compare/${encodeURIComponent(left)}/${encodeURIComponent(right)}`;
 }

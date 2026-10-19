@@ -16,17 +16,19 @@ const PILL_PADDING = 8;
 const MIN_BAR_WIDTH = 1;
 const BAR_GAP = 0.6;
 
-type TimelineProps = { readonly replay: Replay; readonly nowSeconds: number | null };
+// width is the viewBox width: a narrower one keeps the text readable when the
+// chart sits in half a page.
+type TimelineProps = { readonly replay: Replay; readonly nowSeconds: number | null; readonly width?: number };
 
 // Timeline draws the round on one time axis: attacks numbered as in the feed
 // on top, the answers per second in the middle, the typical response time
 // below, and the cure shaded across all three.
-export default function Timeline({ replay, nowSeconds }: TimelineProps): React.JSX.Element {
+export default function Timeline({ replay, nowSeconds, width = TIMELINE.width }: TimelineProps): React.JSX.Element {
   const attacks = replay.events.filter(isAttackEvent);
   const lastEventSeconds = (replay.events.at(-1)?.tMs ?? 0) / MS_PER_SECOND;
   const spanInput = { durationSeconds: replay.durationSeconds, seconds: replay.seconds, lastEventSeconds, nowSeconds };
   const span = spanOf(spanInput);
-  const plot = TIMELINE.width - TIMELINE.left - TIMELINE.right;
+  const plot = width - TIMELINE.left - TIMELINE.right;
   const buckets = bucketsOf(replay.seconds, span);
   const scale = { x: (seconds: number) => TIMELINE.left + (seconds / span) * plot, secondWidth: plot / span };
   const healStart = replay.events.find(isHealStart);
@@ -34,7 +36,7 @@ export default function Timeline({ replay, nowSeconds }: TimelineProps): React.J
 
   return (
     <figure className={styles.chart}>
-      <svg viewBox={`0 0 ${TIMELINE.width} ${TIMELINE.height}`} role="img" aria-label={summaryOf(replay)}>
+      <svg viewBox={`0 0 ${width} ${TIMELINE.height}`} role="img" aria-label={summaryOf(replay)}>
         {healStart ? <HealBand startSeconds={healStart.tMs / MS_PER_SECOND} span={span} x={scale.x} /> : null}
         <Axis span={span} x={scale.x} />
         <Bars buckets={buckets} x={scale.x} secondWidth={scale.secondWidth} />
@@ -72,9 +74,12 @@ function HealBand({ startSeconds, span, x }: { startSeconds: number; span: numbe
 
 function Axis({ span, x }: { span: number; x: Scale }): React.JSX.Element {
   const bottom = TIMELINE.latencyTop + TIMELINE.latencyHeight;
+  const barsBottom = TIMELINE.barsTop + TIMELINE.barsHeight;
 
   return (
     <g className={styles.axis}>
+      <line className={styles.baseline} x1={x(0)} x2={x(span)} y1={barsBottom} y2={barsBottom} />
+      <line className={styles.baseline} x1={x(0)} x2={x(span)} y1={bottom} y2={bottom} />
       <text x={0} y={TIMELINE.barsTop + 14}>
         {messages.round.laneOperations}
       </text>
@@ -102,13 +107,6 @@ function Bars({ buckets, x, secondWidth }: BarsProps): React.JSX.Element {
 
   return (
     <g className={styles.bars}>
-      <line
-        className={styles.baseline}
-        x1={TIMELINE.left}
-        x2={TIMELINE.width - TIMELINE.right}
-        y1={bottom}
-        y2={bottom}
-      />
       {buckets.map((bucket) => (
         <BarStack key={bucket.t} bucket={bucket} x={x} secondWidth={secondWidth} scale={scale} bottom={bottom} />
       ))}
@@ -155,13 +153,6 @@ function Latency({ buckets, x }: { buckets: readonly Bucket[]; x: Scale }): Reac
 
   return (
     <g className={styles.latency}>
-      <line
-        className={styles.baseline}
-        x1={TIMELINE.left}
-        x2={TIMELINE.width - TIMELINE.right}
-        y1={bottom}
-        y2={bottom}
-      />
       <polyline points={points} />
     </g>
   );

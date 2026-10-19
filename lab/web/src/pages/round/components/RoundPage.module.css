@@ -135,7 +135,11 @@
   font-size: var(--step--1);
 }
 
-/* Scoreboard */
+/* Scoreboard: four across on a wide page, two by two in half of one. */
+.boardContainer {
+  container-type: inline-size;
+}
+
 .board {
   display: grid;
   grid-template-columns: 1.35fr 1fr 1fr 1fr;
@@ -163,16 +167,24 @@
   font-family: var(--display);
   font-size: var(--step-3);
   font-weight: 600;
-  /* WONK off: the playful 1 of Fraunces reads as another digit. */
-  font-variation-settings:
-    'opsz' 144,
-    'WONK' 0;
+  font-variation-settings: 'opsz' 144;
   line-height: 1.1;
-  font-variant-numeric: tabular-nums;
+  /* Fraunces draws old-style figures by default, whose 1 and 4 read as
+     other glyphs at this size; lining figures read as numbers. */
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
 .boardMoney .boardValue {
   font-size: 3.4rem;
+}
+
+/* The counts use the text face: Fraunces draws a 4 with an open top that
+   reads as a stroke in numbers like 4.008. */
+.boardFigure .boardValue {
+  font-family: var(--text);
+  font-size: var(--step-2);
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .boardMoney[data-state='ok'] .boardValue {
@@ -559,19 +571,27 @@
   text-align: center;
 }
 
-@media (max-width: 64rem) {
-  .grid {
-    grid-template-columns: 1fr;
-  }
-
+@container (max-width: 46rem) {
   .board {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
   }
 
   .boardMoney {
     grid-column: 1 / -1;
     border-right: 0;
     border-bottom: 1px solid var(--rule);
+  }
+}
+
+@container (max-width: 28rem) {
+  .board {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 64rem) {
+  .grid {
+    grid-template-columns: 1fr;
   }
 }
 
