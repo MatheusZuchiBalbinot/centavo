@@ -87,6 +87,7 @@ type LedgerStore struct {
 	keyStore
 	pixStore
 	outboxStore
+	inboxStore
 	leaseStore
 	reconciliationStore
 }
@@ -114,7 +115,7 @@ func NewLedgerStore(pool *pgxpool.Pool) LedgerStore {
 func storesOn(db querier) LedgerStore {
 	return LedgerStore{
 		ledgerRows: ledgerRows{db: db}, keyStore: keyStore{db: db}, pixStore: pixStore{db: db},
-		outboxStore: outboxStore{db: db}, leaseStore: leaseStore{db: db}, reconciliationStore: reconciliationStore{db: db},
+		outboxStore: outboxStore{db: db}, inboxStore: inboxStore{db: db}, leaseStore: leaseStore{db: db}, reconciliationStore: reconciliationStore{db: db},
 	}
 }
 
@@ -127,31 +128,19 @@ func (s ledgerRows) LockPositions(ctx context.Context, ids []ledger.AccountID) e
 		uuids = append(uuids, uuid.UUID(id))
 	}
 
-	rows, err := s.db.Query(ctx, lockPositionsSQL, uuids)
-	if err != nil {
-		return fmt.Errorf("locking positions: %w", err)
-	}
+	_, err := execute(ctx, s.db, newStatement("locking positions", lockPositionsSQL, uuids))
 
-	rows.Close()
-
-	err = rows.Err()
-	if err != nil {
-		return fmt.Errorf("locking positions: %w", err)
-	}
-
-	return nil
+	return err
 }
 
 // CreateCustomer inserts the account and its zero balance in one statement.
 func (s ledgerRows) CreateCustomer(ctx context.Context, account ledger.Account) (time.Time, error) {
 	var createdAt time.Time
 
-	err := s.db.QueryRow(ctx, createCustomerSQL, uuid.UUID(account.ID), account.HolderName, customerFloorCents).Scan(&createdAt)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("creating customer account: %w", err)
-	}
+	create := newStatement("creating customer account", createCustomerSQL, uuid.UUID(account.ID), account.HolderName, customerFloorCents)
+	err := scanRow(ctx, s.db, create, &createdAt)
 
-	return createdAt, nil
+	return createdAt, err
 }
 
 // FindCustomer reads a customer account and its materialized balance.
@@ -160,9 +149,11 @@ func (s ledgerRows) FindCustomer(ctx context.Context, id ledger.AccountID) (ledg
 
 	var balanceCents int64
 
-	err := s.db.QueryRow(ctx, findCustomerSQL, uuid.UUID(id)).Scan(&account.HolderName, &account.CreatedAt, &balanceCents)
+	find := newStatement("reading customer account", findCustomerSQL, uuid.UUID(id))
+
+	err := scanRow(ctx, s.db, find, &account.HolderName, &account.CreatedAt, &balanceCents)
 	if err != nil {
-		return ledger.Account{}, money.Balance{}, notFoundOr(err, "reading customer account")
+		return ledger.Account{}, money.Balance{}, accountNotFoundOr(err)
 	}
 
 	return account, money.NewBalance(money.Cents(balanceCents)), nil
@@ -171,41 +162,20 @@ func (s ledgerRows) FindCustomer(ctx context.Context, id ledger.AccountID) (ledg
 // ReadCustomerPosition reads a customer's balance and last entry position,
 // without locking the row.
 func (s ledgerRows) ReadCustomerPosition(ctx context.Context, id ledger.AccountID) (ledger.Position, error) {
-	row := s.db.QueryRow(ctx, readCustomerPositionSQL, uuid.UUID(id))
-
-	position, err := scanPosition(row)
-	if err != nil {
-		return ledger.Position{}, notFoundOr(err, "reading customer position")
-	}
-
-	return position, nil
+	return s.readPosition(ctx, newStatement("reading customer position", readCustomerPositionSQL, uuid.UUID(id)))
 }
 
 // OverwritePosition stores a position the caller computed.
 func (s ledgerRows) OverwritePosition(ctx context.Context, id ledger.AccountID, position ledger.Position) error {
 	balanceCents := int64(position.Balance.Cents())
-	tag, err := s.db.Exec(ctx, overwritePositionSQL, uuid.UUID(id), balanceCents, int64(position.LastSeq))
-	if err != nil {
-		return fmt.Errorf("overwriting position: %w", err)
-	}
+	overwrite := newStatement("overwriting position", overwritePositionSQL, uuid.UUID(id), balanceCents, int64(position.LastSeq))
 
-	if tag.RowsAffected() == 0 {
-		return ledger.ErrAccountNotFound
-	}
-
-	return nil
+	return executeOne(ctx, s.db, overwrite, ledger.ErrAccountNotFound)
 }
 
 // IncrementBalance adds delta in the database and returns the new position.
 func (s ledgerRows) IncrementBalance(ctx context.Context, id ledger.AccountID, delta money.Cents) (ledger.Position, error) {
-	row := s.db.QueryRow(ctx, incrementBalanceSQL, uuid.UUID(id), int64(delta))
-
-	position, err := scanPosition(row)
-	if err != nil {
-		return ledger.Position{}, notFoundOr(err, "incrementing balance")
-	}
-
-	return position, nil
+	return s.readPosition(ctx, newStatement("incrementing balance", incrementBalanceSQL, uuid.UUID(id), int64(delta)))
 }
 
 // InsertTransaction appends a ledger transaction header.
@@ -218,60 +188,47 @@ func (s ledgerRows) InsertTransaction(ctx context.Context, transaction ledger.Tr
 		operationID = &id
 	}
 
-	row := s.db.QueryRow(
-		ctx,
-		insertTransactionSQL,
-		uuid.UUID(transaction.ID),
-		string(transaction.Kind),
-		operationID,
-		transaction.ClientRef,
-		transaction.CorrelationID,
-		transaction.ExternalTransferID,
-		transaction.IncomingTransferID,
-		transaction.ReconciliationItemID,
+	insert := newStatement(
+		"inserting ledger transaction", insertTransactionSQL,
+		uuid.UUID(transaction.ID), string(transaction.Kind), operationID, transaction.ClientRef, transaction.CorrelationID,
+		transaction.ExternalTransferID, transaction.IncomingTransferID, transaction.ReconciliationItemID,
 	)
+	err := scanRow(ctx, s.db, insert, &createdAt)
 
-	err := row.Scan(&createdAt)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("inserting ledger transaction: %w", err)
-	}
-
-	return createdAt, nil
+	return createdAt, err
 }
 
 // InsertEntry appends one ledger entry.
 func (s ledgerRows) InsertEntry(ctx context.Context, entry ledger.Entry) error {
 	balanceAfterCents := int64(entry.BalanceAfter.Cents())
-
-	_, err := s.db.Exec(
-		ctx,
-		insertEntrySQL,
-		uuid.UUID(entry.TransactionID),
-		uuid.UUID(entry.AccountID),
-		int64(entry.Amount),
-		int64(entry.Seq),
-		balanceAfterCents,
+	insert := newStatement(
+		"inserting ledger entry", insertEntrySQL,
+		uuid.UUID(entry.TransactionID), uuid.UUID(entry.AccountID), int64(entry.Amount), int64(entry.Seq), balanceAfterCents,
 	)
-	if err != nil {
-		return fmt.Errorf("inserting ledger entry: %w", err)
-	}
 
-	return nil
+	_, err := execute(ctx, s.db, insert)
+
+	return err
 }
 
 // ReadStatement reads one page of an account's entries.
 func (s ledgerRows) ReadStatement(ctx context.Context, query application.StatementQuery) ([]ledger.StatementLine, error) {
-	rows, err := s.db.Query(ctx, readStatementSQL, uuid.UUID(query.AccountID), int64(query.AfterSeq), query.Limit)
+	read := newStatement("reading statement", readStatementSQL, uuid.UUID(query.AccountID), int64(query.AfterSeq), query.Limit)
+
+	return queryRows(ctx, s.db, read, scanStatementLine)
+}
+
+// readPosition reads the balance and last position a statement returns; a
+// missing account is ledger.ErrAccountNotFound.
+func (s ledgerRows) readPosition(ctx context.Context, st statement) (ledger.Position, error) {
+	var balanceCents, lastSeq int64
+
+	err := scanRow(ctx, s.db, st, &balanceCents, &lastSeq)
 	if err != nil {
-		return nil, fmt.Errorf("reading statement: %w", err)
+		return ledger.Position{}, accountNotFoundOr(err)
 	}
 
-	lines, err := pgx.CollectRows(rows, scanStatementLine)
-	if err != nil {
-		return nil, fmt.Errorf("reading statement: %w", err)
-	}
-
-	return lines, nil
+	return ledger.Position{Balance: money.NewBalance(money.Cents(balanceCents)), LastSeq: ledger.Seq(lastSeq)}, nil
 }
 
 func scanStatementLine(row pgx.CollectableRow) (ledger.StatementLine, error) {
@@ -297,22 +254,11 @@ func scanStatementLine(row pgx.CollectableRow) (ledger.StatementLine, error) {
 	return line, nil
 }
 
-func scanPosition(row pgx.Row) (ledger.Position, error) {
-	var balanceCents, lastSeq int64
-
-	err := row.Scan(&balanceCents, &lastSeq)
-	if err != nil {
-		return ledger.Position{}, err
-	}
-
-	return ledger.Position{Balance: money.NewBalance(money.Cents(balanceCents)), LastSeq: ledger.Seq(lastSeq)}, nil
-}
-
-// notFoundOr turns a missing row into the domain error and wraps anything else.
-func notFoundOr(err error, action string) error {
+// accountNotFoundOr turns a missing row into the domain error.
+func accountNotFoundOr(err error) error {
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ledger.ErrAccountNotFound
 	}
 
-	return fmt.Errorf("%s: %w", action, err)
+	return err
 }

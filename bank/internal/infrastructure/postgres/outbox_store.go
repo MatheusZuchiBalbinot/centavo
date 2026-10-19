@@ -101,8 +101,15 @@ UPDATE inbox_events
 SET next_attempt_at = now() + $2::bigint * interval '1 millisecond', outcome = $3
 WHERE id = $1 AND status = 'pending'`
 
-// outboxStore keeps the outbox and the inbox.
+const lockExternalTransferSQL = `SELECT ` + externalTransferColumns + ` FROM external_transfers WHERE id = $1 FOR UPDATE`
+
+// outboxStore keeps the outbox and the locks of the transfers it relays.
 type outboxStore struct {
+	db querier
+}
+
+// inboxStore keeps the partner events waiting to be applied.
+type inboxStore struct {
 	db querier
 }
 
@@ -115,118 +122,85 @@ type inboxPayload struct {
 
 // EnqueueOutbox writes the message in the caller's transaction.
 func (s outboxStore) EnqueueOutbox(ctx context.Context, message application.OutboxMessage) error {
-	_, err := s.db.Exec(ctx, enqueueOutboxSQL, message.Topic, message.AggregateID, message.Payload, message.CorrelationID)
-	if err != nil {
-		return fmt.Errorf("enqueueing outbox message: %w", err)
-	}
+	enqueue := newStatement("enqueueing outbox message", enqueueOutboxSQL, message.Topic, message.AggregateID, message.Payload, message.CorrelationID)
+	_, err := execute(ctx, s.db, enqueue)
 
-	return nil
+	return err
 }
 
 // ClaimOutbox leases up to limit messages.
 func (s outboxStore) ClaimOutbox(ctx context.Context, owner string, ttl time.Duration, limit int) ([]application.OutboxClaim, error) {
-	rows, err := s.db.Query(ctx, claimOutboxSQL, owner, ttl.Milliseconds(), limit)
-	if err != nil {
-		return nil, fmt.Errorf("claiming outbox messages: %w", err)
-	}
+	claim := newStatement("claiming outbox messages", claimOutboxSQL, owner, ttl.Milliseconds(), limit)
 
-	return pgx.CollectRows(rows, scanOutboxClaim)
-}
-
-func scanOutboxClaim(row pgx.CollectableRow) (application.OutboxClaim, error) {
-	var claim application.OutboxClaim
-	err := row.Scan(&claim.ID, &claim.AggregateID, &claim.Token, &claim.Attempts, &claim.CorrelationID)
-
-	return claim, err
+	return queryRows(ctx, s.db, claim, scanOutboxClaim)
 }
 
 // FinishOutbox marks the message delivered if the token still owns it.
 func (s outboxStore) FinishOutbox(ctx context.Context, id, token int64) (bool, error) {
-	tag, err := s.db.Exec(ctx, finishOutboxSQL, id, token)
-	if err != nil {
-		return false, fmt.Errorf("finishing outbox message: %w", err)
-	}
+	finished, err := execute(ctx, s.db, newStatement("finishing outbox message", finishOutboxSQL, id, token))
 
-	return tag.RowsAffected() == 1, nil
+	return finished == 1, err
 }
 
 // LockExternalTransfer locks the transfer until the transaction ends and
 // returns it.
 func (s outboxStore) LockExternalTransfer(ctx context.Context, id transfer.ID) (application.ExternalTransfer, error) {
-	row := s.db.QueryRow(ctx, `SELECT `+externalTransferColumns+` FROM external_transfers WHERE id = $1 FOR UPDATE`, uuid.UUID(id))
-
-	return scanExternalTransfer(row)
+	return readExternalTransfer(ctx, s.db, newStatement("locking external transfer", lockExternalTransferSQL, uuid.UUID(id)))
 }
 
 // AdvanceStatus changes the status if the sequence is still the one seen.
 func (s outboxStore) AdvanceStatus(ctx context.Context, change application.StatusChange, seenSeq int) error {
-	tag, err := s.db.Exec(ctx, advanceStatusSQL, uuid.UUID(change.TransferID), string(change.To), change.FailureCode, seenSeq)
-	if err != nil {
-		return fmt.Errorf("advancing status: %w", err)
-	}
+	advance := newStatement("advancing status", advanceStatusSQL, uuid.UUID(change.TransferID), string(change.To), change.FailureCode, seenSeq)
 
-	if tag.RowsAffected() != 1 {
-		return errStaleStatus
-	}
-
-	return nil
+	return executeOne(ctx, s.db, advance, errStaleStatus)
 }
 
 // DeferOutbox reschedules the message if the token still owns it.
 func (s outboxStore) DeferOutbox(ctx context.Context, claim application.OutboxClaim, delay time.Duration, reason string) (bool, error) {
-	tag, err := s.db.Exec(ctx, deferOutboxSQL, claim.ID, claim.Token, delay.Milliseconds(), reason)
-	if err != nil {
-		return false, fmt.Errorf("deferring outbox message: %w", err)
-	}
+	deferral := newStatement("deferring outbox message", deferOutboxSQL, claim.ID, claim.Token, delay.Milliseconds(), reason)
+	deferred, err := execute(ctx, s.db, deferral)
 
-	return tag.RowsAffected() == 1, nil
+	return deferred == 1, err
 }
 
 // InsertInbox records the event unless it is already there.
-func (s outboxStore) InsertInbox(ctx context.Context, event application.PartnerEvent, correlationID string) (bool, error) {
-	payload, err := json.Marshal(inboxPayload{AmountCents: int64(event.AmountCents), Sequence: event.Sequence, Reason: event.Reason, AccountID: event.AccountID})
+func (s inboxStore) InsertInbox(ctx context.Context, event application.PartnerEvent, correlationID string) (bool, error) {
+	fields := inboxPayload{AmountCents: int64(event.AmountCents), Sequence: event.Sequence, Reason: event.Reason, AccountID: event.AccountID}
+
+	payload, err := json.Marshal(fields)
 	if err != nil {
 		return false, err
 	}
 
-	tag, err := s.db.Exec(ctx, insertInboxSQL, event.ID, event.Type, event.EndToEndID, payload, correlationID)
-	if err != nil {
-		return false, fmt.Errorf("inserting inbox event: %w", err)
-	}
+	insert := newStatement("inserting inbox event", insertInboxSQL, event.ID, event.Type, event.EndToEndID, payload, correlationID)
+	inserted, err := execute(ctx, s.db, insert)
 
-	return tag.RowsAffected() == 1, nil
+	return inserted == 1, err
 }
 
 // ReclaimInbox locks a pending event no other transaction holds.
-func (s outboxStore) ReclaimInbox(ctx context.Context, id int64) (bool, error) {
+func (s inboxStore) ReclaimInbox(ctx context.Context, id int64) (bool, error) {
 	var locked int64
 
-	err := s.db.QueryRow(ctx, reclaimInboxSQL, id).Scan(&locked)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return false, nil
-	}
-
-	if err != nil {
-		return false, fmt.Errorf("reclaiming inbox event: %w", err)
-	}
-
-	return true, nil
+	return scanOptionalRow(ctx, s.db, newStatement("reclaiming inbox event", reclaimInboxSQL, id), &locked)
 }
 
 // ClaimInbox returns the next event to apply, or false when none is ready.
-func (s outboxStore) ClaimInbox(ctx context.Context) (application.InboxEvent, bool, error) {
+func (s inboxStore) ClaimInbox(ctx context.Context) (application.InboxEvent, bool, error) {
 	var (
 		event   application.InboxEvent
 		payload []byte
 	)
 
-	err := s.db.QueryRow(ctx, claimInboxSQL).Scan(&event.ID, &event.Event.ID, &event.Event.Type, &event.Event.EndToEndID, &payload, &event.CorrelationID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return application.InboxEvent{}, false, nil
+	claim := newStatement("claiming inbox event", claimInboxSQL)
+
+	isClaimed, err := scanOptionalRow(ctx, s.db, claim, &event.ID, &event.Event.ID, &event.Event.Type, &event.Event.EndToEndID, &payload, &event.CorrelationID)
+	if err != nil {
+		return application.InboxEvent{}, false, err
 	}
 
-	if err != nil {
-		return application.InboxEvent{}, false, fmt.Errorf("claiming inbox event: %w", err)
+	if !isClaimed {
+		return application.InboxEvent{}, false, nil
 	}
 
 	var fields inboxPayload
@@ -245,21 +219,22 @@ func (s outboxStore) ClaimInbox(ctx context.Context) (application.InboxEvent, bo
 }
 
 // FinishInbox closes the event with its outcome.
-func (s outboxStore) FinishInbox(ctx context.Context, id int64, status application.InboxStatus, outcome string) error {
-	_, err := s.db.Exec(ctx, finishInboxSQL, id, string(status), outcome)
-	if err != nil {
-		return fmt.Errorf("finishing inbox event: %w", err)
-	}
+func (s inboxStore) FinishInbox(ctx context.Context, id int64, status application.InboxStatus, outcome string) error {
+	_, err := execute(ctx, s.db, newStatement("finishing inbox event", finishInboxSQL, id, string(status), outcome))
 
-	return nil
+	return err
 }
 
 // DeferInbox puts the event back for a later attempt.
-func (s outboxStore) DeferInbox(ctx context.Context, id int64, delay time.Duration, reason string) error {
-	_, err := s.db.Exec(ctx, deferInboxSQL, id, delay.Milliseconds(), reason)
-	if err != nil {
-		return fmt.Errorf("deferring inbox event: %w", err)
-	}
+func (s inboxStore) DeferInbox(ctx context.Context, id int64, delay time.Duration, reason string) error {
+	_, err := execute(ctx, s.db, newStatement("deferring inbox event", deferInboxSQL, id, delay.Milliseconds(), reason))
 
-	return nil
+	return err
+}
+
+func scanOutboxClaim(row pgx.CollectableRow) (application.OutboxClaim, error) {
+	var claim application.OutboxClaim
+	err := row.Scan(&claim.ID, &claim.AggregateID, &claim.Token, &claim.Attempts, &claim.CorrelationID)
+
+	return claim, err
 }

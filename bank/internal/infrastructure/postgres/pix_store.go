@@ -3,7 +3,6 @@ package postgres
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -71,6 +70,12 @@ const lockEndToEndSQL = `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`
 
 const lockTransfersOfSQL = `SELECT id FROM external_transfers WHERE end_to_end_id = ANY($1) ORDER BY id FOR UPDATE`
 
+const (
+	findExternalTransferSQL           = `SELECT ` + externalTransferColumns + ` FROM external_transfers WHERE id = $1`
+	findExternalTransferByEndToEndSQL = `SELECT ` + externalTransferColumns + ` FROM external_transfers WHERE end_to_end_id = $1`
+	notifySQL                         = `SELECT pg_notify($1, $2)`
+)
+
 // pixStore keeps external transfers, their transitions and incoming PIX.
 type pixStore struct {
 	db querier
@@ -81,25 +86,14 @@ func (s pixStore) InsertExternalTransfer(ctx context.Context, external applicati
 	var createdAt time.Time
 
 	amountCents := int64(external.Amount.Cents())
-
-	row := s.db.QueryRow(
-		ctx,
-		insertExternalTransferSQL,
-		uuid.UUID(external.ID),
-		external.EndToEndID,
-		uuid.UUID(external.OperationID),
-		external.ClientRef,
-		uuid.UUID(external.AccountID),
-		amountCents,
-		external.DestinationKey,
+	insert := newStatement(
+		"inserting external transfer", insertExternalTransferSQL,
+		uuid.UUID(external.ID), external.EndToEndID, uuid.UUID(external.OperationID), external.ClientRef,
+		uuid.UUID(external.AccountID), amountCents, external.DestinationKey,
 	)
+	err := scanRow(ctx, s.db, insert, &createdAt)
 
-	err := row.Scan(&createdAt)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("inserting external transfer: %w", err)
-	}
-
-	return createdAt, nil
+	return createdAt, err
 }
 
 // InsertTransition appends one line to the transfer's state history.
@@ -116,29 +110,19 @@ func (s pixStore) InsertTransition(ctx context.Context, transition application.T
 		ledgerTransactionID = &id
 	}
 
-	_, err := s.db.Exec(
-		ctx,
-		insertTransitionSQL,
-		uuid.UUID(transition.TransferID),
-		transition.Seq,
-		from,
-		string(transition.To),
-		transition.Cause,
-		ledgerTransactionID,
-		transition.CorrelationID,
+	insert := newStatement(
+		"inserting transition", insertTransitionSQL,
+		uuid.UUID(transition.TransferID), transition.Seq, from, string(transition.To), transition.Cause,
+		ledgerTransactionID, transition.CorrelationID,
 	)
-	if err != nil {
-		return fmt.Errorf("inserting transition: %w", err)
-	}
+	_, err := execute(ctx, s.db, insert)
 
-	return nil
+	return err
 }
 
 // FindExternalTransfer reads a transfer and its state history.
 func (s pixStore) FindExternalTransfer(ctx context.Context, id transfer.ID) (application.ExternalTransfer, []application.TransitionRecord, error) {
-	row := s.db.QueryRow(ctx, `SELECT `+externalTransferColumns+` FROM external_transfers WHERE id = $1`, uuid.UUID(id))
-
-	external, err := scanExternalTransfer(row)
+	external, err := readExternalTransfer(ctx, s.db, newStatement("reading external transfer", findExternalTransferSQL, uuid.UUID(id)))
 	if err != nil {
 		return application.ExternalTransfer{}, nil, err
 	}
@@ -150,12 +134,85 @@ func (s pixStore) FindExternalTransfer(ctx context.Context, id transfer.ID) (app
 
 // FindExternalTransferByEndToEnd finds the transfer a partner event is about.
 func (s pixStore) FindExternalTransferByEndToEnd(ctx context.Context, endToEndID transfer.EndToEndID) (application.ExternalTransfer, error) {
-	row := s.db.QueryRow(ctx, `SELECT `+externalTransferColumns+` FROM external_transfers WHERE end_to_end_id = $1`, endToEndID)
-
-	return scanExternalTransfer(row)
+	return readExternalTransfer(ctx, s.db, newStatement("reading external transfer", findExternalTransferByEndToEndSQL, endToEndID))
 }
 
-func scanExternalTransfer(row pgx.Row) (application.ExternalTransfer, error) {
+// ClaimAttempt is the naive relay's compare-and-set on the end_to_end_id.
+func (s pixStore) ClaimAttempt(ctx context.Context, id transfer.ID, seen, next transfer.EndToEndID) (bool, error) {
+	claimed, err := execute(ctx, s.db, newStatement("claiming an attempt", claimAttemptSQL, uuid.UUID(id), seen, next))
+
+	return claimed == 1, err
+}
+
+// OverwriteStatus sets the status, whatever it was.
+func (s pixStore) OverwriteStatus(ctx context.Context, change application.StatusChange) (transfer.Status, int, error) {
+	var (
+		previous string
+		seq      int
+	)
+
+	overwrite := newStatement("overwriting status", overwriteStatusSQL, uuid.UUID(change.TransferID), string(change.To), change.FailureCode)
+
+	err := scanRow(ctx, s.db, overwrite, &previous, &seq)
+	if err != nil {
+		return "", 0, transferNotFoundOr(err)
+	}
+
+	return transfer.Status(previous), seq, nil
+}
+
+// InsertIncoming records a PIX in; a second one for the same end_to_end_id
+// is application.ErrAlreadyCredited.
+func (s pixStore) InsertIncoming(ctx context.Context, incoming application.IncomingRecord) error {
+	amountCents := int64(incoming.Amount.Cents())
+	insert := newStatement(
+		"inserting incoming transfer", insertIncomingSQL,
+		incoming.ID, incoming.EndToEndID, uuid.UUID(incoming.AccountID), amountCents, incoming.SourceEventID,
+	)
+
+	_, err := execute(ctx, s.db, insert)
+
+	var pgErr *pgconn.PgError
+
+	isDuplicate := errors.As(err, &pgErr) && pgErr.Code == uniqueViolation
+	if isDuplicate {
+		return application.ErrAlreadyCredited
+	}
+
+	return err
+}
+
+// Notify wakes the relays: NOTIFY pix_out with the transfer id. Nobody
+// listening means nobody hears it.
+func (s pixStore) Notify(ctx context.Context, channel, payload string) error {
+	_, err := execute(ctx, s.db, newStatement("notifying "+channel, notifySQL, channel, payload))
+
+	return err
+}
+
+// ListCreated returns transfers still waiting for the partner.
+func (s pixStore) ListCreated(ctx context.Context, limit int) ([]transfer.ID, error) {
+	return queryRows(ctx, s.db, newStatement("listing created transfers", listCreatedSQL, limit), scanTransferID)
+}
+
+// LockEndToEnd holds one PIX until the transaction ends.
+func (s pixStore) LockEndToEnd(ctx context.Context, endToEndID transfer.EndToEndID) error {
+	_, err := execute(ctx, s.db, newStatement("locking a PIX", lockEndToEndSQL, endToEndID))
+
+	return err
+}
+
+// LockTransfersOf locks a batch of transfers in id order, which every other
+// writer that takes more than one of them follows too.
+func (s pixStore) LockTransfersOf(ctx context.Context, endToEndIDs []transfer.EndToEndID) error {
+	_, err := execute(ctx, s.db, newStatement("locking transfers", lockTransfersOfSQL, endToEndIDs))
+
+	return err
+}
+
+// readExternalTransfer reads the transfer a statement selects; a missing one
+// is transfer.ErrTransferNotFound.
+func readExternalTransfer(ctx context.Context, db querier, st statement) (application.ExternalTransfer, error) {
 	var (
 		external                   application.ExternalTransfer
 		id, operationID, accountID uuid.UUID
@@ -163,25 +220,13 @@ func scanExternalTransfer(row pgx.Row) (application.ExternalTransfer, error) {
 		status                     string
 	)
 
-	err := row.Scan(
-		&id,
-		&external.EndToEndID,
-		&operationID,
-		&external.ClientRef,
-		&accountID,
-		&amountCents,
-		&external.DestinationKey,
-		&status,
-		&external.StatusSeq,
-		&external.FailureCode,
-		&external.CreatedAt,
+	err := scanRow(
+		ctx, db, st,
+		&id, &external.EndToEndID, &operationID, &external.ClientRef, &accountID, &amountCents,
+		&external.DestinationKey, &status, &external.StatusSeq, &external.FailureCode, &external.CreatedAt,
 	)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return application.ExternalTransfer{}, transfer.ErrTransferNotFound
-	}
-
 	if err != nil {
-		return application.ExternalTransfer{}, fmt.Errorf("reading external transfer: %w", err)
+		return application.ExternalTransfer{}, transferNotFoundOr(err)
 	}
 
 	amount, err := money.NewAmount(money.Cents(amountCents))
@@ -199,144 +244,58 @@ func scanExternalTransfer(row pgx.Row) (application.ExternalTransfer, error) {
 }
 
 func (s pixStore) transitionsOf(ctx context.Context, id transfer.ID) ([]application.TransitionRecord, error) {
-	rows, err := s.db.Query(ctx, transitionsSQL, uuid.UUID(id))
+	transitions, err := queryRows(ctx, s.db, newStatement("reading transitions", transitionsSQL, uuid.UUID(id)), scanTransition)
 	if err != nil {
-		return nil, fmt.Errorf("reading transitions: %w", err)
+		return nil, err
 	}
 
-	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (application.TransitionRecord, error) {
-		var (
-			transition    application.TransitionRecord
-			from          *string
-			to            string
-			ledgerTransID *uuid.UUID
-		)
-
-		err := row.Scan(&transition.Seq, &from, &to, &transition.Cause, &ledgerTransID, &transition.CorrelationID, &transition.CreatedAt)
-		if err != nil {
-			return application.TransitionRecord{}, err
-		}
-
-		transition.TransferID = id
-		transition.To = transfer.Status(to)
-
-		if from != nil {
-			status := transfer.Status(*from)
-			transition.From = &status
-		}
-
-		if ledgerTransID != nil {
-			transactionID := ledger.TransactionID(*ledgerTransID)
-			transition.LedgerTransactionID = &transactionID
-		}
-
-		return transition, nil
-	})
-}
-
-// ClaimAttempt is the naive relay's compare-and-set on the end_to_end_id.
-func (s pixStore) ClaimAttempt(ctx context.Context, id transfer.ID, seen, next transfer.EndToEndID) (bool, error) {
-	tag, err := s.db.Exec(ctx, claimAttemptSQL, uuid.UUID(id), seen, next)
-	if err != nil {
-		return false, fmt.Errorf("claiming an attempt: %w", err)
+	for k := range transitions {
+		transitions[k].TransferID = id
 	}
 
-	return tag.RowsAffected() == 1, nil
+	return transitions, nil
 }
 
-// OverwriteStatus sets the status, whatever it was.
-func (s pixStore) OverwriteStatus(ctx context.Context, change application.StatusChange) (transfer.Status, int, error) {
+func scanTransition(row pgx.CollectableRow) (application.TransitionRecord, error) {
 	var (
-		previous string
-		seq      int
+		transition    application.TransitionRecord
+		from          *string
+		to            string
+		ledgerTransID *uuid.UUID
 	)
 
-	err := s.db.QueryRow(ctx, overwriteStatusSQL, uuid.UUID(change.TransferID), string(change.To), change.FailureCode).Scan(&previous, &seq)
+	err := row.Scan(&transition.Seq, &from, &to, &transition.Cause, &ledgerTransID, &transition.CorrelationID, &transition.CreatedAt)
+	if err != nil {
+		return application.TransitionRecord{}, err
+	}
+
+	transition.To = transfer.Status(to)
+
+	if from != nil {
+		status := transfer.Status(*from)
+		transition.From = &status
+	}
+
+	if ledgerTransID != nil {
+		transactionID := ledger.TransactionID(*ledgerTransID)
+		transition.LedgerTransactionID = &transactionID
+	}
+
+	return transition, nil
+}
+
+func scanTransferID(row pgx.CollectableRow) (transfer.ID, error) {
+	var id uuid.UUID
+	err := row.Scan(&id)
+
+	return transfer.ID(id), err
+}
+
+// transferNotFoundOr turns a missing row into the domain error.
+func transferNotFoundOr(err error) error {
 	if errors.Is(err, pgx.ErrNoRows) {
-		return "", 0, transfer.ErrTransferNotFound
+		return transfer.ErrTransferNotFound
 	}
 
-	if err != nil {
-		return "", 0, fmt.Errorf("overwriting status: %w", err)
-	}
-
-	return transfer.Status(previous), seq, nil
-}
-
-// InsertIncoming records a PIX in; a second one for the same end_to_end_id
-// is application.ErrAlreadyCredited.
-func (s pixStore) InsertIncoming(ctx context.Context, incoming application.IncomingRecord) error {
-	amountCents := int64(incoming.Amount.Cents())
-
-	_, err := s.db.Exec(
-		ctx,
-		insertIncomingSQL,
-		incoming.ID,
-		incoming.EndToEndID,
-		uuid.UUID(incoming.AccountID),
-		amountCents,
-		incoming.SourceEventID,
-	)
-
-	var pgErr *pgconn.PgError
-
-	isDuplicate := errors.As(err, &pgErr) && pgErr.Code == uniqueViolation
-	if isDuplicate {
-		return application.ErrAlreadyCredited
-	}
-
-	if err != nil {
-		return fmt.Errorf("inserting incoming transfer: %w", err)
-	}
-
-	return nil
-}
-
-// Notify wakes the relays: NOTIFY pix_out with the transfer id. Nobody
-// listening means nobody hears it.
-func (s pixStore) Notify(ctx context.Context, channel, payload string) error {
-	_, err := s.db.Exec(ctx, `SELECT pg_notify($1, $2)`, channel, payload)
-	if err != nil {
-		return fmt.Errorf("notifying %s: %w", channel, err)
-	}
-
-	return nil
-}
-
-// ListCreated returns transfers still waiting for the partner.
-func (s pixStore) ListCreated(ctx context.Context, limit int) ([]transfer.ID, error) {
-	rows, err := s.db.Query(ctx, listCreatedSQL, limit)
-	if err != nil {
-		return nil, fmt.Errorf("listing created transfers: %w", err)
-	}
-
-	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (transfer.ID, error) {
-		var id uuid.UUID
-		err := row.Scan(&id)
-
-		return transfer.ID(id), err
-	})
-}
-
-// LockEndToEnd holds one PIX until the transaction ends.
-func (s pixStore) LockEndToEnd(ctx context.Context, endToEndID transfer.EndToEndID) error {
-	_, err := s.db.Exec(ctx, lockEndToEndSQL, endToEndID)
-	if err != nil {
-		return fmt.Errorf("locking a PIX: %w", err)
-	}
-
-	return nil
-}
-
-// LockTransfersOf locks a batch of transfers in id order, which every other
-// writer that takes more than one of them follows too.
-func (s pixStore) LockTransfersOf(ctx context.Context, endToEndIDs []transfer.EndToEndID) error {
-	rows, err := s.db.Query(ctx, lockTransfersOfSQL, endToEndIDs)
-	if err != nil {
-		return fmt.Errorf("locking transfers: %w", err)
-	}
-
-	rows.Close()
-
-	return rows.Err()
+	return err
 }
