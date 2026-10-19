@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import type { Replay } from '../../../api/replay';
 import AreaChart from '../../../components/charts/AreaChart';
+import { scaleMaxOf } from '../../../components/charts/scale';
 import { Card } from '../../../components/ui/Card';
 import { LiveIndicator } from '../../../components/ui/LiveIndicator';
 import { formatClock } from '../../../domain/duration';
@@ -44,6 +45,12 @@ export default function RoundChart({
   const markers = replay.events.filter(isAttackEvent).map((event) => ({ at: event.tMs / MS_PER_SECOND }));
   const band = healStart ? { from: healStart.tMs / MS_PER_SECOND, to: span, label: messages.round.chartHeal } : null;
   const copy = messages.round.metrics[metric];
+  const points = seriesOf(replay.seconds, metric);
+  // Scaled to the attack only: the cure's bulk re-reads would flatten it.
+  const healFrom = band?.from ?? Number.POSITIVE_INFINITY;
+  const attackValues = points.filter((point) => point.at < healFrom).map((point) => point.value);
+  const scaleValues = attackValues.length > 0 ? attackValues : undefined;
+  const isCut = scaleValues !== undefined && points.some((point) => point.value > scaleMaxOf(scaleValues));
 
   return (
     <Card
@@ -75,14 +82,18 @@ export default function RoundChart({
       }
     >
       <p className={styles.chartCaption}>
-        {copy.caption}
+        <span>
+          {copy.caption}
+          {isCut ? <span className={styles.chartCut}> {messages.round.chartCut}</span> : null}
+        </span>
         <span className={styles.chartLegend}>
           <span className={styles.legendAttack}>{messages.round.legendAttack}</span>
           <span className={styles.legendHeal}>{messages.round.chartHeal}</span>
         </span>
       </p>
       <AreaChart
-        points={seriesOf(replay.seconds, metric)}
+        points={points}
+        scaleValues={scaleValues}
         domain={{ from: 0, to: span }}
         formatValue={(value) => `${Math.round(value).toLocaleString('pt-BR')}${copy.unit}`}
         formatTime={formatClock}

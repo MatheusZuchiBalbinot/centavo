@@ -3,7 +3,7 @@ import { useId, useRef, useState } from 'react';
 import { clusterMarkers, ticksOf } from '../../domain/timeline';
 import { useElementWidth } from '../../hooks/useElementWidth';
 import styles from './AreaChart.module.css';
-import { niceTicks, scaleLinear } from './scale';
+import { niceTicks, scaleLinear, scaleMaxOf } from './scale';
 
 export type ChartPoint = { readonly at: number; readonly value: number };
 
@@ -24,6 +24,10 @@ type AreaChartProps = {
   // isLive makes the newest point breathe while data arrives.
   readonly isLive: boolean;
   readonly label: string;
+  // scaleValues set the value axis when part of the series should not: the
+  // cure re-reads every transfer at once, and scaled to it the attack would
+  // be a flat line. Values above the axis are cut at the top.
+  readonly scaleValues?: readonly number[];
   readonly height?: number;
 };
 
@@ -51,6 +55,7 @@ export default function AreaChart({
   band,
   isLive,
   label,
+  scaleValues,
   height = DEFAULT_HEIGHT,
 }: AreaChartProps): React.JSX.Element {
   const frame = useRef<HTMLDivElement>(null);
@@ -59,12 +64,14 @@ export default function AreaChart({
   const clipId = useId();
   const [hoverAt, setHoverAt] = useState<number | null>(null);
 
-  const ticks = niceTicks(Math.max(0, ...points.map(valueOf)));
+  const ticks = niceTicks(scaleMaxOf(scaleValues ?? points.map(valueOf)));
   const maxValue = ticks.at(-1) ?? 1;
   const plotRight = Math.max(width - MARGIN.right, MARGIN.left + 1);
   const plotBottom = height - MARGIN.bottom;
   const x = scaleLinear(domain.from, domain.to, MARGIN.left, plotRight);
-  const y = scaleLinear(0, maxValue, plotBottom, MARGIN.top);
+  // Values past the axis stay on its top edge instead of leaving the plot.
+  const toY = scaleLinear(0, maxValue, plotBottom, MARGIN.top);
+  const y = (value: number): number => Math.max(MARGIN.top, toY(value));
   const line = points
     .map((point, index) => `${index === 0 ? 'M' : 'L'}${x(point.at).toFixed(1)},${y(point.value).toFixed(1)}`)
     .join(' ');
@@ -102,7 +109,12 @@ export default function AreaChart({
             <stop offset="100%" className={styles.areaBottom} />
           </linearGradient>
           <clipPath id={clipId}>
-            <rect x={MARGIN.left} y={0} width={Math.max(plotRight - MARGIN.left, 0)} height={height} />
+            <rect
+              x={MARGIN.left}
+              y={MARGIN.top}
+              width={Math.max(plotRight - MARGIN.left, 0)}
+              height={plotBottom - MARGIN.top}
+            />
           </clipPath>
         </defs>
         {band ? (

@@ -3,6 +3,7 @@ import { Card } from '../../../components/ui/Card';
 import { formatClock } from '../../../domain/duration';
 import { feedOf } from '../../../domain/feed';
 import type { FeedItem } from '../../../domain/feed';
+import { format } from '../../../i18n/format';
 import { messages } from '../../../i18n/pt-BR';
 import styles from './RoundPage.module.css';
 
@@ -43,15 +44,27 @@ export default function EventFeed({ events, isCalm }: EventFeedProps): React.JSX
 function FeedEntry({ item }: { item: FeedItem }): React.JSX.Element {
   return (
     <li className={styles.feedItem} data-tone={item.tone}>
-      <span className={styles.feedMark} aria-hidden="true">
-        {item.number ?? '·'}
+      <span className={styles.feedMark} data-wide={(item.label?.length ?? 0) > 2} aria-hidden="true">
+        {item.label ?? '·'}
       </span>
       <span className={styles.feedText}>
-        <span className={styles.feedWhat}>{item.what}</span>
+        <span className={styles.feedWhat}>
+          {item.what}
+          {item.count > 1 ? (
+            <span className={styles.feedCount}>{format(messages.feed.times, { count: item.count })}</span>
+          ) : null}
+        </span>
         {item.code === '' ? null : <code className={styles.feedCode}>{item.code}</code>}
         {item.expected === '' ? null : <span className={styles.feedWhy}>{item.expected}</span>}
       </span>
-      <time className={styles.feedTime}>{formatClock(item.tMs / MS_PER_SECOND)}</time>
+      <time className={styles.feedTime}>{timeOf(item)}</time>
     </li>
   );
+}
+
+// timeOf is when the item happened: one moment, or the span of a group.
+function timeOf(item: FeedItem): string {
+  const from = formatClock(item.fromMs / MS_PER_SECOND);
+
+  return item.count > 1 ? `${from}–${formatClock(item.toMs / MS_PER_SECOND)}` : from;
 }

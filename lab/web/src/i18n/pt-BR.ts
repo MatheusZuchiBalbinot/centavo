@@ -253,6 +253,8 @@ export const messages = {
       other: { what: 'O laboratório registrou um evento.', expect: '' },
     },
     someone: 'um processo',
+    manyTargets: '{count} processos',
+    times: '×{count}',
   },
   round: {
     titleLive: '{round} ao vivo · Centavo',
@@ -303,6 +305,7 @@ export const messages = {
     operations: 'Operações',
     chartTitle: 'Segundo a segundo',
     chartSummary: '{metric} ao longo de {duration}.',
+    chartCut: 'A cura relê todas as transferências de uma vez e passa do topo do gráfico.',
     metricLabel: 'O que o gráfico mostra',
     metrics: {
       operations: { name: 'Operações', caption: 'Operações por segundo, concluídas ou não.', unit: '/s' },

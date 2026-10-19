@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import type { RoundEvent } from '../api/replay';
 import { aReading, aReplay, aSecond, anEvent } from '../test/fixtures';
 import { feedOf } from './feed';
 import { guaranteeView } from './guarantees';
@@ -72,9 +73,29 @@ describe('feedOf', () => {
     const events = [anEvent(1, 'kill'), anEvent(2, 'freeze', 'bank-worker-2'), anEvent(3, 'heal_start')];
     const feed = feedOf(events);
 
-    expect(feed.map((item) => item.number)).toEqual([null, 2, 1]);
+    expect(feed.map((item) => item.label)).toEqual([null, '2', '1']);
     expect(feed[1]?.what).toBe('Congelei o bank-worker-2 por 45s.');
     expect(feed[2]?.expected).toMatch(/^Esperado: /);
+  });
+
+  it('groups the same fault in a row into one item, whoever it hit', () => {
+    const fired = (tMs: number, target: string): RoundEvent => ({
+      ...anEvent(tMs, 'failpoint_fired', target),
+      detail: 'relay.after_save',
+    });
+    const events = [
+      anEvent(500, 'kill'),
+      fired(62_000, 'bank-worker-1'),
+      fired(65_000, 'bank-worker-2'),
+      fired(66_000, 'bank-worker-1'),
+      anEvent(90_000, 'heal_start'),
+    ];
+    const [heal, group, kill] = feedOf(events);
+
+    expect(heal?.label).toBeNull();
+    expect(group).toMatchObject({ label: '2–4', count: 3, fromMs: 62_000, toMs: 66_000, code: 'relay.after_save' });
+    expect(group?.what).toBe('Falha injetada no meio do código do bank-worker-1 e bank-worker-2.');
+    expect(kill?.label).toBe('1');
   });
 });
 
