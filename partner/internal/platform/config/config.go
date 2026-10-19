@@ -93,6 +93,11 @@ func Load(lookup LookupFunc) (Config, error) {
 
 	token, _ := lookup(chaosTokenVariable)
 
+	err = refuseExampleSecrets(secret, token)
+	if err != nil {
+		return Config{}, err
+	}
+
 	return Config{Env: env, DBPath: dbPath, Participants: participants, WebhookSecret: secret, ChaosToken: token}, nil
 }
 

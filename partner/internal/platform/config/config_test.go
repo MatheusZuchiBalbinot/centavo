@@ -32,6 +32,7 @@ func TestLoad(t *testing.T) {
 		{name: "participant without url", key: "PARTNER_PARTICIPANTS", value: "centavo-robust", wantErr: config.ErrInvalidParticipants},
 		{name: "javascript webhook", key: "PARTNER_PARTICIPANTS", value: "centavo-robust=javascript:alert(1)", wantErr: config.ErrInvalidParticipants},
 		{name: "weak secret", key: "PARTNER_WEBHOOK_SECRET", value: "short", wantErr: config.ErrWeakSecret},
+		{name: "example chaos token", key: "CENTAVO_CHAOS_TOKEN", value: "change-me", wantErr: config.ErrExampleSecret},
 	}
 
 	for _, testCase := range testCases {

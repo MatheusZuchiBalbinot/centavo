@@ -38,6 +38,7 @@ func TestLoadRun(t *testing.T) {
 		{name: "weak chaos token", key: "CENTAVO_CHAOS_TOKEN", value: "short", want: config.ErrWeakChaosToken},
 		{name: "missing docker host", key: "DOCKER_HOST", value: "", want: config.ErrMissingVariable},
 		{name: "auditor is not postgres", key: "AUDITOR_DATABASE_URL", value: "mysql://auditor@db/bank", want: config.ErrInvalidAuditor},
+		{name: "example auditor password", key: "AUDITOR_DATABASE_URL", value: "postgres://bank_auditor:change-me@postgres:5432/bank_robust", want: config.ErrExampleSecret},
 	}
 
 	for _, tc := range cases {

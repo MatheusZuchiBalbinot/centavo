@@ -84,6 +84,11 @@ func LoadServe(lookup LookupFunc) (Serve, error) {
 		return Serve{}, err
 	}
 
+	err = refuseExampleSecrets(passwordOf(auditorURL))
+	if err != nil {
+		return Serve{}, err
+	}
+
 	return Serve{RoundsDir: roundsDir, AuditorURL: auditorURL}, nil
 }
 
@@ -121,6 +126,11 @@ func LoadRun(lookup LookupFunc) (Run, error) {
 
 	if len(chaosToken) < minChaosTokenLength {
 		return Run{}, ErrWeakChaosToken
+	}
+
+	err = refuseExampleSecrets(chaosToken)
+	if err != nil {
+		return Run{}, err
 	}
 
 	dockerHost, err := require(lookup, dockerHostVariable)

@@ -131,3 +131,21 @@ func lookupFrom(vars map[string]string) config.LookupFunc {
 		return value, isSet
 	}
 }
+
+// TestLoad_RefusesTheExampleSecrets: a password or a secret left at its
+// .env.example value is public, and the process does not start on it.
+func TestLoad_RefusesTheExampleSecrets(t *testing.T) {
+	cases := map[string]map[string]string{
+		"database password": {"CENTAVO_ENV": "local", "DATABASE_URL": "postgres://bank_app:change-me@localhost:5432/bank_robust"},
+		"webhook secret":    {"CENTAVO_ENV": "local", "DATABASE_URL": testDatabaseURL, "PARTNER_WEBHOOK_SECRET": "change-me"},
+	}
+
+	for name, vars := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, err := config.Load(lookupFrom(vars))
+			if !errors.Is(err, config.ErrExampleSecret) {
+				t.Fatalf("err = %v, want ErrExampleSecret", err)
+			}
+		})
+	}
+}

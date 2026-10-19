@@ -133,6 +133,11 @@ func Load(lookup LookupFunc) (Config, error) {
 	secret, _ := lookup(webhookSecretVar)
 	partner := Partner{BaseURL: baseURL, ParticipantID: participant, WebhookSecret: secret}
 
+	err = refuseExampleSecrets(passwordOf(databaseURL), chaos.Token, secret)
+	if err != nil {
+		return Config{}, err
+	}
+
 	return Config{Env: env, Defenses: profile, DatabaseURL: databaseURL, Chaos: chaos, Partner: partner}, nil
 }
 
