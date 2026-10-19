@@ -27,8 +27,25 @@ export function phaseOf(replay: Replay, isFinished: boolean): Phase {
   return 'attack';
 }
 
+// The events that are not an attack: the cure, the bank defending itself,
+// and the processes' state as it changes.
+const NOT_ATTACKS: ReadonlySet<RoundEvent['kind']> = new Set([
+  'heal_start',
+  'heal_complete',
+  'defense',
+  'process_state',
+]);
+
 export function isAttackEvent(event: RoundEvent): boolean {
-  return event.kind !== 'heal_start' && event.kind !== 'heal_complete';
+  return !NOT_ATTACKS.has(event.kind);
+}
+
+export function isDefenseEvent(event: RoundEvent): boolean {
+  return event.kind === 'defense';
+}
+
+export function isStateEvent(event: RoundEvent): boolean {
+  return event.kind === 'process_state';
 }
 
 export function isHealStart(event: RoundEvent): boolean {

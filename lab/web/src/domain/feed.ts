@@ -1,9 +1,9 @@
 import type { RoundEvent } from '../api/replay';
 import { format } from '../i18n/format';
 import { messages } from '../i18n/pt-BR';
-import { isAttackEvent } from './phase';
+import { isAttackEvent, isDefenseEvent, isStateEvent } from './phase';
 
-export type FeedTone = 'attack' | 'heal' | 'other';
+export type FeedTone = 'attack' | 'defense' | 'heal' | 'other';
 
 // A feed item says what happened and what should follow from it. Attacks of
 // the same kind in a row are one item: a burst of the same failpoint reads
@@ -42,12 +42,14 @@ const CODE_KINDS: ReadonlySet<RoundEvent['kind']> = new Set([
 // feedOf tells every event of the round, newest first, numbering the attacks
 // in the order they happened and grouping repeats.
 export function feedOf(events: readonly RoundEvent[]): readonly FeedItem[] {
-  return groupRuns(numbered(events)).map(itemOf).reverse();
+  // Process states draw the map; told in the feed they would be three lines
+  // for every kill.
+  return groupRuns(numbered(events)).filter(isTold).map(itemOf).reverse();
 }
 
 // describeEvent is the sentence of one event, also used by its toast.
 export function describeEvent(event: RoundEvent): { what: string; expected: string } {
-  return describe(event, event.target || messages.feed.someone);
+  return describe(event, event.target || messages.feed.someone, event.count);
 }
 
 function numbered(events: readonly RoundEvent[]): readonly NumberedEvent[] {
@@ -85,10 +87,14 @@ function groupRuns(events: readonly NumberedEvent[]): readonly (readonly Numbere
   return runs;
 }
 
+// isRepeat groups attacks of the same fault, and defenses of the same kind;
+// the cure and the process states always stand alone.
 function isRepeat(previous: NumberedEvent, current: NumberedEvent): boolean {
   const areAttacks = previous.number !== null && current.number !== null;
+  const areDefenses = isDefenseEvent(previous.event) && isDefenseEvent(current.event);
+  const isSameFault = previous.event.kind === current.event.kind && previous.event.detail === current.event.detail;
 
-  return areAttacks && previous.event.kind === current.event.kind && previous.event.detail === current.event.detail;
+  return (areAttacks || areDefenses) && isSameFault;
 }
 
 function itemOf(run: readonly NumberedEvent[]): FeedItem {
@@ -99,7 +105,8 @@ function itemOf(run: readonly NumberedEvent[]): FeedItem {
     throw new Error('a feed run is never empty');
   }
 
-  const { what, expected } = describe(first.event, targetsOf(run));
+  const total = run.reduce(addCount, 0);
+  const { what, expected } = describe(first.event, targetsOf(run), total);
 
   return {
     key: `${first.event.tMs}-${first.index}`,
@@ -115,12 +122,29 @@ function itemOf(run: readonly NumberedEvent[]): FeedItem {
   };
 }
 
-function describe(event: RoundEvent, target: string): { what: string; expected: string } {
-  const copy = messages.feed.events[event.kind];
-  const values = { target, detail: event.detail, duration: event.duration };
+function describe(event: RoundEvent, target: string, count: number): { what: string; expected: string } {
+  const copy = copyOf(event);
+  const values = { target, detail: event.detail, duration: event.duration, count, subject: subjectOf(event.subject) };
   const expected = copy.expect === '' ? '' : format(messages.feed.expected, { text: copy.expect });
 
   return { what: format(copy.what, values), expected };
+}
+
+const defenseCopy: Readonly<Partial<Record<string, { what: string; expect: string }>>> = messages.feed.defenses;
+const subjects: Readonly<Partial<Record<string, string>>> = messages.feed.subjects;
+
+// copyOf picks the sentence of an event; a defense the panel does not know
+// yet is told as one, never as something else.
+function copyOf(event: RoundEvent): { what: string; expect: string } {
+  if (event.kind !== 'defense') {
+    return messages.feed.events[event.kind];
+  }
+
+  return defenseCopy[event.detail] ?? messages.feed.unknownDefense;
+}
+
+function subjectOf(subject: string): string {
+  return subjects[subject] ?? subject;
 }
 
 // targetsOf names who was hit: "bank-worker-1 e bank-worker-2", or a count
@@ -139,6 +163,18 @@ function targetsOf(run: readonly NumberedEvent[]): string {
   return new Intl.ListFormat('pt-BR', { type: 'conjunction' }).format(targets);
 }
 
+function isTold(run: readonly NumberedEvent[]): boolean {
+  return !run.every(isStateItem);
+}
+
+function isStateItem(item: NumberedEvent): boolean {
+  return isStateEvent(item.event);
+}
+
+function addCount(total: number, item: NumberedEvent): number {
+  return total + item.event.count;
+}
+
 function labelOf(first: number | null, last: number | null): string | null {
   if (first === null || last === null) {
     return null;
@@ -150,6 +186,10 @@ function labelOf(first: number | null, last: number | null): string | null {
 function toneOf(event: RoundEvent): FeedTone {
   if (event.kind === 'other') {
     return 'other';
+  }
+
+  if (isDefenseEvent(event)) {
+    return 'defense';
   }
 
   return isAttackEvent(event) ? 'attack' : 'heal';

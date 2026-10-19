@@ -47,6 +47,11 @@ const (
 	// FunctionSkewClock moves a process's wall clock.
 	FunctionSkewClock    Function = "skew_clock"
 	FunctionHealComplete Function = "heal_complete"
+	// FunctionProcessState is a target's state as Docker reports it, each
+	// time it changes: up, starting, frozen or down.
+	FunctionProcessState Function = "process_state"
+	// FunctionDefense is a defense of the bank acting, as the bank recorded it.
+	FunctionDefense Function = "defense"
 )
 
 // Type is the kind of a history record.

@@ -12,6 +12,7 @@ import (
 	"centavo/bank/internal/domain/transfer"
 	"centavo/bank/internal/platform/correlation"
 	"centavo/bank/internal/platform/failpoint"
+	"centavo/bank/internal/platform/labevent"
 )
 
 // TopicPixOutSubmit is the outbox topic of a PIX out to send.
@@ -177,10 +178,16 @@ func (r OutboxRelay) RunOnce(ctx context.Context) error {
 		return err
 	}
 
+	resumed := countResumed(claims)
+	if resumed > 0 {
+		labevent.Record(ctx, labevent.OutboxResumed, TopicPixOutSubmit, resumed)
+	}
+
 	for _, claim := range claims {
 		err := r.deliver(ctx, claim)
 		if errors.Is(err, errLeaseLost) {
 			r.logger.InfoContext(ctx, "discarding a result: the lease moved on", "message_id", claim.ID, "token", claim.Token)
+			labevent.Record(ctx, labevent.OutboxFenced, TopicPixOutSubmit, 1)
 
 			continue
 		}
@@ -191,6 +198,20 @@ func (r OutboxRelay) RunOnce(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// countResumed counts the claimed messages that already had an attempt: a
+// relay that died or was refused before, picked up again.
+func countResumed(claims []OutboxClaim) int {
+	resumed := 0
+
+	for _, claim := range claims {
+		if claim.Attempts > 1 {
+			resumed++
+		}
+	}
+
+	return resumed
 }
 
 func (r OutboxRelay) deliver(ctx context.Context, claim OutboxClaim) error {

@@ -2,23 +2,29 @@ import { useEffect, useRef } from 'react';
 
 import type { RoundEvent } from '../../../api/replay';
 import { describeEvent } from '../../../domain/feed';
-import { isAttackEvent } from '../../../domain/phase';
+import { isAttackEvent, isDefenseEvent } from '../../../domain/phase';
 import { useToasts } from '../../../hooks/toastContext';
+import type { ToastInput } from '../../../hooks/toastContext';
 import { format } from '../../../i18n/format';
 import { messages } from '../../../i18n/pt-BR';
 
-// At most one toast in this window; attacks that land meanwhile are told
-// together in the next one, so a burst never floods the screen or a screen
-// reader.
+// At most one toast of each kind in this window; events that land meanwhile
+// are told together in the next one, so a burst never floods the screen or
+// a screen reader.
 const TOAST_WINDOW_MS = 4_000;
 
-// useAttackToasts announces the attacks that arrive after the page opened.
-// events is the whole list; newEvents is how many of its last items are new.
+type Kind = 'attack' | 'defense';
+
+const KINDS: readonly Kind[] = ['attack', 'defense'];
+
+// useAttackToasts announces the attacks and the defenses that arrive after
+// the page opened. events is the whole list; newEvents is how many of its
+// last items are new.
 export function useAttackToasts(events: readonly RoundEvent[], newEvents: number): void {
   const { push } = useToasts();
   const announced = useRef(0);
-  const pending = useRef<RoundEvent[]>([]);
-  const lastToastAt = useRef(0);
+  const pending = useRef<Record<Kind, RoundEvent[]>>({ attack: [], defense: [] });
+  const lastToastAt = useRef<Record<Kind, number>>({ attack: 0, defense: 0 });
 
   useEffect(() => {
     // A new snapshot, after a reconnection, counts from zero again.
@@ -29,50 +35,61 @@ export function useAttackToasts(events: readonly RoundEvent[], newEvents: number
     const fresh = events.slice(events.length - newEvents + announced.current);
 
     announced.current = newEvents;
-    pending.current.push(...fresh.filter(isAttackEvent));
+    pending.current.attack.push(...fresh.filter(isAttackEvent));
+    pending.current.defense.push(...fresh.filter(isDefenseEvent));
 
-    if (pending.current.length === 0) {
-      return;
-    }
+    function flush(kind: Kind): void {
+      const burst = pending.current[kind];
 
-    function flush(): void {
-      const burst = pending.current;
-      const last = burst.at(-1);
+      pending.current[kind] = [];
+      lastToastAt.current[kind] = Date.now();
 
-      pending.current = [];
-      lastToastAt.current = Date.now();
+      const toast = toastOf(kind, burst);
 
-      if (last === undefined) {
-        return;
+      if (toast !== null) {
+        push(toast);
       }
-
-      const { what, expected } = describeEvent(last);
-
-      if (burst.length === 1) {
-        push({ tone: 'attack', title: what, detail: expected });
-
-        return;
-      }
-
-      push({
-        tone: 'attack',
-        title: format(messages.toasts.grouped, { count: burst.length }),
-        detail: format(messages.toasts.groupedDetail, { what }),
-      });
     }
 
-    const wait = lastToastAt.current + TOAST_WINDOW_MS - Date.now();
-
-    if (wait <= 0) {
-      flush();
-
-      return;
+    function hasPending(kind: Kind): boolean {
+      return pending.current[kind].length > 0;
     }
 
-    const timer = window.setTimeout(flush, wait);
+    function schedule(kind: Kind): number {
+      const wait = lastToastAt.current[kind] + TOAST_WINDOW_MS - Date.now();
+
+      return window.setTimeout(() => flush(kind), Math.max(0, wait));
+    }
+
+    const timers = KINDS.filter(hasPending).map(schedule);
 
     return () => {
-      window.clearTimeout(timer);
+      for (const timer of timers) {
+        window.clearTimeout(timer);
+      }
     };
   }, [events, newEvents, push]);
+}
+
+function toastOf(kind: Kind, burst: readonly RoundEvent[]): ToastInput | null {
+  const last = burst.at(-1);
+
+  if (last === undefined) {
+    return null;
+  }
+
+  const { what, expected } = describeEvent(last);
+  const tone = kind === 'attack' ? 'attack' : 'info';
+
+  if (burst.length === 1) {
+    return expected === '' ? { tone, title: what } : { tone, title: what, detail: expected };
+  }
+
+  const grouped = kind === 'attack' ? messages.toasts.grouped : messages.toasts.groupedDefenses;
+
+  return {
+    tone,
+    title: format(grouped, { count: burst.length }),
+    detail: format(messages.toasts.groupedDetail, { what }),
+  };
 }

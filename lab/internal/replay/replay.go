@@ -27,6 +27,8 @@ const (
 	familyClock     EventFamily = "clock"
 	familyPartner   EventFamily = "partner"
 	familyHeal      EventFamily = "heal"
+	familyDefense   EventFamily = "defense"
+	familyState     EventFamily = "state"
 )
 
 // The percentiles the panel draws, and the scale they are written in.
@@ -80,7 +82,11 @@ type Event struct {
 	Target   string           `json:"target,omitempty"`
 	Detail   string           `json:"detail,omitempty"`
 	Duration string           `json:"duration,omitempty"`
-	Text     string           `json:"text"`
+	// Subject is what a defense protected (a lease, a topic) and Count how
+	// many items one action covered.
+	Subject string `json:"subject,omitempty"`
+	Count   int    `json:"count,omitempty"`
+	Text    string `json:"text"`
 }
 
 // Counters add up the chaos of the round.
@@ -123,6 +129,10 @@ type nemesisValue struct {
 	Offset    string   `json:"offset"`
 	Duration  string   `json:"duration"`
 	Targets   []string `json:"targets"`
+	State     string   `json:"state"`
+	Defense   string   `json:"defense"`
+	Detail    string   `json:"detail"`
+	Count     int      `json:"count"`
 }
 
 // NewBuilder starts the replay of a round.
@@ -286,6 +296,11 @@ func (b *Builder) feedNemesis(record history.Record) {
 		b.addEvent(record, Event{Family: familyHeal, Text: eventHealStarted})
 	case history.FunctionHealComplete:
 		b.addEvent(record, Event{Family: familyHeal, Text: eventHealCompleted})
+	case history.FunctionProcessState:
+		b.addEvent(record, Event{Family: familyState, Target: value.Target, Detail: value.State, Text: fmt.Sprintf(eventProcessState, value.Target, value.State)})
+	case history.FunctionDefense:
+		text := fmt.Sprintf(eventDefense, value.Target, value.Defense, value.Count)
+		b.addEvent(record, Event{Family: familyDefense, Target: value.Target, Detail: value.Defense, Subject: value.Detail, Count: value.Count, Text: text})
 	}
 }
 

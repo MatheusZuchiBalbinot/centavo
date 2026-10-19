@@ -22,7 +22,7 @@ const MAX_FEED_ITEMS = 60;
 // What the feed can be narrowed to.
 type FeedFilter = 'all' | FeedTone;
 
-const FILTERS: readonly FeedFilter[] = ['all', 'attack', 'heal'];
+const FILTERS: readonly FeedFilter[] = ['all', 'attack', 'defense', 'heal'];
 
 type EventFeedProps = {
   readonly events: readonly RoundEvent[];

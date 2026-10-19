@@ -44,7 +44,9 @@ func shapesOf(function history.Function) (args, value any) {
 		history.FunctionDatabase,
 		history.FunctionNetwork,
 		history.FunctionSkewClock,
-		history.FunctionHealComplete:
+		history.FunctionHealComplete,
+		history.FunctionProcessState,
+		history.FunctionDefense:
 		return nil, nil
 	default:
 		return nil, nil

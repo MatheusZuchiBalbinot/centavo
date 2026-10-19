@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"centavo/bank/internal/platform/clock"
+	"centavo/bank/internal/platform/labevent"
 )
 
 // Lease names a singleton loop's lease and the worker that wants it: two
@@ -39,12 +40,24 @@ type LocalClockLeases struct{}
 
 // Acquire takes the lease by the database's clock.
 func (FencedLeases) Acquire(ctx context.Context, stores LeaseStore, lease Lease, ttl time.Duration) (int64, bool, error) {
-	return stores.AcquireLease(ctx, lease, ttl)
+	token, isHeld, err := stores.AcquireLease(ctx, lease, ttl)
+	if isHeld {
+		labevent.RecordLease(ctx, lease.Resource, token)
+	}
+
+	return token, isHeld, err
 }
 
 // Holds checks holder and token in the write's transaction.
 func (FencedLeases) Holds(ctx context.Context, stores LeaseStore, lease Lease, token int64) (bool, error) {
-	return stores.HoldsLease(ctx, lease, token)
+	isHeld, err := stores.HoldsLease(ctx, lease, token)
+
+	isRefused := err == nil && !isHeld
+	if isRefused {
+		labevent.Record(ctx, labevent.FencingRefused, lease.Resource, 1)
+	}
+
+	return isHeld, err
 }
 
 // MoveCursor advances only from where the batch started.

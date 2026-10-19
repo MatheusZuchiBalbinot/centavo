@@ -296,6 +296,11 @@
   box-shadow: inset 3px 0 0 var(--warning);
 }
 
+.feedItem[data-tone='defense'] .feedMark {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
 .feedItem[data-tone='heal'] .feedMark {
   background: var(--success-soft);
   color: var(--success);

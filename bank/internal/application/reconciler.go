@@ -13,6 +13,7 @@ import (
 	"centavo/bank/internal/domain/transfer"
 	"centavo/bank/internal/platform/correlation"
 	"centavo/bank/internal/platform/failpoint"
+	"centavo/bank/internal/platform/labevent"
 )
 
 // Reconciler timings.
@@ -207,7 +208,11 @@ func (r Reconciler) RunOnce(ctx context.Context) error {
 
 // Book books the whole batch or nothing.
 func (AtomicBatches) Book(ctx context.Context, r Reconciler, batch statementBatch) error {
-	return r.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
+	corrected := 0
+
+	err := r.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
+		corrected = 0
+
 		isHeld, err := r.lease.Holds(ctx, stores, Lease{Resource: LeaseReconciler, Holder: r.owner}, batch.token)
 		if err != nil {
 			return err
@@ -228,9 +233,13 @@ func (AtomicBatches) Book(ctx context.Context, r Reconciler, batch statementBatc
 		}
 
 		for _, entry := range batch.entries {
-			err := r.bookEntry(ctx, stores, runID, entry)
+			isCorrection, err := r.bookEntry(ctx, stores, runID, entry)
 			if err != nil {
 				return err
+			}
+
+			if isCorrection {
+				corrected++
 			}
 
 			// `recon.mid_apply`: between two entries of the batch.
@@ -251,6 +260,13 @@ func (AtomicBatches) Book(ctx context.Context, r Reconciler, batch statementBatc
 
 		return stores.FinishRun(ctx, runID)
 	})
+
+	// Told only after the commit: a rolled back batch corrected nothing.
+	if err == nil && corrected > 0 {
+		labevent.Record(ctx, labevent.Reconciled, LeaseReconciler, corrected)
+	}
+
+	return err
 }
 
 // Book books the batch an entry at a time.
@@ -269,11 +285,21 @@ func (EntryByEntry) Book(ctx context.Context, r Reconciler, batch statementBatch
 	}
 
 	for _, entry := range batch.entries {
+		isCorrection := false
+
 		err := r.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
-			return r.bookEntry(ctx, stores, runID, entry)
+			var err error
+
+			isCorrection, err = r.bookEntry(ctx, stores, runID, entry)
+
+			return err
 		})
 		if err != nil {
 			return err
+		}
+
+		if isCorrection {
+			labevent.Record(ctx, labevent.Reconciled, LeaseReconciler, 1)
 		}
 
 		err = failpoint.Hit(entryFailpointContext(ctx, entry), failpoint.ReconMidApply)
@@ -334,18 +360,19 @@ func (r Reconciler) nextBatch(ctx context.Context) (statementBatch, bool, error)
 	return batch, true, nil
 }
 
-// bookEntry classifies one entry and books it, in the caller's unit of work.
-func (r Reconciler) bookEntry(ctx context.Context, stores entryStores, runID int64, entry StatementEntry) error {
+// bookEntry classifies one entry and books it, in the caller's unit of work;
+// it reports whether the entry corrected something the bank had missed.
+func (r Reconciler) bookEntry(ctx context.Context, stores entryStores, runID int64, entry StatementEntry) (bool, error) {
 	ctx = correlation.With(ctx, entryCorrelation(entry))
 
 	facts, err := factsOf(ctx, stores, entry)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	decision, err := classify(entry, facts)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	item := ReconciliationItem{
@@ -355,10 +382,12 @@ func (r Reconciler) bookEntry(ctx context.Context, stores entryStores, runID int
 
 	itemID, err := stores.InsertItem(ctx, item)
 	if err != nil {
-		return err
+		return false, err
 	}
 
-	return r.act(ctx, stores, actCommand{entry: entry, facts: facts, decision: decision, itemID: itemID})
+	err = r.act(ctx, stores, actCommand{entry: entry, facts: facts, decision: decision, itemID: itemID})
+
+	return decision.divergence != DivergenceMatched, err
 }
 
 func (r Reconciler) act(ctx context.Context, stores actStores, command actCommand) error {

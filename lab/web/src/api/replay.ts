@@ -28,7 +28,9 @@ type EventKind =
   | 'skew_clock'
   | 'arm_partner_modes'
   | 'heal_start'
-  | 'heal_complete';
+  | 'heal_complete'
+  | 'process_state'
+  | 'defense';
 
 export type RoundEvent = {
   readonly tMs: number;
@@ -36,6 +38,9 @@ export type RoundEvent = {
   readonly target: string;
   readonly detail: string;
   readonly duration: string;
+  // subject is what a defense protected; count how many items it covered.
+  readonly subject: string;
+  readonly count: number;
 };
 
 type GuaranteeStatus = 'ok' | 'failed' | 'not_checked';
@@ -77,6 +82,8 @@ const EVENT_KINDS: ReadonlySet<string> = new Set<EventKind>([
   'arm_partner_modes',
   'heal_start',
   'heal_complete',
+  'process_state',
+  'defense',
 ]);
 
 export function fetchReplay(round: RoundId, signal?: AbortSignal): Promise<ApiResult<Replay>> {
@@ -149,6 +156,8 @@ export function parseEvent(value: unknown): RoundEvent | null {
     target: stringOr(value.target),
     detail: stringOr(value.detail),
     duration: stringOr(value.duration),
+    subject: stringOr(value.subject),
+    count: isNumber(value.count) ? value.count : 0,
   };
 }
 

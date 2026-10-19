@@ -19,6 +19,7 @@ import (
 	"centavo/bank/internal/platform/clock"
 	"centavo/bank/internal/platform/failpoint"
 	"centavo/bank/internal/platform/httpserver"
+	"centavo/bank/internal/platform/labevent"
 )
 
 // Routes of the chaos server.
@@ -50,6 +51,7 @@ type skewRequest struct {
 // CENTAVO_FAILPOINTS.
 func Setup(config Config) error {
 	failpoint.ConfigureEvents(failpoint.EventsConfig{Dir: EventsDir, Service: config.Service, Instance: config.Instance})
+	labevent.Configure(labevent.Config{Dir: EventsDir, Service: config.Service, Instance: config.Instance})
 
 	return failpoint.ArmFromSpec(config.FailpointSpec, config.Seed, time.Now())
 }

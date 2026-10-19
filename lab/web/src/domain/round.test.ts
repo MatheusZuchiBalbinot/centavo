@@ -157,3 +157,32 @@ describe('attack ranges', () => {
     expect(overlaps(null, 1, 2)).toBe(false);
   });
 });
+
+describe('defenses in the feed', () => {
+  it('tells a defense in its own tone, groups repeats and adds their counts', () => {
+    const resumed = (tMs: number, count: number): RoundEvent => ({
+      ...anEvent(tMs, 'defense', 'bank-worker-2'),
+      detail: 'outbox.resumed',
+      subject: 'pix_out.submit',
+      count,
+    });
+    const lease = {
+      ...anEvent(9_000, 'defense', 'bank-worker-2'),
+      detail: 'lease.acquired',
+      subject: 'reconciler',
+      count: 1,
+    };
+    const down = { ...anEvent(4_000, 'process_state', 'bank-worker-1'), detail: 'down' };
+    const feed = feedOf([anEvent(1_000, 'kill', 'bank-worker-1'), down, resumed(5_000, 3), resumed(6_000, 1), lease]);
+
+    expect(feed.map((item) => item.tone)).toEqual(['defense', 'defense', 'attack']);
+    expect(feed[0]?.what).toBe('O bank-worker-2 assumiu o lease do conciliador.');
+    expect(feed[1]).toMatchObject({ count: 2, what: 'O bank-worker-2 retomou 4 PIX de uma tentativa anterior.' });
+  });
+
+  it('tells a defense it does not know as a defense, never as something else', () => {
+    const odd = { ...anEvent(1, 'defense', 'bank-api'), detail: 'new.defense' };
+
+    expect(feedOf([odd])[0]?.what).toBe('O banco registrou uma defesa (new.defense).');
+  });
+});

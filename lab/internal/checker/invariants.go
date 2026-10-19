@@ -369,7 +369,9 @@ func (e *evaluation) checkOperations() {
 			history.FunctionDatabase,
 			history.FunctionNetwork,
 			history.FunctionSkewClock,
-			history.FunctionHealComplete:
+			history.FunctionHealComplete,
+			history.FunctionProcessState,
+			history.FunctionDefense:
 			// The nemesis's own records; no invariant judges them.
 		}
 	}

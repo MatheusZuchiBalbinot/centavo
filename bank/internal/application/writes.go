@@ -8,6 +8,7 @@ import (
 
 	"centavo/bank/internal/domain/idempotency"
 	"centavo/bank/internal/domain/ledger"
+	"centavo/bank/internal/platform/labevent"
 )
 
 // Errors the storage layer classifies its failures into. The HTTP layer maps
@@ -112,7 +113,12 @@ func (KeysInTheSameCommit) Run(ctx context.Context, stores Stores, write Write) 
 	}
 
 	if !isClaimed {
-		return replayDurably(ctx, stores, write, existing)
+		response, err := replayDurably(ctx, stores, write, existing)
+		if err == nil {
+			labevent.Record(ctx, labevent.IdempotentReplay, write.Endpoint, 1)
+		}
+
+		return response, err
 	}
 
 	operationID, err := ledger.NewOperationID()

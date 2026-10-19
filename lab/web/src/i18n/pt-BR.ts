@@ -175,6 +175,7 @@ export const messages = {
     region: 'Avisos',
     close: 'Fechar aviso',
     grouped: '{count} ataques novos',
+    groupedDefenses: 'O banco se defendeu {count} vezes',
     groupedDetail: 'O último: {what}',
   },
   guarantees: {
@@ -290,12 +291,48 @@ export const messages = {
       heal_start: { what: 'Os ataques pararam: começou a cura.', expect: 'tudo o que ficou pendente termina.' },
       heal_complete: { what: 'A cura terminou.', expect: 'agora o verificador confere cada centavo.' },
       other: { what: 'O laboratório registrou um evento.', expect: '' },
+      process_state: { what: '{target}: {detail}.', expect: '' },
+      defense: { what: 'O banco registrou uma defesa.', expect: '' },
     },
     someone: 'um processo',
+    defenses: {
+      'lease.acquired': {
+        what: 'O {target} assumiu o lease do {subject}.',
+        expect: 'só ele pode trabalhar nisso agora; um zumbi com lease velho será recusado.',
+      },
+      'fencing.refused': {
+        what: 'O banco recusou uma gravação do {target}: o lease dele já era de outro.',
+        expect: '',
+      },
+      'idempotency.replayed': {
+        what: '{count} repetições receberam a resposta guardada, sem novo débito.',
+        expect: '',
+      },
+      'outbox.resumed': {
+        what: 'O {target} retomou {count} PIX de uma tentativa anterior.',
+        expect: 'o id fixo no parceiro garante que nenhum é enviado duas vezes.',
+      },
+      'outbox.fenced': {
+        what: 'O {target} descartou um resultado: outro worker já tinha assumido o PIX.',
+        expect: '',
+      },
+      'reconciliation.corrected': {
+        what: 'A conciliação corrigiu {count} divergência(s) com o parceiro.',
+        expect: '',
+      },
+    },
+    unknownDefense: { what: 'O banco registrou uma defesa ({detail}).', expect: '' },
+    subjects: { reconciler: 'conciliador', sweeper: 'varredor', 'pix_out.submit': 'envio de PIX' },
     manyTargets: '{count} processos',
     filterLabel: 'Mostrar no feed',
     raw: 'Dados crus ({count})',
-    filters: { all: 'Tudo · {count}', attack: 'Ataques · {count}', heal: 'Cura · {count}', other: 'Outros · {count}' },
+    filters: {
+      all: 'Tudo · {count}',
+      attack: 'Ataques · {count}',
+      defense: 'Defesas · {count}',
+      heal: 'Cura · {count}',
+      other: 'Outros · {count}',
+    },
     times: '×{count}',
   },
   round: {

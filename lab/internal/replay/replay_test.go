@@ -41,6 +41,33 @@ func TestBuilder_CountsSecondsLatencyAndChaos(t *testing.T) {
 	}
 }
 
+func TestBuilder_TellsDefensesAndProcessStatesWithTheirFacts(t *testing.T) {
+	t.Parallel()
+
+	b := NewBuilder("r0001", "kill-after-commit", "0x5eed")
+	nemesis := history.Nemesis()
+
+	state := []byte(`{"target":"bank-worker-1","state":"down"}`)
+	defense := []byte(`{"defense":"lease.acquired","target":"bank-worker-2","detail":"reconciler","count":1}`)
+
+	b.Feed(history.Record{Process: nemesis, Type: history.TypeInfo, F: history.FunctionProcessState, Value: state, TimeNS: int64(time.Second)})
+	b.Feed(history.Record{Process: nemesis, Type: history.TypeInfo, F: history.FunctionDefense, Value: defense, TimeNS: int64(3 * time.Second)})
+
+	events := b.Replay().Events
+	if len(events) != 2 {
+		t.Fatalf("events: %+v", events)
+	}
+
+	down, taken := events[0], events[1]
+
+	isState := down.Kind == history.FunctionProcessState && down.Target == "bank-worker-1" && down.Detail == "down"
+	isDefense := taken.Kind == history.FunctionDefense && taken.Target == "bank-worker-2" && taken.Detail == "lease.acquired" && taken.Subject == "reconciler" && taken.Count == 1
+
+	if !isState || !isDefense {
+		t.Fatalf("state %+v, defense %+v", down, taken)
+	}
+}
+
 func TestPercentile_NearestRank(t *testing.T) {
 	t.Parallel()
 

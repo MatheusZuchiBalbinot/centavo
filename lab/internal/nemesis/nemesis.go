@@ -144,6 +144,7 @@ func (n *Nemesis) Start(ctx context.Context) error {
 	}
 
 	n.wg.Go(func() { n.failpoints.run(ctx) })
+	n.wg.Go(func() { n.watch(ctx) })
 
 	err = n.armPartner(ctx)
 	if err != nil {
