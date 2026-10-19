@@ -1,0 +1,40 @@
+.labNow {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+  padding: 1.25rem 1.4rem;
+}
+
+.title {
+  font-size: var(--step-1);
+  font-weight: 700;
+}
+
+.figures {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.35rem var(--space-4);
+  font-size: 0.9rem;
+}
+
+.figures dt {
+  color: var(--steel);
+}
+
+.figures dd {
+  font-weight: 650;
+  text-align: right;
+}
+
+.figures dd[data-tone='ok'] {
+  color: var(--money);
+}
+
+.figures dd[data-tone='broken'] {
+  color: var(--broken);
+}
+
+.note {
+  color: var(--steel);
+  font-size: var(--step--1);
+}

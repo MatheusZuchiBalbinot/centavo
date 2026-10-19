@@ -1,0 +1,23 @@
+.tag {
+  display: inline-block;
+  padding: 0.05rem 0.5rem;
+  border-radius: 0.3rem;
+  background: var(--heal);
+  font-size: var(--step--1);
+  font-weight: 650;
+}
+
+.tag[data-tone='ok'] {
+  background: var(--money-wash);
+  color: var(--money);
+}
+
+.tag[data-tone='broken'] {
+  background: var(--broken-wash);
+  color: var(--broken);
+}
+
+.tag[data-tone='running'] {
+  background: var(--refused-wash);
+  color: var(--refused);
+}

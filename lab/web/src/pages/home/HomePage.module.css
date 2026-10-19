@@ -1,7 +1,14 @@
 .hero {
   display: grid;
-  gap: var(--space-4);
+  grid-template-columns: 1fr 22rem;
+  gap: var(--space-6);
+  align-items: end;
   margin-bottom: var(--space-6);
+}
+
+.intro {
+  display: grid;
+  gap: var(--space-4);
 }
 
 .headline {
@@ -20,6 +27,16 @@
   max-width: 54ch;
   color: var(--steel);
   font-size: var(--step-1);
+}
+
+.note {
+  color: var(--steel);
+}
+
+@media (max-width: 64rem) {
+  .hero {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 48rem) {

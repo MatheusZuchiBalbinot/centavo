@@ -5,6 +5,7 @@ import { useRouteFocus } from '../hooks/useRouteFocus';
 import { messages } from '../i18n/pt-BR';
 import { ROUTES } from '../routes';
 import LabStatusPill from './LabStatusPill';
+import { ToastProvider } from './ui/ToastProvider';
 import styles from './Layout.module.css';
 
 const MAIN_ID = 'main';
@@ -15,7 +16,7 @@ export default function Layout(): React.JSX.Element {
   useRouteFocus();
 
   return (
-    <>
+    <ToastProvider>
       <a className={styles.skipLink} href={`#${MAIN_ID}`}>
         {messages.skipToContent}
       </a>
@@ -39,8 +40,8 @@ export default function Layout(): React.JSX.Element {
         <LabStatusPill reading={reading} />
       </header>
       <main id={MAIN_ID} className={styles.main} tabIndex={-1}>
-        <Outlet />
+        <Outlet context={reading} />
       </main>
-    </>
+    </ToastProvider>
   );
 }
