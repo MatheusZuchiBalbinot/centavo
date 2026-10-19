@@ -106,6 +106,8 @@ type Result struct {
 	StartedAt time.Time
 	History   history.Report
 	Verdict   checker.Verdict
+	// Defenses is the bank's profile, as it reported it before the round.
+	Defenses string
 }
 
 type manifest struct {
@@ -114,6 +116,7 @@ type manifest struct {
 	ScenarioSHA256 string          `json:"scenario_sha256"`
 	Seed           string          `json:"seed"`
 	Duration       string          `json:"duration"`
+	Defenses       string          `json:"defenses,omitempty"`
 	LabVersion     string          `json:"lab_version"`
 	StartedAt      time.Time       `json:"started_at"`
 	FinishedAt     time.Time       `json:"finished_at"`
@@ -190,6 +193,12 @@ func Run(ctx context.Context, options Options) (Result, error) {
 		return Result{ID: id, Dir: dir}, errors.Join(err, writer.Close())
 	}
 
+	// Written again with the profile the preflight learned, for the panel.
+	err = writeManifest(dir, newManifest(options, Result{ID: id, Dir: dir, Defenses: bot.Defenses()}, startedAt, nil))
+	if err != nil {
+		return Result{ID: id, Dir: dir}, errors.Join(err, writer.Close())
+	}
+
 	loadConfig := newLoadConfig(options, id, writer, bot)
 	load, loadErr := loadgen.Run(ctx, loadConfig)
 
@@ -208,7 +217,7 @@ func Run(ctx context.Context, options Options) (Result, error) {
 		return Result{}, errors.Join(runErr, err)
 	}
 
-	result := Result{ID: id, Dir: dir, StartedAt: startedAt, History: report}
+	result := Result{ID: id, Dir: dir, StartedAt: startedAt, History: report, Defenses: bot.Defenses()}
 
 	// The checker reads round.json for the report header, so it is written
 	// before the check and again with the verdict.
@@ -519,7 +528,7 @@ func newManifest(options Options, result Result, startedAt time.Time, runErr err
 
 	roundManifest := manifest{
 		Round: result.ID, Scenario: options.Scenario.Name, ScenarioSHA256: options.Scenario.SHA256,
-		Seed: options.Seed.String(), Duration: options.Scenario.Duration.String(), LabVersion: options.LabVersion,
+		Seed: options.Seed.String(), Duration: options.Scenario.Duration.String(), Defenses: result.Defenses, LabVersion: options.LabVersion,
 		StartedAt: startedAt, FinishedAt: time.Now().UTC(), Verdict: result.Verdict,
 		History: historySummary{
 			Records: report.Records, Invocations: report.Invocations, OK: report.OK, Fail: report.Fail,

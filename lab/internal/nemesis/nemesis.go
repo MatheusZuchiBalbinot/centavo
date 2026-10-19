@@ -72,6 +72,8 @@ type Nemesis struct {
 	freezes sync.WaitGroup
 
 	failpoints *failpointController
+	// defenses is the profile the bank reported in the preflight.
+	defenses string
 	// toxiproxyURL is Toxiproxy's API; tests point it at a fake.
 	toxiproxyURL string
 	// hasFailedOver keeps the cure from starting a fenced old primary.
@@ -90,6 +92,8 @@ type target struct {
 type healthBody struct {
 	IsChaosBuild bool   `json:"chaos_build"`
 	Env          string `json:"env"`
+	// Defenses is the bank's profile; the partner reports none.
+	Defenses string `json:"defenses"`
 }
 
 // New builds the nemesis of a round.
@@ -123,6 +127,11 @@ func (n *Nemesis) Preflight(ctx context.Context) error {
 	n.resetNetwork(ctx)
 
 	return nil
+}
+
+// Defenses is the defense profile the bank reported in the preflight.
+func (n *Nemesis) Defenses() string {
+	return n.defenses
 }
 
 // Start arms the scenario's faults; they run until Heal.
@@ -265,6 +274,10 @@ func (n *Nemesis) checkSafety(ctx context.Context, t target) error {
 	isSafe := health.IsChaosBuild && health.Env == expectedEnv
 	if !isSafe {
 		return fmt.Errorf("%w: %s reports chaos_build=%t env=%q", ErrUnsafeTarget, t.service, health.IsChaosBuild, health.Env)
+	}
+
+	if health.Defenses != "" {
+		n.defenses = health.Defenses
 	}
 
 	return nil

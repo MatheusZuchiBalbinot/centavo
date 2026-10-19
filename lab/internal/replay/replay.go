@@ -44,8 +44,14 @@ type Replay struct {
 	Events   []Event         `json:"events"`
 	Counters Counters        `json:"counters"`
 	Verdict  checker.Verdict `json:"verdict,omitempty"`
-	Checks   []Check         `json:"checks,omitempty"`
-	BuiltAt  time.Time       `json:"built_at"`
+	// Description says in plain words what the scenario does to the bank.
+	Description     string    `json:"description,omitempty"`
+	DurationSeconds int       `json:"duration_seconds,omitempty"`
+	StartedAt       time.Time `json:"started_at"`
+	Defenses        string    `json:"defenses,omitempty"`
+	Error           string    `json:"error,omitempty"`
+	Checks          []Check   `json:"checks,omitempty"`
+	BuiltAt         time.Time `json:"built_at"`
 }
 
 // Second is what the clients saw in one second of the round.

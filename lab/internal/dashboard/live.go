@@ -104,13 +104,13 @@ func (t *tracker) live() (liveResponse, error) {
 func (t *tracker) follow(id string) (*replay.Replay, error) {
 	dir := filepath.Join(t.roundsDir, id)
 
-	if id != t.current {
-		manifest, err := replay.ReadManifest(dir)
-		if err != nil {
-			// The round directory exists before its round.json.
-			return nil, nil
-		}
+	manifest, err := replay.ReadManifest(dir)
+	if err != nil {
+		// The round directory exists before its round.json.
+		return nil, nil
+	}
 
+	if id != t.current {
 		t.current, t.offset = id, 0
 		t.builder = replay.NewBuilder(manifest.Round, manifest.Scenario, manifest.Seed)
 	}
@@ -134,7 +134,7 @@ func (t *tracker) follow(id string) (*replay.Replay, error) {
 		return nil, err
 	}
 
-	current := t.builder.Replay()
+	current := t.builder.Replay().WithManifest(manifest)
 	current.Seconds = lastSeconds(current.Seconds, int(liveWindow/time.Second))
 
 	return &current, nil

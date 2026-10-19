@@ -9,9 +9,16 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
+	"time"
 
 	"centavo/lab/internal/checker"
+	"centavo/lab/scenarios"
 )
+
+// codeNames are the failpoint names a scenario description cites between
+// backticks: the panel says what happens, not where in the code.
+var codeNames = regexp.MustCompile("\\s*\\([^)]*`[^)]*\\)")
 
 // Files of a round directory the replay reads.
 const (
@@ -26,10 +33,14 @@ const (
 
 // Manifest is the part of round.json a replay shows.
 type Manifest struct {
-	Round    string          `json:"round"`
-	Scenario string          `json:"scenario"`
-	Seed     string          `json:"seed"`
-	Verdict  checker.Verdict `json:"verdict"`
+	Round     string          `json:"round"`
+	Scenario  string          `json:"scenario"`
+	Seed      string          `json:"seed"`
+	Verdict   checker.Verdict `json:"verdict"`
+	Duration  string          `json:"duration"`
+	StartedAt time.Time       `json:"started_at"`
+	Defenses  string          `json:"defenses"`
+	Error     string          `json:"error"`
 }
 
 type report struct {
@@ -76,8 +87,7 @@ func FromRound(roundDir string) (Replay, error) {
 		return Replay{}, err
 	}
 
-	replay := builder.Replay()
-	replay.Verdict = manifest.Verdict
+	replay := builder.Replay().WithManifest(manifest)
 
 	verdict, err := readReport(roundDir)
 	if err != nil {
@@ -140,4 +150,25 @@ func readReport(roundDir string) (*report, error) {
 	}
 
 	return &verdict, nil
+}
+
+// WithManifest adds what round.json says about the round: its plan, the bank's
+// profile and, once the round ended, its verdict.
+func (r Replay) WithManifest(manifest Manifest) Replay {
+	r.Verdict = manifest.Verdict
+	r.StartedAt = manifest.StartedAt
+	r.Defenses = manifest.Defenses
+	r.Error = manifest.Error
+
+	duration, err := time.ParseDuration(manifest.Duration)
+	if err == nil {
+		r.DurationSeconds = int(duration.Seconds())
+	}
+
+	scenario, err := scenarios.Load(manifest.Scenario)
+	if err == nil {
+		r.Description = codeNames.ReplaceAllString(scenario.Description, "")
+	}
+
+	return r
 }
