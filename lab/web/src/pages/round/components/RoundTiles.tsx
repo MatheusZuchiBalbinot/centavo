@@ -2,6 +2,7 @@ import type { AuditorReading, Replay } from '../../../api/replay';
 import MetricTile from '../../../components/charts/MetricTile';
 import type { MetricTone } from '../../../components/charts/MetricTile';
 import { formatCents } from '../../../domain/money';
+import { useViewMode } from '../../../hooks/viewModeContext';
 import { trendOf, valueOf } from '../../../domain/series';
 import { format } from '../../../i18n/format';
 import { messages } from '../../../i18n/pt-BR';
@@ -21,6 +22,7 @@ export default function RoundTiles({ replay, reading, isFinished }: RoundTilesPr
   const latest = replay.seconds.at(-1);
   const totals = replay.seconds.reduce(addSecond, { all: 0, trouble: 0 });
   const money = moneyOf(replay, reading, isFinished);
+  const isTechnical = useViewMode().mode === 'technical';
   const operationsTrend = trendOf(replay.seconds, 'operations');
   // The auditor reads one sum at a time; a flat line at its value says the
   // money stayed put while the clients kept going.
@@ -46,7 +48,7 @@ export default function RoundTiles({ replay, reading, isFinished }: RoundTilesPr
       <MetricTile
         label={messages.round.latencyLabel}
         value={latest ? `${Math.round(latest.p50Ms).toLocaleString('pt-BR')}${MS}` : '—'}
-        hint={messages.round.latencyHint}
+        hint={latencyHint(latest, isTechnical)}
         help={messages.tooltip.latency}
         trend={trendOf(replay.seconds, 'latency')}
       />
@@ -81,6 +83,14 @@ function moneyOf(replay: Replay, reading: AuditorReading | null, isFinished: boo
   }
 
   return { text: formatCents(reading.sumCents), tone: reading.sumCents === 0 ? 'success' : 'danger' };
+}
+
+function latencyHint(latest: Replay['seconds'][number] | undefined, isTechnical: boolean): string {
+  if (!isTechnical || latest === undefined) {
+    return messages.round.latencyHint;
+  }
+
+  return format(messages.round.latencyHintTechnical, { p99: Math.round(latest.p99Ms) });
 }
 
 // rateText is the latest second while the round runs, and the average of

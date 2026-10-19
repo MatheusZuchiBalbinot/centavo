@@ -45,6 +45,7 @@ export type GuaranteeCheck = { readonly id: string; readonly status: GuaranteeSt
 export type Replay = {
   readonly round: RoundId;
   readonly scenario: string;
+  readonly seed: string;
   readonly seconds: readonly RoundSecond[];
   readonly events: readonly RoundEvent[];
   readonly counters: ChaosCounters;
@@ -110,6 +111,7 @@ export function parseReplay(body: unknown): Replay | null {
   return {
     round,
     scenario,
+    seed: stringOr(body.seed),
     seconds: parsedSeconds,
     events: parsedEvents,
     counters,

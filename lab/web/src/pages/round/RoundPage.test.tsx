@@ -159,4 +159,36 @@ describe('the round page', () => {
 
     expect(screen.getByText('Derrubei o bank-api.')).toBeInTheDocument();
   });
+
+  it('shows the technical details only in the technical mode, and remembers it', async () => {
+    installFakeEventSource();
+    window.localStorage.clear();
+    answerFetch({ [API_ROUTES.lab]: { status: 200, body: { status: 'idle' } } });
+    const user = userEvent.setup();
+
+    renderRound();
+
+    const fired = {
+      t_ms: 4_000,
+      family: 'failpoint',
+      kind: 'failpoint_fired',
+      target: 'bank-api',
+      detail: 'api.after_commit',
+      text: 'x',
+    };
+
+    act(() => {
+      stream().send('finished', { ...snapshot, events: [fired], verdict: 'pass', checks: allHeld });
+    });
+
+    expect(screen.queryByText('api.after_commit')).not.toBeInTheDocument();
+    expect(screen.queryByText('I1')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Técnico' }));
+
+    expect(screen.getByText('api.after_commit')).toBeInTheDocument();
+    expect(screen.getByText('I1')).toBeInTheDocument();
+    expect(screen.getByText('semente 0x5eed')).toBeInTheDocument();
+    expect(window.localStorage.getItem('centavo.viewMode')).toBe('"technical"');
+  });
 });

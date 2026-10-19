@@ -15,6 +15,7 @@ export function aReplay(overrides: Partial<Replay> = {}): Replay {
   return {
     round: 'r0007' as RoundId,
     scenario: 'kill-after-commit',
+    seed: '0x5eed',
     seconds: [aSecond(0), aSecond(1)],
     events: [anEvent(1_500, 'kill')],
     counters: {

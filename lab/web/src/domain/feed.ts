@@ -22,6 +22,8 @@ export type FeedItem = {
   // code is the fault's technical name (a failpoint, a toxic), shown apart
   // so the sentence stays readable.
   readonly code: string;
+  // raw are the events behind the item, for the technical mode.
+  readonly raw: readonly RoundEvent[];
 };
 
 type NumberedEvent = { readonly event: RoundEvent; readonly number: number | null; readonly index: number };
@@ -109,6 +111,7 @@ function itemOf(run: readonly NumberedEvent[]): FeedItem {
     what,
     expected,
     code: CODE_KINDS.has(first.event.kind) ? first.event.detail : '',
+    raw: run.map((item) => item.event),
   };
 }
 

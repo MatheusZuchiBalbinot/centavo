@@ -2,6 +2,7 @@ import type { AuditorReading, GuaranteeCheck } from '../../../api/replay';
 import { Badge } from '../../../components/ui/Badge';
 import type { BadgeTone } from '../../../components/ui/Badge';
 import { Card } from '../../../components/ui/Card';
+import { useViewMode } from '../../../hooks/viewModeContext';
 import { Glossed } from '../../../components/ui/Glossed';
 import { GUARANTEE_IDS, guaranteeCopy, guaranteeView } from '../../../domain/guarantees';
 import type { GuaranteeId, GuaranteeView } from '../../../domain/guarantees';
@@ -43,11 +44,12 @@ type GuaranteeItemProps = { readonly id: GuaranteeId; readonly view: GuaranteeVi
 
 function GuaranteeItem({ id, view, isFinished }: GuaranteeItemProps): React.JSX.Element {
   const copy = guaranteeCopy(id);
+  const isTechnical = useViewMode().mode === 'technical';
   const { label, tone } = describeView(view);
 
   return (
     <li className={styles.guarantee} data-tone={tone} data-tooltip={`${copy.why} ${copy.threats}`}>
-      <span className={styles.guaranteeId}>{id}</span>
+      {isTechnical ? <span className={styles.guaranteeId}>{id}</span> : null}
       <span className={styles.guaranteeText}>
         <span className={styles.guaranteeName}>{isFinished ? copy.name : copy.short}</span>
         {isFinished ? (

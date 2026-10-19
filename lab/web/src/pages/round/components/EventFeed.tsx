@@ -9,6 +9,7 @@ import type { FeedItem, FeedTone } from '../../../domain/feed';
 import { overlaps, rangeOfLabel } from '../../../domain/highlight';
 import type { AttackRange } from '../../../domain/highlight';
 import { useHoverRange } from '../../../hooks/useHoverRange';
+import { useViewMode } from '../../../hooks/viewModeContext';
 import { format } from '../../../i18n/format';
 import { messages } from '../../../i18n/pt-BR';
 import styles from './RoundPage.module.css';
@@ -91,6 +92,7 @@ type FeedEntryProps = {
 
 function FeedEntry({ item, highlight, onHighlight }: FeedEntryProps): React.JSX.Element {
   const ref = useRef<HTMLLIElement>(null);
+  const isTechnical = useViewMode().mode === 'technical';
   const range = rangeOfLabel(item.label);
   const isHot = range !== null && overlaps(highlight, range.from, range.to);
 
@@ -108,16 +110,31 @@ function FeedEntry({ item, highlight, onHighlight }: FeedEntryProps): React.JSX.
             <span className={styles.feedCount}>{format(messages.feed.times, { count: item.count })}</span>
           ) : null}
         </span>
-        {item.code === '' ? null : <code className={styles.feedCode}>{item.code}</code>}
+        {isTechnical && item.code !== '' ? <code className={styles.feedCode}>{item.code}</code> : null}
         {item.expected === '' ? null : (
           <span className={styles.feedWhy}>
             <Glossed text={item.expected} />
           </span>
         )}
+        {isTechnical ? <RawEvents events={item.raw} /> : null}
       </span>
       <time className={styles.feedTime}>{timeOf(item)}</time>
     </li>
   );
+}
+
+// RawEvents shows the events behind an item as the history recorded them.
+function RawEvents({ events }: { events: readonly RoundEvent[] }): React.JSX.Element {
+  return (
+    <details className={styles.feedRaw}>
+      <summary>{format(messages.feed.raw, { count: events.length })}</summary>
+      <pre>{events.map(rawLine).join('\n')}</pre>
+    </details>
+  );
+}
+
+function rawLine(event: RoundEvent): string {
+  return [`t=${event.tMs}ms`, event.kind, event.target, event.detail, event.duration].filter(Boolean).join('  ');
 }
 
 // timeOf is when the item happened: one moment, or the span of a group.

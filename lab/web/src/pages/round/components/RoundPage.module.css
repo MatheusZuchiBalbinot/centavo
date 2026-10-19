@@ -192,8 +192,7 @@
 }
 
 .guarantee {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  display: flex;
   gap: 10px;
   align-items: center;
   padding: 10px 12px;
@@ -214,6 +213,7 @@
 
 .guaranteeText {
   display: grid;
+  flex: 1;
   min-width: 0;
 }
 
@@ -330,6 +330,29 @@
   font-size: var(--text-2xs);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.feedRaw summary {
+  color: var(--faint);
+  font-size: var(--text-2xs);
+  cursor: pointer;
+}
+
+.feedRaw pre {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  overflow-x: auto;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--muted);
+  font: var(--text-2xs) var(--font-mono);
+}
+
+.technicalFacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
 }
 
 .feedWhy {

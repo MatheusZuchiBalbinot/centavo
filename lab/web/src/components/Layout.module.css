@@ -151,6 +151,24 @@
   backdrop-filter: blur(8px);
 }
 
+.topbarSide {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.modeSwitch {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.modeLabel {
+  margin-right: 4px;
+  color: var(--faint);
+  font-size: var(--text-xs);
+}
+
 .topbarTitle {
   color: var(--muted);
   font-size: var(--text-sm);
@@ -204,7 +222,8 @@
     padding: 0 14px;
   }
 
-  .topbarTitle {
+  .topbarTitle,
+  .modeLabel {
     display: none;
   }
 }

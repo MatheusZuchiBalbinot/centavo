@@ -2,6 +2,7 @@ import type { RoundId } from '../../../api/ids';
 import type { Replay } from '../../../api/replay';
 import { Glossed } from '../../../components/ui/Glossed';
 import { StatusIntro } from '../../../components/ui/StatusIntro';
+import { useViewMode } from '../../../hooks/viewModeContext';
 import type { StatusTone } from '../../../components/ui/StatusIntro';
 import { expectationOf } from '../../../domain/headline';
 import type { Phase } from '../../../domain/phase';
@@ -32,10 +33,9 @@ export default function RoundHero({
   isConnected,
 }: RoundHeroProps): React.JSX.Element {
   const isFinished = phase === 'verdict';
-  const eyebrow = format(isFinished ? messages.round.eyebrowDone : messages.round.eyebrowLive, {
-    round,
-    scenario: replay.scenario,
-  });
+  const isTechnical = useViewMode().mode === 'technical';
+  const eyebrowMessage = isFinished ? messages.round.eyebrowDone : messages.round.eyebrowLive;
+  const eyebrow = format(eyebrowMessage, { round });
 
   return (
     <StatusIntro
@@ -55,6 +55,7 @@ export default function RoundHero({
           <p className={styles.expectation}>
             <Glossed text={expectationOf(replay.defenses)} />
           </p>
+          {isTechnical ? <TechnicalFacts replay={replay} /> : null}
           {replay.isStopped ? <p className={styles.notice}>{messages.round.stopped}</p> : null}
           {isConnected ? null : (
             <p className={styles.notice} role="status">
@@ -70,6 +71,25 @@ export default function RoundHero({
         </div>
       }
     />
+  );
+}
+
+// TechnicalFacts are the round's identity for whoever wants to rerun it.
+function TechnicalFacts({ replay }: { replay: Replay }): React.JSX.Element {
+  const facts = [
+    format(messages.round.factScenario, { scenario: replay.scenario }),
+    format(messages.round.factSeed, { seed: replay.seed }),
+    format(messages.round.factDefenses, { defenses: replay.defenses || '?' }),
+  ];
+
+  return (
+    <p className={styles.technicalFacts}>
+      {facts.map((fact) => (
+        <code key={fact} className="badge badge-muted">
+          {fact}
+        </code>
+      ))}
+    </p>
   );
 }
 
