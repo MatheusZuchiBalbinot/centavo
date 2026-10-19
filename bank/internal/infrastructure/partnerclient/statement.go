@@ -44,6 +44,7 @@ func (c Client) Statement(ctx context.Context, afterSeq int64, limit int) ([]app
 	if err != nil {
 		return nil, fmt.Errorf("requesting the statement: %w", err)
 	}
+
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {

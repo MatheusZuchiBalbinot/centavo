@@ -118,6 +118,7 @@ func (c bankClient) attempt(ctx context.Context, call request, timeout time.Dura
 	if err != nil {
 		return transportFailure(err, started)
 	}
+
 	defer response.Body.Close()
 
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes))

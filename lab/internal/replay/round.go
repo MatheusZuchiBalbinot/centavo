@@ -68,6 +68,7 @@ func FromRound(roundDir string) (Replay, error) {
 	if err != nil {
 		return Replay{}, fmt.Errorf("opening the history: %w", err)
 	}
+
 	defer file.Close()
 
 	_, err = FeedFrom(builder, file)

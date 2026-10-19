@@ -45,6 +45,7 @@ func TestLockOrder_SystemBalancesBeforeTheCustomer(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			defer other.Rollback(context.Background()) //nolint:errcheck // a no-op after the commit below
 
 			_, err = other.Exec(t.Context(), `UPDATE account_balances SET updated_at = now() WHERE account_id = $1`, uuid.UUID(tc.system))

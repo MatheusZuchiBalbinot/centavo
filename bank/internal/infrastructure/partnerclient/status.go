@@ -33,6 +33,7 @@ func (c Client) Status(ctx context.Context, endToEndID transfer.EndToEndID) (app
 	if err != nil {
 		return application.AuthoritativeStatus{}, fmt.Errorf("requesting the status: %w", err)
 	}
+
 	defer response.Body.Close()
 
 	if response.StatusCode == http.StatusNotFound {

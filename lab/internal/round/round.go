@@ -412,6 +412,7 @@ func createdAccounts(dir string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("opening history: %w", err)
 	}
+
 	defer file.Close()
 
 	var accounts []string
@@ -506,6 +507,7 @@ func validateHistory(dir string) (history.Report, error) {
 	if err != nil {
 		return history.Report{}, fmt.Errorf("opening history: %w", err)
 	}
+
 	defer file.Close()
 
 	return history.Validate(file)

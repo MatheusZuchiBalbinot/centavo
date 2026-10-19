@@ -141,6 +141,7 @@ func appendTo(t *testing.T, path, content string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	defer file.Close()
 
 	_, err = file.WriteString(content)

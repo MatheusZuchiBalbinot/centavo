@@ -119,6 +119,7 @@ func (t *tracker) follow(id string) (*replay.Replay, error) {
 	if err != nil {
 		return nil, nil
 	}
+
 	defer file.Close()
 
 	_, err = file.Seek(t.offset, 0)

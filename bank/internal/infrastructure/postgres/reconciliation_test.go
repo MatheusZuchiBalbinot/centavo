@@ -90,6 +90,7 @@ func TestReconciliation_BatchTakesItsTransfersBeforeAnyBalance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	defer writer.Rollback(context.Background()) //nolint:errcheck // a no-op after the commit below
 
 	_, err = writer.Exec(t.Context(), `SELECT id FROM external_transfers WHERE id = $1 FOR UPDATE`, uuid.UUID(second.TransferID))

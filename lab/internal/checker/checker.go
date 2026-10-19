@@ -304,6 +304,7 @@ func scanHistory(roundDir string, take func(history.Record)) error {
 	if err != nil {
 		return fmt.Errorf("opening history: %w", err)
 	}
+
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
@@ -375,6 +376,7 @@ func readEvents(roundDir string) chaosEvents {
 	if err != nil {
 		return events
 	}
+
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)

@@ -166,6 +166,7 @@ func serve(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
 	defer pool.Close()
 
 	auditor := audit.New(pool, logger)
@@ -234,6 +235,7 @@ func runRound(ctx context.Context, arguments []string) error {
 	if err != nil {
 		return err
 	}
+
 	defer pool.Close()
 
 	options.Export = func(ctx context.Context, request export.Request) (snapshot.Snapshot, error) {
@@ -468,6 +470,7 @@ func probeHealth(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {

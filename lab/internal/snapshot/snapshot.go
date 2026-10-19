@@ -375,6 +375,7 @@ func readTable(path string, header []string, load func([]string) error) error {
 	if err != nil {
 		return fmt.Errorf("opening %s: %w", filepath.Base(path), err)
 	}
+
 	defer file.Close()
 
 	reader := csv.NewReader(file)

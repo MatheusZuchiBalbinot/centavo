@@ -110,6 +110,7 @@ func serve(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
 	defer closeStore(store, logger)
 
 	registry := modes.NewRegistry()
@@ -160,6 +161,7 @@ func probeHealth(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {

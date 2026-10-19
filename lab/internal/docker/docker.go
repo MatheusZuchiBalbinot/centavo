@@ -303,6 +303,7 @@ func (c Client) call(ctx context.Context, sent apiCall, into any) error {
 	if err != nil {
 		return fmt.Errorf("docker %s %s: %w", sent.method, sent.path, err)
 	}
+
 	defer response.Body.Close()
 
 	content, err := io.ReadAll(io.LimitReader(response.Body, maxBodyBytes))

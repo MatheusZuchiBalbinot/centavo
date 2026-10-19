@@ -65,6 +65,7 @@ func listenOnce(ctx context.Context, pool *pgxpool.Pool, channel string, handle 
 	if err != nil {
 		return err
 	}
+
 	defer conn.Release()
 
 	// LISTEN takes no parameters: the channel is quoted as an identifier.

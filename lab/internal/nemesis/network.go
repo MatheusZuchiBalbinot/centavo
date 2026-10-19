@@ -217,6 +217,7 @@ func (n *Nemesis) toxiproxy(ctx context.Context, method, path string, body any) 
 	if err != nil {
 		return err
 	}
+
 	defer response.Body.Close()
 
 	// The body only enriches the error message.

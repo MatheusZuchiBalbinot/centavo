@@ -321,6 +321,7 @@ func runRound(t *testing.T, bankURL string, workload scenarios.Workload, policy 
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	defer file.Close()
 
 	report, err := history.Validate(file)

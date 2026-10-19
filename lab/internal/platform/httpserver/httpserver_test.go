@@ -36,6 +36,7 @@ func TestRun_ListenFails_ReturnsError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reserving a port: %v", err)
 	}
+
 	defer occupied.Close()
 
 	server := httpserver.New(occupied.Addr().String(), http.NewServeMux())

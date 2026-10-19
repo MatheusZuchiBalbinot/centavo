@@ -212,6 +212,7 @@ func readEvents(t *testing.T, path string) []event {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	defer file.Close()
 
 	var recorded []event

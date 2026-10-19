@@ -76,6 +76,7 @@ func writeRound(t *testing.T, roundDir string, records []history.Record, state s
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	defer file.Close()
 
 	encoder := json.NewEncoder(file)

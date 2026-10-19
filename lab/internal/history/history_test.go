@@ -72,6 +72,7 @@ func TestWriter_DurableAppendIsOnDiskWhenItReturns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	defer closeWriter(t, writer)
 
 	written, err := writer.AppendDurable(history.Record{Process: history.Client(1), Type: history.TypeInvoke, F: history.FunctionDeposit, Op: "r0001-p01-000001"})
@@ -200,6 +201,7 @@ func readRecords(t *testing.T, path string) []history.Record {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	defer file.Close()
 
 	var records []history.Record

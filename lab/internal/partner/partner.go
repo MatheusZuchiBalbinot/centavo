@@ -79,6 +79,7 @@ func (c Client) get(ctx context.Context, path string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("partner %s: %w", path, err)
 	}
+
 	defer response.Body.Close()
 
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxTruthBytes))

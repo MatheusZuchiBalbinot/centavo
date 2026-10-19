@@ -64,6 +64,7 @@ func (c Client) Submit(ctx context.Context, submission application.PartnerSubmis
 	if err != nil {
 		return application.PartnerUnknown
 	}
+
 	defer response.Body.Close()
 
 	// Drained so the connection can be reused; the status code is the answer.

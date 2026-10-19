@@ -162,6 +162,7 @@ func serveAPI(ctx context.Context, configuration config.Config, logger *slog.Log
 	if err != nil {
 		return err
 	}
+
 	defer pool.Close()
 
 	buildInfo := newBuildInfo(roleAPI, configuration)
@@ -312,6 +313,7 @@ func serveWorker(ctx context.Context, configuration config.Config, logger *slog.
 	if err != nil {
 		return err
 	}
+
 	defer pool.Close()
 
 	err = checkSchema(ctx, pool, configuration, logger)
@@ -584,6 +586,7 @@ func probeHealth(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {

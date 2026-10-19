@@ -261,6 +261,7 @@ func (c *failpointController) readNewLines(path string) [][]byte {
 	if err != nil {
 		return nil
 	}
+
 	defer file.Close()
 
 	c.mu.Lock()

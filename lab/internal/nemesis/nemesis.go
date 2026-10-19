@@ -319,6 +319,7 @@ func (n *Nemesis) chaosCall(ctx context.Context, method, url string, body []byte
 	if err != nil {
 		return err
 	}
+
 	defer response.Body.Close()
 
 	// The body only enriches the error message; failing to read it changes nothing.
@@ -343,6 +344,7 @@ func (n *Nemesis) getJSON(ctx context.Context, url string, into any) error {
 	if err != nil {
 		return err
 	}
+
 	defer response.Body.Close()
 
 	return json.NewDecoder(io.LimitReader(response.Body, maxResponseBytes)).Decode(into)

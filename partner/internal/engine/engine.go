@@ -230,6 +230,7 @@ func (e *Engine) send(ctx context.Context, delivery truth.Delivery, now time.Tim
 	if err != nil {
 		return err
 	}
+
 	defer response.Body.Close()
 
 	// Drain so the connection can be reused; the body itself is ignored.

@@ -59,6 +59,7 @@ func queryRows[T any](ctx context.Context, db querier, st statement, scan func(r
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", st.step, err)
 	}
+
 	defer rows.Close()
 
 	collected := []T{}
