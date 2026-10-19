@@ -2,11 +2,15 @@ package dashboard
 
 // Routes of the panel.
 const (
-	statusRoute = "/api/status"
-	liveRoute   = "/api/live"
-	replayRoute = "/api/replay/{round}"
-	reportRoute = "/rounds/{round}/" + reportMDFile
-	staticRoute = "/"
+	statusRoute  = "/api/status"
+	liveRoute    = "/api/live"
+	replayRoute  = "/api/replay/{round}"
+	reportRoute  = "/rounds/{round}/" + reportMDFile
+	staticRoute  = "/"
+	labRoute     = "/api/lab"
+	stopRoute    = "/api/lab/stop"
+	attacksRoute = "/api/attacks"
+	roundsRoute  = "/api/rounds"
 )
 
 // reportURLOf is where the panel serves a round's report.

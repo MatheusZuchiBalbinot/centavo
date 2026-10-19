@@ -126,6 +126,9 @@ type Config struct {
 	// BeforeLoad runs once the accounts exist and before the load starts;
 	// the nemesis arms its faults here, so preparation never sees chaos.
 	BeforeLoad func(ctx context.Context) error
+	// Stop ends the load early when it closes; the operations in flight finish
+	// as they do at the end of the duration. A nil Stop never closes.
+	Stop <-chan struct{}
 }
 
 // retryPolicy is how a client times out and retries one operation.
@@ -208,6 +211,8 @@ func runWith(ctx context.Context, config Config, policy retryPolicy) (Result, er
 	loadCtx, stopLoad := context.WithTimeout(ctx, config.Duration)
 	defer stopLoad()
 
+	go stopOnSignal(loadCtx, config.Stop, stopLoad)
+
 	tokens := make(chan struct{})
 	go emitTokens(loadCtx, config.Workload.RatePerSecond, tokens)
 
@@ -218,6 +223,16 @@ func runWith(ctx context.Context, config Config, policy retryPolicy) (Result, er
 	err = forEachClient(ctx, clients, runLoad)
 
 	return r.result(), err
+}
+
+// stopOnSignal ends the load when stop closes, and returns once the load is
+// over either way.
+func stopOnSignal(loadCtx context.Context, stop <-chan struct{}, stopLoad context.CancelFunc) {
+	select {
+	case <-stop:
+		stopLoad()
+	case <-loadCtx.Done():
+	}
 }
 
 func (r *run) result() Result {

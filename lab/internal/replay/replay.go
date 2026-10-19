@@ -49,6 +49,7 @@ type Replay struct {
 	DurationSeconds int       `json:"duration_seconds,omitempty"`
 	StartedAt       time.Time `json:"started_at"`
 	Defenses        string    `json:"defenses,omitempty"`
+	Stopped         bool      `json:"stopped,omitempty"`
 	Error           string    `json:"error,omitempty"`
 	Checks          []Check   `json:"checks,omitempty"`
 	BuiltAt         time.Time `json:"built_at"`

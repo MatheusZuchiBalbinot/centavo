@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
@@ -177,6 +178,77 @@ func (t *tracker) summarize(ids []string) (headline, []summary) {
 	}
 
 	return total, append([]summary{}, listed...)
+}
+
+// page returns up to size finished rounds older than cursor, newest first,
+// and the cursor of the next page when there is one.
+func (t *tracker) page(cursor string, size int) (roundsPage, error) {
+	entries, err := os.ReadDir(t.roundsDir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return roundsPage{Rounds: []summary{}}, nil
+	}
+
+	if err != nil {
+		return roundsPage{}, fmt.Errorf("listing rounds: %w", err)
+	}
+
+	ids := roundsNewestFirst(entries)
+
+	if cursor != "" {
+		ids = ids[indexAfter(ids, cursor):]
+	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	page := roundsPage{Rounds: []summary{}}
+
+	for _, id := range ids {
+		round, isFinished := t.summaryOf(id)
+		if !isFinished {
+			continue
+		}
+
+		if len(page.Rounds) == size {
+			page.NextCursor = page.Rounds[size-1].Round
+
+			break
+		}
+
+		page.Rounds = append(page.Rounds, round)
+	}
+
+	return page, nil
+}
+
+// indexAfter is where the rounds older than cursor start in ids, newest
+// first; a cursor that is no longer there starts from the round numbered
+// right below it.
+func indexAfter(ids []string, cursor string) int {
+	cursorNumber := roundNumberOf(cursor)
+
+	for index, id := range ids {
+		if roundNumberOf(id) < cursorNumber {
+			return index
+		}
+	}
+
+	return len(ids)
+}
+
+// roundNumberOf is the number of a round id that matched roundDirPattern.
+func roundNumberOf(id string) int {
+	match := roundDirPattern.FindStringSubmatch(id)
+	if match == nil {
+		return 0
+	}
+
+	number, err := strconv.Atoi(match[1])
+	if err != nil {
+		return 0
+	}
+
+	return number
 }
 
 // summaryOf returns a finished round's summary: one with a report.

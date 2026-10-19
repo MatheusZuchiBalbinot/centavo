@@ -74,6 +74,9 @@ type Options struct {
 	Chaos ChaosOptions
 	// Saga is how the cure watches the PIX of the round settle.
 	Saga SagaOptions
+	// Stop ends the attack early when it closes; the cure and the check still
+	// run, so a stopped round leaves the bank clean and gets a verdict.
+	Stop <-chan struct{}
 }
 
 // SagaOptions read the state of the round's PIX for the cure.
@@ -108,6 +111,8 @@ type Result struct {
 	Verdict   checker.Verdict
 	// Defenses is the bank's profile, as it reported it before the round.
 	Defenses string
+	// Stopped is true when the attack ended before its duration.
+	Stopped bool
 }
 
 type manifest struct {
@@ -117,6 +122,7 @@ type manifest struct {
 	Seed           string          `json:"seed"`
 	Duration       string          `json:"duration"`
 	Defenses       string          `json:"defenses,omitempty"`
+	Stopped        bool            `json:"stopped,omitempty"`
 	LabVersion     string          `json:"lab_version"`
 	StartedAt      time.Time       `json:"started_at"`
 	FinishedAt     time.Time       `json:"finished_at"`
@@ -217,7 +223,7 @@ func Run(ctx context.Context, options Options) (Result, error) {
 		return Result{}, errors.Join(runErr, err)
 	}
 
-	result := Result{ID: id, Dir: dir, StartedAt: startedAt, History: report, Defenses: bot.Defenses()}
+	result := Result{ID: id, Dir: dir, StartedAt: startedAt, History: report, Defenses: bot.Defenses(), Stopped: isClosed(options.Stop)}
 
 	// The checker reads round.json for the report header, so it is written
 	// before the check and again with the verdict.
@@ -314,7 +320,17 @@ func newLoadConfig(options Options, id string, writer *history.Writer, bot *neme
 	return loadgen.Config{
 		Round: id, Seed: options.Seed, Workload: options.Scenario.Workload, Duration: options.Scenario.Duration,
 		BankURL: options.BankURL, History: writer, Logger: options.Logger, BeforeLoad: bot.Start,
-		PartnerURL: options.Saga.PartnerURL, ParticipantID: options.Saga.ParticipantID,
+		PartnerURL: options.Saga.PartnerURL, ParticipantID: options.Saga.ParticipantID, Stop: options.Stop,
+	}
+}
+
+// isClosed reports whether stop has closed; a nil stop never does.
+func isClosed(stop <-chan struct{}) bool {
+	select {
+	case <-stop:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -528,7 +544,7 @@ func newManifest(options Options, result Result, startedAt time.Time, runErr err
 
 	roundManifest := manifest{
 		Round: result.ID, Scenario: options.Scenario.Name, ScenarioSHA256: options.Scenario.SHA256,
-		Seed: options.Seed.String(), Duration: options.Scenario.Duration.String(), Defenses: result.Defenses, LabVersion: options.LabVersion,
+		Seed: options.Seed.String(), Duration: options.Scenario.Duration.String(), Defenses: result.Defenses, Stopped: result.Stopped, LabVersion: options.LabVersion,
 		StartedAt: startedAt, FinishedAt: time.Now().UTC(), Verdict: result.Verdict,
 		History: historySummary{
 			Records: report.Records, Invocations: report.Invocations, OK: report.OK, Fail: report.Fail,

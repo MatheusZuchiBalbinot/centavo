@@ -40,6 +40,7 @@ import (
 	"centavo/lab/internal/platform/httpserver"
 	"centavo/lab/internal/replay"
 	"centavo/lab/internal/round"
+	"centavo/lab/internal/runner"
 	"centavo/lab/internal/seed"
 	"centavo/lab/internal/snapshot"
 	"centavo/lab/scenarios"
@@ -67,6 +68,10 @@ const (
 	// checkerMemoryLimit is the soft limit of the checker subprocess.
 	checkerMemoryLimit = "GOMEMLIMIT=256MiB"
 )
+
+// attackStopSignal asks a running `lab run` to end its attack early; the
+// cure and the check still run, so the round gets a verdict.
+const attackStopSignal = syscall.SIGUSR1
 
 // Exit codes; lab check uses the checker's own.
 const (
@@ -172,7 +177,10 @@ func serve(ctx context.Context) error {
 	auditor := audit.New(pool, logger)
 	go auditor.Run(ctx)
 
-	panelConfig := dashboard.Config{Version: buildinfo.Version(), Live: auditor.Latest, RoundsDir: serveConfig.RoundsDir, Logger: logger}
+	rounds := runner.New(ctx, roundLauncher{roundsDir: serveConfig.RoundsDir}.launch, logger)
+	panelConfig := dashboard.Config{
+		Version: buildinfo.Version(), Live: auditor.Latest, RoundsDir: serveConfig.RoundsDir, Logger: logger, Runner: rounds,
+	}
 	panelServer := httpserver.New(panelAddr, dashboard.NewHandler(panelConfig))
 
 	logger.InfoContext(ctx, "serving", "panel_addr", panelAddr)
@@ -250,6 +258,14 @@ func runRound(ctx context.Context, arguments []string) error {
 
 	options.Chaos = round.ChaosOptions{Docker: dockerClient, Token: runConfig.ChaosToken, EventsDir: eventsDir}
 	options.Saga = sagaOptions(pool, runConfig)
+	options.Stop = stopOnSignal(ctx)
+
+	unlock, err := round.Lock(runConfig.RoundsDir)
+	if err != nil {
+		return err
+	}
+
+	defer unlock()
 
 	result, err := round.Run(ctx, options)
 	printSummary(result)
@@ -263,6 +279,28 @@ func runRound(ctx context.Context, arguments []string) error {
 	}
 
 	return verdictError(result.Verdict)
+}
+
+// stopOnSignal returns a channel that closes when attackStopSignal arrives.
+func stopOnSignal(ctx context.Context) <-chan struct{} {
+	signals := make(chan os.Signal, 1)
+	stop := make(chan struct{})
+
+	signal.Notify(signals, attackStopSignal)
+
+	go closeOnSignal(ctx, signals, stop)
+
+	return stop
+}
+
+func closeOnSignal(ctx context.Context, signals chan os.Signal, stop chan struct{}) {
+	defer signal.Stop(signals)
+
+	select {
+	case <-signals:
+		close(stop)
+	case <-ctx.Done():
+	}
 }
 
 func verdictError(verdict checker.Verdict) error {

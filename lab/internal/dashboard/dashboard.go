@@ -40,6 +40,8 @@ type Config struct {
 	Live      LiveFunc
 	RoundsDir string
 	Logger    *slog.Logger
+	// Runner starts and stops rounds. Without one, the panel only reads.
+	Runner RoundRunner
 }
 
 type healthResponse struct {
@@ -74,8 +76,20 @@ func NewHandler(config Config) http.Handler {
 	mux.HandleFunc("GET "+replayRoute, panel.replay)
 	mux.HandleFunc("GET "+reportRoute, panel.report)
 	mux.Handle("GET "+staticRoute, http.FileServerFS(static))
+	mux.HandleFunc("GET "+roundsRoute, panel.rounds)
+
+	if config.Runner != nil {
+		handleControl(mux, control{panel: panel, runner: config.Runner, limiter: newWindowLimiter(roundStartLimit)})
+	}
 
 	return withSecurityHeaders(mux)
+}
+
+func handleControl(mux *http.ServeMux, routes control) {
+	mux.HandleFunc("GET "+labRoute, routes.lab)
+	mux.HandleFunc("GET "+attacksRoute, routes.menu)
+	mux.HandleFunc("POST "+roundsRoute, routes.start)
+	mux.HandleFunc("POST "+stopRoute, routes.stop)
 }
 
 func withSecurityHeaders(next http.Handler) http.Handler {
@@ -96,8 +110,7 @@ func (h healthHandler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 func (p panelHandlers) live(w http.ResponseWriter, r *http.Request) {
 	response, err := p.tracker.live()
 	if err != nil {
-		p.config.Logger.WarnContext(r.Context(), "following the rounds", "error", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "the rounds could not be read"})
+		p.writeError(w, r, err)
 
 		return
 	}
@@ -106,18 +119,49 @@ func (p panelHandlers) live(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, response)
 }
 
+// rounds lists the finished rounds, newest first, a page at a time; the
+// cursor is the last round of the previous page.
+func (p panelHandlers) rounds(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	cursor := query.Get("cursor")
+
+	size, err := pageSizeOf(query.Get("limit"))
+	if err != nil {
+		p.writeError(w, r, err)
+
+		return
+	}
+
+	hasBadCursor := cursor != "" && !roundDirPattern.MatchString(cursor)
+	if hasBadCursor {
+		p.writeError(w, r, errInvalidRequest)
+
+		return
+	}
+
+	page, err := p.tracker.page(cursor, size)
+	if err != nil {
+		p.writeError(w, r, err)
+
+		return
+	}
+
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, page)
+}
+
 // replay is a finished round for the side-by-side mode.
 func (p panelHandlers) replay(w http.ResponseWriter, r *http.Request) {
 	round := r.PathValue("round")
 	if !roundDirPattern.MatchString(round) {
-		http.NotFound(w, r)
+		p.writeError(w, r, errNotFound)
 
 		return
 	}
 
 	built, err := replay.FromRound(filepath.Join(p.config.RoundsDir, round))
 	if err != nil {
-		http.NotFound(w, r)
+		p.writeError(w, r, errNotFound)
 
 		return
 	}

@@ -40,6 +40,7 @@ type Manifest struct {
 	Duration  string          `json:"duration"`
 	StartedAt time.Time       `json:"started_at"`
 	Defenses  string          `json:"defenses"`
+	Stopped   bool            `json:"stopped"`
 	Error     string          `json:"error"`
 }
 
@@ -158,6 +159,7 @@ func (r Replay) WithManifest(manifest Manifest) Replay {
 	r.Verdict = manifest.Verdict
 	r.StartedAt = manifest.StartedAt
 	r.Defenses = manifest.Defenses
+	r.Stopped = manifest.Stopped
 	r.Error = manifest.Error
 
 	duration, err := time.ParseDuration(manifest.Duration)

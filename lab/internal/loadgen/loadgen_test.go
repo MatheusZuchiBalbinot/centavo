@@ -110,6 +110,72 @@ func TestRun_RecordsAWellFormedHistoryThatMatchesTheBank(t *testing.T) {
 	assertEveryWriteReachedTheBankWithItsKey(t, path, bank)
 }
 
+func TestRun_StopEndsTheLoadBeforeItsDurationAndLeavesNothingOpen(t *testing.T) {
+	const (
+		duration  = time.Minute
+		stopAfter = 200 * time.Millisecond
+		// endsWithin is far below duration and far above stopAfter plus the
+		// in-flight operations finishing.
+		endsWithin = 10 * time.Second
+	)
+
+	server := httptest.NewServer(newFakeBank())
+	defer server.Close()
+
+	path := filepath.Join(t.TempDir(), "history.jsonl")
+
+	writer, err := history.Create(path, "r0001")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stop := make(chan struct{})
+	time.AfterFunc(stopAfter, func() { close(stop) })
+
+	workload := scenarios.Workload{
+		Profile: scenarios.ProfileLedgerOnly, Clients: 2, RatePerSecond: 50, Accounts: 4, HasExclusiveAccounts: true,
+		ClientMix: map[scenarios.ClientProfile]float64{scenarios.ClientPolite: 1},
+	}
+	config := Config{
+		Round: "r0001", Seed: seed.Seed(0x5eed), Workload: workload, Duration: duration, BankURL: server.URL,
+		History: writer, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), Stop: stop,
+	}
+
+	startedAt := time.Now()
+
+	_, err = runWith(t.Context(), config, politePolicy)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	took := time.Since(startedAt)
+	if took > endsWithin {
+		t.Fatalf("the load ran %v after the stop; it should end right after it", took)
+	}
+
+	err = writer.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer file.Close()
+
+	report, err := history.Validate(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	isClean := report.IsWellFormed() && len(report.Open) == 0
+	if !isClean {
+		t.Fatalf("history after the stop: %+v", report)
+	}
+}
+
 func TestRun_RetriesWithTheSameKeyAndRetiresTheProcessAfterInfo(t *testing.T) {
 	bank := newFakeBank()
 	bank.shouldFailFirstAttempt = true
