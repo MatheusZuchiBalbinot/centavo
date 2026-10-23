@@ -248,4 +248,33 @@ describe('the round page', () => {
     expect(screen.getByText('Você apostou que quebraria. O banco aguentou.')).toBeInTheDocument();
     expect(window.localStorage.getItem('centavo.bets')).toBe('{"r0007":"breaks"}');
   });
+
+  it('replays a finished round from the moment in its link, and keeps the moment on pause', async () => {
+    installFakeEventSource();
+    answerFetch({ [API_ROUTES.lab]: { status: 200, body: { status: 'idle' } } });
+    const user = userEvent.setup();
+    const router = createMemoryRouter(appRoutes, { initialEntries: ['/rounds/r0007?arena=1&t=0:01'] });
+
+    render(<RouterProvider router={router} />);
+
+    act(() => {
+      // Three minutes of seconds, so the replay is still playing when the
+      // test pauses it.
+      const seconds = Array.from({ length: 180 }, (_, t) => ({ t, ok: 20, fail: 0, info: 0, p50_ms: 8, p99_ms: 12 }));
+
+      stream().send('finished', { ...snapshot, seconds, verdict: 'pass', checks: allHeld });
+    });
+
+    const arena = screen.getByRole('dialog', { name: /./ });
+
+    expect(within(arena).getByText('Rodada r0007 · replay')).toBeInTheDocument();
+    expect(within(arena).getByRole('slider', { name: 'Momento da rodada' })).toBeInTheDocument();
+    expect(within(arena).getByRole('button', { name: '10×' })).toHaveAttribute('aria-pressed', 'true');
+    await expectNoAxeViolations(arena);
+
+    await user.click(within(arena).getByRole('button', { name: 'Pausar' }));
+
+    expect(router.state.location.search).toMatch(/t=0%3A0[12]/);
+    expect(within(arena).getByRole('button', { name: 'Tocar' })).toBeInTheDocument();
+  });
 });

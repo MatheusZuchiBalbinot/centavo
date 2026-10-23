@@ -11,7 +11,7 @@ export const ROUTES = {
 } as const;
 
 // Query parameters the pages read; written here and nowhere else.
-export const QUERY = { arena: 'arena', surprise: 'surprise', bet: 'bet' } as const;
+export const QUERY = { arena: 'arena', surprise: 'surprise', bet: 'bet', moment: 't' } as const;
 
 // surpriseLivePath follows a surprise round into the arena, with the bet
 // made in the draw, if any.

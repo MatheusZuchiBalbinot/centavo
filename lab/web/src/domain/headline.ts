@@ -39,6 +39,16 @@ export function headlineOf(input: HeadlineInput): string {
   }
 }
 
+// replayHeadlineOf is the first line of a replay: the recording keeps no
+// auditor readings, so under attack it only says how long it has run.
+export function replayHeadlineOf(input: Omit<HeadlineInput, 'reading'>): string {
+  if (input.phase === 'attack') {
+    return format(messages.arena.replayAttack, { elapsed: formatDuration(input.elapsedSeconds) });
+  }
+
+  return headlineOf({ ...input, reading: null });
+}
+
 // disabledDefenses lists the defenses the profile turned off.
 export function disabledDefenses(defenses: string): readonly string[] {
   return defenses

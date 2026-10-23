@@ -12,6 +12,7 @@ import { isAttackEvent, isDefenseEvent } from '../../domain/phase';
 import type { Phase } from '../../domain/phase';
 import { systemStateAt } from '../../domain/systemState';
 import { spanOf } from '../../domain/timeline';
+import { useSpaceKey } from '../../hooks/useSpaceKey';
 import { format } from '../../i18n/format';
 import { messages } from '../../i18n/pt-BR';
 import { Button } from '../ui/Button';
@@ -40,14 +41,38 @@ export type ArenaProps = {
   // betLine settles the bet made in the surprise draw, once there is a verdict.
   readonly betLine: string | null;
   readonly actions?: React.ReactNode;
+  // isLive marks a round happening now; a replay plays a recorded one.
+  readonly isLive: boolean;
+  readonly player?: React.ReactNode;
+  readonly onWatchAgain?: () => void;
+  readonly onSpace?: () => void;
   readonly onClose: () => void;
 };
 
 // Arena is the round on one screen: the system with every attack landing on
 // it, the money, what happens and how the bank answers, and the verdict.
 export default function Arena(props: ArenaProps): React.JSX.Element {
-  const { eyebrow, title, replay, reading, phase, nowMs, ageSeconds, wallMs, betLine, actions, onClose } = props;
+  const {
+    eyebrow,
+    title,
+    replay,
+    reading,
+    phase,
+    nowMs,
+    ageSeconds,
+    wallMs,
+    betLine,
+    actions,
+    isLive,
+    player,
+    onWatchAgain,
+    onSpace,
+    onClose,
+  } = props;
   const dialog = useRef<HTMLDialogElement>(null);
+
+  // Space pauses a replay while the arena itself has focus.
+  useSpaceKey(dialog, onSpace);
   const isFinished = phase === 'verdict';
   const nowSeconds = nowMs / MS_PER_SECOND;
   const seen = replay.events.filter((event) => event.tMs <= nowMs);
@@ -81,7 +106,14 @@ export default function Arena(props: ArenaProps): React.JSX.Element {
   }
 
   return (
-    <dialog ref={dialog} className={styles.arena} tabIndex={-1} aria-labelledby="arena-title" onCancel={handleCancel}>
+    <dialog
+      ref={dialog}
+      className={styles.arena}
+      data-replay={!isLive}
+      tabIndex={-1}
+      aria-labelledby="arena-title"
+      onCancel={handleCancel}
+    >
       <header className={styles.head}>
         <div className={styles.headText}>
           <p className={styles.eyebrow}>{eyebrow}</p>
@@ -90,13 +122,13 @@ export default function Arena(props: ArenaProps): React.JSX.Element {
           </h2>
         </div>
         <AttackClock phase={phase} nowSeconds={nowSeconds} durationSeconds={replay.durationSeconds} />
-        {isFinished ? null : (
+        {isLive && !isFinished ? (
           <LiveIndicator
             state="live"
             label={messages.round.live}
             age={ageSeconds === null ? undefined : format(messages.round.age, { seconds: ageSeconds })}
           />
-        )}
+        ) : null}
         {actions}
         <Button onClick={onClose} aria-label={messages.arena.close}>
           <X size={16} aria-hidden="true" />
@@ -112,7 +144,7 @@ export default function Arena(props: ArenaProps): React.JSX.Element {
           isLive={!isFinished}
         />
         <aside className={styles.side}>
-          <MoneyCard replay={replay} reading={reading} isFinished={isFinished} wallMs={wallMs} />
+          <MoneyCard replay={replay} reading={reading} isFinished={isFinished} isLive={isLive} wallMs={wallMs} />
           <section className={styles.card} aria-labelledby="arena-now">
             <h3 id="arena-now" className={styles.cardTitle}>
               {messages.arena.nowTitle}
@@ -139,8 +171,10 @@ export default function Arena(props: ArenaProps): React.JSX.Element {
         </aside>
       </div>
       <ArenaTicker events={replay.events} spanSeconds={span} nowSeconds={nowSeconds} />
+      {player}
       {isFinished ? (
         <VerdictStamp verdict={replay.verdict} facts={factsOf(replay)} betLine={betLine}>
+          {onWatchAgain === undefined ? null : <Button onClick={onWatchAgain}>{messages.arena.watchAgain}</Button>}
           <Button variant="primary" onClick={onClose}>
             {messages.arena.seeRound}
           </Button>
@@ -175,30 +209,55 @@ type MoneyCardProps = {
   readonly replay: Replay;
   readonly reading: AuditorReading | null;
   readonly isFinished: boolean;
+  readonly isLive: boolean;
   readonly wallMs: number;
 };
 
-function MoneyCard({ replay, reading, isFinished, wallMs }: MoneyCardProps): React.JSX.Element {
-  const conservation = replay.checks.find((check) => check.id === 'I1');
-  const isBroken = isFinished ? conservation?.status === 'failed' : (reading?.sumCents ?? 0) !== 0;
-  const value = isBroken && isFinished ? messages.round.moneyBrokenValue : formatCents(reading?.sumCents ?? 0);
-  const readSecondsAgo = reading ? Math.max(0, Math.round((wallMs - reading.at.getTime()) / MS_PER_SECOND)) : null;
-  const hint =
-    isFinished || readSecondsAgo === null
-      ? messages.arena.moneyHintDone
-      : format(messages.arena.moneyHint, { seconds: readSecondsAgo });
+function MoneyCard(props: MoneyCardProps): React.JSX.Element {
+  const view = moneyViewOf(props);
 
   return (
     <section className={styles.card} aria-labelledby="arena-money">
       <h3 id="arena-money" className={styles.cardTitle}>
         {messages.arena.money}
       </h3>
-      <p className={styles.money} data-broken={isBroken}>
-        {value}
+      <p className={styles.money} data-broken={view.isBroken}>
+        {view.value}
       </p>
-      <p className={styles.hint}>{hint}</p>
+      <p className={styles.hint}>{view.hint}</p>
     </section>
   );
+}
+
+type MoneyView = { readonly value: string; readonly hint: string; readonly isBroken: boolean };
+
+// moneyViewOf is the money card's word: the checker's at the end, the live
+// auditor's meanwhile, and nothing a replay did not record.
+function moneyViewOf({ replay, reading, isFinished, isLive, wallMs }: MoneyCardProps): MoneyView {
+  if (isFinished) {
+    const isBroken = replay.checks.some((check) => check.id === 'I1' && check.status === 'failed');
+    const value = isBroken ? messages.round.moneyBrokenValue : formatCents(0);
+
+    return { value, hint: messages.arena.moneyHintDone, isBroken };
+  }
+
+  if (!isLive) {
+    return { value: messages.arena.moneyUnread, hint: messages.arena.moneyHintReplay, isBroken: false };
+  }
+
+  const isUnread = reading === null || reading.isUnavailable;
+
+  if (isUnread) {
+    return { value: messages.arena.moneyUnread, hint: messages.round.moneyHintLive, isBroken: false };
+  }
+
+  const seconds = Math.max(0, Math.round((wallMs - reading.at.getTime()) / MS_PER_SECOND));
+
+  return {
+    value: formatCents(reading.sumCents),
+    hint: format(messages.arena.moneyHint, { seconds }),
+    isBroken: reading.sumCents !== 0,
+  };
 }
 
 function Stats({ replay, seen }: { replay: Replay; seen: Replay['events'] }): React.JSX.Element {
