@@ -7,7 +7,8 @@ import { brokenCount } from '../../../domain/guarantees';
 import { disabledDefenses } from '../../../domain/headline';
 import { format } from '../../../i18n/format';
 import { messages } from '../../../i18n/pt-BR';
-import { ROUTES } from '../../../routes';
+import { comparePath, ROUTES } from '../../../routes';
+import { useControlRound } from '../hooks/useControlRound';
 import styles from './RoundPage.module.css';
 
 type ResultAsideProps = { readonly replay: Replay };
@@ -22,6 +23,8 @@ export default function ResultAside({ replay }: ResultAsideProps): React.JSX.Ele
     : messages.round.expectedPass;
   const broken = brokenCount(replay.checks);
   const isMatch = isControl ? replay.verdict === 'fail' : replay.verdict === 'pass';
+  const isRobust = replay.defenses !== '' && !isControl;
+  const control = useControlRound(replay.scenario, isRobust);
 
   return (
     <div className={styles.side}>
@@ -48,6 +51,11 @@ export default function ResultAside({ replay }: ResultAsideProps): React.JSX.Ele
           <LinkButton to={ROUTES.home} variant="primary">
             {messages.round.again}
           </LinkButton>
+          {control === null ? null : (
+            <LinkButton to={comparePath(replay.round, control)} data-tooltip={messages.round.withoutDefenseHelp}>
+              {messages.round.withoutDefense}
+            </LinkButton>
+          )}
           <a className="btn" href={reportPath(replay.round)}>
             {messages.round.report}
           </a>

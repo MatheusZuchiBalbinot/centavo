@@ -94,3 +94,33 @@ func appendTo(t *testing.T, path, content string) {
 		t.Fatal(err)
 	}
 }
+
+func TestRounds_ListsEachRoundsDefenseProfile(t *testing.T) {
+	t.Parallel()
+
+	roundsDir := t.TempDir()
+	writeLiveRound(t, roundsDir, "r0005", `{"verdict":"fail","invariants":[{"id":"I1","status":"failed"}]}`)
+
+	manifest := `{"round":"r0005","scenario":"smoke","seed":"0x5eed","defenses":"robust,-fencing"}`
+
+	err := os.WriteFile(filepath.Join(roundsDir, "r0005", "round.json"), []byte(manifest), 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	handler := dashboard.NewHandler(dashboard.Config{Live: noReading, RoundsDir: roundsDir})
+
+	var page struct {
+		Rounds []struct {
+			Round    string `json:"round"`
+			Defenses string `json:"defenses"`
+		} `json:"rounds"`
+	}
+
+	code := get(t, handler, "/api/rounds?limit=10", &page)
+
+	isUnexpected := code != http.StatusOK || len(page.Rounds) != 1 || page.Rounds[0].Defenses != "robust,-fencing"
+	if isUnexpected {
+		t.Fatalf("rounds: %d, %+v", code, page)
+	}
+}

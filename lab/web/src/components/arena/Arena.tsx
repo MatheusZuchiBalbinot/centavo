@@ -1,4 +1,4 @@
-import { ShieldCheck, X } from 'lucide-react';
+import { ShieldCheck, Volume2, VolumeX, X } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
 import type { AuditorReading, GuaranteeCheck, Replay } from '../../api/replay';
@@ -12,6 +12,7 @@ import { isAttackEvent, isDefenseEvent } from '../../domain/phase';
 import type { Phase } from '../../domain/phase';
 import { systemStateAt } from '../../domain/systemState';
 import { spanOf } from '../../domain/timeline';
+import { useArenaSound } from '../../hooks/useArenaSound';
 import { useSpaceKey } from '../../hooks/useSpaceKey';
 import { format } from '../../i18n/format';
 import { messages } from '../../i18n/pt-BR';
@@ -71,6 +72,8 @@ export default function Arena(props: ArenaProps): React.JSX.Element {
   } = props;
   const dialog = useRef<HTMLDialogElement>(null);
 
+  const sound = useArenaSound({ attacks: replay.events.filter(isAttackEvent).length, verdict: replay.verdict });
+
   // Space pauses a replay while the arena itself has focus.
   useSpaceKey(dialog, onSpace);
   const isFinished = phase === 'verdict';
@@ -129,6 +132,10 @@ export default function Arena(props: ArenaProps): React.JSX.Element {
             age={ageSeconds === null ? undefined : format(messages.round.age, { seconds: ageSeconds })}
           />
         ) : null}
+        <Button onClick={sound.toggle} aria-pressed={sound.isOn} data-tooltip={messages.arena.soundHelp}>
+          {sound.isOn ? <Volume2 size={16} aria-hidden="true" /> : <VolumeX size={16} aria-hidden="true" />}
+          {messages.arena.sound}
+        </Button>
         {actions}
         <Button onClick={onClose} aria-label={messages.arena.close}>
           <X size={16} aria-hidden="true" />

@@ -42,7 +42,10 @@ type summary struct {
 	Operations int             `json:"operations"`
 	Fails      int             `json:"fails"`
 	Counters   replay.Counters `json:"counters"`
-	ReportURL  string          `json:"report_url"`
+	// Defenses is the round's defense profile, "robust" or with some
+	// turned off, so the panel can tell a control round from a real one.
+	Defenses  string `json:"defenses"`
+	ReportURL string `json:"report_url"`
 }
 
 // tracker reads the rounds directory for the panel and remembers the
@@ -225,7 +228,7 @@ func (t *tracker) summaryOf(id string) (summary, bool) {
 
 	round := summary{
 		Round: id, Scenario: built.Scenario, Seed: built.Seed, Verdict: built.Verdict, Seconds: len(built.Seconds),
-		Counters: built.Counters, ReportURL: reportURLOf(id),
+		Counters: built.Counters, Defenses: built.Defenses, ReportURL: reportURLOf(id),
 	}
 
 	for _, second := range built.Seconds {

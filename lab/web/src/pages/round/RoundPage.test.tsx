@@ -277,4 +277,32 @@ describe('the round page', () => {
     expect(router.state.location.search).toMatch(/t=0%3A0[12]/);
     expect(within(arena).getByRole('button', { name: 'Tocar' })).toBeInTheDocument();
   });
+
+  it('offers the recorded round without the defense, side by side', async () => {
+    installFakeEventSource();
+    const control = {
+      round: 'r0004',
+      scenario: 'kill-after-commit',
+      verdict: 'fail',
+      seconds: 180,
+      operations: 900,
+      counters,
+      defenses: 'robust,-fencing',
+    };
+    answerFetch({
+      [API_ROUTES.lab]: { status: 200, body: { status: 'idle' } },
+      [API_ROUTES.rounds]: { status: 200, body: { rounds: [control] } },
+    });
+
+    renderRound();
+
+    act(() => {
+      stream().send('finished', { ...snapshot, verdict: 'pass', checks: allHeld });
+    });
+
+    expect(await screen.findByRole('link', { name: 'E sem a defesa?' })).toHaveAttribute(
+      'href',
+      '/compare/r0007/r0004',
+    );
+  });
 });

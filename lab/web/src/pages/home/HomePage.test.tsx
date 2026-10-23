@@ -223,4 +223,21 @@ describe('the home page', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(postedBodies()).toEqual([]);
   });
+
+  it('shows the streak of robust rounds without a lost cent, the records and the bet score', async () => {
+    window.localStorage.setItem('centavo.bets', JSON.stringify({ r0003: 'breaks', r0001: 'holds' }));
+    const robust = rounds.rounds.map((round) => ({ ...round, defenses: 'robust' }));
+    const withControl = [robust[0], { ...robust[1], defenses: 'robust,-fencing' }, robust[2]];
+    answerFetch({
+      ...homeAnswers({ status: 'idle' }),
+      [API_ROUTES.rounds]: { status: 200, body: { rounds: withControl } },
+    });
+
+    renderHome();
+
+    expect(await screen.findByText('2 rodadas seguidas sem perder um centavo')).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: '9 na r0003' })).toHaveLength(2);
+    expect(screen.getByText('Seus palpites: 1 certos, 1 errados')).toBeInTheDocument();
+    window.localStorage.clear();
+  });
 });

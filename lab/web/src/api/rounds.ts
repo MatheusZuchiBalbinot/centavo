@@ -25,6 +25,9 @@ export type RoundSummary = {
   readonly seconds: number;
   readonly operations: number;
   readonly counters: ChaosCounters;
+  // defenses is the bank's profile, "robust" or with some turned off; ""
+  // when the round did not record it.
+  readonly defenses: string;
 };
 
 export type RoundsPage = { readonly rounds: readonly RoundSummary[]; readonly nextCursor: RoundId | null };
@@ -76,7 +79,9 @@ function parseRoundSummary(value: unknown): RoundSummary | null {
     return null;
   }
 
-  return { round, scenario, verdict: parseVerdict(value.verdict), seconds, operations, counters };
+  const defenses = isString(value.defenses) ? value.defenses : '';
+
+  return { round, scenario, verdict: parseVerdict(value.verdict), seconds, operations, counters, defenses };
 }
 
 export function parseCounters(value: unknown): ChaosCounters | null {
