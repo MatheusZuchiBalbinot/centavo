@@ -2,7 +2,7 @@ module centavo/partner
 
 go 1.26.0
 
-toolchain go1.26.9
+toolchain go1.26.10
 
 require modernc.org/sqlite v1.60.1
 
