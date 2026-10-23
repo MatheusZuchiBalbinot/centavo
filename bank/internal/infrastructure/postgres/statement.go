@@ -31,21 +31,6 @@ func execute(ctx context.Context, db querier, st statement) (int64, error) {
 	return tag.RowsAffected(), nil
 }
 
-// executeOne runs a write that must touch exactly one row; any other count is
-// errNone, the store's own error for "that row is not there".
-func executeOne(ctx context.Context, db querier, st statement, errNone error) error {
-	touched, err := execute(ctx, db, st)
-	if err != nil {
-		return err
-	}
-
-	if touched != 1 {
-		return errNone
-	}
-
-	return nil
-}
-
 // scanRow reads the one row a query must return. A missing row stays
 // pgx.ErrNoRows under the wrap, for the caller to map.
 func scanRow(ctx context.Context, db querier, st statement, dest ...any) error {

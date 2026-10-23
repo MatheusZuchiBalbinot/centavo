@@ -15,36 +15,11 @@ import (
 // lockNotAvailable is lock_timeout firing while another request owns the key.
 const lockNotAvailable = "55P03"
 
-const (
-	claimKeySQL = `
-INSERT INTO idempotency_keys (key, endpoint, request_hash, status)
-VALUES ($1, $2, $3, 'pending')
-ON CONFLICT (key) DO NOTHING
-RETURNING key`
-
-	voidKeySQL = `
-INSERT INTO idempotency_keys (key, status)
-VALUES ($1, 'voided')
-ON CONFLICT (key) DO NOTHING
-RETURNING key`
-
-	readKeySQL = `
-SELECT coalesce(endpoint, ''), coalesce(request_hash, ''::bytea), status::text,
-       coalesce(response_status, 0), coalesce(response_body, ''::bytea)
-FROM idempotency_keys
-WHERE key = $1`
-
-	completeKeySQL = `
-UPDATE idempotency_keys
-SET status = 'completed', operation_id = $2, response_status = $3, response_body = $4
-WHERE key = $1 AND status = 'pending'`
-)
+const idempotencyKeysTable = "idempotency_keys"
 
 var errKeyNotPending = errors.New("completing an idempotency key that this unit of work does not own")
 
-const touchKeySQL = `UPDATE idempotency_keys SET expires_at = expires_at WHERE key = $1`
-
-const clientRefAppliedSQL = `SELECT EXISTS (SELECT 1 FROM ledger_transactions WHERE client_ref = $1)`
+const clientRefAppliedSQL = `SELECT EXISTS (SELECT 1 FROM ledger_transactions WHERE client_ref = @client_ref)`
 
 // deleteExpiredKeysSQL keeps an hour of margin past the 24 hours of idempotency
 // keys live 24 hours by the database clock and measures both with the database
@@ -55,9 +30,33 @@ WHERE key IN (
     SELECT key FROM idempotency_keys
     WHERE expires_at < now() - interval '1 hour'
     ORDER BY expires_at
-    LIMIT $1
+    LIMIT @batch
     FOR UPDATE SKIP LOCKED
 )`
+
+// claimedKeyRow is a key a request takes: pending until it completes.
+type claimedKeyRow struct {
+	Key         string `db:"key"`
+	Endpoint    string `db:"endpoint"`
+	RequestHash []byte `db:"request_hash"`
+	Status      string `db:"status"`
+}
+
+// voidedKeyRow is the tombstone of a key nobody may use any more.
+type voidedKeyRow struct {
+	Key    string `db:"key"`
+	Status string `db:"status"`
+}
+
+// keyRecordRow is a stored key; a tombstone has no request or response, read
+// as their zero values.
+type keyRecordRow struct {
+	Endpoint       string `db:"endpoint"        read:"coalesce(endpoint, '')"`
+	RequestHash    []byte `db:"request_hash"    read:"coalesce(request_hash, ''::bytea)"`
+	Status         string `db:"status"          read:"status::text"`
+	ResponseStatus int    `db:"response_status" read:"coalesce(response_status, 0)"`
+	ResponseBody   []byte `db:"response_body"   read:"coalesce(response_body, ''::bytea)"`
+}
 
 // keyStore keeps idempotency keys.
 type keyStore struct {
@@ -70,9 +69,14 @@ type keyStore struct {
 func (s keyStore) ClaimKey(ctx context.Context, claim application.KeyClaim) (idempotency.Record, bool, error) {
 	var inserted string
 
-	insert := newStatement("claiming idempotency key", claimKeySQL, string(claim.Key), claim.Endpoint, claim.RequestHash[:])
+	row := claimedKeyRow{
+		Key: string(claim.Key), Endpoint: claim.Endpoint, RequestHash: claim.RequestHash[:], Status: string(idempotency.StatusPending),
+	}
 
-	isClaimed, err := scanOptionalRow(ctx, s.db, insert, &inserted)
+	isClaimed, err := insertRow("claiming idempotency key", idempotencyKeysTable, row).
+		OnConflictDoNothing("(key)").
+		Returning("key").
+		ScanOptional(ctx, s.db, &inserted)
 	if err != nil {
 		return idempotency.Record{}, false, keyError(err)
 	}
@@ -88,8 +92,10 @@ func (s keyStore) ClaimKey(ctx context.Context, claim application.KeyClaim) (ide
 
 // TouchKey writes a new version of the key's row with the same values.
 func (s keyStore) TouchKey(ctx context.Context, key idempotency.Key) error {
-	query := newStatement("touching idempotency key", touchKeySQL, string(key))
-	_, err := execute(ctx, s.db, query)
+	_, err := update("touching idempotency key", idempotencyKeysTable).
+		SetSQL("expires_at = expires_at", nil).
+		Where("key = @key", args{"key": string(key)}).
+		Exec(ctx, s.db)
 
 	return keyError(err)
 }
@@ -98,8 +104,12 @@ func (s keyStore) TouchKey(ctx context.Context, key idempotency.Key) error {
 func (s keyStore) VoidKey(ctx context.Context, key idempotency.Key) (idempotency.Record, bool, error) {
 	var inserted string
 
-	query := newStatement("voiding idempotency key", voidKeySQL, string(key))
-	isVoided, err := scanOptionalRow(ctx, s.db, query, &inserted)
+	row := voidedKeyRow{Key: string(key), Status: string(idempotency.StatusVoided)}
+
+	isVoided, err := insertRow("voiding idempotency key", idempotencyKeysTable, row).
+		OnConflictDoNothing("(key)").
+		Returning("key").
+		ScanOptional(ctx, s.db, &inserted)
 	if err != nil {
 		return idempotency.Record{}, false, keyError(err)
 	}
@@ -115,9 +125,13 @@ func (s keyStore) VoidKey(ctx context.Context, key idempotency.Key) (idempotency
 
 // CompleteKey stores the answer in the same transaction as the effect.
 func (s keyStore) CompleteKey(ctx context.Context, key idempotency.Key, operationID ledger.OperationID, response idempotency.StoredResponse) error {
-	complete := newStatement("completing idempotency key", completeKeySQL, string(key), uuid.UUID(operationID), response.Status, response.Body)
-
-	return executeOne(ctx, s.db, complete, errKeyNotPending)
+	return update("completing idempotency key", idempotencyKeysTable).
+		Set("status", string(idempotency.StatusCompleted)).
+		Set("operation_id", uuid.UUID(operationID)).
+		Set("response_status", response.Status).
+		Set("response_body", response.Body).
+		Where("key = @key AND status = 'pending'", args{"key": string(key)}).
+		ExecOne(ctx, s.db, errKeyNotPending)
 }
 
 // IsClientRefApplied tells whether any ledger transaction carries the key.
@@ -125,7 +139,7 @@ func (s keyStore) CompleteKey(ctx context.Context, key idempotency.Key, operatio
 func (s keyStore) IsClientRefApplied(ctx context.Context, key idempotency.Key) (bool, error) {
 	var isApplied bool
 
-	query := newStatement("looking up client_ref", clientRefAppliedSQL, string(key))
+	query := newStatement("looking up client_ref", clientRefAppliedSQL, args{"client_ref": string(key)})
 	err := scanRow(ctx, s.db, query, &isApplied)
 
 	return isApplied, err
@@ -133,26 +147,22 @@ func (s keyStore) IsClientRefApplied(ctx context.Context, key idempotency.Key) (
 
 // DeleteExpiredKeys removes one batch of expired keys and reports how many.
 func (s keyStore) DeleteExpiredKeys(ctx context.Context, batch int) (int64, error) {
-	return execute(ctx, s.db, newStatement("deleting expired idempotency keys", deleteExpiredKeysSQL, batch))
+	return execute(ctx, s.db, newStatement("deleting expired idempotency keys", deleteExpiredKeysSQL, args{"batch": batch}))
 }
 
 func (s keyStore) readKey(ctx context.Context, key idempotency.Key) (idempotency.Record, error) {
-	record := idempotency.Record{Key: key}
-
-	var (
-		hash   []byte
-		status string
-	)
-
-	read := newStatement("reading idempotency key", readKeySQL, string(key))
-
-	err := scanRow(ctx, s.db, read, &record.Endpoint, &hash, &status, &record.Response.Status, &record.Response.Body)
+	row, err := selectFrom[keyRecordRow]("reading idempotency key", idempotencyKeysTable).
+		Where("key = @key", args{"key": string(key)}).
+		One(ctx, s.db)
 	if err != nil {
 		return idempotency.Record{}, err
 	}
 
-	record.Status = idempotency.Status(status)
-	copy(record.RequestHash[:], hash)
+	record := idempotency.Record{
+		Key: key, Endpoint: row.Endpoint, Status: idempotency.Status(row.Status),
+		Response: idempotency.StoredResponse{Status: row.ResponseStatus, Body: row.ResponseBody},
+	}
+	copy(record.RequestHash[:], row.RequestHash)
 
 	return record, nil
 }
