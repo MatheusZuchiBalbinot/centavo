@@ -5,7 +5,7 @@ import type { AttackMenu } from '../../../api/attacks';
 import type { AttackId } from '../../../api/ids';
 import { Button } from '../../../components/ui/Button';
 import { messages } from '../../../i18n/pt-BR';
-import type { StartChoice } from '../hooks/useStartRound';
+import type { StartChoice } from '../../../hooks/useStartRound';
 import AttackPicker from './AttackPicker';
 import styles from './Composer.module.css';
 import DurationPicker from './DurationPicker';

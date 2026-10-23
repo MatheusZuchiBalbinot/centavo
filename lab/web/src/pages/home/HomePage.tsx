@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router';
 
 import { LinkButton } from '../../components/ui/Button';
+import SurpriseButton from '../../components/surprise/SurpriseButton';
 import { StatusIntro } from '../../components/ui/StatusIntro';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { useLabReading } from '../../hooks/useLabReading';
@@ -11,10 +12,10 @@ import Composer from './components/Composer';
 import LabNow from './components/LabNow';
 import RecentRounds from './components/RecentRounds';
 import styles from './HomePage.module.css';
-import { useAttackMenu } from './hooks/useAttackMenu';
+import { useAttackMenu } from '../../hooks/useAttackMenu';
 import { useRecentRounds } from './hooks/useRecentRounds';
-import { useStartRound } from './hooks/useStartRound';
-import type { StartChoice } from './hooks/useStartRound';
+import { useStartRound } from '../../hooks/useStartRound';
+import type { StartChoice } from '../../hooks/useStartRound';
 
 export default function HomePage(): React.JSX.Element {
   useDocumentTitle(messages.titles.home);
@@ -58,7 +59,10 @@ export default function HomePage(): React.JSX.Element {
                 {messages.home.watch}
               </LinkButton>
             ) : (
-              <span className={styles.heroHint}>{messages.home.hint}</span>
+              <div className={styles.heroActions}>
+                <SurpriseButton isBusy={isBusy} size="large" />
+                <span className={styles.heroHint}>{messages.home.hint}</span>
+              </div>
             )
           }
         />

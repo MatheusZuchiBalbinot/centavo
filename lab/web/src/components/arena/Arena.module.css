@@ -769,3 +769,12 @@
     display: none;
   }
 }
+
+.stampBet {
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  background: var(--violet-soft);
+  color: var(--violet);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}

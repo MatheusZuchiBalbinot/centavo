@@ -1,4 +1,4 @@
-import { Link, Navigate } from 'react-router';
+import { Link, Navigate, useLocation } from 'react-router';
 
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { useLabReading } from '../../hooks/useLabReading';
@@ -11,10 +11,12 @@ export default function LivePage(): React.JSX.Element {
   useDocumentTitle(messages.live.title);
 
   const lab = useLabReading();
+  // The query goes along: a surprise round opens in the arena, with its bet.
+  const { search } = useLocation();
   const round = lab.kind === 'ready' && lab.state.status !== 'idle' ? lab.state.round : null;
 
   if (round !== null) {
-    return <Navigate to={roundPath(round)} replace />;
+    return <Navigate to={{ pathname: roundPath(round), search }} replace />;
   }
 
   const isPreparing = lab.kind === 'ready' && lab.state.status !== 'idle';

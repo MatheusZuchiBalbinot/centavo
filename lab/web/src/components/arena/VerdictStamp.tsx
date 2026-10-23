@@ -12,12 +12,13 @@ const PERCENT = 100;
 type VerdictStampProps = {
   readonly verdict: Verdict | null;
   readonly facts: string;
+  readonly betLine: string | null;
   readonly children: React.ReactNode;
 };
 
 // VerdictStamp lands on the arena when the checker has spoken: a green stamp
 // and a little confetti when the bank held, a red one when it broke.
-export default function VerdictStamp({ verdict, facts, children }: VerdictStampProps): React.JSX.Element {
+export default function VerdictStamp({ verdict, facts, betLine, children }: VerdictStampProps): React.JSX.Element {
   const isPass = verdict === 'pass';
 
   return (
@@ -26,6 +27,7 @@ export default function VerdictStamp({ verdict, facts, children }: VerdictStampP
       <div className={styles.stamp} data-verdict={verdict ?? 'none'} role="status">
         <p className={styles.stampWord}>{stampWord(verdict)}</p>
         <p className={styles.stampFacts}>{facts}</p>
+        {betLine === null ? null : <p className={styles.stampBet}>{betLine}</p>}
         <div className={styles.stampActions}>{children}</div>
       </div>
     </div>

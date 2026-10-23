@@ -233,4 +233,19 @@ describe('the round page', () => {
     expect(within(arena).getByText('Passou')).toBeInTheDocument();
     expect(within(arena).getByText('um ataque · R$ 0,00 · 8 de 8 garantias')).toBeInTheDocument();
   });
+
+  it('settles the bet made in the surprise draw and keeps it in the browser', () => {
+    installFakeEventSource();
+    window.localStorage.clear();
+    answerFetch({ [API_ROUTES.lab]: { status: 200, body: { status: 'idle' } } });
+
+    renderRound('/rounds/r0007?arena=1&surprise=1&bet=breaks');
+
+    act(() => {
+      stream().send('finished', { ...snapshot, verdict: 'pass', checks: allHeld });
+    });
+
+    expect(screen.getByText('Você apostou que quebraria. O banco aguentou.')).toBeInTheDocument();
+    expect(window.localStorage.getItem('centavo.bets')).toBe('{"r0007":"breaks"}');
+  });
 });

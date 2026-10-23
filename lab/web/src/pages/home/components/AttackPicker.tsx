@@ -3,7 +3,7 @@ import type { AttackId } from '../../../api/ids';
 import { attackCopy } from '../../../domain/attacks';
 import { format } from '../../../i18n/format';
 import { messages } from '../../../i18n/pt-BR';
-import AttackIcon from './AttackIcon';
+import AttackIcon from '../../../components/AttackIcon';
 import styles from './Composer.module.css';
 
 type AttackPickerProps = {

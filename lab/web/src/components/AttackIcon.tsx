@@ -1,7 +1,7 @@
 import { Activity, Clock3, Database, Handshake, HelpCircle, ServerCrash, Shuffle, WifiOff } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
-import type { AttackId } from '../../../api/ids';
+import type { AttackId } from '../api/ids';
 
 const ICONS: Readonly<Record<string, LucideIcon>> = {
   'workers-down': ServerCrash,

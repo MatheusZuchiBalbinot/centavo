@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
 
 import { isRoundId } from '../../api/ids';
 import type { RoundId } from '../../api/ids';
 import type { Replay } from '../../api/replay';
 import Arena from '../../components/arena/Arena';
+import { betOutcome, isBet, isBetBook, withBet } from '../../domain/bets';
+import type { Bet } from '../../domain/bets';
 import { headlineOf } from '../../domain/headline';
 import type { AttackRange } from '../../domain/highlight';
 import { phaseOf } from '../../domain/phase';
@@ -15,6 +17,7 @@ import { PAGE_HEADING_ID } from '../../hooks/useRouteFocus';
 import { format } from '../../i18n/format';
 import { messages } from '../../i18n/pt-BR';
 import { QUERY } from '../../routes';
+import { readStored, STORAGE_KEYS, writeStored } from '../../storage';
 import NotFoundPage from '../not-found/NotFoundPage';
 import EventFeed from './components/EventFeed';
 import Guarantees from './components/Guarantees';
@@ -55,6 +58,17 @@ function FollowedRound({ round }: { round: RoundId }): React.JSX.Element {
   const isPresenting = useViewMode().mode === 'presentation';
   const arenaParam = searchParams.get(QUERY.arena);
   const isArenaOpen = arenaParam === ARENA_OPEN || (isPresenting && arenaParam !== ARENA_CLOSED);
+  const isSurprise = searchParams.get(QUERY.surprise) === ARENA_OPEN;
+  const betParam = searchParams.get(QUERY.bet);
+  const bet = isBet(betParam) ? betParam : null;
+
+  useEffect(() => {
+    if (bet === null || !isFinished) {
+      return;
+    }
+
+    recordBet(round, bet);
+  }, [bet, isFinished, round]);
 
   useAttackToasts(events, newEvents);
   useDocumentTitle(format(isFinished ? messages.round.titleDone : messages.round.titleLive, { round }));
@@ -74,7 +88,7 @@ function FollowedRound({ round }: { round: RoundId }): React.JSX.Element {
   const headline = headlineOf({ replay, phase, elapsedSeconds, reading });
   const ageSeconds = lastMessageAt === null ? null : Math.max(0, Math.round((now - lastMessageAt) / MS_PER_SECOND));
   const isCalm = CALM_SCENARIOS.has(replay.scenario);
-  const eyebrow = format(isFinished ? messages.arena.eyebrowDone : messages.arena.eyebrow, { round });
+  const eyebrow = format(arenaEyebrowOf(isFinished, isSurprise), { round });
 
   function setArena(value: string): void {
     const next = new URLSearchParams(searchParams);
@@ -133,6 +147,7 @@ function FollowedRound({ round }: { round: RoundId }): React.JSX.Element {
           nowMs={arenaNowOf(replay, now, isFinished)}
           ageSeconds={ageSeconds}
           wallMs={now}
+          betLine={bet === null ? null : betLineOf(bet, replay.verdict)}
           actions={<RoundActions round={round} isFinished={isFinished} />}
           onClose={handleCloseArena}
         />
@@ -165,4 +180,30 @@ function arenaNowOf(replay: Replay, now: number, isFinished: boolean): number {
   }
 
   return Math.max(endMs, now - replay.startedAt.getTime());
+}
+
+function arenaEyebrowOf(isFinished: boolean, isSurprise: boolean): string {
+  if (isFinished) {
+    return messages.arena.eyebrowDone;
+  }
+
+  return isSurprise ? messages.arena.eyebrowSurprise : messages.arena.eyebrow;
+}
+
+// recordBet keeps the bet in this browser, for the lab's scoreboard.
+function recordBet(round: RoundId, bet: Bet): void {
+  const book = readStored(STORAGE_KEYS.bets, isBetBook) ?? {};
+
+  writeStored(STORAGE_KEYS.bets, withBet(book, round, bet));
+}
+
+const BET_LINES = {
+  holds: { right: messages.arena.bet.holdsRight, wrong: messages.arena.bet.holdsWrong },
+  breaks: { right: messages.arena.bet.breaksRight, wrong: messages.arena.bet.breaksWrong },
+} as const;
+
+function betLineOf(bet: Bet, verdict: Replay['verdict']): string | null {
+  const outcome = betOutcome(bet, verdict);
+
+  return outcome === null ? null : BET_LINES[bet][outcome];
 }

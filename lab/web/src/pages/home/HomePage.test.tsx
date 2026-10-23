@@ -1,7 +1,7 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { appRoutes } from '../../App';
 import { API_ROUTES } from '../../api/routes';
@@ -99,6 +99,18 @@ function bodyOf(call: Parameters<typeof fetch>): unknown {
   return typeof body === 'string' ? JSON.parse(body) : null;
 }
 
+// The surprise reel spins only with motion; the tests ask for none, so the
+// draw goes straight to the countdown.
+function preferReducedMotion(): void {
+  vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('reduce'), media: query }));
+}
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
 describe('the home page', () => {
   it('starts the attack and the duration that were chosen', async () => {
     answerFetch({ ...homeAnswers({ status: 'idle' }), [`POST ${API_ROUTES.rounds}`]: { status: 202, body: running } });
@@ -166,5 +178,49 @@ describe('the home page', () => {
     expect(within(rows[2] as HTMLElement).getByText('Quebrou')).toBeInTheDocument();
     expect(screen.getByText('18.583')).toBeInTheDocument();
     await expectNoAxeViolations(container);
+  });
+
+  it('draws a surprise attack, counts down, starts it and follows it into the arena with the bet', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    preferReducedMotion();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    answerFetch({ ...homeAnswers({ status: 'idle' }), [`POST ${API_ROUTES.rounds}`]: { status: 202, body: running } });
+    const user = userEvent.setup({ advanceTimers: (ms) => vi.advanceTimersByTime(ms) });
+    const router = createMemoryRouter(appRoutes, { initialEntries: ['/'] });
+
+    render(<RouterProvider router={router} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Ataque surpresa' }));
+
+    const draw = screen.getByRole('dialog', { name: /O sorteio caiu em: Derrubar os workers/ });
+
+    expect(within(draw).getByText('3 min de ataque, com todas as defesas ligadas.')).toBeInTheDocument();
+    await user.click(within(draw).getByRole('radio', { name: 'Vai quebrar' }));
+    await expectNoAxeViolations(draw);
+
+    act(() => {
+      vi.advanceTimersByTime(3_200);
+    });
+
+    await waitFor(() => {
+      expect(postedBodies()).toEqual([{ attack: 'workers-down', duration_seconds: 180 }]);
+    });
+    await waitFor(() => {
+      expect(router.state.location.search).toBe('?arena=1&surprise=1&bet=breaks');
+    });
+  });
+
+  it('cancels a surprise draw without starting anything', async () => {
+    preferReducedMotion();
+    answerFetch(homeAnswers({ status: 'idle' }));
+    const user = userEvent.setup();
+
+    renderHome();
+
+    await user.click(await screen.findByRole('button', { name: 'Ataque surpresa' }));
+    await user.click(screen.getByRole('button', { name: /Cancelar/ }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(postedBodies()).toEqual([]);
   });
 });

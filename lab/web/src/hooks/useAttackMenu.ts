@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
-import { fetchAttackMenu } from '../../../api/attacks';
-import type { AttackMenu } from '../../../api/attacks';
+import { fetchAttackMenu } from '../api/attacks';
+import type { AttackMenu } from '../api/attacks';
 
 type MenuReading =
   { readonly kind: 'loading' } | { readonly kind: 'ready'; readonly menu: AttackMenu } | { readonly kind: 'failed' };

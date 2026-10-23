@@ -37,6 +37,8 @@ export type ArenaProps = {
   readonly ageSeconds: number | null;
   // wallMs is the clock time of this render, for how old the money reading is.
   readonly wallMs: number;
+  // betLine settles the bet made in the surprise draw, once there is a verdict.
+  readonly betLine: string | null;
   readonly actions?: React.ReactNode;
   readonly onClose: () => void;
 };
@@ -44,7 +46,7 @@ export type ArenaProps = {
 // Arena is the round on one screen: the system with every attack landing on
 // it, the money, what happens and how the bank answers, and the verdict.
 export default function Arena(props: ArenaProps): React.JSX.Element {
-  const { eyebrow, title, replay, reading, phase, nowMs, ageSeconds, wallMs, actions, onClose } = props;
+  const { eyebrow, title, replay, reading, phase, nowMs, ageSeconds, wallMs, betLine, actions, onClose } = props;
   const dialog = useRef<HTMLDialogElement>(null);
   const isFinished = phase === 'verdict';
   const nowSeconds = nowMs / MS_PER_SECOND;
@@ -138,7 +140,7 @@ export default function Arena(props: ArenaProps): React.JSX.Element {
       </div>
       <ArenaTicker events={replay.events} spanSeconds={span} nowSeconds={nowSeconds} />
       {isFinished ? (
-        <VerdictStamp verdict={replay.verdict} facts={factsOf(replay)}>
+        <VerdictStamp verdict={replay.verdict} facts={factsOf(replay)} betLine={betLine}>
           <Button variant="primary" onClick={onClose}>
             {messages.arena.seeRound}
           </Button>

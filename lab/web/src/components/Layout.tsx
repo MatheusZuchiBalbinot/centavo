@@ -6,6 +6,7 @@ import { useRouteFocus } from '../hooks/useRouteFocus';
 import { messages } from '../i18n/pt-BR';
 import { roundPath, ROUTES } from '../routes';
 import LabStatus from './LabStatus';
+import SurpriseButton from './surprise/SurpriseButton';
 import styles from './Layout.module.css';
 import { ToastProvider } from './ui/ToastProvider';
 import TooltipLayer from './ui/TooltipLayer';
@@ -18,6 +19,7 @@ const ICON_SIZE = 16;
 export default function Layout(): React.JSX.Element {
   const reading = useLabState();
   const isRunning = reading.kind === 'ready' && reading.state.status !== 'idle';
+  const isIdle = reading.kind === 'ready' && reading.state.status === 'idle';
   const { pathname } = useLocation();
   const liveRound = reading.kind === 'ready' && reading.state.status !== 'idle' ? reading.state.round : null;
   const isOnLiveRound = liveRound !== null && pathname === roundPath(liveRound);
@@ -80,6 +82,7 @@ export default function Layout(): React.JSX.Element {
             <header className={styles.topbar}>
               <span className={styles.topbarTitle}>{messages.topbar}</span>
               <div className={styles.topbarSide}>
+                {isIdle && pathname !== ROUTES.home ? <SurpriseButton isBusy={false} /> : null}
                 <ViewModeSwitch />
                 <LabStatus reading={reading} />
               </div>
