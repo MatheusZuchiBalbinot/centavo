@@ -1,5 +1,3 @@
-// Package engine runs the partner's background work: deciding transfers and
-// delivering webhooks.
 package engine
 
 import (
@@ -32,17 +30,13 @@ const (
 	maxResponseBytes  = 64 << 10
 )
 
-// eventIDBytes is the randomness of a webhook id.
 const eventIDBytes = 12
 
-// Participant is a bank the partner serves.
 type Participant struct {
 	ID         string
 	WebhookURL string
 }
 
-// Queue is what the engine reads and records about due work: the transfers
-// waiting for a decision and the webhooks waiting to be delivered.
 type Queue interface {
 	Due(ctx context.Context, now time.Time, limit int) ([]truth.Transfer, error)
 	DueDeliveries(ctx context.Context, now time.Time, limit int) ([]truth.Delivery, error)
@@ -51,7 +45,6 @@ type Queue interface {
 	Abandon(ctx context.Context, id int64, at time.Time) error
 }
 
-// Engine decides transfers and delivers webhooks.
 type Engine struct {
 	queue        Queue
 	saga         truth.Saga
@@ -62,7 +55,6 @@ type Engine struct {
 	logger       *slog.Logger
 }
 
-// Config wires an engine.
 type Config struct {
 	Queue        Queue
 	Saga         truth.Saga
@@ -72,7 +64,6 @@ type Config struct {
 	Logger       *slog.Logger
 }
 
-// New builds an engine.
 func New(config Config) *Engine {
 	participants := make(map[string]Participant, len(config.Participants))
 	for _, participant := range config.Participants {
@@ -85,7 +76,6 @@ func New(config Config) *Engine {
 	}
 }
 
-// Run decides and delivers until ctx ends.
 func (e *Engine) Run(ctx context.Context) {
 	ticker := time.NewTicker(tickInterval)
 	defer ticker.Stop()
@@ -102,7 +92,6 @@ func (e *Engine) Run(ctx context.Context) {
 	}
 }
 
-// NewEventID returns a random webhook id.
 func NewEventID() string {
 	var buffer [eventIDBytes]byte
 
@@ -178,8 +167,8 @@ func (e *Engine) deliverDue(ctx context.Context) {
 	}
 }
 
-// deliver sends one webhook at least once: a failure is retried with
-// exponential backoff, and given up after maxAttempts, like a real provider.
+// A failure is retried with exponential backoff and given up after
+// maxAttempts, like a real provider.
 func (e *Engine) deliver(ctx context.Context, delivery truth.Delivery, now time.Time) {
 	err := e.send(ctx, delivery, now)
 	if err == nil {

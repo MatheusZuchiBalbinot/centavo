@@ -9,7 +9,6 @@ var securityHeaders = map[string]string{
 	"Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
 }
 
-// withSecurityHeaders sets securityHeaders on every answer.
 func withSecurityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		for name, value := range securityHeaders {

@@ -14,7 +14,6 @@ FROM transfers
 WHERE participant_id = ? AND created_at >= ?
 ORDER BY created_at, end_to_end_id`
 
-// statementSinceSQL is statementSQL bounded by time instead of by sequence.
 const statementSinceSQL = `
 SELECT e.seq, e.participant_id, e.kind, e.end_to_end_id, e.amount_cents, e.created_at,
        coalesce(i.account_id, ''), coalesce(t.correlation_id, i.correlation_id, '')
@@ -30,8 +29,7 @@ FROM incoming
 WHERE participant_id = ? AND created_at >= ?
 ORDER BY created_at, end_to_end_id`
 
-// Truth exports everything about one participant created at or after since:
-// a round only needs its own part, and the volume keeps every round's.
+// A round only needs its own part, and the volume keeps every round's.
 func (d *DB) Truth(ctx context.Context, participantID string, since time.Time) (truth.Export, error) {
 	export := truth.Export{ParticipantID: participantID}
 

@@ -10,15 +10,12 @@ import (
 
 var epoch = time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
 
-// memoryTx is a truth in memory: enough to run the use cases without SQLite.
 type memoryTx struct {
 	transfers  map[string]truth.Transfer
 	entries    []truth.StatementEntry
 	deliveries []truth.DeliveryRecord
 }
 
-// TestSaga_SettlesOnceOrTwiceWhenTheBugHits: the partner's own bug books two
-// settlements for one transfer; an honest transfer books one.
 func TestSaga_SettlesOnceOrTwiceWhenTheBugHits(t *testing.T) {
 	t.Parallel()
 
@@ -45,8 +42,6 @@ func TestSaga_SettlesOnceOrTwiceWhenTheBugHits(t *testing.T) {
 	}
 }
 
-// TestSaga_FollowsTheStateMachine: a decision on a transfer in the wrong state
-// changes nothing and sends nothing.
 func TestSaga_FollowsTheStateMachine(t *testing.T) {
 	t.Parallel()
 

@@ -37,7 +37,6 @@ const correlationHeader = "X-Correlation-Id"
 // endToEndPattern accepts the bank's ids, E plus hex and an optional attempt.
 var endToEndPattern = regexp.MustCompile(`^E[0-9a-fA-F-]{8,80}$`)
 
-// TruthReader is what the API reads from the truth.
 type TruthReader interface {
 	Get(ctx context.Context, endToEndID string) (truth.Transfer, error)
 	Statement(ctx context.Context, participantID string, afterSeq int64, limit int) ([]truth.StatementEntry, error)
@@ -46,7 +45,6 @@ type TruthReader interface {
 	LastStatementSeq(ctx context.Context, participantID string) (int64, error)
 }
 
-// API serves the partner's client API (8081) and its admin port (9092).
 type API struct {
 	intake       truth.Intake
 	reads        TruthReader
@@ -55,7 +53,6 @@ type API struct {
 	logger       *slog.Logger
 }
 
-// APIConfig wires the handlers.
 type APIConfig struct {
 	Intake       truth.Intake
 	Reads        TruthReader
@@ -90,13 +87,11 @@ type incomingRequest struct {
 	AmountCents   int64  `json:"amount_cents"`
 }
 
-// pending counts the webhooks still to be sent, for the lab's quiescence.
 type pendingResponse struct {
 	PendingDeliveries int   `json:"pending_deliveries"`
 	LastStatementSeq  int64 `json:"last_statement_seq"`
 }
 
-// NewAPI builds the handlers.
 func NewAPI(config APIConfig) API {
 	participants := make(map[string]bool, len(config.Participants))
 	for _, participant := range config.Participants {
@@ -106,7 +101,6 @@ func NewAPI(config APIConfig) API {
 	return API{intake: config.Intake, reads: config.Reads, modes: config.Modes, participants: participants, logger: config.Logger}
 }
 
-// Handler serves POST /v1/transfers, GET /v1/transfers/{e2e} and GET /v1/statements.
 func (a API) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST "+transfersRoute, a.submit)
@@ -116,8 +110,8 @@ func (a API) Handler() http.Handler {
 	return withSecurityHeaders(mux)
 }
 
-// submit is idempotent by end_to_end_id: 202 the first time, 200 with the
-// current status after that, 422 for a destination key that does not exist.
+// Idempotent by end_to_end_id: 202 the first time, 200 with the current
+// status after that, 422 for a destination key that does not exist.
 func (a API) submit(w http.ResponseWriter, r *http.Request) {
 	var request submitRequest
 
@@ -181,8 +175,8 @@ func (a API) answerSubmit(ctx context.Context, w http.ResponseWriter, result tru
 	writeJSON(w, http.StatusAccepted, response)
 }
 
-// newTransfer decides, at submission, whether the transfer is refused for an
-// unknown key and whether the partner's double-processing bug will hit it.
+// Decided at submission: whether an unknown key refuses the transfer, and
+// whether the double-processing bug will hit it.
 func newTransfer(request submitRequest, decider modes.Decider, now time.Time) truth.Transfer {
 	transfer := truth.Transfer{
 		EndToEndID: request.EndToEndID, ParticipantID: request.ParticipantID, AmountCents: request.AmountCents,
@@ -201,7 +195,7 @@ func newTransfer(request submitRequest, decider modes.Decider, now time.Time) tr
 	return transfer
 }
 
-// status is the authoritative status: what a webhook can never override.
+// The authoritative status: a webhook can never override it.
 func (a API) status(w http.ResponseWriter, r *http.Request) {
 	e2e := r.PathValue("e2e")
 
@@ -261,8 +255,8 @@ func (a API) statement(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, response)
 }
 
-// incoming is a lab-only call: a PIX arrives for an account of the bank and the
-// partner announces it by webhook.
+// Lab-only: a PIX arrives for an account of the bank, and the partner
+// announces it by webhook.
 func (a API) incoming(w http.ResponseWriter, r *http.Request) {
 	var request incomingRequest
 
@@ -293,7 +287,6 @@ func (a API) incoming(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]bool{"accepted": true, "new": isNew})
 }
 
-// truthExport is the lab's view of everything the partner really did.
 func (a API) truthExport(w http.ResponseWriter, r *http.Request) {
 	participant := r.URL.Query().Get("participant_id")
 	if !a.participants[participant] {
@@ -319,8 +312,6 @@ func (a API) truthExport(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, export)
 }
 
-// sinceOf reads the optional since of a truth export; without it the export
-// starts at the beginning.
 func sinceOf(r *http.Request) (time.Time, error) {
 	since := r.URL.Query().Get("since")
 	if since == "" {
@@ -330,8 +321,8 @@ func sinceOf(r *http.Request) (time.Time, error) {
 	return time.Parse(time.RFC3339Nano, since)
 }
 
-// pending is what the lab's quiescence waits on: webhooks still to deliver
-// and, for a participant, the statement entry its reconciliation must reach.
+// What the lab's quiescence waits on: webhooks still to deliver and, for a
+// participant, the statement entry its reconciliation must reach.
 func (a API) pending(w http.ResponseWriter, r *http.Request) {
 	count, err := a.reads.PendingDeliveries(r.Context())
 	if err != nil {
@@ -350,8 +341,6 @@ func (a API) pending(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, pendingResponse{PendingDeliveries: count, LastStatementSeq: lastSeq})
 }
 
-// correlationOf is the caller's correlation id, or none when it is missing or
-// malformed.
 func correlationOf(r *http.Request) string {
 	received := r.Header.Get(correlationHeader)
 	if !correlationPattern.MatchString(received) {
@@ -370,8 +359,6 @@ func (a API) validate(request submitRequest) error {
 	return nil
 }
 
-// refuseIfDown answers for an outage: 503, or a connection closed with no
-// answer at all.
 func refuseIfDown(w http.ResponseWriter, decider modes.Decider) bool {
 	mode, isDown := decider.Outage()
 	if !isDown {
@@ -388,7 +375,6 @@ func refuseIfDown(w http.ResponseWriter, decider modes.Decider) bool {
 	return true
 }
 
-// hangUp closes the connection without writing a byte.
 func hangUp(w http.ResponseWriter) bool {
 	hijacker, canHijack := w.(http.Hijacker)
 	if !canHijack {

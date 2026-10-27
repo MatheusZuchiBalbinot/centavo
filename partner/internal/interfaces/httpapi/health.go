@@ -1,4 +1,3 @@
-// Package httpapi exposes the partner over HTTP.
 package httpapi
 
 import (
@@ -6,12 +5,10 @@ import (
 	"net/http"
 )
 
-// HealthPath is the admin route the lab and the container healthcheck poll.
 const HealthPath = "/internal/health"
 
 const healthStatusOK = "ok"
 
-// BuildInfo identifies the running process in the health response.
 type BuildInfo struct {
 	Version      string
 	IsChaosBuild bool
@@ -30,8 +27,8 @@ type healthHandler struct {
 	response healthResponse
 }
 
-// NewAdminHandler serves the admin and chaos port (9092). The lab-only
-// routes live here, never on the client port; chaos is nil outside chaoslab builds.
+// The lab-only routes live here, never on the client port; chaos is nil
+// outside chaoslab builds.
 func NewAdminHandler(info BuildInfo, api API, chaos http.Handler) http.Handler {
 	response := healthResponse{Service: "partner", Version: info.Version, IsChaosBuild: info.IsChaosBuild, Env: info.Env, Status: healthStatusOK}
 

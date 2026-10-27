@@ -1,6 +1,5 @@
-// Package storage keeps the partner's truth in SQLite with synchronous=FULL, a
-// failure domain apart from the bank's PostgreSQL. It runs the use cases'
-// transactions and answers the reads of the API and of the webhook engine.
+// Package storage keeps the partner's truth in SQLite with synchronous=FULL,
+// a failure domain apart from the bank's PostgreSQL.
 package storage
 
 import (
@@ -116,7 +115,6 @@ VALUES (?, ?, ?, ?, ?, ?)`
 	columnCountSQL = `SELECT count(*) FROM pragma_table_info(?) WHERE name = ?`
 )
 
-// DB is the truth on disk.
 type DB struct {
 	db *sql.DB
 }
@@ -129,13 +127,12 @@ type columnUpgrade struct {
 	definition string
 }
 
-// tx is one transaction of a use case.
 type tx struct {
 	db querier
 }
 
-// Open opens (or creates) the truth at path. synchronous=FULL makes every
-// commit durable before it returns; a single connection serializes writers.
+// synchronous=FULL makes every commit durable before it returns; a single
+// connection serializes writers.
 func Open(ctx context.Context, path string) (*DB, error) {
 	dsn := fmt.Sprintf("file:%s?_pragma=synchronous(FULL)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_txlock=immediate", path)
 
@@ -159,12 +156,10 @@ func Open(ctx context.Context, path string) (*DB, error) {
 	return &DB{db: db}, nil
 }
 
-// Close closes the database.
 func (d *DB) Close() error {
 	return d.db.Close()
 }
 
-// InTx runs fn in one transaction: everything it writes commits together.
 func (d *DB) InTx(ctx context.Context, fn func(ctx context.Context, tx truth.Tx) error) error {
 	sqlTx, err := d.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -179,12 +174,10 @@ func (d *DB) InTx(ctx context.Context, fn func(ctx context.Context, tx truth.Tx)
 	return sqlTx.Commit()
 }
 
-// FindTransfer reads a transfer; a missing one is truth.ErrNotFound.
 func (t tx) FindTransfer(ctx context.Context, endToEndID string) (truth.Transfer, error) {
 	return findTransfer(ctx, t.db, endToEndID)
 }
 
-// InsertTransfer records a new transfer.
 func (t tx) InsertTransfer(ctx context.Context, transfer truth.Transfer) error {
 	insert := newStatement(
 		"recording a transfer", insertTransferSQL,
@@ -196,7 +189,6 @@ func (t tx) InsertTransfer(ctx context.Context, transfer truth.Transfer) error {
 	return err
 }
 
-// MarkSettled settles a transfer and schedules its return, when there is one.
 func (t tx) MarkSettled(ctx context.Context, endToEndID string, returnAt *time.Time) error {
 	var at sql.NullInt64
 	if returnAt != nil {
@@ -208,21 +200,18 @@ func (t tx) MarkSettled(ctx context.Context, endToEndID string, returnAt *time.T
 	return err
 }
 
-// MarkRejected refuses a transfer for good.
 func (t tx) MarkRejected(ctx context.Context, endToEndID, reason string) error {
 	_, err := execute(ctx, t.db, newStatement("rejecting a transfer", rejectSQL, reason, endToEndID))
 
 	return err
 }
 
-// MarkReturned gives a settled transfer back.
 func (t tx) MarkReturned(ctx context.Context, endToEndID string) error {
 	_, err := execute(ctx, t.db, newStatement("returning a transfer", returnSQL, endToEndID))
 
 	return err
 }
 
-// InsertIncoming records a PIX in once per end_to_end_id.
 func (t tx) InsertIncoming(ctx context.Context, incoming truth.Incoming) (bool, error) {
 	insert := newStatement(
 		"recording an incoming PIX", insertIncomingSQL,
@@ -233,7 +222,6 @@ func (t tx) InsertIncoming(ctx context.Context, incoming truth.Incoming) (bool, 
 	return inserted == 1, err
 }
 
-// AddEntry appends a line to a participant's statement.
 func (t tx) AddEntry(ctx context.Context, entry truth.StatementEntry) error {
 	add := newStatement(
 		"recording a statement entry", addEntrySQL,
@@ -244,7 +232,6 @@ func (t tx) AddEntry(ctx context.Context, entry truth.StatementEntry) error {
 	return err
 }
 
-// NextWebhookSeq numbers the next webhook of a transfer.
 func (t tx) NextWebhookSeq(ctx context.Context, endToEndID string) (int, error) {
 	var seq int
 
@@ -253,7 +240,6 @@ func (t tx) NextWebhookSeq(ctx context.Context, endToEndID string) (int, error) 
 	return seq, err
 }
 
-// AddDelivery stores one planned webhook delivery.
 func (t tx) AddDelivery(ctx context.Context, delivery truth.DeliveryRecord) error {
 	add := newStatement(
 		"planning a webhook", addDeliverySQL,

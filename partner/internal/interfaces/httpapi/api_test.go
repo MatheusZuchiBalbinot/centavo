@@ -119,8 +119,6 @@ func TestIncomingAndTruth_ShowTheStatementTheBankReconcilesAgainst(t *testing.T)
 	}
 }
 
-// TestEngine_SettlesAndDeliversSignedWebhooks runs the partner end to end:
-// submit, settle by the engine, webhook to the bank with a valid signature.
 func TestEngine_SettlesAndDeliversSignedWebhooks(t *testing.T) {
 	fixture := newPartner(t)
 	secret := []byte(strings.Repeat("s", 32))
@@ -176,9 +174,8 @@ func TestEngine_SettlesAndDeliversSignedWebhooks(t *testing.T) {
 	}
 }
 
-// TestEngine_EchoesTheCorrelationIDOnWebhooks guards the lab's failpoints on
-// the bank's webhook path: they match the PIX's correlation id, which only
-// reaches the bank if the partner sends it back.
+// The bank's webhook failpoints match the PIX's correlation id, which only
+// reaches the bank if the partner echoes it.
 func TestEngine_EchoesTheCorrelationIDOnWebhooks(t *testing.T) {
 	fixture := newPartner(t)
 	secret := []byte(strings.Repeat("s", 32))
@@ -217,8 +214,6 @@ func TestEngine_EchoesTheCorrelationIDOnWebhooks(t *testing.T) {
 	}
 }
 
-// TestErrors_AnswerAStableCode: every refusal carries a machine-readable code
-// and the rule the request broke, never the decoder's detail.
 func TestErrors_AnswerAStableCode(t *testing.T) {
 	fixture := newPartner(t)
 

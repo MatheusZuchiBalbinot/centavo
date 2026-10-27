@@ -1,4 +1,3 @@
-// Package config loads and validates the partner configuration at startup.
 package config
 
 import (
@@ -9,7 +8,6 @@ import (
 	"strings"
 )
 
-// The environments the partner knows.
 const (
 	EnvLocal      Env = "local"
 	EnvChaoslab   Env = "chaoslab"
@@ -28,7 +26,6 @@ const (
 
 var participantPattern = regexp.MustCompile(`^[a-z0-9-]{3,40}$`)
 
-// Errors of reading the configuration.
 var (
 	ErrMissingVariable        = errors.New("required environment variable is not set")
 	ErrUnknownEnv             = errors.New("unknown CENTAVO_ENV")
@@ -38,19 +35,15 @@ var (
 	ErrWeakChaosToken         = errors.New("the chaoslab build needs CENTAVO_CHAOS_TOKEN with at least 32 characters")
 )
 
-// Env is the deployment environment the process declares it runs in.
 type Env string
 
-// LookupFunc reads one environment variable; os.LookupEnv satisfies it.
 type LookupFunc func(key string) (string, bool)
 
-// Participant is a bank the partner serves and where its webhooks go.
 type Participant struct {
 	ID         string
 	WebhookURL string
 }
 
-// Config is the validated partner configuration.
 type Config struct {
 	Env           Env
 	DBPath        string
@@ -59,7 +52,6 @@ type Config struct {
 	ChaosToken    string
 }
 
-// Load reads the configuration from the environment.
 func Load(lookup LookupFunc) (Config, error) {
 	rawEnv, err := require(lookup, envVariable)
 	if err != nil {
@@ -101,9 +93,8 @@ func Load(lookup LookupFunc) (Config, error) {
 	return Config{Env: env, DBPath: dbPath, Participants: participants, WebhookSecret: secret, ChaosToken: token}, nil
 }
 
-// ValidateBuild enforces the safety rule that a chaoslab build refuses to run
-// in production: the lying modes of a chaoslab build never run in production,
-// and the chaos port has a real secret.
+// A chaoslab build refuses to run in production, and the chaos port needs a
+// real secret.
 func ValidateBuild(configuration Config, isChaosBuild bool) error {
 	isChaosBuildInProduction := isChaosBuild && configuration.Env == EnvProduction
 	if isChaosBuildInProduction {

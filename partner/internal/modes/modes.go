@@ -1,6 +1,5 @@
-// Package modes holds the partner's lies: probabilities per participant, with
-// their own seed and a TTL. Without an active mode the partner is honest. Only
-// the chaoslab build can set a mode.
+// Package modes holds the partner's lies. Without an active mode the partner
+// is honest, and only the chaoslab build can set a mode.
 package modes
 
 import (
@@ -16,7 +15,6 @@ import (
 	"centavo/partner/internal/truth"
 )
 
-// HonestSettleDelay is how long an honest partner takes to settle.
 const HonestSettleDelay = 300 * time.Millisecond
 
 // The seed of the lies: up to 64 bits read byte by byte, and a salt, the 64-bit
@@ -34,32 +32,26 @@ const (
 	returnDelayMax = 5 * time.Second
 )
 
-// The ways the partner can be down.
 const (
 	OutageServiceUnavailable OutageMode = "503"
 	OutageRefuse             OutageMode = "refuse"
 )
 
-// ErrInvalidMode means a mode request does not decode or is out of range.
 var ErrInvalidMode = errors.New("invalid partner mode")
 
-// OutageMode is how the partner is unavailable.
 type OutageMode string
 
-// Range is a duration range.
 type Range struct {
 	Min string `json:"min"`
 	Max string `json:"max"`
 }
 
-// OutageConfig is a window during which the partner is down.
 type OutageConfig struct {
 	// Until is relative to the moment the mode is set, such as "+3m".
 	Until string     `json:"until"`
 	Mode  OutageMode `json:"mode"`
 }
 
-// Config is the body of PUT /chaos/modes.
 type Config struct {
 	ParticipantID         string        `json:"participant_id"`
 	Seed                  string        `json:"seed"`
@@ -78,20 +70,17 @@ type Config struct {
 	Outage                *OutageConfig `json:"outage"`
 }
 
-// Registry keeps the active mode of each participant.
 type Registry struct {
 	mu     sync.Mutex
 	active map[string]*mode
 }
 
-// Decider answers the partner's questions for one participant at one moment.
 type Decider struct {
 	registry    *Registry
 	participant string
 	now         time.Time
 }
 
-// mode is a validated, active configuration.
 type mode struct {
 	config        Config
 	expiresAt     time.Time
@@ -105,14 +94,12 @@ type mode struct {
 	nextEventCopy int
 }
 
-// NewRegistry starts honest.
 func NewRegistry() *Registry {
 	return &Registry{active: map[string]*mode{}}
 }
 
-// Set validates and activates a mode, replacing the participant's previous
-// one. Setting the same mode again only extends its life: the lab renews it
-// like a lease, without restarting the outage window or the sequence of lies.
+// Setting the same mode again only extends its life: the lab renews it like
+// a lease, without restarting the outage window or the sequence of lies.
 func (r *Registry) Set(config Config, now time.Time) error {
 	current, err := newMode(config, now)
 	if err != nil {
@@ -136,7 +123,7 @@ func (r *Registry) Set(config Config, now time.Time) error {
 	return nil
 }
 
-// Clear makes the partner honest again; deliveries already planned still go out.
+// Deliveries already planned still go out.
 func (r *Registry) Clear() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -144,12 +131,10 @@ func (r *Registry) Clear() {
 	clear(r.active)
 }
 
-// For returns the decider of a participant.
 func (r *Registry) For(participant string, now time.Time) Decider {
 	return Decider{registry: r, participant: participant, now: now}
 }
 
-// Outage reports whether the partner is down for this participant now.
 func (d Decider) Outage() (OutageMode, bool) {
 	type answer struct {
 		mode   OutageMode
@@ -168,29 +153,23 @@ func (d Decider) Outage() (OutageMode, bool) {
 	return result.mode, result.isDown
 }
 
-// TimeoutAfterProcess reports whether to process the transfer, then answer too
-// late.
 func (d Decider) TimeoutAfterProcess() bool {
 	return draw(d, false, func(current *mode) bool { return current.draws.Float64() < current.config.TimeoutAfterProcess })
 }
 
-// ErrorAfterProcess reports whether to process the transfer, then answer 500.
 func (d Decider) ErrorAfterProcess() bool {
 	return draw(d, false, func(current *mode) bool { return current.draws.Float64() < current.config.ErrorAfterProcess })
 }
 
-// DoubleProcess reports whether to settle the transfer twice, the partner's own
-// bug.
+// Settling twice is the partner's own bug.
 func (d Decider) DoubleProcess() bool {
 	return draw(d, false, func(current *mode) bool { return current.draws.Float64() < current.config.DoubleProcess })
 }
 
-// Reject reports whether to refuse a transfer that was accepted.
 func (d Decider) Reject() bool {
 	return draw(d, false, func(current *mode) bool { return current.draws.Float64() < current.config.RejectRate })
 }
 
-// ReturnAfterSettle returns when to give a settled transfer back, if at all.
 func (d Decider) ReturnAfterSettle() *time.Time {
 	return draw(d, (*time.Time)(nil), func(current *mode) *time.Time {
 		if current.draws.Float64() >= current.config.ReturnAfterSettle {
@@ -203,7 +182,6 @@ func (d Decider) ReturnAfterSettle() *time.Time {
 	})
 }
 
-// SettleDelay is how long until the transfer settles or is rejected.
 func (d Decider) SettleDelay() time.Duration {
 	return draw(d, HonestSettleDelay, func(current *mode) time.Duration {
 		if current.settleMax == 0 {
@@ -214,14 +192,12 @@ func (d Decider) SettleDelay() time.Duration {
 	})
 }
 
-// Plan decides how an event is delivered.
 func (d Decider) Plan(event truth.Event, now time.Time) []truth.PlannedDelivery {
 	honest := []truth.PlannedDelivery{{EventID: event.ID, At: now}}
 
 	return draw(d, honest, func(current *mode) []truth.PlannedDelivery { return current.plan(event, now) })
 }
 
-// draw runs fn on the active mode under the lock, or returns the honest answer.
 func draw[T any](d Decider, honest T, fn func(m *mode) T) T {
 	d.registry.mu.Lock()
 	defer d.registry.mu.Unlock()
@@ -261,8 +237,7 @@ func (m *mode) plan(event truth.Event, now time.Time) []truth.PlannedDelivery {
 	return planned
 }
 
-// lateness is the delay of one delivery: up to webhook_delay_max, and
-// spread over the reorder window so events of one transfer can swap places.
+// Spread over the reorder window, so events of one transfer can swap places.
 func (m *mode) lateness() time.Duration {
 	return between(m.draws, 0, m.delayMax) + between(m.draws, 0, m.reorderWindow)
 }

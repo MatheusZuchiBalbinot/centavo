@@ -12,7 +12,6 @@ import (
 	"centavo/partner/internal/platform/chaosbuild"
 )
 
-// modesRoute is where the lab sets and clears the partner's lies.
 const modesRoute = "/chaos/modes"
 
 const (
@@ -24,7 +23,6 @@ type controls struct {
 	registry *modes.Registry
 }
 
-// Handler serves PUT and DELETE /chaos/modes behind the chaos token.
 func Handler(token string, registry *modes.Registry) http.Handler {
 	controls := controls{registry: registry}
 

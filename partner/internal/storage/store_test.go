@@ -14,7 +14,6 @@ import (
 
 var epoch = time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)
 
-// truthStore is the truth with its use cases, the way the partner wires it.
 type truthStore struct {
 	*storage.DB
 	truth.Saga
@@ -205,8 +204,6 @@ func TestDeliveries_CanBeDroppedRescheduledAndAbandoned(t *testing.T) {
 	}
 }
 
-// TestOpen_AddsTheColumnsOfANewerSchema guards the partner's volume across
-// upgrades: a truth created before a column existed gets it on open.
 func TestOpen_AddsTheColumnsOfANewerSchema(t *testing.T) {
 	t.Parallel()
 
@@ -246,8 +243,6 @@ func TestOpen_AddsTheColumnsOfANewerSchema(t *testing.T) {
 	}
 }
 
-// TestTruth_ExportsOnlyWhatCameAfterSince guards the partner's memory: a
-// round exports its own part of a truth that keeps every round.
 func TestTruth_ExportsOnlyWhatCameAfterSince(t *testing.T) {
 	t.Parallel()
 
@@ -282,8 +277,7 @@ func TestTruth_ExportsOnlyWhatCameAfterSince(t *testing.T) {
 	}
 }
 
-// TestStatement_CarriesTheCorrelationOfEachPix guards the lab's failpoints in
-// the bank's reconciler: they match the PIX's correlation id, and the
+// The bank's reconciler failpoints match the PIX's correlation id, and the
 // statement is all the reconciler reads.
 func TestStatement_CarriesTheCorrelationOfEachPix(t *testing.T) {
 	t.Parallel()

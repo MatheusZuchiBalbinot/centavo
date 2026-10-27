@@ -63,9 +63,8 @@ type errorDetail struct {
 	Message string    `json:"message"`
 }
 
-// writeError answers err with its mapped status and code. The message is the
-// rule the request broke, never the wrapped detail; an unmapped error is
-// logged and answered as a bare 500.
+// The message is the rule the request broke, never the wrapped detail; an
+// unmapped error is logged and answered as a bare 500.
 func writeError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, err error) {
 	if writeKnownError(w, err) {
 		return
@@ -77,7 +76,6 @@ func writeError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, err
 	writeJSON(w, http.StatusInternalServerError, errorBody{Error: detail})
 }
 
-// writeKnownError answers err when it has a mapping and reports whether it did.
 func writeKnownError(w http.ResponseWriter, err error) bool {
 	for _, mapping := range errorMappings {
 		if !errors.Is(err, mapping.target) {

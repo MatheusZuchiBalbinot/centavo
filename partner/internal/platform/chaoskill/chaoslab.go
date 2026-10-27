@@ -16,7 +16,7 @@ const procDir = "/proc"
 
 var errNoMainProcess = errors.New("no main process found in /proc")
 
-// KillMain sends SIGKILL to "<binary> serve", never to itself or to a healthcheck.
+// Never to itself or to a healthcheck.
 func KillMain(binary string) error {
 	entries, err := os.ReadDir(procDir)
 	if err != nil {

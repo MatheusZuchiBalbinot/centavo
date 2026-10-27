@@ -41,8 +41,6 @@ func TestHealth_ReportsBuild(t *testing.T) {
 	}
 }
 
-// TestHealth_SendsSecurityHeaders: nothing the partner answers is a page a
-// browser may render or sniff.
 func TestHealth_SendsSecurityHeaders(t *testing.T) {
 	handler := httpapi.NewAdminHandler(httpapi.BuildInfo{}, httpapi.API{}, nil)
 	request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, httpapi.HealthPath, http.NoBody)

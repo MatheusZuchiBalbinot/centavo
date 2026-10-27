@@ -5,19 +5,15 @@ import (
 	"errors"
 )
 
-// Intake receives PIX: transfers a participant sends and PIX that arrive for
-// its accounts.
 type Intake struct {
 	db Transactor
 }
 
-// NewIntake builds the intake over a transactional store.
 func NewIntake(db Transactor) Intake {
 	return Intake{db: db}
 }
 
-// Submit records a new transfer, or returns the one with the same
-// end_to_end_id: the API is idempotent by end_to_end_id.
+// The API is idempotent by end_to_end_id.
 func (i Intake) Submit(ctx context.Context, transfer Transfer) (SubmitResult, error) {
 	var result SubmitResult
 
@@ -46,8 +42,6 @@ func (i Intake) Submit(ctx context.Context, transfer Transfer) (SubmitResult, er
 	return result, err
 }
 
-// AddIncoming records an incoming PIX once per end_to_end_id, books it in the
-// statement, plans its webhook and reports whether it was new.
 func (i Intake) AddIncoming(ctx context.Context, command IncomingCommand) (bool, error) {
 	isNew := false
 

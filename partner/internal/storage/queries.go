@@ -20,13 +20,12 @@ ORDER BY settle_at LIMIT ?`
 	lastStatementSeqSQL = `SELECT coalesce(max(seq), 0) FROM statement_entries WHERE participant_id = ?`
 )
 
-// Get returns the authoritative state of a transfer.
 func (d *DB) Get(ctx context.Context, endToEndID string) (truth.Transfer, error) {
 	return findTransfer(ctx, d.db, endToEndID)
 }
 
-// Due lists transfers waiting for a decision: processing ones whose settle
-// time came, and settled ones whose return time came.
+// Processing transfers whose settle time came, and settled ones whose
+// return time came.
 func (d *DB) Due(ctx context.Context, now time.Time, limit int) ([]truth.Transfer, error) {
 	list := newStatement("listing due transfers", dueTransfersSQL, now.UnixNano(), now.UnixNano(), limit)
 
@@ -49,36 +48,30 @@ func (d *DB) Due(ctx context.Context, now time.Time, limit int) ([]truth.Transfe
 	return transfers, nil
 }
 
-// Statement returns the participant's entries after a sequence number.
 func (d *DB) Statement(ctx context.Context, participantID string, afterSeq int64, limit int) ([]truth.StatementEntry, error) {
 	return queryRows(ctx, d.db, newStatement("reading the statement", statementSQL, participantID, afterSeq, limit), scanStatementEntry)
 }
 
-// DueDeliveries lists pending deliveries whose time came.
 func (d *DB) DueDeliveries(ctx context.Context, now time.Time, limit int) ([]truth.Delivery, error) {
 	query := newStatement("listing due deliveries", dueDeliveriesSQL, now.UnixNano(), limit)
 	return queryRows(ctx, d.db, query, scanDelivery)
 }
 
-// MarkDelivered closes a delivery.
 func (d *DB) MarkDelivered(ctx context.Context, id int64) error {
 	_, err := execute(ctx, d.db, newStatement("closing a delivery", markDeliveredSQL, id))
 
 	return err
 }
 
-// Reschedule records a failed attempt and when to try again.
 func (d *DB) Reschedule(ctx context.Context, id int64, next time.Time) error {
 	return d.recordAttempt(ctx, id, next, truth.DeliveryPending)
 }
 
-// Abandon records the last failed attempt: the delivery is given up, like a
-// real provider does after its retries.
+// Given up after the last failed attempt, like a real provider.
 func (d *DB) Abandon(ctx context.Context, id int64, at time.Time) error {
 	return d.recordAttempt(ctx, id, at, truth.DeliveryAbandoned)
 }
 
-// PendingDeliveries counts what is still to be sent, for the lab's quiescence.
 func (d *DB) PendingDeliveries(ctx context.Context) (int, error) {
 	var count int
 
@@ -87,8 +80,7 @@ func (d *DB) PendingDeliveries(ctx context.Context) (int, error) {
 	return count, err
 }
 
-// LastStatementSeq is the participant's newest statement entry, or zero:
-// the lab's quiescence waits until the bank reconciled up to it.
+// The lab's quiescence waits until the bank reconciled up to it.
 func (d *DB) LastStatementSeq(ctx context.Context, participantID string) (int64, error) {
 	var seq int64
 
