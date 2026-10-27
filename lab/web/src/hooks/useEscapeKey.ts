@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 
 // The callback is kept in a ref so the listener is attached once, not on
-// every render.
-export function useEscapeKey(isActive: boolean, onEscape: () => void): void {
+// every render. It gets the event, so it can keep Esc from also closing the
+// dialog around it.
+export function useEscapeKey(isActive: boolean, onEscape: (event: KeyboardEvent) => void): void {
 	const callback = useRef(onEscape);
 
 	useLayoutEffect(() => {
@@ -16,7 +17,7 @@ export function useEscapeKey(isActive: boolean, onEscape: () => void): void {
 
 		function handleKeyDown(event: KeyboardEvent): void {
 			if (event.key === 'Escape') {
-				callback.current();
+				callback.current(event);
 			}
 		}
 

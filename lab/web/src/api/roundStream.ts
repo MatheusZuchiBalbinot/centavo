@@ -5,10 +5,12 @@ import {
 	parseEvent,
 	parseReplay,
 	parseSeconds,
+	parseTransfers,
 	type AuditorReading,
 	type Replay,
 	type RoundEvent,
 	type RoundSecond,
+	type RoundTransfer,
 } from './replay';
 import { roundEventsPath } from './routes';
 
@@ -18,6 +20,7 @@ export type StreamMessage =
 	| { readonly type: 'snapshot'; readonly replay: Replay }
 	| { readonly type: 'seconds'; readonly seconds: readonly RoundSecond[] }
 	| { readonly type: 'event'; readonly event: RoundEvent }
+	| { readonly type: 'transfers'; readonly transfers: readonly RoundTransfer[] }
 	| { readonly type: 'auditor'; readonly reading: AuditorReading }
 	| { readonly type: 'finished'; readonly replay: Replay };
 
@@ -30,7 +33,7 @@ type StreamHandlers = {
 	readonly onClosed: () => void;
 };
 
-const MESSAGE_TYPES = ['snapshot', 'seconds', 'event', 'auditor', 'finished'] as const;
+const MESSAGE_TYPES = ['snapshot', 'seconds', 'event', 'transfers', 'auditor', 'finished'] as const;
 
 // The browser reconnects by itself after a drop, and the server answers
 // each connection with a new snapshot.
@@ -85,6 +88,8 @@ function parseMessage(type: string, data: string): StreamMessage | null {
 			return secondsMessage(body);
 		case 'event':
 			return eventMessage(body);
+		case 'transfers':
+			return transfersMessage(body);
 		case 'auditor':
 			return auditorMessage(body);
 		default:
@@ -108,6 +113,12 @@ function eventMessage(body: unknown): StreamMessage | null {
 	const event = parseEvent(body);
 
 	return event === null ? null : { type: 'event', event };
+}
+
+function transfersMessage(body: unknown): StreamMessage | null {
+	const transfers = isObject(body) && Array.isArray(body.transfers) ? parseTransfers(body.transfers) : null;
+
+	return transfers === null ? null : { type: 'transfers', transfers };
 }
 
 function auditorMessage(body: unknown): StreamMessage | null {

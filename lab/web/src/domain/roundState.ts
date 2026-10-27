@@ -25,6 +25,8 @@ export function reduceRound(state: RoundState, message: StreamMessage): RoundSta
 			return updateReplay(state, (replay) => ({ ...replay, seconds: mergeSeconds(replay.seconds, message.seconds) }));
 		case 'event':
 			return addEvent(state, message.event);
+		case 'transfers':
+			return updateReplay(state, (replay) => ({ ...replay, transfers: [...replay.transfers, ...message.transfers] }));
 		case 'auditor':
 			return state.kind === 'connecting' ? state : { ...state, reading: message.reading };
 	}

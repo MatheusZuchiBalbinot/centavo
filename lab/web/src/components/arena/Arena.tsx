@@ -24,7 +24,7 @@ import { LiveIndicator } from '../ui/LiveIndicator';
 import styles from './Arena.module.css';
 import ArenaInspector from './ArenaInspector';
 import ArenaSummary from './ArenaSummary';
-import ArenaTicker from './ArenaTicker';
+import OccurrenceStrip from './OccurrenceStrip';
 import SystemMap from './SystemMap';
 import VerdictStamp from './VerdictStamp';
 
@@ -199,7 +199,13 @@ export default function Arena(props: ArenaProps): React.JSX.Element {
 					)}
 				</aside>
 			</div>
-			<ArenaTicker events={replay.events} spanSeconds={span} nowSeconds={nowSeconds} isLive={isLive && !isFinished} />
+			<OccurrenceStrip
+				events={replay.events}
+				transfers={replay.transfers}
+				spanSeconds={span}
+				nowSeconds={nowSeconds}
+				isLive={isLive && !isFinished}
+			/>
 			{player}
 			{isFinished ? (
 				<VerdictStamp verdict={replay.verdict} facts={factsOf(replay)} betLine={betLine}>

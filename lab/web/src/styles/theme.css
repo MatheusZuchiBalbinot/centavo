@@ -56,6 +56,9 @@
 
 	/* One blue for single-series charts; the others for a second series. */
 	--series-blue: #3987e5;
+	/* Two more hues for the arena's occurrences, which need one per kind. */
+	--pink: oklch(0.72 0.17 350);
+	--lime: oklch(0.86 0.17 128);
 	--series-orange: #d95926;
 
 	--text-2xs: 11px;

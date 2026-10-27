@@ -40,6 +40,22 @@ export type RoundEvent = {
 	readonly isManual: boolean;
 };
 
+// A move of money a client asked for: an internal transfer or a PIX out.
+// error is the bank's code for a refusal, or the kind of failure when the
+// client got no answer.
+export type RoundTransfer = {
+	readonly tMs: number;
+	readonly kind: 'transfer' | 'pix_out';
+	readonly outcome: 'ok' | 'fail' | 'info';
+	readonly op: string;
+	readonly from: string;
+	readonly to: string;
+	readonly destination: string;
+	readonly amountCents: number;
+	readonly latencyMs: number;
+	readonly error: string;
+};
+
 type GuaranteeStatus = 'ok' | 'failed' | 'not_checked';
 
 export type GuaranteeCheck = { readonly id: string; readonly status: GuaranteeStatus; readonly violations: number };
@@ -50,6 +66,7 @@ export type Replay = {
 	readonly seed: string;
 	readonly seconds: readonly RoundSecond[];
 	readonly events: readonly RoundEvent[];
+	readonly transfers: readonly RoundTransfer[];
 	readonly counters: ChaosCounters;
 	readonly verdict: Verdict | null;
 	readonly description: string;
@@ -96,6 +113,8 @@ export function parseReplay(body: unknown): Replay | null {
 	const counters = parseCounters(body.counters);
 	const parsedSeconds = parseSeconds(seconds);
 	const parsedEvents = Array.isArray(events) ? events.map(parseEvent) : null;
+	// A replay built before the lab kept transfers has none.
+	const parsedTransfers = parseTransfers(Array.isArray(body.transfers) ? body.transfers : []);
 	// A round still running has no checks yet.
 	const checks = parseChecks(Array.isArray(body.checks) ? body.checks : []);
 
@@ -106,6 +125,7 @@ export function parseReplay(body: unknown): Replay | null {
 		parsedSeconds !== null &&
 		parsedEvents !== null &&
 		parsedEvents.every(isPresent) &&
+		parsedTransfers !== null &&
 		checks !== null;
 
 	if (!isComplete) {
@@ -118,6 +138,7 @@ export function parseReplay(body: unknown): Replay | null {
 		seed: stringOr(body.seed),
 		seconds: parsedSeconds,
 		events: parsedEvents,
+		transfers: parsedTransfers,
 		counters,
 		verdict: parseVerdict(body.verdict),
 		description: stringOr(body.description),
@@ -157,6 +178,46 @@ export function parseEvent(value: unknown): RoundEvent | null {
 		count: isNumber(value.count) ? value.count : 0,
 		isManual: value.manual === true,
 	};
+}
+
+export function parseTransfers(value: readonly unknown[]): readonly RoundTransfer[] | null {
+	const transfers = value.map(parseTransfer);
+
+	return transfers.every(isPresent) ? transfers : null;
+}
+
+function parseTransfer(value: unknown): RoundTransfer | null {
+	if (!isObject(value)) {
+		return null;
+	}
+
+	const { t_ms: tMs, kind, outcome, op, amount_cents: amountCents, latency_ms: latencyMs } = value;
+	const isComplete = isNumber(tMs) && isMoveKind(kind) && isOutcome(outcome) && isString(op) && isNumber(amountCents) && isNumber(latencyMs);
+
+	if (!isComplete) {
+		return null;
+	}
+
+	return {
+		tMs,
+		kind,
+		outcome,
+		op,
+		from: stringOr(value.from),
+		to: stringOr(value.to),
+		destination: stringOr(value.destination),
+		amountCents,
+		latencyMs,
+		error: stringOr(value.error),
+	};
+}
+
+function isMoveKind(value: unknown): value is RoundTransfer['kind'] {
+	return value === 'transfer' || value === 'pix_out';
+}
+
+function isOutcome(value: unknown): value is RoundTransfer['outcome'] {
+	return value === 'ok' || value === 'fail' || value === 'info';
 }
 
 export function parseAuditorReading(value: unknown): AuditorReading | null {

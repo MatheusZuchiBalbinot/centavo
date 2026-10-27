@@ -277,6 +277,50 @@ describe('the round page', () => {
 		expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 	});
 
+	it('walks the occurrences by keyboard, transfers included, and tells each one', async () => {
+		installFakeEventSource();
+		answerFetch({ [API_ROUTES.lab]: { status: 200, body: running } });
+		const user = userEvent.setup();
+
+		renderRound('/rounds/r0007?arena=1');
+
+		const transfer = {
+			t_ms: 1200,
+			kind: 'transfer',
+			outcome: 'fail',
+			op: 'r0007-p02-000003',
+			from: 'acc-0000aaaaaa',
+			to: 'acc-0000bbbbbb',
+			amount_cents: 700,
+			latency_ms: 12,
+			error: 'INSUFFICIENT_FUNDS',
+		};
+
+		act(() => {
+			stream().send('snapshot', { ...snapshot, transfers: [transfer] });
+		});
+
+		const arena = screen.getByRole('dialog', { name: /O banco está sob ataque/ });
+		const strip = within(arena).getByRole('slider', { name: 'Ocorrências da rodada' });
+
+		act(() => {
+			strip.focus();
+		});
+
+		expect(strip).toHaveAttribute('aria-valuetext', expect.stringContaining('Ataque 1 · queda'));
+
+		await user.keyboard('{ArrowDown}');
+
+		expect(strip).toHaveAttribute('aria-valuetext', expect.stringContaining('transferência'));
+		expect(strip).toHaveAttribute('aria-valuetext', expect.stringContaining('conta …aaaaaa para conta …bbbbbb'));
+
+		await user.keyboard('{Escape}');
+
+		expect(strip).toHaveAttribute('aria-valuetext', 'Passe o mouse num ponto, ou foque aqui e use as setas.');
+		expect(screen.getByRole('dialog', { name: /O banco está sob ataque/ })).toBeInTheDocument();
+		await expectNoAxeViolations(arena);
+	});
+
 	it('stamps the verdict on the arena when the round ends', () => {
 		installFakeEventSource();
 		answerFetch({ [API_ROUTES.lab]: { status: 200, body: { status: 'idle' } } });

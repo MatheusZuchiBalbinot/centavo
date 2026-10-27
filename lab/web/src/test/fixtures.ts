@@ -18,6 +18,7 @@ export function aReplay(overrides: Partial<Replay> = {}): Replay {
 		seed: '0x5eed',
 		seconds: [aSecond(0), aSecond(1)],
 		events: [anEvent(1_500, 'kill')],
+		transfers: [],
 		counters: {
 			kills: 1,
 			failpointFires: 0,
