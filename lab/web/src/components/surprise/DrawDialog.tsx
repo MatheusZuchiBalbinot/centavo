@@ -1,5 +1,5 @@
 import { Shuffle } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
 
 import type { AttackId } from '../../api/ids';
 import { attackCopy } from '../../domain/attacks';
@@ -7,6 +7,7 @@ import type { Bet } from '../../domain/bets';
 import { formatDuration } from '../../domain/duration';
 import type { Reel, SurpriseDraw } from '../../domain/surprise';
 import { useDrawStage } from '../../hooks/useDrawStage';
+import { useModalDialog } from '../../hooks/useModalDialog';
 import type { DrawStage } from '../../hooks/useDrawStage';
 import { format } from '../../i18n/format';
 import { messages } from '../../i18n/pt-BR';
@@ -46,15 +47,7 @@ export default function DrawDialog(props: DrawDialogProps): React.JSX.Element {
   const isSpinning = stage.kind === 'spinning';
   const copy = attackCopy(session.draw.attack);
 
-  useEffect(() => {
-    const element = dialog.current;
-
-    if (element && !element.open) {
-      element.showModal();
-    }
-
-    return () => element?.close();
-  }, []);
+  useModalDialog(dialog);
 
   function handleReady(): void {
     onReady(session.draw);

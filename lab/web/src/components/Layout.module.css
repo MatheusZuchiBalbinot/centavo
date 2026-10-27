@@ -176,7 +176,10 @@
 
 /* On a phone the sidebar becomes a strip of links above the page. */
 @media (max-width: 860px) {
+  /* The page takes the leftover height; without this a short page stretches
+     the strip of links instead. */
   .shell {
+    grid-template-rows: auto 1fr;
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -199,8 +202,8 @@
 
   .nav ul {
     display: flex;
+    flex-wrap: wrap;
     gap: 4px;
-    overflow-x: auto;
   }
 
   .navGroup,
@@ -217,9 +220,20 @@
     box-shadow: none;
   }
 
+  /* The top bar wraps instead of pushing the lab's status off the screen,
+     and scrolls away with the page so it never covers it. */
   .topbar {
-    height: 52px;
-    padding: 0 14px;
+    position: static;
+    flex-wrap: wrap;
+    gap: 8px;
+    height: auto;
+    min-height: 52px;
+    padding: 8px 14px;
+  }
+
+  .topbarSide {
+    flex-wrap: wrap;
+    gap: 8px;
   }
 
   .topbarTitle,

@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -311,5 +311,27 @@ describe('the round page', () => {
       'href',
       '/compare/r0007/r0004',
     );
+  });
+
+  it('closes only the stop confirmation when Esc is pressed on it inside the arena', async () => {
+    installFakeEventSource();
+    answerFetch({ [API_ROUTES.lab]: { status: 200, body: running } });
+    const user = userEvent.setup();
+
+    renderRound('/rounds/r0007?arena=1');
+
+    act(() => {
+      stream().send('snapshot', snapshot);
+    });
+
+    const arena = screen.getByRole('dialog', { name: /O banco está sob ataque/ });
+
+    await user.click(await within(arena).findByRole('button', { name: 'Parar rodada' }));
+
+    const confirmation = screen.getByRole('dialog', { name: 'Parar esta rodada?' });
+
+    fireEvent(confirmation, new Event('cancel', { cancelable: true }));
+
+    expect(screen.getByRole('dialog', { name: /O banco está sob ataque/ })).toBeInTheDocument();
   });
 });

@@ -11,7 +11,7 @@ import type { AttackRange } from '../../../domain/highlight';
 import { isAttackEvent, isHealStart } from '../../../domain/phase';
 import { ROUND_METRICS, seriesOf } from '../../../domain/series';
 import type { RoundMetric } from '../../../domain/series';
-import { spanOf } from '../../../domain/timeline';
+import { attackSecondsOf, spanOf } from '../../../domain/timeline';
 import { format } from '../../../i18n/format';
 import { messages } from '../../../i18n/pt-BR';
 import styles from './RoundPage.module.css';
@@ -42,7 +42,7 @@ export default function RoundChart({
   const [metric, setMetric] = useState<RoundMetric>('operations');
   const lastEventSeconds = (replay.events.at(-1)?.tMs ?? 0) / MS_PER_SECOND;
   const span = spanOf({
-    durationSeconds: replay.durationSeconds,
+    durationSeconds: attackSecondsOf(replay),
     seconds: replay.seconds,
     lastEventSeconds,
     nowSeconds,

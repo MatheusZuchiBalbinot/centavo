@@ -7,6 +7,7 @@ import { useViewMode } from '../../../hooks/viewModeContext';
 import type { StatusTone } from '../../../components/ui/StatusIntro';
 import { expectationOf } from '../../../domain/headline';
 import type { Phase } from '../../../domain/phase';
+import { attackSecondsOf } from '../../../domain/timeline';
 import { PAGE_HEADING_ID } from '../../../hooks/useRouteFocus';
 import { format } from '../../../i18n/format';
 import { messages } from '../../../i18n/pt-BR';
@@ -69,7 +70,7 @@ export default function RoundHero({
       }
       footer={
         <div className={styles.heroFooter}>
-          <PhaseStepper phase={phase} elapsedSeconds={elapsedSeconds} durationSeconds={replay.durationSeconds} />
+          <PhaseStepper phase={phase} elapsedSeconds={elapsedSeconds} durationSeconds={attackSecondsOf(replay)} />
           <div className={styles.actionsRow}>
             <Button variant="primary" onClick={onOpenArena}>
               {messages.arena.open}

@@ -26,6 +26,14 @@
 }
 
 /* Header */
+/* The header and the replay player stay above the verdict stamp, so the
+   close button and the scrubber keep working once a round is over. */
+.head,
+.player {
+  position: relative;
+  z-index: 6;
+}
+
 .head {
   display: flex;
   flex-wrap: wrap;

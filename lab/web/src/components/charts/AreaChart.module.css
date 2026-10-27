@@ -123,6 +123,12 @@
   }
 }
 
+/* The crosshair only shows where the pointer is; it must never take the
+   pointer from the attack markers under it. */
+.crosshair {
+  pointer-events: none;
+}
+
 .crosshair line {
   stroke: var(--border-strong);
 }

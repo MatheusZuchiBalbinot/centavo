@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { aReplay, aSecond, anEvent } from '../test/fixtures';
 import { endOfMs, parseClock, playbackPhase, replayAt } from './playback';
+import { attackSecondsOf } from './timeline';
 
 const replay = aReplay({
   seconds: [aSecond(0), aSecond(1), aSecond(2), aSecond(3)],
@@ -32,5 +33,13 @@ describe('playback', () => {
     expect(parseClock('1:99')).toBeNull();
     expect(parseClock('abc')).toBeNull();
     expect(parseClock(null)).toBeNull();
+  });
+
+  it('measures a stopped round by how long its attack ran, not by the plan', () => {
+    const stopped = aReplay({ durationSeconds: 180, isStopped: true, events: [anEvent(43_000, 'heal_start')] });
+
+    expect(attackSecondsOf(stopped)).toBe(43);
+    expect(attackSecondsOf({ ...stopped, isStopped: false })).toBe(180);
+    expect(attackSecondsOf({ ...stopped, events: [] })).toBe(180);
   });
 });

@@ -22,7 +22,10 @@ type RoundsTableProps = { readonly rounds: readonly RoundSummary[]; readonly pic
 // each, numbers in mono, the verdict as a badge.
 export default function RoundsTable({ rounds, picking }: RoundsTableProps): React.JSX.Element {
   return (
-    <div className="table-wrap">
+    // The table can be wider than the screen; the region takes focus so the
+    // keyboard can scroll it too, as WCAG asks of a scrollable region.
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- a scrollable region must be focusable
+    <div className="table-wrap" role="region" aria-label={messages.rounds.caption} tabIndex={0}>
       <table className="tbl">
         <caption className="visually-hidden">{messages.rounds.caption}</caption>
         <thead>
@@ -57,7 +60,7 @@ function RoundRow({ round, picking }: { round: RoundSummary; picking: RoundPicki
       <th scope="row" className="num">
         <Link to={roundPath(round.round)}>{round.round}</Link>
       </th>
-      <td className="num">{round.scenario}</td>
+      <td className="num wrap">{round.scenario}</td>
       <td className="num">{formatDuration(round.seconds)}</td>
       <td className="num">{round.operations.toLocaleString('pt-BR')}</td>
       <td className="num">{totalAttacks(round.counters).toLocaleString('pt-BR')}</td>

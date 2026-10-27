@@ -1,5 +1,5 @@
 import { ShieldCheck, Volume2, VolumeX, X } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 
 import type { AuditorReading, GuaranteeCheck, Replay } from '../../api/replay';
 import { attacksText } from '../../domain/attacks';
@@ -11,8 +11,9 @@ import { narrate } from '../../domain/narrator';
 import { isAttackEvent, isDefenseEvent } from '../../domain/phase';
 import type { Phase } from '../../domain/phase';
 import { systemStateAt } from '../../domain/systemState';
-import { spanOf } from '../../domain/timeline';
+import { attackSecondsOf, spanOf } from '../../domain/timeline';
 import { useArenaSound } from '../../hooks/useArenaSound';
+import { useModalDialog } from '../../hooks/useModalDialog';
 import { useSpaceKey } from '../../hooks/useSpaceKey';
 import { format } from '../../i18n/format';
 import { messages } from '../../i18n/pt-BR';
@@ -84,26 +85,30 @@ export default function Arena(props: ArenaProps): React.JSX.Element {
   const latest = replay.seconds.findLast((second) => second.t <= nowSeconds) ?? replay.seconds.at(-1);
   const operationsPerSecond = latest ? latest.ok + latest.fail + latest.info : 0;
   const span = spanOf({
-    durationSeconds: replay.durationSeconds,
+    durationSeconds: attackSecondsOf(replay),
     seconds: replay.seconds,
     lastEventSeconds: nowSeconds,
     nowSeconds: null,
   });
 
-  useEffect(() => {
-    const element = dialog.current;
+  useModalDialog(dialog);
 
-    if (element && !element.open) {
-      element.showModal();
-      // showModal focuses the first button, Copy link; the dialog itself
-      // reads its title first and leaves Tab to start at the top.
-      element.focus();
-    }
-
-    return () => element?.close();
+  // showModal focuses the first button, Copy link; the dialog itself reads
+  // its title first and leaves Tab to start at the top.
+  useLayoutEffect(() => {
+    dialog.current?.focus();
   }, []);
 
+  // React passes a dialog's cancel up through its parents, so Esc on the
+  // stop confirmation, which lives inside the arena, would close the arena
+  // too; the arena only answers its own.
   function handleCancel(event: React.SyntheticEvent<HTMLDialogElement>): void {
+    const isOwnCancel = event.target === event.currentTarget;
+
+    if (!isOwnCancel) {
+      return;
+    }
+
     event.preventDefault();
     onClose();
   }
@@ -124,7 +129,7 @@ export default function Arena(props: ArenaProps): React.JSX.Element {
             {title}
           </h2>
         </div>
-        <AttackClock phase={phase} nowSeconds={nowSeconds} durationSeconds={replay.durationSeconds} />
+        <AttackClock phase={phase} nowSeconds={nowSeconds} durationSeconds={attackSecondsOf(replay)} />
         {isLive && !isFinished ? (
           <LiveIndicator
             state="live"

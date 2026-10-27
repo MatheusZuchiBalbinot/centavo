@@ -97,6 +97,11 @@ body {
   overflow-x: clip;
 }
 
+/* While a modal is open, the page under it stays put. */
+:root:has(dialog:modal) {
+  overflow: hidden;
+}
+
 body {
   background: var(--bg);
   color: var(--fg);
@@ -413,8 +418,21 @@ a {
 
 /* ---------- Tables ---------- */
 
+/* A table wider than its card scrolls sideways. The covers move with the
+   content and the shadows stay at the edges, so a shadow shows only on a
+   side that has more to see. */
 .table-wrap {
   overflow-x: auto;
+  background:
+    linear-gradient(to right, var(--surface), var(--surface)) left / 28px 100% no-repeat local,
+    linear-gradient(to left, var(--surface-dim), var(--surface-dim)) right / 28px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, oklch(0 0 0 / 45%), transparent) left / 14px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, oklch(0 0 0 / 45%), transparent) right / 14px 100% no-repeat scroll;
+}
+
+.table-wrap:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
 }
 
 .tbl {
@@ -456,6 +474,13 @@ a {
 .tbl .num {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
+}
+
+/* Scenario names are long; they break at their hyphens instead of widening
+   the table. */
+.tbl .wrap {
+  min-width: 18ch;
+  white-space: normal;
 }
 
 .tbl a {
