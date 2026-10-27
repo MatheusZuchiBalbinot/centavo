@@ -25,6 +25,9 @@ import OccurrenceLegend from './OccurrenceLegend';
 const MS_PER_SECOND = 1_000;
 const SCALE_STEPS = 4;
 const STRIP_HEIGHT = 50;
+// The svg fills the strip at 100%: a width in pixels taken from the strip's
+// own size would hold the arena's column at that width and never let it
+// shrink. The measured width only places the dots.
 // The rows' centers, top to bottom, and the size of their dots: an attack is
 // rare and big, a transfer is one of thousands and small.
 const ROW_Y: Readonly<Record<OccurrenceRow, number>> = { attack: 11, defense: 24, money: 35 };
@@ -121,7 +124,7 @@ export default function OccurrenceStrip({ events, transfers, spanSeconds, nowSec
 					onFocus={handleFocus}
 					onBlur={() => setCursor(null)}
 				>
-					<svg width={width} height={STRIP_HEIGHT} aria-hidden="true" onPointerMove={handlePointerMove}>
+					<svg width="100%" height={STRIP_HEIGHT} aria-hidden="true" onPointerMove={handlePointerMove}>
 						<rect className={styles.elapsed} x={0} y={0} width={xOf(nowMs)} height={STRIP_HEIGHT} />
 						{heal ? <CureBand x={xOf(heal.tMs)} width={width} /> : null}
 						<OccurrenceDots occurrences={occurrences} width={width} spanMs={spanMs} />
