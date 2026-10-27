@@ -48,6 +48,7 @@ type Replay struct {
 	Seed            string          `json:"seed"`
 	Seconds         []Second        `json:"seconds"`
 	Events          []Event         `json:"events"`
+	Transfers       []Transfer      `json:"transfers"`
 	Counters        Counters        `json:"counters"`
 	Verdict         checker.Verdict `json:"verdict,omitempty"`
 	Description     string          `json:"description,omitempty"`
@@ -109,10 +110,12 @@ type Check struct {
 }
 
 type Builder struct {
-	replay    Replay
-	invokes   map[string]int64
-	latencies map[int][]float64
-	defenses  int
+	replay        Replay
+	invokes       map[string]int64
+	latencies     map[int][]float64
+	defenses      int
+	moves         map[string]pendingMove
+	movesBySecond map[int]int
 }
 
 type nemesisValue struct {
@@ -141,9 +144,12 @@ const viaManual = "manual"
 const databaseTarget = "postgres"
 
 func NewBuilder(round, scenario, seed string) *Builder {
-	replay := Replay{Round: round, Scenario: scenario, Seed: seed, Seconds: []Second{}, Events: []Event{}}
+	replay := Replay{Round: round, Scenario: scenario, Seed: seed, Seconds: []Second{}, Events: []Event{}, Transfers: []Transfer{}}
 
-	return &Builder{replay: replay, invokes: map[string]int64{}, latencies: map[int][]float64{}}
+	return &Builder{
+		replay: replay, invokes: map[string]int64{}, latencies: map[int][]float64{},
+		moves: map[string]pendingMove{}, movesBySecond: map[int]int{},
+	}
 }
 
 // A line that is not a record is skipped, since the live file may end in a
@@ -169,6 +175,10 @@ func (b *Builder) Feed(record history.Record) {
 	if record.Type == history.TypeInvoke {
 		b.invokes[record.Op] = record.TimeNS
 
+		if isMove(record.F) {
+			b.holdMove(record)
+		}
+
 		return
 	}
 
@@ -177,12 +187,17 @@ func (b *Builder) Feed(record history.Record) {
 	}
 
 	b.feedCompletion(record)
+
+	if isMove(record.F) {
+		b.closeMove(record)
+	}
 }
 
 func (b *Builder) Replay() Replay {
 	replay := b.replay
 	replay.Seconds = slices.Clone(b.replay.Seconds)
 	replay.Events = slices.Clone(b.replay.Events)
+	replay.Transfers = slices.Clone(b.replay.Transfers)
 	replay.BuiltAt = time.Now().UTC()
 
 	for i := range replay.Seconds {

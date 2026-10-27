@@ -2,6 +2,7 @@ package replay
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -138,5 +139,58 @@ func TestBuilder_KeepsTheAttacksAndTheCurePastTheDefenseBound(t *testing.T) {
 	isKept := events[len(events)-2].Kind == history.FunctionKill && events[len(events)-1].Kind == history.FunctionHealStart
 	if !isKept {
 		t.Fatalf("the last events are %+v", events[len(events)-2:])
+	}
+}
+
+func TestBuilder_KeepsEachTransferWithItsAccountsAndHowItEnded(t *testing.T) {
+	t.Parallel()
+
+	b := NewBuilder("r0001", "smoke", "0x5eed")
+	client := history.Client(3)
+
+	b.Feed(history.Record{Process: client, Type: history.TypeInvoke, F: history.FunctionTransfer, Op: "op-1", TimeNS: int64(time.Second),
+		Value: []byte(`{"from":"acc-a","to":"acc-b","amount_cents":5238}`)})
+	b.Feed(history.Record{Process: client, Type: history.TypeOK, F: history.FunctionTransfer, Op: "op-1", TimeNS: int64(time.Second) + int64(30*time.Millisecond)})
+	b.Feed(history.Record{Process: client, Type: history.TypeInvoke, F: history.FunctionPixOut, Op: "op-2", TimeNS: int64(2 * time.Second),
+		Value: []byte(`{"account_id":"acc-c","amount_cents":19274,"destination_key":"dest-7594"}`)})
+	b.Feed(history.Record{Process: client, Type: history.TypeFail, F: history.FunctionPixOut, Op: "op-2", TimeNS: int64(2*time.Second) + int64(5*time.Millisecond),
+		Error: []byte(`{"kind":"domain","http_status":422,"code":"INSUFFICIENT_FUNDS"}`)})
+	b.Feed(history.Record{Process: client, Type: history.TypeInvoke, F: history.FunctionDeposit, Op: "op-3", TimeNS: int64(3 * time.Second)})
+	b.Feed(history.Record{Process: client, Type: history.TypeOK, F: history.FunctionDeposit, Op: "op-3", TimeNS: int64(3 * time.Second)})
+
+	transfers := b.Replay().Transfers
+	if len(transfers) != 2 {
+		t.Fatalf("transfers: %+v", transfers)
+	}
+
+	sent, refused := transfers[0], transfers[1]
+
+	isSent := sent.Kind == history.FunctionTransfer && sent.Outcome == history.TypeOK && sent.From == "acc-a" && sent.To == "acc-b" &&
+		sent.AmountCents == 5238 && sent.LatencyMs == 30 && sent.TMillis == 1030
+	isRefused := refused.Kind == history.FunctionPixOut && refused.Outcome == history.TypeFail && refused.From == "acc-c" &&
+		refused.Destination == "dest-7594" && refused.Error == "INSUFFICIENT_FUNDS"
+
+	if !isSent || !isRefused {
+		t.Fatalf("sent %+v, refused %+v", sent, refused)
+	}
+}
+
+func TestBuilder_KeepsAtMostADozenTransfersEachSecond(t *testing.T) {
+	t.Parallel()
+
+	b := NewBuilder("r0001", "smoke", "0x5eed")
+	client := history.Client(1)
+
+	for k := range maxTransfersPerSecond + 5 {
+		op := fmt.Sprintf("op-%d", k)
+		at := int64(time.Second) + int64(k)*int64(time.Millisecond)
+
+		b.Feed(history.Record{Process: client, Type: history.TypeInvoke, F: history.FunctionTransfer, Op: op, TimeNS: at, Value: []byte(`{"from":"a","to":"b","amount_cents":1}`)})
+		b.Feed(history.Record{Process: client, Type: history.TypeOK, F: history.FunctionTransfer, Op: op, TimeNS: at})
+	}
+
+	kept := len(b.Replay().Transfers)
+	if kept != maxTransfersPerSecond {
+		t.Fatalf("%d transfers in one second, want %d", kept, maxTransfersPerSecond)
 	}
 }

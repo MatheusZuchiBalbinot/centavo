@@ -33,9 +33,15 @@ const (
 	streamSnapshot = "snapshot"
 	streamSeconds  = "seconds"
 	streamEvent    = "event"
-	streamAuditor  = "auditor"
-	streamFinished = "finished"
+	// The money moves arrive in batches: there can be a dozen a second.
+	streamTransfers = "transfers"
+	streamAuditor   = "auditor"
+	streamFinished  = "finished"
 )
+
+type transfersUpdate struct {
+	Transfers []replay.Transfer `json:"transfers"`
+}
 
 type secondsUpdate struct {
 	// Seconds start at the last second already sent, which may have grown.
@@ -48,11 +54,12 @@ type streamSession struct {
 	follower   *follower
 	live       LiveFunc
 
-	hasSnapshot bool
-	sentSeconds int
-	sentEvents  int
-	lastReading time.Time
-	lastWrite   time.Time
+	hasSnapshot   bool
+	sentSeconds   int
+	sentEvents    int
+	sentTransfers int
+	lastReading   time.Time
+	lastWrite     time.Time
 }
 
 func (p panelHandlers) events(w http.ResponseWriter, r *http.Request) {
@@ -157,7 +164,7 @@ func (s *streamSession) tick() (bool, error) {
 func (s *streamSession) sendRound(current *replay.Replay) error {
 	if !s.hasSnapshot {
 		s.hasSnapshot = true
-		s.sentSeconds, s.sentEvents = len(current.Seconds), len(current.Events)
+		s.sentSeconds, s.sentEvents, s.sentTransfers = len(current.Seconds), len(current.Events), len(current.Transfers)
 
 		return s.send(streamSnapshot, current)
 	}
@@ -182,6 +189,18 @@ func (s *streamSession) sendRound(current *replay.Replay) error {
 	}
 
 	s.sentEvents = len(current.Events)
+
+	hasTransfers := len(current.Transfers) > s.sentTransfers
+	if !hasTransfers {
+		return nil
+	}
+
+	err := s.send(streamTransfers, transfersUpdate{Transfers: current.Transfers[s.sentTransfers:]})
+	if err != nil {
+		return err
+	}
+
+	s.sentTransfers = len(current.Transfers)
 
 	return nil
 }

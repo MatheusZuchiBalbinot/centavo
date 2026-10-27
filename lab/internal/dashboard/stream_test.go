@@ -183,6 +183,30 @@ func TestEvents_StreamsTheRoundFromSnapshotToVerdict(t *testing.T) {
 	}
 }
 
+// A round makes about ten transfers a second; they follow the events in
+// batches, as the history grows.
+func TestEvents_StreamsTheTransfersAsTheyHappen(t *testing.T) {
+	t.Parallel()
+
+	roundsDir := t.TempDir()
+	writeLiveRound(t, roundsDir, "r0001", "")
+
+	server := httptest.NewServer(dashboard.NewHandler(dashboard.Config{Live: noReading, RoundsDir: roundsDir}))
+	t.Cleanup(server.Close)
+
+	messages := openStream(t, server.URL, "r0001")
+	nextMessageNamed(t, messages, "snapshot")
+
+	transferLines := `{"index":3,"round":"r0001","time_ns":2200000000,"wall":"x","process":2,"type":"invoke","f":"transfer","op":"r0001-p02-000001","value":{"from":"a1","to":"b2","amount_cents":700}}` + "\n" +
+		`{"index":4,"round":"r0001","time_ns":2230000000,"wall":"x","process":2,"type":"ok","f":"transfer","op":"r0001-p02-000001","value":{"transaction_id":"t1"}}` + "\n"
+	appendTo(t, filepath.Join(roundsDir, "r0001", "history.jsonl"), transferLines)
+
+	transfers := nextMessageNamed(t, messages, "transfers")
+	if !strings.Contains(transfers.data, `"from":"a1","to":"b2","amount_cents":700`) {
+		t.Fatalf("transfers: %s", transfers.data)
+	}
+}
+
 func TestEvents_ServesOnlyExistingRounds(t *testing.T) {
 	t.Parallel()
 
