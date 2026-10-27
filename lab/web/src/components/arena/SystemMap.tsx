@@ -5,7 +5,18 @@ import { describeEvent } from '../../domain/feed';
 import { manualActionsOf } from '../../domain/manualAttacks';
 import { curveOf, frameOf, pointOf, type MapFrame } from '../../domain/mapGeometry';
 import type { LinkView, SystemState } from '../../domain/systemState';
-import { isSameTarget, linksOf, MAP_LINKS, MAP_NODES, nodesOf, targetKeyOf, type MapLink, type MapTarget, type NodeId } from '../../domain/topology';
+import {
+	isSameTarget,
+	linksOf,
+	MAP_LINKS,
+	MAP_NODES,
+	MAP_TARGETS,
+	nodesOf,
+	targetKeyOf,
+	type MapLink,
+	type MapTarget,
+	type NodeId,
+} from '../../domain/topology';
 import { totalOf, type Traffic } from '../../domain/traffic';
 import { useElementSize } from '../../hooks/useElementSize';
 import { format } from '../../i18n/format';
@@ -25,7 +36,8 @@ const MAX_EXTRA_STROKE = 4;
 
 // Only the links a person can attack get a button; the lab's own links are
 // never faulted.
-const ATTACKABLE_LINKS: readonly MapLink[] = MAP_LINKS.filter(isAttackable);
+const ATTACKABLE_LINKS: ReadonlyMap<string, MapLink> = new Map(MAP_LINKS.filter(isAttackable).map((link) => [link.id, link]));
+const NODES_BY_ID = new Map(MAP_NODES.map((node) => [node.id, node]));
 
 type SystemMapProps = {
 	readonly state: SystemState;
@@ -43,6 +55,36 @@ export default function SystemMap({ state, traffic, bubble, nowMs, isLive, selec
 	const layout = frameOf(size.width, size.height);
 	const operationsPerSecond = totalOf(traffic);
 
+	// Nodes and links share one list, in reading order, so Tab follows the map.
+	function renderTarget(target: MapTarget): React.JSX.Element | null {
+		if (target.kind === 'link') {
+			const link = ATTACKABLE_LINKS.get(target.id);
+
+			return link === undefined ? null : (
+				<LinkButton key={target.id} link={link} view={state.links[link.id]} frame={layout} selected={selected} onSelect={onSelect} />
+			);
+		}
+
+		const node = NODES_BY_ID.get(target.id);
+
+		if (node === undefined) {
+			return null;
+		}
+
+		return (
+			<MapNodeCard
+				key={node.id}
+				node={node}
+				view={state.nodes[node.id]}
+				frame={layout}
+				nowMs={nowMs}
+				operationsPerSecond={operationsPerSecond}
+				selected={selected}
+				onSelect={onSelect}
+			/>
+		);
+	}
+
 	return (
 		<div ref={box} className={styles.map} role="group" aria-label={messages.arena.mapLabel}>
 			<svg className={styles.links} width={size.width} height={size.height} aria-hidden="true">
@@ -51,21 +93,7 @@ export default function SystemMap({ state, traffic, bubble, nowMs, isLive, selec
 				))}
 			</svg>
 			{isLive ? <MapPackets state={state} frame={layout} traffic={traffic} /> : null}
-			{ATTACKABLE_LINKS.map((link) => (
-				<LinkButton key={link.id} link={link} view={state.links[link.id]} frame={layout} selected={selected} onSelect={onSelect} />
-			))}
-			{MAP_NODES.map((node) => (
-				<MapNodeCard
-					key={node.id}
-					node={node}
-					view={state.nodes[node.id]}
-					frame={layout}
-					nowMs={nowMs}
-					operationsPerSecond={operationsPerSecond}
-					selected={selected}
-					onSelect={onSelect}
-				/>
-			))}
+			{MAP_TARGETS.map(renderTarget)}
 			{bubble ? <AttackBubble event={bubble.event} label={bubble.label} frame={layout} /> : null}
 			{isLive ? <TrafficLegend /> : null}
 		</div>

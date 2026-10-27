@@ -533,6 +533,7 @@ export const messages = {
 		guarantees: 'As oito garantias',
 		guaranteesHint: 'Verde: conferida agora. Cinza: o verificador confere no fim.',
 		mapLabel: 'Mapa do sistema',
+		sideLabel: 'Resumo e detalhes da rodada',
 		nodes: {
 			clients: 'Clientes',
 			api: 'API',

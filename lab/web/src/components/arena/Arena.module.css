@@ -114,6 +114,11 @@
 	border-left: 1px solid var(--border);
 }
 
+.side:focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: -2px;
+}
+
 .card {
 	padding: 12px 14px;
 	border: 1px solid var(--border);
@@ -493,9 +498,11 @@
 	box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--warning) 45%, transparent);
 }
 
+/* Red on translucent red over the map falls short of 4.5:1; the dark fill
+   keeps the word readable and the ring keeps it red. */
 .linkButton[data-status='cut'] {
-	background: var(--danger-soft);
-	box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--danger) 45%, transparent);
+	background: var(--surface);
+	box-shadow: inset 0 0 0 1px var(--danger);
 	color: var(--danger);
 }
 

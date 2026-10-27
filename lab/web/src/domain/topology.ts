@@ -91,3 +91,30 @@ export function targetKeyOf(target: MapTarget): string {
 export function isSameTarget(a: MapTarget | null, b: MapTarget): boolean {
 	return a !== null && a.kind === b.kind && a.id === b.id;
 }
+
+type PlacedTarget = { readonly target: MapTarget; readonly x: number; readonly y: number };
+
+// The order the Tab key walks the map in: the way it reads, left to right and
+// then top to bottom, with each link where its middle is drawn.
+export const MAP_TARGETS: readonly MapTarget[] = [...MAP_NODES.map(placedNode), ...MAP_LINKS.map(placedLink)]
+	.sort(byPlace)
+	.map((placed) => placed.target);
+
+function placedNode(node: MapNode): PlacedTarget {
+	return { target: { kind: 'node', id: node.id }, x: node.x, y: node.y };
+}
+
+// A link's middle is the middle of its curve: halfway between its ends, moved
+// by half its bend.
+function placedLink(link: MapLink): PlacedTarget {
+	const from = MAP_NODES.find((node) => node.id === link.from);
+	const to = MAP_NODES.find((node) => node.id === link.to);
+	const x = ((from?.x ?? 0) + (to?.x ?? 0)) / 2;
+	const y = ((from?.y ?? 0) + (to?.y ?? 0)) / 2 + link.bend / 2;
+
+	return { target: { kind: 'link', id: link.id }, x, y };
+}
+
+function byPlace(a: PlacedTarget, b: PlacedTarget): number {
+	return a.x - b.x || a.y - b.y;
+}

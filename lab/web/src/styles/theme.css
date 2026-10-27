@@ -9,8 +9,10 @@
 	--surface-2: oklch(0.235 0.011 264);
 	--elevated: oklch(0.255 0.012 264);
 	--fg: oklch(0.96 0.004 264);
-	--muted: oklch(0.68 0.014 264);
-	--faint: oklch(0.6 0.014 264);
+	--muted: oklch(0.73 0.014 264);
+	/* The lightest text that still reads at 4.5:1 on the lightest card and on
+	   the hero's glow; muted keeps its distance above it. */
+	--faint: oklch(0.67 0.014 264);
 	--border: oklch(0.29 0.012 264);
 	--border-strong: oklch(0.36 0.014 264);
 
