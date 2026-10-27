@@ -199,7 +199,7 @@ export default function Arena(props: ArenaProps): React.JSX.Element {
 					)}
 				</aside>
 			</div>
-			<ArenaTicker events={replay.events} spanSeconds={span} nowSeconds={nowSeconds} />
+			<ArenaTicker events={replay.events} spanSeconds={span} nowSeconds={nowSeconds} isLive={isLive && !isFinished} />
 			{player}
 			{isFinished ? (
 				<VerdictStamp verdict={replay.verdict} facts={factsOf(replay)} betLine={betLine}>

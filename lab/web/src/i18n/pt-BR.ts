@@ -297,12 +297,12 @@ export const messages = {
 		},
 		someone: 'um processo',
 		manual: {
-			kill: 'O {target} foi derrubado por um ataque manual.',
-			freeze: 'O {target} foi congelado ({duration}) por um ataque manual.',
-			cut: 'A rede em {target} foi cortada por um ataque manual.',
-			slow: 'A rede em {target} foi desacelerada por um ataque manual.',
-			databaseKill: 'O Postgres foi derrubado por um ataque manual.',
-			databaseFreeze: 'O Postgres foi congelado ({duration}) por um ataque manual.',
+			kill: 'O {target} caiu.',
+			freeze: 'O {target} congelou por {duration}.',
+			cut: 'A rede em {target} caiu.',
+			slow: 'A rede em {target} ficou lenta.',
+			databaseKill: 'O Postgres caiu.',
+			databaseFreeze: 'O Postgres congelou por {duration}.',
 		},
 		defenses: {
 			'lease.acquired': {
@@ -625,9 +625,12 @@ export const messages = {
 			verdict: 'A rodada terminou.',
 		},
 		bubble: 'Ataque {label} · agora',
+		bubbleManual: 'Ataque manual {label} · agora',
 		tickerLabel: 'Linha do tempo da rodada',
+		ticker: { title: 'Linha do tempo', attacks: 'ataques', defenses: 'defesas', now: 'agora {clock}' },
 		legend: {
-			attack: 'ataque',
+			attack: 'ataque do cenário',
+			manual: 'ataque manual',
 			defense: 'defesa',
 			cure: 'cura',
 		},

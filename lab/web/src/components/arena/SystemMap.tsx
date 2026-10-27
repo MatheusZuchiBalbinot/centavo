@@ -138,7 +138,7 @@ function AttackBubble({ event, label, frame }: AttackBubbleProps): React.JSX.Ele
 
 	return (
 		<div className={styles.bubble} data-side={isOnRight ? 'right' : 'left'} data-manual={event.isManual} style={{ left: anchor.x, top: anchor.y }}>
-			<strong>{format(messages.arena.bubble, { label })}</strong>
+			<strong>{format(event.isManual ? messages.arena.bubbleManual : messages.arena.bubble, { label })}</strong>
 			<span>{what}</span>
 			{expected === '' ? null : <small>{expected}</small>}
 		</div>
