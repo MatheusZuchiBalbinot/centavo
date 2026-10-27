@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router';
 import { isRoundId } from '../../api/ids';
 import type { RoundId } from '../../api/ids';
 import type { Replay } from '../../api/replay';
+import { LinkButton } from '../../components/ui/Button';
 import VerdictBadge from '../../components/VerdictBadge';
 import { expectationOf, headlineOf } from '../../domain/headline';
 import type { AttackRange } from '../../domain/highlight';
@@ -11,7 +12,7 @@ import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { PAGE_HEADING_ID } from '../../hooks/useRouteFocus';
 import { format } from '../../i18n/format';
 import { messages } from '../../i18n/pt-BR';
-import { roundPath } from '../../routes';
+import { roundPath, ROUTES } from '../../routes';
 import NotFoundPage from '../not-found/NotFoundPage';
 import Guarantees from '../round/components/Guarantees';
 import RoundChart from '../round/components/RoundChart';
@@ -47,25 +48,24 @@ function Comparison({ left, right }: { left: RoundId; right: RoundId }): React.J
           <p className="page-desc">{messages.compare.lead}</p>
         </div>
       </header>
-      <ComparisonBody replays={replays} left={left} right={right} />
+      <ComparisonBody replays={replays} />
     </>
   );
 }
 
-function ComparisonBody({
-  replays,
-  left,
-  right,
-}: {
-  replays: TwoReplays;
-  left: RoundId;
-  right: RoundId;
-}): React.JSX.Element {
+function ComparisonBody({ replays }: { replays: TwoReplays }): React.JSX.Element {
   switch (replays.kind) {
     case 'loading':
       return <p className="muted">{messages.compare.loading}</p>;
+    case 'missing':
+      return (
+        <div role="alert" className={styles.problem}>
+          <p>{missingText(replays.rounds)}</p>
+          <LinkButton to={ROUTES.rounds}>{messages.compare.toList}</LinkButton>
+        </div>
+      );
     case 'failed':
-      return <p role="alert">{format(messages.compare.failed, { left, right })}</p>;
+      return <p role="alert">{messages.compare.failed}</p>;
     case 'ready':
       return (
         <div className={styles.columns}>
@@ -109,4 +109,14 @@ function RoundColumn({ replay }: { replay: Replay }): React.JSX.Element {
       <Guarantees checks={replay.checks} reading={null} isFinished={false} titleId={`${replay.round}-guarantees`} />
     </article>
   );
+}
+
+function missingText(rounds: readonly RoundId[]): string {
+  const [first, second] = rounds;
+
+  if (second === undefined) {
+    return format(messages.compare.missingOne, { round: first ?? '' });
+  }
+
+  return format(messages.compare.missingBoth, { left: first ?? '', right: second });
 }

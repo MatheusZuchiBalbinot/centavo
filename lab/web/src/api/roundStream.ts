@@ -16,6 +16,10 @@ export type StreamMessage =
 type StreamHandlers = {
   readonly onMessage: (message: StreamMessage) => void;
   readonly onConnectionChange: (isConnected: boolean) => void;
+  // onClosed fires when the browser gives up on the stream: the lab answered
+  // with an error (a round that does not exist, too many streams) instead of
+  // events, and EventSource never retries that.
+  readonly onClosed: () => void;
 };
 
 const MESSAGE_TYPES = ['snapshot', 'seconds', 'event', 'auditor', 'finished'] as const;
@@ -45,6 +49,10 @@ export function openRoundStream(round: RoundId, handlers: StreamHandlers): () =>
 
   function handleError(): void {
     handlers.onConnectionChange(false);
+
+    if (source.readyState === EventSource.CLOSED) {
+      handlers.onClosed();
+    }
   }
 
   for (const type of MESSAGE_TYPES) {

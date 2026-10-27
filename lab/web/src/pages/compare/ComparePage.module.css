@@ -51,3 +51,9 @@
     grid-template-columns: 1fr;
   }
 }
+
+.problem {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+}

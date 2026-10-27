@@ -9,8 +9,10 @@ import type { AttackRange } from '../../domain/highlight';
 import { phaseOf } from '../../domain/phase';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { useNow } from '../../hooks/useNow';
+import { Button, LinkButton } from '../../components/ui/Button';
 import { PAGE_HEADING_ID } from '../../hooks/useRouteFocus';
 import { format } from '../../i18n/format';
+import { ROUTES } from '../../routes';
 import { messages } from '../../i18n/pt-BR';
 import NotFoundPage from '../not-found/NotFoundPage';
 import EventFeed from './components/EventFeed';
@@ -24,6 +26,7 @@ import RoundTiles from './components/RoundTiles';
 import { useArenaQuery } from './hooks/useArenaQuery';
 import { useAttackToasts } from './hooks/useAttackToasts';
 import { useRoundStream } from './hooks/useRoundStream';
+import type { StreamAvailability } from './hooks/useRoundStream';
 
 const CLOCK_TICK_MS = 1_000;
 const MS_PER_SECOND = 1_000;
@@ -40,7 +43,7 @@ export default function RoundPage(): React.JSX.Element {
 }
 
 function FollowedRound({ round }: { round: RoundId }): React.JSX.Element {
-  const { state, isConnected, lastMessageAt } = useRoundStream(round);
+  const { state, isConnected, lastMessageAt, availability, retry } = useRoundStream(round);
   const [highlight, setHighlight] = useState<AttackRange | null>(null);
   const isFinished = state.kind === 'finished';
   const now = useNow(CLOCK_TICK_MS, !isFinished);
@@ -49,14 +52,10 @@ function FollowedRound({ round }: { round: RoundId }): React.JSX.Element {
   const arena = useArenaQuery();
 
   useAttackToasts(events, newEvents);
-  useDocumentTitle(format(isFinished ? messages.round.titleDone : messages.round.titleLive, { round }));
+  useDocumentTitle(titleOf(round, isFinished, availability));
 
   if (state.kind === 'connecting') {
-    return (
-      <h1 id={PAGE_HEADING_ID} className={styles.connecting} tabIndex={-1}>
-        {messages.round.connecting}
-      </h1>
-    );
+    return <Unopened round={round} availability={availability} onRetry={retry} />;
   }
 
   const { replay, reading } = state;
@@ -124,4 +123,55 @@ function elapsedOf(replay: Replay, now: number): number {
   const elapsed = (now - replay.startedAt.getTime()) / MS_PER_SECOND;
 
   return Math.max(0, Math.min(elapsed, replay.durationSeconds || elapsed));
+}
+
+type UnopenedProps = {
+  readonly round: RoundId;
+  readonly availability: StreamAvailability;
+  readonly onRetry: () => void;
+};
+
+// Unopened is the page before the first snapshot: still connecting, a round
+// that does not exist, or a lab that did not answer.
+function Unopened({ round, availability, onRetry }: UnopenedProps): React.JSX.Element {
+  switch (availability) {
+    case 'open':
+      return (
+        <h1 id={PAGE_HEADING_ID} className={styles.connecting} tabIndex={-1}>
+          {messages.round.connecting}
+        </h1>
+      );
+    case 'missing':
+      return (
+        <div className={styles.unopened}>
+          <h1 id={PAGE_HEADING_ID} className="page-title" tabIndex={-1}>
+            {format(messages.round.missing, { round })}
+          </h1>
+          <p className="page-desc">{messages.round.missingDetail}</p>
+          <LinkButton to={ROUTES.rounds} variant="primary">
+            {messages.round.toList}
+          </LinkButton>
+        </div>
+      );
+    case 'unreachable':
+      return (
+        <div className={styles.unopened} role="alert">
+          <h1 id={PAGE_HEADING_ID} className="page-title" tabIndex={-1}>
+            {messages.round.unreachable}
+          </h1>
+          <p className="page-desc">{format(messages.round.unreachableDetail, { round })}</p>
+          <Button variant="primary" onClick={onRetry}>
+            {messages.round.retry}
+          </Button>
+        </div>
+      );
+  }
+}
+
+function titleOf(round: RoundId, isFinished: boolean, availability: StreamAvailability): string {
+  if (availability === 'missing') {
+    return messages.titles.notFound;
+  }
+
+  return format(isFinished ? messages.round.titleDone : messages.round.titleLive, { round });
 }

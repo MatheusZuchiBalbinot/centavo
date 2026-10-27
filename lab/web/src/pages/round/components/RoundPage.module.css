@@ -473,3 +473,10 @@
     display: none;
   }
 }
+
+/* A round that could not be opened: what happened and the way out. */
+.unopened {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+}
