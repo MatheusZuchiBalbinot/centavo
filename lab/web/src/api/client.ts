@@ -10,6 +10,7 @@ type ApiErrorCode =
 	| 'not_found'
 	| 'round_running'
 	| 'lab_idle'
+	| 'attack_closed'
 	| 'unknown_attack'
 	| 'invalid_duration'
 	| 'too_many_streams'
@@ -32,6 +33,7 @@ const KNOWN_CODES: ReadonlySet<string> = new Set<ApiErrorCode>([
 	'not_found',
 	'round_running',
 	'lab_idle',
+	'attack_closed',
 	'unknown_attack',
 	'invalid_duration',
 	'too_many_streams',

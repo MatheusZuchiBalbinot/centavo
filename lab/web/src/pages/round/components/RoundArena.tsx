@@ -7,10 +7,12 @@ import ReplayArena from '../../../components/arena/ReplayArena';
 import { betOutcome, isBetBook, withBet, type Bet } from '../../../domain/bets';
 import type { Phase } from '../../../domain/phase';
 import { endOfMs } from '../../../domain/playback';
+import { useLabReading } from '../../../hooks/useLabReading';
 import { format } from '../../../i18n/format';
 import { messages } from '../../../i18n/pt-BR';
 import { readStored, STORAGE_KEYS, writeStored } from '../../../storage';
 import type { ArenaQuery } from '../hooks/useArenaQuery';
+import { useManualAttack } from '../hooks/useManualAttack';
 import RoundActions from './RoundActions';
 
 const REPLAY_SPEED = 10;
@@ -35,6 +37,9 @@ export default function RoundArena(props: RoundArenaProps): React.JSX.Element | 
 	const { round, replay, reading, phase, headline, now, ageSeconds, query } = props;
 	const isFinished = phase === 'verdict';
 	const { bet } = query;
+	const lab = useLabReading();
+	const manualAttack = useManualAttack();
+	const isUnderAttackHere = lab.kind === 'ready' && lab.state.status === 'running' && lab.state.round === round && phase === 'attack';
 
 	useEffect(() => {
 		if (bet === null || !isFinished) {
@@ -81,6 +86,7 @@ export default function RoundArena(props: RoundArenaProps): React.JSX.Element | 
 			betLine={bet === null ? null : betLineOf(bet, replay.verdict)}
 			actions={actions}
 			isLive
+			manualAttack={isUnderAttackHere ? manualAttack : undefined}
 			onWatchAgain={isFinished ? query.watchAgain : undefined}
 			onClose={query.close}
 		/>

@@ -9,6 +9,9 @@ export type LinkId =
 // Where a node sits, as fractions of the map's width and height.
 export type MapNode = { readonly id: NodeId; readonly x: number; readonly y: number; readonly service: string | null };
 
+// What a person can point at on the map.
+export type MapTarget = { readonly kind: 'node'; readonly id: NodeId } | { readonly kind: 'link'; readonly id: LinkId };
+
 // bend pulls a link into an arc, as a fraction of the map's height, so it
 // goes around the nodes between its ends instead of through them.
 export type MapLink = { readonly id: LinkId; readonly from: NodeId; readonly to: NodeId; readonly bend: number };
@@ -78,4 +81,13 @@ function namesOf(target: string): readonly string[] {
 
 function isLinkId(name: string): name is LinkId {
 	return LINK_IDS.has(name);
+}
+
+// The key the map marks a target's button with, to give it the focus back.
+export function targetKeyOf(target: MapTarget): string {
+	return `${target.kind}:${target.id}`;
+}
+
+export function isSameTarget(a: MapTarget | null, b: MapTarget): boolean {
+	return a !== null && a.kind === b.kind && a.id === b.id;
 }

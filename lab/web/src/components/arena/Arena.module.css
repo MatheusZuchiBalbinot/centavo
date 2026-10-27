@@ -96,10 +96,13 @@
 	font-size: var(--text-2xs);
 }
 
+/* In a window too short for the map, the body scrolls instead of letting
+   the map run under the timeline. */
 .body {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) 360px;
 	min-height: 0;
+	overflow-y: auto;
 }
 
 .side {
@@ -145,52 +148,9 @@
 	font-size: var(--text-xs);
 }
 
-.now {
-	font-size: var(--text-lg);
-	font-weight: 600;
-	line-height: 1.35;
-	letter-spacing: -0.01em;
-}
-
-.defense {
-	display: grid;
-	grid-template-columns: auto minmax(0, 1fr);
-	gap: 10px;
-	margin-top: 12px;
-	padding-top: 12px;
-	border-top: 1px solid var(--border);
+.phaseLine {
+	color: var(--muted);
 	font-size: var(--text-sm);
-}
-
-.shield {
-	display: grid;
-	place-items: center;
-	width: 28px;
-	height: 28px;
-	border-radius: var(--radius-md);
-	background: var(--success-soft);
-	box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--success) 45%, transparent);
-	color: var(--success);
-}
-
-.defense[data-waiting='true'] .shield {
-	background: var(--surface-2);
-	color: var(--muted);
-	box-shadow: inset 0 0 0 1px var(--border-strong);
-	animation: wait 1.4s ease-in-out infinite;
-}
-
-.defenseTitle {
-	color: var(--success);
-	font-weight: 600;
-}
-
-.defense[data-waiting='true'] .defenseTitle {
-	color: var(--muted);
-}
-
-.defenseText {
-	color: var(--muted);
 }
 
 .stats {
@@ -217,6 +177,191 @@
 
 .stat[data-kind='defenses'] b {
 	color: var(--success);
+}
+
+.stat[data-kind='recovery'] {
+	grid-column: 1 / -1;
+}
+
+.incidents {
+	display: grid;
+	gap: 10px;
+	margin: 12px 0 0;
+	padding: 0;
+	list-style: none;
+}
+
+.incident {
+	display: grid;
+	gap: 4px;
+	padding-top: 10px;
+	border-top: 1px solid var(--border);
+	font-size: var(--text-sm);
+}
+
+.incidentHead {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 4px 8px;
+	font-weight: 500;
+}
+
+.incidentLabel {
+	padding: 0 7px;
+	border: 1px solid color-mix(in oklch, var(--warning) 55%, transparent);
+	border-radius: var(--radius-full);
+	background: var(--warning-soft);
+	color: var(--warning);
+	font-family: var(--font-mono);
+	font-size: var(--text-2xs);
+	font-weight: 600;
+}
+
+.incident[data-manual='true'] .incidentLabel {
+	border-color: color-mix(in oklch, var(--violet) 55%, transparent);
+	background: var(--violet-soft);
+	color: var(--violet);
+}
+
+.youBadge {
+	padding: 0 6px;
+	border-radius: var(--radius-full);
+	background: var(--violet-soft);
+	color: var(--violet);
+	font-size: var(--text-2xs);
+	font-weight: 600;
+}
+
+.incidentLine {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	gap: 8px;
+	align-items: start;
+	color: var(--muted);
+	font-size: var(--text-xs);
+}
+
+.incidentLine svg {
+	margin-top: 2px;
+}
+
+.incidentLine[data-response='answered'] svg,
+.incidentLine[data-recovery='back'] svg {
+	color: var(--success);
+}
+
+.incidentLine[data-response='answered'] b {
+	color: var(--success);
+	font-family: var(--font-mono);
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.incidentLine[data-response='waiting'] svg {
+	animation: wait 1.4s ease-in-out infinite;
+}
+
+.incidentLine[data-recovery='out'] {
+	color: var(--danger);
+}
+
+.inspector {
+	display: grid;
+	align-content: start;
+	gap: 12px;
+}
+
+.inspectorBack {
+	justify-self: start;
+}
+
+.inspectorTitle {
+	font-size: var(--text-lg);
+	font-weight: 600;
+}
+
+.inspectorTitle:focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: 3px;
+}
+
+.inspectorStatus {
+	color: var(--success);
+	font-family: var(--font-mono);
+	font-size: var(--text-xs);
+}
+
+.inspectorStatus[data-status='down'],
+.inspectorStatus[data-status='cut'] {
+	color: var(--danger);
+}
+
+.inspectorStatus[data-status='starting'],
+.inspectorStatus[data-status='slow'] {
+	color: var(--warning);
+}
+
+.inspectorStatus[data-status='frozen'] {
+	color: var(--ice);
+}
+
+.manualActions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 10px;
+}
+
+.manualFeedback {
+	margin-top: 8px;
+	font-size: var(--text-xs);
+}
+
+.manualFeedback:empty {
+	display: none;
+}
+
+.manualFeedback[data-tone='sent'] {
+	color: var(--success);
+}
+
+.manualFeedback[data-tone='refused'] {
+	color: var(--danger);
+}
+
+.history {
+	display: grid;
+	gap: 8px;
+	margin: 6px 0 0;
+	padding: 0;
+	list-style: none;
+	font-size: var(--text-sm);
+}
+
+.history li {
+	display: grid;
+	grid-template-columns: 3.2em minmax(0, 1fr);
+	gap: 8px;
+}
+
+.history time {
+	color: var(--faint);
+	font-family: var(--font-mono);
+	font-size: var(--text-xs);
+	font-variant-numeric: tabular-nums;
+}
+
+.history [data-tone='attack'] span {
+	color: var(--warning);
+}
+
+.history [data-tone='defense'] span {
+	color: var(--success);
+}
+
+.history [data-tone='state'] span {
+	color: var(--muted);
 }
 
 .chips {
@@ -250,8 +395,9 @@
 .map {
 	position: relative;
 	min-width: 0;
-	min-height: 360px;
-	margin: 28px 70px;
+	container-type: inline-size;
+	min-height: 260px;
+	margin: clamp(30px, 5vh, 44px) 70px clamp(30px, 4vh, 36px);
 }
 
 .links {
@@ -264,7 +410,9 @@
 	fill: none;
 	stroke: color-mix(in oklch, var(--primary) 40%, var(--border-strong));
 	stroke-width: 2;
-	transition: stroke var(--duration-slow) var(--ease-out);
+	transition:
+		stroke var(--duration-slow) var(--ease-out),
+		stroke-width var(--duration-slow) var(--ease-out);
 }
 
 .link[data-status='slow'] {
@@ -278,22 +426,96 @@
 	opacity: 0.7;
 }
 
-.linkLabel {
+/* The button is 24 px for the pointer; the dot inside is what shows. */
+.linkButton {
 	position: absolute;
 	z-index: 1;
-	padding: 1px 7px;
+	display: grid;
+	place-items: center;
+	min-width: 24px;
+	min-height: 24px;
+	padding: 0;
+	border: 0;
 	border-radius: var(--radius-full);
-	background: var(--warning-soft);
+	background: none;
 	color: var(--warning);
+	font: inherit;
 	font-family: var(--font-mono);
 	font-size: var(--text-2xs);
 	white-space: nowrap;
+	cursor: pointer;
 	transform: translate(-50%, -50%);
 }
 
-.linkLabel[data-status='cut'] {
+.linkButton:focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: 2px;
+}
+
+.linkDot {
+	width: 10px;
+	height: 10px;
+	border: 2px solid color-mix(in oklch, var(--primary) 55%, var(--border-strong));
+	border-radius: 50%;
+	background: var(--surface);
+	transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.linkButton:hover .linkDot,
+.linkButton[data-selected='true'] .linkDot {
+	border-color: var(--primary);
+	transform: scale(1.4);
+}
+
+/* A faulted link's word sits over the nodes it joins, which can be close. */
+.linkButton[data-status='slow'],
+.linkButton[data-status='cut'] {
+	z-index: 3;
+	padding: 1px 8px;
+	background: var(--warning-soft);
+	box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--warning) 45%, transparent);
+}
+
+.linkButton[data-status='cut'] {
 	background: var(--danger-soft);
+	box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--danger) 45%, transparent);
 	color: var(--danger);
+}
+
+.linkButton[data-selected='true'] {
+	outline: 2px solid var(--primary);
+	outline-offset: 2px;
+}
+
+.trafficLegend {
+	position: absolute;
+	bottom: -26px;
+	left: 0;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 12px;
+	color: var(--faint);
+	font-size: var(--text-2xs);
+	pointer-events: none;
+}
+
+.trafficLegend [data-outcome]::before {
+	content: '';
+	display: inline-block;
+	width: 7px;
+	height: 7px;
+	margin-right: 5px;
+	border-radius: 50%;
+	background: var(--primary);
+	vertical-align: 0;
+}
+
+.trafficLegend [data-outcome='fail']::before {
+	background: var(--refused);
+}
+
+.trafficLegend [data-outcome='info']::before {
+	background: var(--violet);
 }
 
 .packets {
@@ -315,10 +537,25 @@
 	animation: travel 1.6s linear infinite;
 }
 
-.packet[data-slow='true'] {
-	background: var(--warning);
-	box-shadow: 0 0 8px var(--warning);
+.packet[data-outcome='fail'] {
+	background: var(--refused);
+	box-shadow: 0 0 8px var(--refused);
+}
+
+.packet[data-outcome='info'] {
+	background: var(--violet);
+	box-shadow: 0 0 8px var(--violet);
+}
+
+.packet[data-motion='slow'] {
 	animation-duration: 4.8s;
+}
+
+/* Turned back by a cut link or by a process that is down. */
+.packet[data-motion='bounce'] {
+	background: var(--danger);
+	box-shadow: 0 0 8px var(--danger);
+	animation: bounce 1.4s ease-in-out infinite;
 }
 
 .node {
@@ -328,7 +565,8 @@
 	grid-template-columns: auto minmax(0, 1fr);
 	align-items: center;
 	gap: 4px 10px;
-	width: 152px;
+	/* Five columns of nodes share the map's width. */
+	width: min(152px, 19.5cqw);
 	padding: 10px 12px;
 	border: 1.5px solid var(--border-strong);
 	border-radius: 12px;
@@ -336,7 +574,7 @@
 	color: var(--fg);
 	font: inherit;
 	text-align: left;
-	cursor: help;
+	cursor: pointer;
 	transform: translate(-50%, -50%);
 	transition:
 		border-color var(--duration-slow) var(--ease-out),
@@ -385,6 +623,9 @@
 }
 
 .nodeBadge {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
 	padding: 0 6px;
 	border-radius: var(--radius-full);
 	background: var(--primary-soft);
@@ -393,19 +634,43 @@
 	font-weight: 500;
 }
 
+.nodeTimer {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	padding: 0 6px;
+	border-radius: var(--radius-full);
+	background: var(--danger-soft);
+	color: var(--danger);
+	font-family: var(--font-mono);
+	font-size: var(--text-2xs);
+	font-variant-numeric: tabular-nums;
+}
+
+.nodeTimer[data-status='starting'] {
+	background: var(--warning-soft);
+	color: var(--warning);
+}
+
+.nodeTimer[data-status='frozen'] {
+	background: var(--ice-soft);
+	color: var(--ice);
+}
+
 .nodeBadge[data-tone='violet'] {
 	background: var(--violet-soft);
 	color: var(--violet);
 }
 
+/* A skewed clock is easy to miss on a process that looks healthy. */
 .nodeBadge[data-tone='warning'] {
+	padding: 1px 7px;
 	background: var(--warning-soft);
+	box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--warning) 50%, transparent);
 	color: var(--warning);
-}
-
-.nodeBadge[data-tone='success'] {
-	background: var(--success-soft);
-	color: var(--success);
+	font-family: var(--font-mono);
+	font-size: var(--text-xs);
+	font-weight: 600;
 }
 
 .node[data-status='down'] {
@@ -427,9 +692,15 @@
 	color: var(--warning);
 }
 
+.node[data-status='starting'] .nodeIcon svg {
+	animation: spin 1.6s linear infinite;
+}
+
 .node[data-status='frozen'] {
 	border-color: var(--ice);
-	background: color-mix(in oklch, var(--ice) 14%, var(--surface-2));
+	background:
+		repeating-linear-gradient(135deg, color-mix(in oklch, var(--ice) 10%, transparent) 0 6px, transparent 6px 12px),
+		color-mix(in oklch, var(--ice) 14%, var(--surface-2));
 }
 
 .node[data-status='frozen'] .nodeIcon,
@@ -439,6 +710,52 @@
 
 .node[data-hit='true'] {
 	animation: shake 0.5s var(--ease-out);
+}
+
+.node[data-hit='true']::after {
+	content: '';
+	position: absolute;
+	inset: -2px;
+	border: 2px solid var(--danger);
+	border-radius: inherit;
+	opacity: 0;
+	pointer-events: none;
+	animation: shockwave 0.9s var(--ease-out);
+}
+
+.node[data-lying='true'] {
+	border-color: var(--violet);
+	border-style: dashed;
+}
+
+.node[data-lying='true'] .nodeIcon {
+	color: var(--violet);
+}
+
+.node[data-selected='true'] {
+	outline: 2px solid var(--primary);
+	outline-offset: 3px;
+}
+
+/* The bank's answer floats over the node that gave it. */
+.reaction {
+	position: absolute;
+	bottom: calc(100% + 6px);
+	left: 50%;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 8px;
+	border-radius: var(--radius-full);
+	background: var(--success-soft);
+	box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--success) 50%, transparent);
+	color: var(--success);
+	font-size: var(--text-2xs);
+	font-weight: 600;
+	white-space: nowrap;
+	pointer-events: none;
+	translate: -50% 0;
+	animation: enter-rise var(--duration-slow) var(--ease-out);
 }
 
 .node[data-defending='true'] {
@@ -480,6 +797,14 @@
 .bubble strong {
 	color: var(--danger);
 	font-size: var(--text-xs);
+}
+
+.bubble[data-manual='true'] {
+	border-color: var(--violet);
+}
+
+.bubble[data-manual='true'] strong {
+	color: var(--violet);
 }
 
 .bubble small {
@@ -683,6 +1008,35 @@
 	}
 }
 
+@keyframes bounce {
+	0%,
+	100% {
+		offset-distance: 0%;
+	}
+
+	50% {
+		offset-distance: var(--turn, 48%);
+	}
+}
+
+@keyframes shockwave {
+	from {
+		opacity: 0.9;
+		transform: scale(1);
+	}
+
+	to {
+		opacity: 0;
+		transform: scale(1.35);
+	}
+}
+
+@keyframes spin {
+	to {
+		rotate: 360deg;
+	}
+}
+
 @keyframes shake {
 	20%,
 	60% {
@@ -728,7 +1082,24 @@
 /* Without motion, the packets and confetti have nothing to say. */
 @media (prefers-reduced-motion: reduce) {
 	.packets,
-	.confetti {
+	.confetti,
+	.trafficLegend {
+		display: none;
+	}
+}
+
+/* Short windows: the header and the timeline get tighter before the map
+   has to scroll. */
+@media (max-height: 760px) {
+	.head {
+		padding-block: 10px;
+	}
+
+	.ticker {
+		padding-block: 8px 10px;
+	}
+
+	.legend {
 		display: none;
 	}
 }
@@ -767,7 +1138,8 @@
 		display: none;
 	}
 
-	.bubble {
+	.bubble,
+	.reaction {
 		display: none;
 	}
 }

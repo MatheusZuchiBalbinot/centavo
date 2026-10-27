@@ -200,7 +200,7 @@ describe('the round page', () => {
 
 		const arena = screen.getByRole('dialog', { name: /O banco está sob ataque/ });
 
-		expect(within(arena).getByRole('button', { name: 'API: derrubado' })).toBeInTheDocument();
+		expect(within(arena).getByRole('button', { name: /^API: derrubado há \d+ s$/ })).toBeInTheDocument();
 		expect(within(arena).getByRole('group', { name: 'Mapa do sistema' })).toBeInTheDocument();
 		await expectNoAxeViolations(arena);
 
@@ -211,6 +211,50 @@ describe('the round page', () => {
 		await user.click(screen.getByRole('button', { name: 'Abrir a arena' }));
 
 		expect(screen.getByRole('dialog')).toBeInTheDocument();
+	});
+
+	it('opens a process from the map, attacks it by hand, and lets Esc close the panel before the arena', async () => {
+		installFakeEventSource();
+		answerFetch({
+			[API_ROUTES.lab]: { status: 200, body: running },
+			[`POST ${API_ROUTES.manualAttacks}`]: { status: 202, body: { action: 'kill', target: 'bank-worker-1' } },
+		});
+		const user = userEvent.setup();
+
+		renderRound('/rounds/r0007?arena=1');
+
+		act(() => {
+			stream().send('snapshot', snapshot);
+		});
+
+		const arena = screen.getByRole('dialog', { name: /O banco está sob ataque/ });
+		const api = within(arena).getByRole('button', { name: /^API: derrubado/ });
+
+		await user.click(api);
+
+		expect(within(arena).getByRole('heading', { name: 'API' })).toHaveFocus();
+		expect(within(within(arena).getByRole('region', { name: 'O que aconteceu aqui' })).getByText('Derrubei o bank-api.')).toBeInTheDocument();
+		expect(await within(arena).findByRole('button', { name: 'Derrubar agora' })).toBeDisabled();
+
+		await user.click(within(arena).getByRole('button', { name: 'Voltar ao resumo' }));
+		await user.click(within(arena).getByRole('button', { name: /^Worker 1: no ar/ }));
+		await user.click(within(arena).getByRole('button', { name: 'Derrubar agora' }));
+
+		expect(await within(arena).findByRole('status')).toHaveTextContent('Enviado.');
+		expect(fetch).toHaveBeenCalledWith(
+			API_ROUTES.manualAttacks,
+			expect.objectContaining({ method: 'POST', body: '{"action":"kill","target":"bank-worker-1"}' }),
+		);
+		await expectNoAxeViolations(arena);
+
+		fireEvent(arena, new Event('cancel', { cancelable: true }));
+
+		expect(within(arena).queryByRole('heading', { name: 'Worker 1' })).not.toBeInTheDocument();
+		expect(within(arena).getByRole('button', { name: /^Worker 1/ })).toHaveFocus();
+
+		fireEvent(arena, new Event('cancel', { cancelable: true }));
+
+		expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 	});
 
 	it('stamps the verdict on the arena when the round ends', () => {

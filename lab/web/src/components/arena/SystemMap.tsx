@@ -1,202 +1,131 @@
-import { Activity, Database, DatabaseBackup, Handshake, Search, Server, Users, type LucideIcon } from 'lucide-react';
 import { useRef } from 'react';
 
 import type { RoundEvent } from '../../api/replay';
 import { describeEvent } from '../../domain/feed';
+import { manualActionsOf } from '../../domain/manualAttacks';
 import { curveOf, frameOf, pointOf, type MapFrame } from '../../domain/mapGeometry';
-import type { LinkView, NodeView, SystemState } from '../../domain/systemState';
-import { linksOf, MAP_LINKS, MAP_NODES, nodesOf, type MapLink, type MapNode, type NodeId } from '../../domain/topology';
+import type { LinkView, SystemState } from '../../domain/systemState';
+import { isSameTarget, linksOf, MAP_LINKS, MAP_NODES, nodesOf, targetKeyOf, type MapLink, type MapTarget, type NodeId } from '../../domain/topology';
 import { useElementSize } from '../../hooks/useElementSize';
 import { format } from '../../i18n/format';
 import { messages } from '../../i18n/pt-BR';
 import styles from './Arena.module.css';
+import { INSPECTOR_ID } from './ArenaInspector';
+import MapNodeCard from './MapNodeCard';
+import MapPackets, { BUSY_LINKS, totalOf, type Traffic } from './MapPackets';
 
-const ICONS: Readonly<Record<NodeId, LucideIcon>> = {
-	clients: Users,
-	api: Activity,
-	worker1: Server,
-	worker2: Server,
-	postgres: Database,
-	replica: DatabaseBackup,
-	partner: Handshake,
-	auditor: Search,
-};
-
-const ICON_SIZE = 18;
-const MS_PER_SECOND = 1_000;
 const HALF = 0.5;
 
-const MAX_PACKETS = 3;
-const OPERATIONS_PER_PACKET = 8;
+// The clients' links thicken with the load: one more pixel for every this
+// many operations a second, up to a few.
+const BASE_STROKE = 2;
+const OPERATIONS_PER_PIXEL = 15;
+const MAX_EXTRA_STROKE = 4;
 
-const BUSY_LINKS: ReadonlySet<string> = new Set(['client_api', 'api_pg']);
+// Only the links a person can attack get a button; the lab's own links are
+// never faulted.
+const ATTACKABLE_LINKS: readonly MapLink[] = MAP_LINKS.filter(isAttackable);
 
 type SystemMapProps = {
 	readonly state: SystemState;
-	readonly operationsPerSecond: number;
+	readonly traffic: Traffic;
 	readonly bubble: { readonly event: RoundEvent; readonly label: string } | null;
 	readonly nowMs: number;
 	readonly isLive: boolean;
+	readonly selected: MapTarget | null;
+	readonly onSelect: (target: MapTarget) => void;
 };
 
-export default function SystemMap({ state, operationsPerSecond, bubble, nowMs, isLive }: SystemMapProps): React.JSX.Element {
+export default function SystemMap({ state, traffic, bubble, nowMs, isLive, selected, onSelect }: SystemMapProps): React.JSX.Element {
 	const box = useRef<HTMLDivElement>(null);
 	const size = useElementSize(box);
 	const layout = frameOf(size.width, size.height);
+	const operationsPerSecond = totalOf(traffic);
 
 	return (
 		<div ref={box} className={styles.map} role="group" aria-label={messages.arena.mapLabel}>
 			<svg className={styles.links} width={size.width} height={size.height} aria-hidden="true">
 				{MAP_LINKS.map((link) => (
-					<LinkLine key={link.id} link={link} view={state.links[link.id]} frame={layout} />
+					<LinkLine key={link.id} link={link} view={state.links[link.id]} frame={layout} operationsPerSecond={operationsPerSecond} />
 				))}
 			</svg>
-			{isLive ? <Packets state={state} frame={layout} operationsPerSecond={operationsPerSecond} /> : null}
-			{MAP_LINKS.map((link) => (
-				<LinkLabel key={link.id} link={link} view={state.links[link.id]} frame={layout} />
+			{isLive ? <MapPackets state={state} frame={layout} traffic={traffic} /> : null}
+			{ATTACKABLE_LINKS.map((link) => (
+				<LinkButton key={link.id} link={link} view={state.links[link.id]} frame={layout} selected={selected} onSelect={onSelect} />
 			))}
 			{MAP_NODES.map((node) => (
-				<NodeCard key={node.id} node={node} view={state.nodes[node.id]} frame={layout} nowMs={nowMs} operationsPerSecond={operationsPerSecond} />
+				<MapNodeCard
+					key={node.id}
+					node={node}
+					view={state.nodes[node.id]}
+					frame={layout}
+					nowMs={nowMs}
+					operationsPerSecond={operationsPerSecond}
+					selected={selected}
+					onSelect={onSelect}
+				/>
 			))}
 			{bubble ? <AttackBubble event={bubble.event} label={bubble.label} frame={layout} /> : null}
+			{isLive ? <TrafficLegend /> : null}
 		</div>
 	);
 }
 
-type LinkPartProps = { readonly link: MapLink; readonly view: LinkView; readonly frame: MapFrame };
+type LinkLineProps = { readonly link: MapLink; readonly view: LinkView; readonly frame: MapFrame; readonly operationsPerSecond: number };
 
-function LinkLine({ link, view, frame }: LinkPartProps): React.JSX.Element {
-	return <path className={styles.link} data-status={view.status} d={curveOf(link, frame).path} />;
+function LinkLine({ link, view, frame, operationsPerSecond }: LinkLineProps): React.JSX.Element {
+	const extra = BUSY_LINKS.has(link.id) ? Math.min(MAX_EXTRA_STROKE, operationsPerSecond / OPERATIONS_PER_PIXEL) : 0;
+
+	return <path className={styles.link} data-status={view.status} d={curveOf(link, frame).path} style={{ strokeWidth: BASE_STROKE + extra }} />;
 }
 
-function LinkLabel({ link, view, frame }: LinkPartProps): React.JSX.Element | null {
-	if (view.status === 'ok' || view.toxic === null) {
-		return null;
-	}
-
-	const { middle } = curveOf(link, frame);
-	const text = format(view.status === 'cut' ? messages.arena.linkCut : messages.arena.linkSlow, { toxic: view.toxic });
-
-	return (
-		<span className={styles.linkLabel} data-status={view.status} style={{ left: middle.x, top: middle.y }}>
-			{text}
-		</span>
-	);
-}
-
-type PacketsProps = { readonly state: SystemState; readonly frame: MapFrame; readonly operationsPerSecond: number };
-
-function Packets({ state, frame, operationsPerSecond }: PacketsProps): React.JSX.Element {
-	const packets = MAP_LINKS.flatMap((link) => packetsOf(link, state, frame, operationsPerSecond));
-
-	return (
-		<div className={styles.packets} aria-hidden="true">
-			{packets.map((packet) => (
-				<span key={packet.key} className={styles.packet} data-slow={packet.isSlow} style={packet.style} />
-			))}
-		</div>
-	);
-}
-
-type Packet = { readonly key: string; readonly isSlow: boolean; readonly style: React.CSSProperties };
-
-function packetsOf(link: MapLink, state: SystemState, frame: MapFrame, operationsPerSecond: number): readonly Packet[] {
-	const view = state.links[link.id];
-	const isSourceAlive = state.nodes[link.from].status === 'up' && state.nodes[link.to].status !== 'down';
-	const isFlowing = view.status !== 'cut' && isSourceAlive;
-
-	if (!isFlowing) {
-		return [];
-	}
-
-	const count = BUSY_LINKS.has(link.id) ? Math.min(MAX_PACKETS, Math.ceil(operationsPerSecond / OPERATIONS_PER_PACKET)) : 1;
-	const { path } = curveOf(link, frame);
-	const isSlow = view.status === 'slow';
-
-	return Array.from({ length: count }, (_, index) => ({
-		key: `${link.id}-${index}`,
-		isSlow,
-		style: {
-			offsetPath: `path('${path}')`,
-			animationDelay: `${(index * 0.55).toFixed(2)}s`,
-		},
-	}));
-}
-
-type NodeCardProps = {
-	readonly node: MapNode;
-	readonly view: NodeView;
+type LinkButtonProps = {
+	readonly link: MapLink;
+	readonly view: LinkView;
 	readonly frame: MapFrame;
-	readonly nowMs: number;
-	readonly operationsPerSecond: number;
+	readonly selected: MapTarget | null;
+	readonly onSelect: (target: MapTarget) => void;
 };
 
-function NodeCard({ node, view, frame, nowMs, operationsPerSecond }: NodeCardProps): React.JSX.Element {
-	const Icon = ICONS[node.id];
-	const name = messages.arena.nodes[node.id];
-	const center = pointOf(node.id, frame);
-	const status = statusText(node.id, view, nowMs, operationsPerSecond);
-	const help =
-		view.lastEvent === null ? messages.arena.nodeHelp[node.id] : `${messages.arena.nodeHelp[node.id]} ${describeEvent(view.lastEvent).what}`;
+function LinkButton({ link, view, frame, selected, onSelect }: LinkButtonProps): React.JSX.Element {
+	const target: MapTarget = { kind: 'link', id: link.id };
+	const isSelected = isSameTarget(selected, target);
+	const { middle } = curveOf(link, frame);
+	const name = messages.arena.links[link.id];
+	const status = messages.arena.linkStatus[view.status];
+	const isFaulted = view.status !== 'ok';
+	const label = format(isFaulted ? messages.arena.linkButtonFault : messages.arena.linkButton, { name, status, toxic: view.toxic ?? '' });
 
 	return (
 		<button
 			type="button"
-			className={styles.node}
+			className={styles.linkButton}
 			data-status={view.status}
-			data-hit={view.isHit}
-			data-defending={view.isDefending}
-			style={{ left: center.x, top: center.y }}
-			data-tooltip={help}
-			aria-label={`${name}: ${status}`}
+			data-selected={isSelected}
+			data-target={targetKeyOf(target)}
+			style={{ left: middle.x, top: middle.y }}
+			data-tooltip={isFaulted ? label : format(messages.arena.linkHelp, { name })}
+			aria-label={label}
+			aria-expanded={isSelected}
+			aria-controls={isSelected ? INSPECTOR_ID : undefined}
+			onClick={() => onSelect(target)}
 		>
-			<span className={styles.nodeIcon} aria-hidden="true">
-				<Icon size={ICON_SIZE} />
-			</span>
-			<span className={styles.nodeText}>
-				<span className={styles.nodeName}>{name}</span>
-				<span className={styles.nodeStatus}>{status}</span>
-			</span>
-			<NodeBadges view={view} />
+			{isFaulted ? status : <span className={styles.linkDot} aria-hidden="true" />}
 		</button>
 	);
 }
 
-function NodeBadges({ view }: { view: NodeView }): React.JSX.Element | null {
-	const badges = [
-		view.isLeader ? { key: 'leader', text: messages.arena.leader, tone: 'info' } : null,
-		view.isLying ? { key: 'lying', text: messages.arena.lying, tone: 'violet' } : null,
-		view.clockSkew ? { key: 'skew', text: format(messages.arena.skew, { offset: view.clockSkew }), tone: 'warning' } : null,
-		view.isDefending ? { key: 'defending', text: messages.arena.defending, tone: 'success' } : null,
-	].filter((badge) => badge !== null);
-
-	if (badges.length === 0) {
-		return null;
-	}
+function TrafficLegend(): React.JSX.Element {
+	const { label, ok, fail, info } = messages.arena.traffic;
 
 	return (
-		<span className={styles.nodeBadges}>
-			{badges.map((badge) => (
-				<span key={badge.key} className={styles.nodeBadge} data-tone={badge.tone}>
-					{badge.text}
-				</span>
-			))}
-		</span>
+		<p className={styles.trafficLegend} aria-hidden="true">
+			<span>{label}:</span>
+			<span data-outcome="ok">{ok}</span>
+			<span data-outcome="fail">{fail}</span>
+			<span data-outcome="info">{info}</span>
+		</p>
 	);
-}
-
-function statusText(id: NodeId, view: NodeView, nowMs: number, operationsPerSecond: number): string {
-	if (id === 'clients') {
-		return format(messages.arena.clientsRate, { rate: Math.round(operationsPerSecond) });
-	}
-
-	if (view.status === 'frozen' && view.frozenUntilMs !== null) {
-		return format(messages.arena.frozenFor, {
-			seconds: Math.max(0, Math.ceil((view.frozenUntilMs - nowMs) / MS_PER_SECOND)),
-		});
-	}
-
-	return messages.arena.status[view.status];
 }
 
 type AttackBubbleProps = { readonly event: RoundEvent; readonly label: string; readonly frame: MapFrame };
@@ -207,7 +136,7 @@ function AttackBubble({ event, label, frame }: AttackBubbleProps): React.JSX.Ele
 	const isOnRight = anchor.x < frame.width * HALF;
 
 	return (
-		<div className={styles.bubble} data-side={isOnRight ? 'right' : 'left'} style={{ left: anchor.x, top: anchor.y }}>
+		<div className={styles.bubble} data-side={isOnRight ? 'right' : 'left'} data-manual={event.isManual} style={{ left: anchor.x, top: anchor.y }}>
 			<strong>{format(messages.arena.bubble, { label })}</strong>
 			<span>{what}</span>
 			{expected === '' ? null : <small>{expected}</small>}
@@ -225,4 +154,8 @@ function anchorOf(event: RoundEvent): NodeId {
 	const link = MAP_LINKS.find((candidate) => candidate.id === linksOf(event.target)[0]);
 
 	return link?.from ?? 'api';
+}
+
+function isAttackable(link: MapLink): boolean {
+	return manualActionsOf({ kind: 'link', id: link.id }).length > 0;
 }

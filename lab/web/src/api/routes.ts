@@ -3,6 +3,7 @@ import type { RoundId } from './ids';
 export const API_ROUTES = {
 	lab: '/api/lab',
 	stop: '/api/lab/stop',
+	manualAttacks: '/api/lab/attacks',
 	attacks: '/api/attacks',
 	rounds: '/api/rounds',
 } as const;

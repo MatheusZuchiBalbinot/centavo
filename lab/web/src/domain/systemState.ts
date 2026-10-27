@@ -4,12 +4,17 @@ import { linksOf, MAP_LINKS, MAP_NODES, nodesOf, type LinkId, type NodeId } from
 
 export const FLASH_MS = 2_500;
 
+// Long enough to read the few words a defense shows over its node.
+const REACTION_MS = 4_000;
+
 const MS_PER_SECOND = 1_000;
 
 export type NodeStatus = 'up' | 'starting' | 'frozen' | 'down';
 
 export type NodeView = {
 	readonly status: NodeStatus;
+	// When the node took its current status, for how long it has been down.
+	readonly statusSinceMs: number;
 	readonly frozenUntilMs: number | null;
 	readonly isHit: boolean;
 	readonly isDefending: boolean;
@@ -17,6 +22,7 @@ export type NodeView = {
 	readonly isLeader: boolean;
 	readonly clockSkew: string | null;
 	readonly lastEvent: RoundEvent | null;
+	readonly reaction: RoundEvent | null;
 };
 
 export type LinkStatus = 'ok' | 'slow' | 'cut';
@@ -29,8 +35,8 @@ export type SystemState = {
 	readonly isHealing: boolean;
 };
 
-// Toxics that stop traffic; the others only slow it.
-const CUTTING_TOXICS: ReadonlySet<string> = new Set(['timeout', 'reset_peer', 'down', 'limit_data']);
+// Toxics that stop traffic, partitions among them; the others only slow it.
+const CUTTING_TOXICS: ReadonlySet<string> = new Set(['timeout', 'reset_peer', 'down', 'limit_data', 'reject', 'blackhole', 'one_way']);
 
 // Pure, so a replay can ask for any moment.
 export function systemStateAt(events: readonly RoundEvent[], nowMs: number): SystemState {
@@ -78,11 +84,17 @@ function applyEvent({ event, isRecent, nodes, links, nowMs }: Apply): boolean | 
 		if (isRecent && event.kind === 'defense') {
 			node.isDefending = true;
 		}
+
+		const isReacting = event.kind === 'defense' && nowMs - event.tMs <= REACTION_MS;
+
+		if (isReacting) {
+			node.reaction = event;
+		}
 	}
 
 	switch (event.kind) {
 		case 'process_state':
-			targets.forEach((node) => applyState(node, event.detail));
+			targets.forEach((node) => applyState(node, event));
 
 			return undefined;
 		case 'freeze':
@@ -94,7 +106,7 @@ function applyEvent({ event, isRecent, nodes, links, nowMs }: Apply): boolean | 
 
 			return undefined;
 		case 'kill':
-			targets.forEach((node) => (node.status = 'down'));
+			targets.forEach((node) => setStatus(node, 'down', event.tMs));
 
 			return undefined;
 		case 'arm_partner_modes':
@@ -114,7 +126,7 @@ function applyEvent({ event, isRecent, nodes, links, nowMs }: Apply): boolean | 
 
 			return true;
 		case 'heal_complete':
-			bringAllUp(nodes);
+			bringAllUp(nodes, event.tMs);
 
 			return false;
 		case 'failpoint_fired':
@@ -125,14 +137,23 @@ function applyEvent({ event, isRecent, nodes, links, nowMs }: Apply): boolean | 
 	}
 }
 
-function applyState(node: MutableNode, state: string): void {
-	if (isNodeStatus(state)) {
-		node.status = state;
+function applyState(node: MutableNode, event: RoundEvent): void {
+	if (isNodeStatus(event.detail)) {
+		setStatus(node, event.detail, event.tMs);
 	}
 
-	if (state !== 'frozen') {
+	if (event.detail !== 'frozen') {
 		node.frozenUntilMs = null;
 	}
+}
+
+function setStatus(node: MutableNode, status: NodeStatus, atMs: number): void {
+	if (node.status === status) {
+		return;
+	}
+
+	node.status = status;
+	node.statusSinceMs = atMs;
 }
 
 function applyFreeze(node: MutableNode, event: RoundEvent, nowMs: number): void {
@@ -143,7 +164,7 @@ function applyFreeze(node: MutableNode, event: RoundEvent, nowMs: number): void 
 		return;
 	}
 
-	node.status = 'frozen';
+	setStatus(node, 'frozen', event.tMs);
 	node.frozenUntilMs = until;
 }
 
@@ -192,9 +213,9 @@ function healAll(nodes: Map<NodeId, MutableNode>, links: Map<LinkId, LinkView>):
 
 // The cure completes only once every process answers its health check
 // again, and the lab stops watching them there.
-function bringAllUp(nodes: Map<NodeId, MutableNode>): void {
+function bringAllUp(nodes: Map<NodeId, MutableNode>, atMs: number): void {
 	for (const node of nodes.values()) {
-		node.status = 'up';
+		setStatus(node, 'up', atMs);
 		node.frozenUntilMs = null;
 	}
 }
@@ -202,6 +223,7 @@ function bringAllUp(nodes: Map<NodeId, MutableNode>): void {
 function freshNode(id: NodeId): MutableNode {
 	return {
 		status: 'up',
+		statusSinceMs: 0,
 		frozenUntilMs: null,
 		isHit: false,
 		isDefending: false,
@@ -209,6 +231,7 @@ function freshNode(id: NodeId): MutableNode {
 		isLeader: id === 'postgres',
 		clockSkew: null,
 		lastEvent: null,
+		reaction: null,
 	};
 }
 

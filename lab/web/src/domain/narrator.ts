@@ -1,37 +1,25 @@
 import type { RoundEvent } from '../api/replay';
 import { messages } from '../i18n/pt-BR';
 import { describeEvent } from './feed';
-import { isAttackEvent, isDefenseEvent, type Phase } from './phase';
+import { isAttackEvent, type Phase } from './phase';
 
 const ATTACK_WINDOW_MS = 15_000;
-const DEFENSE_WINDOW_MS = 20_000;
 
-export type Narration = {
-	readonly now: string;
-	readonly defense: { readonly text: string; readonly isWaiting: boolean } | null;
-};
+export type Narration = { readonly text: string; readonly isAttack: boolean };
 
+// The arena's headline: the attack of the last few seconds, or what the round
+// is doing between attacks.
 export function narrate(events: readonly RoundEvent[], nowMs: number, phase: Phase): Narration {
-	const seen = events.filter((event) => event.tMs <= nowMs);
-	const attack = latest(seen, isAttackEvent, nowMs, ATTACK_WINDOW_MS);
-	const defense = latest(seen, isDefenseEvent, nowMs, DEFENSE_WINDOW_MS);
-	const now = attack === null ? messages.arena.phaseNow[phase] : describeEvent(attack).what;
+	const attack = events.findLast(isAttackBy(nowMs));
+	const isRecent = attack !== undefined && nowMs - attack.tMs <= ATTACK_WINDOW_MS;
 
-	if (defense !== null && (attack === null || defense.tMs >= attack.tMs)) {
-		return { now, defense: { text: describeEvent(defense).what, isWaiting: false } };
+	if (!isRecent) {
+		return { text: messages.arena.phaseNow[phase], isAttack: false };
 	}
 
-	if (attack !== null) {
-		const { expected } = describeEvent(attack);
-
-		return { now, defense: expected === '' ? null : { text: expected, isWaiting: true } };
-	}
-
-	return { now, defense: null };
+	return { text: describeEvent(attack).what, isAttack: true };
 }
 
-function latest(events: readonly RoundEvent[], isKind: (event: RoundEvent) => boolean, nowMs: number, windowMs: number): RoundEvent | null {
-	const found = events.findLast(isKind);
-
-	return found !== undefined && nowMs - found.tMs <= windowMs ? found : null;
+function isAttackBy(nowMs: number): (event: RoundEvent) => boolean {
+	return (event) => event.tMs <= nowMs && isAttackEvent(event);
 }

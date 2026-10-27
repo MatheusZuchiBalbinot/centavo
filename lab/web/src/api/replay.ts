@@ -36,6 +36,8 @@ export type RoundEvent = {
 	// subject is what a defense protected; count how many items it covered.
 	readonly subject: string;
 	readonly count: number;
+	// Launched by a person from the panel, not drawn by the scenario.
+	readonly isManual: boolean;
 };
 
 type GuaranteeStatus = 'ok' | 'failed' | 'not_checked';
@@ -153,6 +155,7 @@ export function parseEvent(value: unknown): RoundEvent | null {
 		duration: stringOr(value.duration),
 		subject: stringOr(value.subject),
 		count: isNumber(value.count) ? value.count : 0,
+		isManual: value.manual === true,
 	};
 }
 

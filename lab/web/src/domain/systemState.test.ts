@@ -67,6 +67,27 @@ describe('systemStateAt', () => {
 		expect(healed.isHealing).toBe(true);
 	});
 
+	it('times how long a process has been out and shows the defense it just made', () => {
+		const events = [
+			event(1_000, 'kill', { target: 'bank-worker-1' }),
+			event(2_000, 'process_state', { target: 'bank-worker-1', detail: 'down' }),
+			event(4_000, 'process_state', { target: 'bank-worker-1', detail: 'starting' }),
+			event(5_000, 'defense', { target: 'bank-worker-2', detail: 'lease.acquired', subject: 'reconciler' }),
+		];
+
+		const state = systemStateAt(events, 6_000);
+		expect(state.nodes.worker1).toMatchObject({ status: 'starting', statusSinceMs: 4_000 });
+		expect(state.nodes.worker2.reaction?.detail).toBe('lease.acquired');
+		expect(systemStateAt(events, 3_000).nodes.worker1.statusSinceMs).toBe(1_000);
+		expect(systemStateAt(events, 10_000).nodes.worker2.reaction).toBeNull();
+	});
+
+	it('cuts a link under a partition', () => {
+		const events = [event(1_000, 'network', { target: 'worker1_partner', detail: 'blackhole', isManual: true })];
+
+		expect(systemStateAt(events, 2_000).links.worker1_partner.status).toBe('cut');
+	});
+
 	it('lights the defending node, unmasks the partner at the cure and moves the leader on failover', () => {
 		const events = [
 			event(1_000, 'arm_partner_modes', { detail: 'double_process' }),

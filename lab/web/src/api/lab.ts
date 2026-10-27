@@ -17,6 +17,12 @@ export type LabState =
 
 type StartRoundInput = { readonly attack: AttackId; readonly durationSeconds: number };
 
+export type ManualAction = 'kill' | 'freeze' | 'cut' | 'slow';
+
+export type ManualAttack = { readonly action: ManualAction; readonly target: string };
+
+const MANUAL_ACTIONS: ReadonlySet<string> = new Set<ManualAction>(['kill', 'freeze', 'cut', 'slow']);
+
 export function fetchLabState(signal?: AbortSignal): Promise<ApiResult<LabState>> {
 	return getJSON(API_ROUTES.lab, parseLabState, signal);
 }
@@ -29,6 +35,11 @@ export function startRound(input: StartRoundInput): Promise<ApiResult<LabState>>
 
 export function stopRound(): Promise<ApiResult<LabState>> {
 	return postJSON(API_ROUTES.stop, undefined, parseLabState);
+}
+
+// The lab answers 202 with the attack it passed on to the round.
+export function launchManualAttack(attack: ManualAttack): Promise<ApiResult<ManualAttack>> {
+	return postJSON(API_ROUTES.manualAttacks, attack, parseManualAttack);
 }
 
 export function parseLabState(body: unknown): LabState | null {
@@ -53,4 +64,23 @@ export function parseLabState(body: unknown): LabState | null {
 	}
 
 	return { status, round: isRoundId(round) ? round : null, attack, scenario, durationSeconds, startedAt };
+}
+
+function parseManualAttack(body: unknown): ManualAttack | null {
+	if (!isObject(body)) {
+		return null;
+	}
+
+	const { action, target } = body;
+	const isComplete = isManualAction(action) && isString(target);
+
+	if (!isComplete) {
+		return null;
+	}
+
+	return { action, target };
+}
+
+function isManualAction(value: unknown): value is ManualAction {
+	return isString(value) && MANUAL_ACTIONS.has(value);
 }

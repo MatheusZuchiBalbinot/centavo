@@ -8,7 +8,7 @@ export function aSecond(t: number, ok = 20): RoundSecond {
 }
 
 export function anEvent(tMs: number, kind: RoundEvent['kind'], target = 'bank-worker-1'): RoundEvent {
-	return { tMs, kind, target, detail: '', duration: kind === 'freeze' ? '45s' : '', subject: '', count: 0 };
+	return { tMs, kind, target, detail: '', duration: kind === 'freeze' ? '45s' : '', subject: '', count: 0, isManual: false };
 }
 
 export function aReplay(overrides: Partial<Replay> = {}): Replay {

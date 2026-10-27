@@ -15,6 +15,7 @@ export type FeedItem = {
 	// Matches the chart's markers: "7", or "10–14" for a group.
 	readonly label: string | null;
 	readonly count: number;
+	readonly isManual: boolean;
 	readonly what: string;
 	readonly expected: string;
 	readonly code: string;
@@ -24,6 +25,10 @@ export type FeedItem = {
 type NumberedEvent = { readonly event: RoundEvent; readonly number: number | null; readonly index: number };
 
 const MAX_LISTED_TARGETS = 3;
+
+// How the lab names a slowed link and a frozen database.
+const SLOW_TOXIC = 'latency';
+const DATABASE_FREEZE = 'freeze';
 
 const CODE_KINDS: ReadonlySet<RoundEvent['kind']> = new Set(['failpoint_fired', 'network', 'arm_partner_modes', 'database']);
 
@@ -73,7 +78,10 @@ function groupRuns(events: readonly NumberedEvent[]): readonly (readonly Numbere
 function isRepeat(previous: NumberedEvent, current: NumberedEvent): boolean {
 	const areAttacks = previous.number !== null && current.number !== null;
 	const areDefenses = isDefenseEvent(previous.event) && isDefenseEvent(current.event);
-	const isSameFault = previous.event.kind === current.event.kind && previous.event.detail === current.event.detail;
+	const isSameFault =
+		previous.event.kind === current.event.kind &&
+		previous.event.detail === current.event.detail &&
+		previous.event.isManual === current.event.isManual;
 
 	return (areAttacks || areDefenses) && isSameFault;
 }
@@ -96,6 +104,7 @@ function itemOf(run: readonly NumberedEvent[]): FeedItem {
 		tone: toneOf(first.event),
 		label: labelOf(first.number, last.number),
 		count: run.length,
+		isManual: first.event.isManual,
 		what,
 		expected,
 		code: CODE_KINDS.has(first.event.kind) ? first.event.detail : '',
@@ -105,10 +114,40 @@ function itemOf(run: readonly NumberedEvent[]): FeedItem {
 
 function describe(event: RoundEvent, target: string, count: number): { what: string; expected: string } {
 	const copy = copyOf(event);
+	const what = manualWhatOf(event) ?? copy.what;
 	const values = { target, detail: event.detail, duration: event.duration, count, subject: subjectOf(event.subject) };
 	const expected = copy.expect === '' ? '' : format(messages.feed.expected, { text: copy.expect });
 
-	return { what: format(copy.what, values), expected };
+	return { what: format(what, values), expected };
+}
+
+// What a person launched from the panel is told as theirs; what the bank is
+// expected to do stays the same.
+function manualWhatOf(event: RoundEvent): string | null {
+	if (!event.isManual) {
+		return null;
+	}
+
+	switch (event.kind) {
+		case 'kill':
+			return messages.feed.manual.kill;
+		case 'freeze':
+			return messages.feed.manual.freeze;
+		case 'network':
+			return event.detail === SLOW_TOXIC ? messages.feed.manual.slow : messages.feed.manual.cut;
+		case 'database':
+			return event.detail === DATABASE_FREEZE ? messages.feed.manual.databaseFreeze : messages.feed.manual.databaseKill;
+		case 'failpoint_fired':
+		case 'failover':
+		case 'skew_clock':
+		case 'arm_partner_modes':
+		case 'heal_start':
+		case 'heal_complete':
+		case 'process_state':
+		case 'defense':
+		case 'other':
+			return null;
+	}
 }
 
 const defenseCopy: Readonly<Partial<Record<string, { what: string; expect: string }>>> = messages.feed.defenses;
