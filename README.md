@@ -3,11 +3,13 @@
 [![CI](https://github.com/MatheusZuchiBalbinot/centavo/actions/workflows/ci.yml/badge.svg)](https://github.com/MatheusZuchiBalbinot/centavo/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Um banco digital pequeno, feito para ser atacado. Clientes robôs depositam,
-transferem e mandam PIX sem parar enquanto um laboratório de caos derruba
-processos, corta a rede, faz o banco parceiro mentir e troca o banco de dados
-de líder. No fim de cada rodada, um verificador confere o histórico inteiro e
-diz se algum centavo sumiu, apareceu ou foi lançado duas vezes.
+Sistema financeiro em Go para testar técnicas de consistência e resiliência
+transacional sob falhas reais. Clientes robôs fazem transações sem parar
+enquanto um laboratório de caos mata processos com kill -9 no meio de uma
+escrita, particiona a rede, faz o banco parceiro mentir e força o failover do
+PostgreSQL. No fim de cada rodada, um verificador independente confere o
+histórico inteiro e diz se algum centavo sumiu, apareceu ou foi lançado duas
+vezes.
 
 ![A arena de uma rodada ao vivo](showcase/arena-ao-vivo.png)
 
