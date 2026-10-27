@@ -14,6 +14,10 @@ const PERCENT = 100;
 // Chips closer than this, in pixels, merge into one: a range like "10–12"
 // needs about this much room.
 const CHIP_GAP_PX = 44;
+// A chip is centered on its moment, but never closer to the strip's ends than
+// half a wide chip, so an attack in the first second still shows whole; the
+// chips merge after that, so a moved chip never lands on its neighbor.
+const CHIP_EDGE_PX = 26;
 const SCALE_STEPS = 4;
 
 type ArenaTickerProps = {
@@ -30,8 +34,9 @@ export default function ArenaTicker({ events, spanSeconds, nowSeconds, isLive }:
 	const track = useElementSize(box);
 	const percentOf = (tMs: number): number => Math.min(PERCENT, (tMs / MS_PER_SECOND / spanSeconds) * PERCENT);
 	const attacks = events.filter(isAttackEvent);
+	const edge = (CHIP_EDGE_PX / track.width) * PERCENT;
 	const chips = clusterMarkers(
-		attacks.map((event) => percentOf(event.tMs)),
+		attacks.map((event) => Math.min(PERCENT - edge, Math.max(edge, percentOf(event.tMs)))),
 		(CHIP_GAP_PX / track.width) * PERCENT,
 	);
 	const defenses = events.filter(isDefenseEvent);
