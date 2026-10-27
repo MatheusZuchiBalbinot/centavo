@@ -9,7 +9,8 @@ import { niceTicks, scaleLinear, scaleMaxOf } from './scale';
 
 export type ChartPoint = { readonly at: number; readonly value: number };
 
-type ChartMarker = { readonly at: number };
+// isManual draws an attack a person launched apart from the scenario's.
+type ChartMarker = { readonly at: number; readonly isManual: boolean };
 
 type ChartBand = { readonly from: number; readonly to: number; readonly label: string };
 
@@ -150,6 +151,7 @@ export default function AreaChart({
 						bottom={plotBottom}
 						description={describeMarker({ from: cluster.first, to: cluster.last })}
 						isHot={overlaps(highlight, cluster.first, cluster.last)}
+						isManual={isAllManual(markers, cluster.first, cluster.last)}
 						onHighlight={onHighlight}
 					/>
 				))}
@@ -173,19 +175,20 @@ type MarkerChipProps = {
 	readonly bottom: number;
 	readonly description: string;
 	readonly isHot: boolean;
+	readonly isManual: boolean;
 	readonly onHighlight: (range: AttackRange | null) => void;
 };
 
 // MarkerChip is focusable, so a keyboard reaches each attack and its
 // tooltip the way a pointer does.
-function MarkerChip({ x, label, range, bottom, description, isHot, onHighlight }: MarkerChipProps): React.JSX.Element {
+function MarkerChip({ x, label, range, bottom, description, isHot, isManual, onHighlight }: MarkerChipProps): React.JSX.Element {
 	const width = Math.max(MARKER_HEIGHT, label.length * MARKER_CHAR_PX + MARKER_PADDING_PX);
 	const ref = useRef<SVGGElement>(null);
 
 	useHoverRange(ref, range, onHighlight);
 
 	return (
-		<g ref={ref} className={styles.marker} data-hot={isHot} data-tooltip={description} tabIndex={0} aria-label={description}>
+		<g ref={ref} className={styles.marker} data-hot={isHot} data-manual={isManual} data-tooltip={description} tabIndex={0} aria-label={description}>
 			<line x1={x} x2={x} y1={MARKER_ROW + MARKER_HEIGHT} y2={bottom} />
 			<rect x={x - width / 2} y={MARKER_ROW} width={width} height={MARKER_HEIGHT} rx={MARKER_HEIGHT / 2} />
 			<text x={x} y={MARKER_ROW + MARKER_HEIGHT / 2} textAnchor="middle" dominantBaseline="central">
@@ -245,4 +248,9 @@ function closestPoint(points: readonly ChartPoint[], at: number): ChartPoint | n
 
 function valueOf(point: ChartPoint): number {
 	return point.value;
+}
+
+// first and last count from 1, as the chips do.
+function isAllManual(markers: readonly ChartMarker[], first: number, last: number): boolean {
+	return markers.slice(first - 1, last).every((marker) => marker.isManual);
 }

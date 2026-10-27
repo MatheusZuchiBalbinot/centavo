@@ -115,6 +115,26 @@ describe('the round page', () => {
 		expect(stream().isClosed).toBe(true);
 	});
 
+	it('marks the attacks made by hand in the feed and on the chart', () => {
+		installFakeEventSource();
+		answerFetch({ [API_ROUTES.lab]: { status: 200, body: running } });
+
+		renderRound();
+
+		const manualKill = { t_ms: 1500, family: 'process', kind: 'kill', target: 'bank-worker-1', manual: true, text: 'processo morto: bank-worker-1' };
+
+		act(() => {
+			stream().send('snapshot', { ...snapshot, events: [manualKill] });
+		});
+
+		const feed = screen.getByRole('region', { name: 'O que está acontecendo' });
+
+		expect(within(feed).getByText('O bank-worker-1 caiu.')).toBeInTheDocument();
+		expect(within(feed).getByText('manual')).toBeInTheDocument();
+		expect(screen.getByLabelText('Ataques manuais 1, 0:01: O bank-worker-1 caiu.')).toBeInTheDocument();
+		expect(screen.getByText('ataque manual')).toBeInTheDocument();
+	});
+
 	it('turns a broken control round into the expected outcome', () => {
 		installFakeEventSource();
 		answerFetch({ [API_ROUTES.lab]: { status: 200, body: { status: 'idle' } } });

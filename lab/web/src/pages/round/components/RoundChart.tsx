@@ -48,7 +48,8 @@ export default function RoundChart({
 	const band = healStart ? { from: healStart.tMs / MS_PER_SECOND, to: span, label: messages.round.chartHeal } : null;
 	const copy = messages.round.metrics[metric];
 	const attacks = replay.events.filter(isAttackEvent);
-	const markers = attacks.map((event) => ({ at: event.tMs / MS_PER_SECOND }));
+	const markers = attacks.map((event) => ({ at: event.tMs / MS_PER_SECOND, isManual: event.isManual }));
+	const hasManual = attacks.some((event) => event.isManual);
 
 	function describeMarker(range: AttackRange): string {
 		const first = attacks[range.from - 1];
@@ -63,8 +64,9 @@ export default function RoundChart({
 		const from = formatClock(first.tMs / MS_PER_SECOND);
 		const time = count > 1 ? `${from}–${formatClock(last.tMs / MS_PER_SECOND)}` : from;
 		const what = describeEvent(first).what + (count > 1 ? ` ${format(messages.feed.times, { count })}` : '');
+		const isManual = attacks.slice(range.from - 1, range.to).every((event) => event.isManual);
 
-		return format(messages.tooltip.attackMarker, { label, time, what });
+		return format(isManual ? messages.tooltip.attackMarkerManual : messages.tooltip.attackMarker, { label, time, what });
 	}
 	const points = seriesOf(replay.seconds, metric);
 	// Scaled to the attack only: the cure's bulk re-reads would flatten it.
@@ -103,6 +105,7 @@ export default function RoundChart({
 				</span>
 				<span className={styles.chartLegend}>
 					<span className={styles.legendAttack}>{messages.round.legendAttack}</span>
+					{hasManual ? <span className={styles.legendManual}>{messages.round.legendManual}</span> : null}
 					<span className={styles.legendHeal}>{messages.round.chartHeal}</span>
 				</span>
 			</p>

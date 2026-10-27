@@ -16,6 +16,10 @@ const MS_PER_SECOND = 1_000;
 
 const MAX_FEED_ITEMS = 60;
 
+// How the raw line of the technical mode marks an attack made by hand, as the
+// lab's history names it.
+const MANUAL_MARK = 'via=manual';
+
 type FeedFilter = 'all' | FeedTone;
 
 const FILTERS: readonly FeedFilter[] = ['all', 'attack', 'defense', 'heal'];
@@ -87,13 +91,14 @@ function FeedEntry({ item, highlight, onHighlight }: FeedEntryProps): React.JSX.
 	useHoverRange(ref, range, onHighlight);
 
 	return (
-		<li ref={ref} className={styles.feedItem} data-tone={item.tone} data-hot={isHot}>
+		<li ref={ref} className={styles.feedItem} data-tone={item.tone} data-hot={isHot} data-manual={item.isManual}>
 			<span className={styles.feedMark} data-wide={(item.label?.length ?? 0) > 2} aria-hidden="true">
 				{item.label ?? '·'}
 			</span>
 			<span className={styles.feedText}>
 				<span className={styles.feedWhat}>
 					{item.what}
+					{item.isManual ? <span className={styles.feedManual}>{messages.feed.manualBadge}</span> : null}
 					{item.count > 1 ? <span className={styles.feedCount}>{format(messages.feed.times, { count: item.count })}</span> : null}
 				</span>
 				{isTechnical && item.code !== '' ? <code className={styles.feedCode}>{item.code}</code> : null}
@@ -119,7 +124,7 @@ function RawEvents({ events }: { events: readonly RoundEvent[] }): React.JSX.Ele
 }
 
 function rawLine(event: RoundEvent): string {
-	return [`t=${event.tMs}ms`, event.kind, event.target, event.detail, event.duration].filter(Boolean).join('  ');
+	return [`t=${event.tMs}ms`, event.kind, event.target, event.detail, event.duration, event.isManual ? MANUAL_MARK : ''].filter(Boolean).join('  ');
 }
 
 function timeOf(item: FeedItem): string {

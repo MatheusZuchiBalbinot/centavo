@@ -172,6 +172,7 @@ export const messages = {
 		trouble: 'Operações que o banco recusou ou que ficaram sem resposta. Sem resposta não quer dizer erro: na cura o banco esclarece cada uma.',
 		scenarios: 'Cenários desta família: {scenarios}.',
 		attackMarker: 'Ataques {label}, {time}: {what}',
+		attackMarkerManual: 'Ataques manuais {label}, {time}: {what}',
 	},
 	toasts: {
 		region: 'Avisos',
@@ -333,6 +334,7 @@ export const messages = {
 		unknownDefense: { what: 'O banco registrou uma defesa ({detail}).', expect: '' },
 		subjects: { reconciler: 'conciliador', sweeper: 'varredor', 'pix_out.submit': 'envio de PIX' },
 		manyTargets: '{count} processos',
+		manualBadge: 'manual',
 		filterLabel: 'Mostrar no feed',
 		raw: 'Dados crus ({count})',
 		filters: {
@@ -441,6 +443,7 @@ export const messages = {
 		troubleLabel: 'Recusadas ou sem resposta',
 		troubleHint: 'o banco esclarece cada uma na cura',
 		legendAttack: 'ataque',
+		legendManual: 'ataque manual',
 		chartHeal: 'cura',
 		expectedTitle: 'Esperado e resultado',
 		expectedLabel: 'O que esperávamos',
@@ -570,7 +573,13 @@ export const messages = {
 		linkButton: 'Rede {name}: {status}',
 		linkButtonFault: 'Rede {name}: {status}, {toxic}',
 		linkHelp: 'A rede {name}. Clique para ver o que aconteceu nela.',
-		traffic: { label: 'Cada ponto é uma operação dos clientes', ok: 'concluída', fail: 'recusada', info: 'sem resposta' },
+		traffic: {
+			label: 'No caminho dos clientes, cada ponto é uma operação',
+			ok: 'concluída',
+			fail: 'recusada',
+			info: 'sem resposta',
+			blocked: 'barrada por um corte ou uma queda',
+		},
 		reactions: {
 			'lease.acquired': 'assumiu o lease',
 			'fencing.refused': 'recusou uma gravação velha',

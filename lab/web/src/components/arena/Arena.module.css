@@ -535,6 +535,10 @@
 	background: var(--violet);
 }
 
+.trafficLegend [data-outcome='blocked']::before {
+	background: var(--danger);
+}
+
 .packets {
 	position: absolute;
 	inset: 0;

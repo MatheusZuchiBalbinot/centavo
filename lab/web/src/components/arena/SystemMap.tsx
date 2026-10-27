@@ -117,7 +117,7 @@ function LinkButton({ link, view, frame, selected, onSelect }: LinkButtonProps):
 }
 
 function TrafficLegend(): React.JSX.Element {
-	const { label, ok, fail, info } = messages.arena.traffic;
+	const { label, ok, fail, info, blocked } = messages.arena.traffic;
 
 	return (
 		<p className={styles.trafficLegend} aria-hidden="true">
@@ -125,6 +125,7 @@ function TrafficLegend(): React.JSX.Element {
 			<span data-outcome="ok">{ok}</span>
 			<span data-outcome="fail">{fail}</span>
 			<span data-outcome="info">{info}</span>
+			<span data-outcome="blocked">{blocked}</span>
 		</p>
 	);
 }

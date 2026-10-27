@@ -87,6 +87,34 @@
 	font-weight: 600;
 }
 
+.marker[data-manual='true'] line {
+	stroke: color-mix(in oklch, var(--violet) 55%, transparent);
+}
+
+.marker[data-manual='true'] rect {
+	fill: var(--violet-soft);
+	stroke: color-mix(in oklch, var(--violet) 60%, transparent);
+}
+
+.marker[data-manual='true'] text {
+	fill: var(--violet);
+}
+
+.marker[data-manual='true'][data-hot='true'] rect,
+.marker[data-manual='true']:focus-visible rect {
+	fill: var(--violet);
+	stroke: var(--violet);
+}
+
+.marker[data-manual='true'][data-hot='true'] text,
+.marker[data-manual='true']:focus-visible text {
+	fill: var(--primary-fg);
+}
+
+.marker[data-manual='true'][data-hot='true'] line {
+	stroke: var(--violet);
+}
+
 .ring {
 	fill: var(--surface);
 }
