@@ -228,7 +228,11 @@ processos, como um worker caindo e voltando.
 A arena reconstrói o estado do sistema a partir desses eventos, e o replay
 usa a mesma arena com o relógio controlado pelo player. Ela liga cada ataque
 à primeira defesa que veio depois dele e mede quanto o alvo levou para voltar,
-pelos estados dos processos que o laboratório registra. O painel tem três
+pelos estados dos processos que o laboratório registra. No pé da arena, as
+ocorrências põem cada ataque, cada defesa e cada transferência num ponto com a
+cor do seu tipo. O replay guarda cada transferência com as contas, o valor, o
+resultado e o tempo de resposta, e a rodada ao vivo as manda aos poucos pelo
+mesmo stream dos eventos. O painel tem três
 modos de linguagem (explicado, técnico e apresentação), glossário em
 tooltips, som opcional e um placar das rodadas. Ele segue a WCAG 2.2 AA: tudo
 funciona pelo teclado, e os testes das páginas rodam o axe.
