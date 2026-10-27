@@ -4,6 +4,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { appRoutes } from '../../App';
+import { formatClock } from '../../domain/duration';
 import type { RoundId } from '../../api/ids';
 import { API_ROUTES, roundEventsPath } from '../../api/routes';
 import { expectNoAxeViolations } from '../../test/axe';
@@ -274,7 +275,13 @@ describe('the round page', () => {
 
     await user.click(within(arena).getByRole('button', { name: 'Pausar' }));
 
-    expect(router.state.location.search).toMatch(/t=0%3A0[12]/);
+    // How far the replay got before the click depends on the machine; the
+    // link has to keep exactly where the player stopped.
+    const stoppedAt = Number(within(arena).getByRole('slider', { name: 'Momento da rodada' }).getAttribute('value'));
+    const moment = new URLSearchParams(router.state.location.search).get('t');
+
+    expect(moment).toBe(formatClock(stoppedAt / 1_000));
+    expect(stoppedAt).toBeGreaterThanOrEqual(1_000);
     expect(within(arena).getByRole('button', { name: 'Tocar' })).toBeInTheDocument();
   });
 
