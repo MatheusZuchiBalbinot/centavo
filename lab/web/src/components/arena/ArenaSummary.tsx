@@ -130,9 +130,13 @@ function GuaranteeChips({ replay, reading }: { replay: Replay; reading: AuditorR
 function GuaranteeChip({ id, view }: { id: GuaranteeId; view: GuaranteeView }): React.JSX.Element {
 	const copy = guaranteeCopy(id);
 
+	// A button so the keyboard reaches the full name in the tooltip, as the
+	// glossary's terms do.
 	return (
-		<li className={styles.guaranteeChip} data-tone={toneOf(view)} data-tooltip={copy.name}>
-			{copy.short}
+		<li>
+			<button type="button" className={styles.guaranteeChip} data-tone={toneOf(view)} data-tooltip={copy.name}>
+				{copy.short}
+			</button>
 		</li>
 	);
 }

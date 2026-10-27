@@ -175,8 +175,7 @@ export default function Arena(props: ArenaProps): React.JSX.Element {
 					selected={selected}
 					onSelect={handleSelect}
 				/>
-				{/* It scrolls on its own, so the keyboard needs a stop on it to scroll it. */}
-				<aside className={styles.side} tabIndex={0} aria-label={messages.arena.sideLabel}>
+				<aside className={styles.side} aria-label={messages.arena.sideLabel}>
 					{selected === null ? (
 						<ArenaSummary
 							replay={replay}

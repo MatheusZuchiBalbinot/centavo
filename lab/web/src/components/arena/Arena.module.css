@@ -114,11 +114,6 @@
 	border-left: 1px solid var(--border);
 }
 
-.side:focus-visible {
-	outline: 2px solid var(--focus);
-	outline-offset: -2px;
-}
-
 .card {
 	padding: 12px 14px;
 	border: 1px solid var(--border);
@@ -397,11 +392,19 @@
 
 .guaranteeChip {
 	padding: 2px 9px;
+	border: 0;
 	border-radius: var(--radius-full);
 	background: var(--surface-2);
 	color: var(--muted);
+	font: inherit;
 	font-size: var(--text-xs);
 	font-weight: 500;
+	cursor: help;
+}
+
+.guaranteeChip:focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: 2px;
 }
 
 .guaranteeChip[data-tone='ok'] {
