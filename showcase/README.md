@@ -1,10 +1,10 @@
 # Showcase
 
 As telas do painel do Centavo, capturadas de rodadas reais do laboratório. A
-r0012 aparece no sorteio que a criou, na página do resultado e no replay. A
-arena ao vivo é da r0027, uma rodada de rede caindo e voltando em que também
-houve ataques feitos à mão. Todas as rodadas mostradas passaram, com as oito
-garantias mantidas.
+r0012 aparece na página do resultado e no replay, e o sorteio é o que criou a
+r0028. A arena ao vivo é da r0027, uma rodada de rede caindo e voltando em
+que também houve ataques feitos à mão. Todas as rodadas mostradas passaram,
+com as oito garantias mantidas.
 
 ## Início
 
@@ -12,18 +12,19 @@ garantias mantidas.
 
 A página inicial convida a tentar fazer o banco perder um centavo. Dá para
 escolher um dos seis ataques e a duração, ou apertar "Ataque surpresa". Ao
-lado, o cartão do laboratório mostra a sequência atual (9 rodadas seguidas sem
-perder um centavo), as operações conferidas nas últimas rodadas e o recorde de
-ataques numa rodada aprovada, com link para ela.
+lado, o cartão do laboratório mostra a sequência atual (23 rodadas seguidas
+sem perder um centavo), as operações conferidas nas últimas rodadas e os
+recordes, como o de ataques numa rodada aprovada: 45, na r0023, com link para
+ela.
 
 ## O sorteio
 
 ![O sorteio do ataque surpresa](sorteio.png)
 
 O ataque surpresa gira uma roleta com os ataques do cardápio e para em um.
-Aqui caiu em "Relógio adiantado e worker zumbi", com 5 minutos. A duração
-também é sorteada. Antes da contagem de 3 segundos, dá para deixar um
-palpite: o banco aguenta ou vai quebrar. O palpite fica guardado no
+Aqui caiu em "Relógio adiantado e worker zumbi", com 5 minutos, e virou a
+r0028. A duração também é sorteada. Antes da contagem de 3 segundos, dá para
+deixar um palpite: o banco aguenta ou vai quebrar. O palpite fica guardado no
 navegador, e o veredito diz se ele acertou.
 
 ## A arena ao vivo
