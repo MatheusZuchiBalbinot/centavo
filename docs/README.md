@@ -132,6 +132,15 @@ caminho diferente:
 Toda configuração de caos tem prazo de validade, renovado enquanto a rodada
 dura. Se o laboratório morrer, o caos para sozinho.
 
+Quem assiste a uma rodada ao vivo também pode atacar, enquanto durar a fase de
+ataque. Na arena, um clique num processo ou numa conexão abre o que aconteceu
+ali e os botões: derrubar o processo, congelá-lo por 20 segundos, cortar a
+conexão por 15 ou deixá-la lenta por 20. O pedido vira um arquivo na pasta da
+rodada, o bot o executa com as mesmas ferramentas do roteiro e grava no
+histórico que o ataque foi manual. O verificador confere a rodada do mesmo
+jeito. São no máximo 12 ataques por minuto, para que ninguém segure o banco no
+chão a rodada inteira.
+
 ## As defesas
 
 Cada técnica do banco é uma defesa com nome. O perfil `robust` liga todas, e
@@ -216,7 +225,9 @@ ataque, cada defesa que o banco registrou e cada mudança de estado dos
 processos, como um worker caindo e voltando.
 
 A arena reconstrói o estado do sistema a partir desses eventos, e o replay
-usa a mesma arena com o relógio controlado pelo player. O painel tem três
+usa a mesma arena com o relógio controlado pelo player. Ela liga cada ataque
+à primeira defesa que veio depois dele e mede quanto o alvo levou para voltar,
+pelos estados dos processos que o laboratório registra. O painel tem três
 modos de linguagem (explicado, técnico e apresentação), glossário em
 tooltips, som opcional e um placar das rodadas. Ele segue a WCAG 2.2 AA: tudo
 funciona pelo teclado, e os testes das páginas rodam o axe.
@@ -259,10 +270,10 @@ Algumas decisões de estrutura:
 
 ## Testes e CI
 
-São 250 testes em Go. Os do banco rodam contra um PostgreSQL real com
+São mais de 260 testes em Go. Os do banco rodam contra um PostgreSQL real com
 testcontainers, e há testes baseados em propriedades (rapid) para o ledger e
-fuzzing no validador do histórico. O painel tem 94 testes, com verificação de
-acessibilidade.
+fuzzing no validador do histórico. O painel tem mais de 110 testes, com
+verificação de acessibilidade.
 
 O CI roda `go vet`, testes com `-race`, um piso de cobertura e golangci-lint
 nos dois builds de cada módulo, govulncheck, `npm audit`, os testes do painel, a construção

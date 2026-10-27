@@ -1,9 +1,10 @@
 # Showcase
 
 As telas do painel do Centavo, capturadas de rodadas reais do laboratório. A
-r0012 aparece do começo ao fim: o sorteio que a criou, a arena ao vivo, a
-página do resultado e o replay. Todas as rodadas mostradas passaram, com as
-oito garantias mantidas.
+r0012 aparece no sorteio que a criou, na página do resultado e no replay. A
+arena ao vivo é da r0022, uma rodada de partições de rede em que também
+houve ataques feitos à mão. Todas as rodadas mostradas passaram, com as oito
+garantias mantidas.
 
 ## Início
 
@@ -27,14 +28,37 @@ navegador, e o veredito diz se ele acertou.
 
 ## A arena ao vivo
 
-![A arena da r0012 aos 20 segundos](arena-ao-vivo.png)
+![A arena da r0022 aos 2 minutos](arena-ao-vivo.png)
 
 A rodada abre em tela cheia. O mapa mostra os processos do sistema e as
-conexões entre eles, com pacotes correndo onde há tráfego. Cada ataque marca
-o alvo: na r0012, a API está com o relógio dez minutos atrasado, o worker 2 com
-29 segundos adiantado, e o parceiro está mentindo. À direita, o auditor soma
-todos os saldos por fora do banco a cada 2 segundos e continua em R$ 0,00.
-Embaixo, a linha do tempo numera os ataques na ordem em que caíram.
+conexões entre eles, com pontos correndo onde há tráfego. Na entrada dos
+clientes, cada ponto é uma operação, e a cor diz como ela terminou: azul
+concluída, amarelo recusada, roxo sem resposta. A r0022 saiu do sorteio de
+"Tudo junto" e caiu em partições curtas, uma conexão de cada vez. Aos 2
+minutos, as duas conexões dos workers com o parceiro estão cortadas, e o que
+passa por elas bate no corte e volta, em vermelho. Quando o banco se defende,
+o processo que agiu mostra o que fez: o worker 2 acabou de retomar 7 PIX de
+uma tentativa anterior.
+
+À direita, o auditor continua em R$ 0,00. Embaixo dele, cada ataque aparece
+com a primeira defesa que veio depois e o tempo até o alvo voltar ao normal.
+No ataque 11, as conexões da API e do worker 1 com o Postgres falharam; o
+worker 2 retomou 9 PIX 0,7 segundo depois, e a rede voltou em 3,7 segundos.
+A linha do tempo, no pé da tela, põe os ataques numa faixa e as defesas em
+outra, com a mesma numeração do lado direito.
+
+## Ataque manual
+
+![O worker 1 logo depois de um ataque manual](ataque-manual.png)
+
+Enquanto dura a fase de ataque, dá para atacar à mão. Um clique num processo
+ou numa conexão abre o que aconteceu ali e os botões: derrubar o processo,
+congelá-lo por 20 segundos, cortar a conexão por 15 ou deixá-la lenta por 20.
+Na imagem, o worker 1 acabou de cair no ataque manual 12. Ele está
+reiniciando há 2 segundos, e os botões só voltam quando ele estiver de pé. O
+histórico ao lado mostra o worker 1 retomando os PIX que tinha deixado pela
+metade. A r0022 teve quatro ataques manuais, e o verificador conferiu a
+rodada como confere as outras.
 
 ## O veredito
 
@@ -44,7 +68,9 @@ Quando o verificador termina, o veredito cai na arena. A r0013 levou 36
 falhas injetadas no meio do código, e o banco respondeu com 34 defesas
 registradas: entregas retomadas por outro worker, respostas repetidas tiradas
 da chave de idempotência. Os pontos verdes da linha do tempo são essas
-defesas. Daqui dá para assistir de novo ou abrir a página da rodada.
+defesas. No ataque 31, uma falha no meio do código do worker 2, o worker 1
+retomou 5 PIX 2 segundos depois. Daqui dá para assistir de novo ou abrir a
+página da rodada.
 
 ## O replay
 
@@ -94,7 +120,7 @@ registro cru do histórico.
 
 ## Modo Apresentação
 
-![A vitrine tocando a r0013 em replay](vitrine.png)
+![A vitrine tocando a r0022 em replay](vitrine.png)
 
 No modo Apresentação, a rodada ao vivo abre direto na arena. Com o laboratório
 livre, a página ao vivo vira uma vitrine que toca a rodada aprovada mais
