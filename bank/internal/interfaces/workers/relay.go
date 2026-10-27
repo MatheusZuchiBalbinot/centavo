@@ -7,12 +7,10 @@ import (
 	"centavo/bank/internal/domain/transfer"
 )
 
-// Relayer sends one transfer to the partner.
 type Relayer interface {
 	Relay(ctx context.Context, id transfer.ID) error
 }
 
-// RelayNotified relays every transfer announced on the channel.
 func RelayNotified(relay Relayer, logger *slog.Logger) func(ctx context.Context, payload string) {
 	return func(ctx context.Context, payload string) {
 		id, err := transfer.ParseID(payload)

@@ -9,7 +9,6 @@ import (
 	"centavo/bank/internal/platform/failpoint"
 )
 
-// TransferInput asks to move money between two customer accounts.
 type TransferInput struct {
 	From   ledger.AccountID
 	To     ledger.AccountID
@@ -17,30 +16,25 @@ type TransferInput struct {
 	Write  WriteContext
 }
 
-// TransferResult is what the client gets back from an internal transfer.
 type TransferResult struct {
 	TransactionID ledger.TransactionID
 	FromBalance   money.Balance
 	CreatedAt     time.Time
 }
 
-// TransferInternal moves money between two customers.
 type TransferInternal struct {
 	unitOfWork UnitOfWork
 	locker     Locker
 }
 
-// NewTransferInternal builds the use case.
 func NewTransferInternal(deps MoneyDependencies) TransferInternal {
 	return TransferInternal{unitOfWork: deps.UnitOfWork, locker: deps.Locker}
 }
 
-// Execute locks both balances in id order (balance_locking), checks funds in
-// the domain and writes the transaction, the debit and the credit in one unit
-// of work (atomic_ledger). Without balance_locking the source balance is read
-// unlocked and overwritten with the value computed here, so two concurrent
-// debits can both pass the check and one of them is lost; without atomic_ledger
-// a crash at `transfer.after_debit_before_credit` leaves the debit without its
+// Without balance_locking the source balance is read unlocked and
+// overwritten with the value computed here, so two concurrent debits can
+// both pass the check and one of them is lost; without atomic_ledger a crash
+// at `transfer.after_debit_before_credit` leaves the debit without its
 // credit.
 func (t TransferInternal) Execute(ctx context.Context, input TransferInput) (TransferResult, error) {
 	operationID, err := ledger.NewOperationID()
@@ -61,7 +55,6 @@ func (t TransferInternal) Execute(ctx context.Context, input TransferInput) (Tra
 	return result, err
 }
 
-// Apply runs the transfer inside a unit of work that is already open.
 func (t TransferInternal) Apply(ctx context.Context, stores MoneyStores, operationID ledger.OperationID, input TransferInput) (TransferResult, error) {
 	err := ledger.CheckTransferAccounts(input.From, input.To)
 	if err != nil {

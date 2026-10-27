@@ -22,7 +22,6 @@ import (
 	"centavo/bank/internal/platform/correlation"
 )
 
-// The actions a failpoint can take.
 const (
 	ActionKill  Action = "kill"
 	ActionDelay Action = "delay"
@@ -35,8 +34,7 @@ const (
 
 const (
 	// maxTTL bounds every rule: chaos stops by itself if the lab dies.
-	maxTTL = time.Hour
-	// envRuleTTL is the life of a rule armed by CENTAVO_FAILPOINTS.
+	maxTTL     = time.Hour
 	envRuleTTL = time.Hour
 	maxDelay   = 30 * time.Second
 	// maxFreeze lets a pause outlast the 30 s leases with room to spare.
@@ -44,7 +42,6 @@ const (
 	specSep   = ","
 )
 
-// known lists the failpoints compiled into the bank; arming any other name fails.
 var known = []Name{
 	TransferAfterDebitBeforeCredit,
 	APIAfterCommitBeforeResponse,
@@ -58,7 +55,6 @@ var known = []Name{
 	SweeperAfterStatusBeforeTransition,
 }
 
-// The capture groups of specPattern.
 const (
 	groupName = iota + 1
 	groupProbability
@@ -67,13 +63,11 @@ const (
 	groupMaxFires
 )
 
-// eventsFileMode is the permission of the failpoint events file.
 const eventsFileMode = 0o640
 
 // specPattern is name=[probability%]action[(argument)][*max_fires].
 var specPattern = regexp.MustCompile(`^([a-z_.]+)=(?:([0-9]+(?:\.[0-9]+)?)%)?([a-z]+)(?:\(([^)]*)\))?(?:\*([0-9]+))?$`)
 
-// Errors of parsing failpoint rules.
 var (
 	ErrUnknownFailpoint = errors.New("unknown failpoint")
 	ErrInvalidRule      = errors.New("invalid failpoint rule")
@@ -92,16 +86,14 @@ var events = struct {
 	file   *os.File
 }{}
 
-// Action is what a failpoint does when it fires.
 type Action string
 
-// Match narrows a rule to some requests, for exact reproduction.
+// For exact reproduction.
 type Match struct {
 	CorrelationPrefix string `json:"correlation_prefix,omitempty"`
 	CorrelationID     string `json:"correlation_id,omitempty"`
 }
 
-// Rule arms one failpoint.
 type Rule struct {
 	Action      Action  `json:"action"`
 	Arg         string  `json:"arg,omitempty"`
@@ -111,11 +103,9 @@ type Rule struct {
 	SkipHits int    `json:"skip_hits,omitempty"`
 	Match    Match  `json:"match"`
 	TTL      string `json:"ttl"`
-	// Seed makes the decisions of this rule reproducible.
-	Seed uint64 `json:"seed"`
+	Seed     uint64 `json:"seed"`
 }
 
-// RuleState is a rule with its counters, as GET /chaos/failpoints shows it.
 type RuleState struct {
 	Name      Name      `json:"name"`
 	Rule      Rule      `json:"rule"`
@@ -124,7 +114,6 @@ type RuleState struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
-// EventsConfig says where fired failpoints are recorded.
 type EventsConfig struct {
 	Dir      string
 	Service  string
@@ -161,8 +150,8 @@ type event struct {
 	Fire          int       `json:"fire"`
 }
 
-// Arm installs or renews a rule. Re-arming the same rule only extends its
-// life, so the lab can renew it like a lease without resetting the counters.
+// Re-arming the same rule only extends its life, so the lab can renew it
+// like a lease without resetting the counters.
 func Arm(name Name, rule Rule, now time.Time) error {
 	ttl, delay, err := validate(name, rule)
 	if err != nil {
@@ -185,7 +174,6 @@ func Arm(name Name, rule Rule, now time.Time) error {
 	return nil
 }
 
-// DisarmAll clears every rule: the cure.
 func DisarmAll() {
 	registry.mu.Lock()
 	defer registry.mu.Unlock()
@@ -193,7 +181,6 @@ func DisarmAll() {
 	clear(registry.rules)
 }
 
-// Rules lists the live rules and their counters.
 func Rules(now time.Time) []RuleState {
 	registry.mu.Lock()
 	defer registry.mu.Unlock()
@@ -213,8 +200,8 @@ func Rules(now time.Time) []RuleState {
 	return states
 }
 
-// ArmFromSpec arms the rules of CENTAVO_FAILPOINTS, to reproduce a case
-// without the lab: "relay.after_partner_call_before_save=5%kill*50,...".
+// To reproduce a case without the lab:
+// "relay.after_partner_call_before_save=5%kill*50,...".
 func ArmFromSpec(spec string, seed uint64, now time.Time) error {
 	if strings.TrimSpace(spec) == "" {
 		return nil
@@ -235,8 +222,8 @@ func ArmFromSpec(spec string, seed uint64, now time.Time) error {
 	return nil
 }
 
-// ConfigureEvents sets where fired failpoints are recorded. Until it is
-// called, no failpoint fires: an unrecorded fault would be invisible chaos.
+// Until it is called, no failpoint fires: an unrecorded fault would be
+// invisible chaos.
 func ConfigureEvents(config EventsConfig) {
 	events.mu.Lock()
 	defer events.mu.Unlock()
@@ -331,8 +318,8 @@ func execute(ctx context.Context, fired firing) error {
 	}
 }
 
-// record appends the event and fsyncs it before the action runs, so even a
-// SIGKILL the process sends itself is in the history.
+// Fsynced before the action runs, so even a SIGKILL the process sends
+// itself is in the history.
 func record(ctx context.Context, fired firing) error {
 	events.mu.Lock()
 	defer events.mu.Unlock()

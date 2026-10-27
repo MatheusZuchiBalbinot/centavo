@@ -11,7 +11,6 @@ import (
 	"centavo/bank/internal/domain/transfer"
 )
 
-// Event types the partner sends.
 const (
 	EventSettled  EventType = "transfer.settled"
 	EventRejected EventType = "transfer.rejected"
@@ -26,10 +25,8 @@ var expectedFrom = map[EventType]transfer.Status{
 	EventSettled: transfer.StatusSent, EventRejected: transfer.StatusSent, EventReturned: transfer.StatusConfirmed,
 }
 
-// EventType is the kind of a partner webhook.
 type EventType string
 
-// PartnerEvent is a webhook from the partner.
 type PartnerEvent struct {
 	ID          string
 	Type        EventType
@@ -40,39 +37,33 @@ type PartnerEvent struct {
 	AccountID   string
 }
 
-// NaiveWebhook applies partner events as they arrive, in the request that
-// carries them: no inbox, no dedup.
+// No inbox, no dedup: events apply in the request that carries them.
 type NaiveWebhook struct {
 	unitOfWork UnitOfWork
 	events     eventApplier
 }
 
-// eventApplier turns a partner event into its effect.
 type eventApplier struct {
 	machine StateMachine
 }
 
-// eventStores are what applying any partner event may write.
 type eventStores interface {
 	TransitionStores
 	creditStores
 }
 
-// creditStores are what crediting a PIX in writes.
 type creditStores interface {
 	PixStore
 	PositionStore
 	LedgerWriter
 }
 
-// NewNaiveWebhook builds the handler's use case.
 func NewNaiveWebhook(unitOfWork UnitOfWork, machine StateMachine) NaiveWebhook {
 	return NaiveWebhook{unitOfWork: unitOfWork, events: eventApplier{machine: machine}}
 }
 
-// Apply runs the event's effect. With the guarded machine (state_machine), an
-// event that does not fit the transfer is refused, and the partner delivers it
-// again later.
+// With the guarded machine, an event that does not fit the transfer is
+// refused, and the partner delivers it again later.
 func (w NaiveWebhook) Apply(ctx context.Context, event PartnerEvent) error {
 	return w.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
 		return w.events.apply(ctx, stores, event)
@@ -117,8 +108,8 @@ func failureCodeOf(event PartnerEvent) string {
 	return event.Reason
 }
 
-// creditIncoming credits a PIX in. The unique end_to_end_id of
-// incoming_transfers keeps it to one credit in every profile.
+// The unique end_to_end_id of incoming_transfers keeps it to one credit in
+// every profile.
 func creditIncoming(ctx context.Context, stores creditStores, event PartnerEvent) error {
 	accountID, err := ledger.ParseAccountID(event.AccountID)
 	if err != nil {

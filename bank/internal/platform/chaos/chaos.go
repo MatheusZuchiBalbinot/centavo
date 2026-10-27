@@ -1,5 +1,4 @@
-// Package chaos wires the chaos controls of a chaoslab build: the control
-// server on :9091, the failpoint events and the chaos-kill command. The
+// Package chaos wires the chaos controls of a chaoslab build. The
 // production build compiles a version that does nothing.
 package chaos
 
@@ -7,10 +6,8 @@ package chaos
 // network.
 const Addr = ":9091"
 
-// EventsDir is the shared volume where fired failpoints are recorded.
 const EventsDir = "/lab/events"
 
-// Config is what the chaos controls need from the process configuration.
 type Config struct {
 	Token         string
 	FailpointSpec string

@@ -1,5 +1,3 @@
-// Package defenses parses the defense profile that selects, at run time, which
-// defenses (atomic_ledger to durable_db) are active.
 package defenses
 
 import (
@@ -9,7 +7,6 @@ import (
 	"strings"
 )
 
-// The defenses, atomic_ledger to durable_db.
 const (
 	AtomicLedger       Defense = "atomic_ledger"
 	BalanceLocking     Defense = "balance_locking"
@@ -32,7 +29,6 @@ const (
 	disablePrefix    = "-"
 )
 
-// Errors of parsing a defense profile.
 var (
 	ErrEmptyProfile      = errors.New("defense profile is empty")
 	ErrUnknownBase       = errors.New("defense profile must start with robust or naive")
@@ -40,13 +36,10 @@ var (
 	ErrMissingPrefix     = errors.New("defense modifiers must start with '-'")
 	ErrUnknownDefense    = errors.New("unknown defense")
 	ErrDuplicateDefense  = errors.New("defense disabled more than once")
-	// ErrNoNaiveVariant means the binary has no naive variant of a defense: the
-	// production build never does.
-	ErrNoNaiveVariant = errors.New("this binary has no naive variant of the defense")
+	ErrNoNaiveVariant    = errors.New("this binary has no naive variant of the defense")
 )
 
-// all lists the defenses in catalog order (atomic_ledger to durable_db); String
-// relies on it to print a canonical profile.
+// String relies on this order to print a canonical profile.
 var all = []Defense{
 	AtomicLedger,
 	BalanceLocking,
@@ -62,20 +55,16 @@ var all = []Defense{
 	DurableDB,
 }
 
-// Defense is the flag name of one defense technique.
 type Defense string
 
-// Profile is an immutable set of disabled defenses.
 type Profile struct {
 	disabled []Defense
 }
 
-// All returns every defense in catalog order.
 func All() []Defense {
 	return slices.Clone(all)
 }
 
-// Robust returns the profile with every defense enabled.
 func Robust() Profile {
 	return Profile{}
 }
@@ -101,17 +90,14 @@ func ParseProfile(raw string) (Profile, error) {
 	return parseRobustModifiers(modifiers)
 }
 
-// IsEnabled reports whether the defense is active in this profile.
 func (p Profile) IsEnabled(defense Defense) bool {
 	return !slices.Contains(p.disabled, defense)
 }
 
-// IsRobust reports whether every defense is enabled.
 func (p Profile) IsRobust() bool {
 	return len(p.disabled) == 0
 }
 
-// String returns the canonical form of the profile, which ParseProfile accepts.
 func (p Profile) String() string {
 	if p.IsRobust() {
 		return robustKeyword
@@ -130,8 +116,6 @@ func (p Profile) String() string {
 	return strings.Join(parts, profileSeparator)
 }
 
-// Notes explains the combinations where one defense depends on another that is
-// off; /internal/health shows them.
 func (p Profile) Notes() []string {
 	var notes []string
 

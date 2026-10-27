@@ -23,35 +23,29 @@ import (
 )
 
 const (
-	signatureHeader = "X-Partner-Signature"
-	// signatureTolerance bounds how old a signed webhook may be.
+	signatureHeader    = "X-Partner-Signature"
 	signatureTolerance = 5 * time.Minute
 )
 
 var errBadSignature = errors.New("webhook signature is missing, stale or wrong")
 
-// PixOutCreator creates PIX out inside a unit of work.
 type PixOutCreator interface {
 	Apply(ctx context.Context, stores application.PixOutStores, operationID ledger.OperationID, input application.PixOutInput) (application.PixOutResult, error)
 }
 
-// PixOutGetter reads one PIX out.
 type PixOutGetter interface {
 	Execute(ctx context.Context, id transfer.ID) (application.ExternalTransferView, error)
 }
 
-// WebhookApplier applies a partner event.
 type WebhookApplier interface {
 	Apply(ctx context.Context, event application.PartnerEvent) error
 }
 
-// PixUseCases are the PIX entry points of the API.
 type PixUseCases struct {
-	Create    PixOutCreator
-	Publisher application.Publication
-	Get       PixOutGetter
-	Webhook   WebhookApplier
-	// WebhookSecret signs the partner's webhooks.
+	Create        PixOutCreator
+	Publisher     application.Publication
+	Get           PixOutGetter
+	Webhook       WebhookApplier
 	WebhookSecret []byte
 }
 
@@ -68,8 +62,7 @@ type pixOutResponse struct {
 	CreatedAt  time.Time           `json:"created_at"`
 }
 
-// pendingPublication carries the transfer a write created to the step after
-// its commit; a replayed write creates nothing and publishes nothing.
+// A replayed write creates nothing and publishes nothing.
 type pendingPublication struct {
 	transferID *transfer.ID
 }
@@ -207,8 +200,8 @@ func newExternalTransferResponse(view application.ExternalTransferView) external
 	}
 }
 
-// webhook takes a partner event. Only a valid signature gets in; what it
-// does with the event depends on the profile (naive: applies it right here).
+// Only a valid signature gets in; what happens next depends on the profile
+// (naive: applies it right here).
 func (a apiHandlers) webhook(w http.ResponseWriter, r *http.Request) {
 	body, err := readBody(w, r)
 	if err != nil {
@@ -261,8 +254,7 @@ func (a apiHandlers) webhook(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"received": true})
 }
 
-// verifySignature checks t=<unix>,v1=<hex HMAC-SHA256(secret, t + "." + body)>
-// in constant time, refusing signatures older than the tolerance.
+// In constant time, refusing signatures older than the tolerance.
 func verifySignature(header string, body, secret []byte, now time.Time) bool {
 	fields, hasTimestamp := strings.CutPrefix(header, "t=")
 	timestampText, signature, hasSignature := strings.Cut(fields, ",v1=")

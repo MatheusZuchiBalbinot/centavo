@@ -11,7 +11,6 @@ import (
 	"centavo/bank/internal/domain/transfer"
 )
 
-// Circuit breaker settings.
 const (
 	breakerWindow     = 20
 	breakerOpenFor    = 10 * time.Second
@@ -19,7 +18,6 @@ const (
 	breakerFailureDen = 2
 )
 
-// ErrBreakerOpen is a call the breaker did not let through.
 var ErrBreakerOpen = errors.New("partner circuit breaker is open")
 
 const (
@@ -46,12 +44,10 @@ type Breaker struct {
 
 type breakerState int
 
-// NewBreaker wraps a client.
 func NewBreaker(client Client) *Breaker {
 	return &Breaker{client: client, now: time.Now}
 }
 
-// Submit sends the PIX if the breaker allows it.
 func (b *Breaker) Submit(ctx context.Context, submission application.PartnerSubmission) application.PartnerAnswer {
 	if !b.allow() {
 		return application.PartnerUnknown
@@ -63,7 +59,6 @@ func (b *Breaker) Submit(ctx context.Context, submission application.PartnerSubm
 	return answer
 }
 
-// Status queries the partner if the breaker allows it.
 func (b *Breaker) Status(ctx context.Context, endToEndID transfer.EndToEndID) (application.AuthoritativeStatus, error) {
 	if !b.allow() {
 		return application.AuthoritativeStatus{}, ErrBreakerOpen
@@ -75,7 +70,6 @@ func (b *Breaker) Status(ctx context.Context, endToEndID transfer.EndToEndID) (a
 	return status, err
 }
 
-// Statement reads the partner's statement if the breaker allows it.
 func (b *Breaker) Statement(ctx context.Context, afterSeq int64, limit int) ([]application.StatementEntry, error) {
 	if !b.allow() {
 		return nil, ErrBreakerOpen
@@ -137,7 +131,6 @@ func (b *Breaker) record(isSuccess bool) {
 	}
 }
 
-// closeOrReopen settles the half-open probe.
 func (b *Breaker) closeOrReopen(isSuccess bool) {
 	b.isProbeOnAir = false
 

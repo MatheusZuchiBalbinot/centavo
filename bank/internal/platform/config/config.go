@@ -1,4 +1,3 @@
-// Package config loads and validates the process configuration at startup.
 package config
 
 import (
@@ -10,13 +9,11 @@ import (
 	"centavo/bank/internal/platform/defenses"
 )
 
-// The bases a seed may be written in.
 const (
 	decimalBase = 10
 	hexBase     = 16
 )
 
-// The environments the bank knows.
 const (
 	EnvLocal      Env = "local"
 	EnvChaoslab   Env = "chaoslab"
@@ -38,7 +35,6 @@ const (
 	minChaosTokenLength = 32
 )
 
-// Errors of reading the configuration.
 var (
 	ErrMissingVariable        = errors.New("required environment variable is not set")
 	ErrUnknownEnv             = errors.New("unknown CENTAVO_ENV")
@@ -51,13 +47,10 @@ var (
 	ErrMissingPartner         = errors.New("the worker role needs PARTNER_BASE_URL and PARTNER_PARTICIPANT_ID")
 )
 
-// Env is the deployment environment the process declares it runs in.
 type Env string
 
-// LookupFunc reads one environment variable; os.LookupEnv satisfies it.
 type LookupFunc func(key string) (string, bool)
 
-// Config is the validated configuration shared by every bank role.
 type Config struct {
 	Env         Env
 	Defenses    defenses.Profile
@@ -66,14 +59,12 @@ type Config struct {
 	Partner     Partner
 }
 
-// Partner is how the bank reaches the PIX partner and checks its webhooks.
 type Partner struct {
 	BaseURL       string
 	ParticipantID string
 	WebhookSecret string
 }
 
-// Chaos is the chaos configuration; only a chaoslab build accepts it.
 type Chaos struct {
 	Token         string
 	FailpointSpec string
@@ -82,7 +73,6 @@ type Chaos struct {
 	Instance string
 }
 
-// RequireWebhookSecret is the api role's check: unsigned webhooks never get in.
 func (p Partner) RequireWebhookSecret() error {
 	if len(p.WebhookSecret) < minChaosTokenLength {
 		return ErrWeakWebhookSecret
@@ -91,7 +81,6 @@ func (p Partner) RequireWebhookSecret() error {
 	return nil
 }
 
-// RequireEndpoint is the worker role's check: the relay must know the partner.
 func (p Partner) RequireEndpoint() error {
 	isPartnerMissing := p.BaseURL == "" || p.ParticipantID == ""
 	if isPartnerMissing {
@@ -101,7 +90,6 @@ func (p Partner) RequireEndpoint() error {
 	return nil
 }
 
-// Load reads the configuration from the environment.
 func Load(lookup LookupFunc) (Config, error) {
 	rawEnv, err := require(lookup, envVariable)
 	if err != nil {
@@ -141,10 +129,8 @@ func Load(lookup LookupFunc) (Config, error) {
 	return Config{Env: env, Defenses: profile, DatabaseURL: databaseURL, Chaos: chaos, Partner: partner}, nil
 }
 
-// ValidateBuild enforces the safety rule that chaos code exists only in
-// chaoslab builds: chaos code never runs in production, production never runs a
-// naive variant or takes chaos configuration, and the chaos port has a real
-// secret.
+// Chaos code never runs in production, production never runs a naive
+// variant or takes chaos configuration, and the chaos port has a real secret.
 func ValidateBuild(configuration Config, isChaosBuild bool) error {
 	isChaosBuildInProduction := isChaosBuild && configuration.Env == EnvProduction
 	if isChaosBuildInProduction {
@@ -183,7 +169,6 @@ func loadChaos(lookup LookupFunc) (Chaos, error) {
 	return Chaos{Token: token, FailpointSpec: spec, Seed: seed, Instance: instance}, nil
 }
 
-// parseSeed reads 0x5eed0142 or a decimal; an empty seed is zero.
 func parseSeed(raw string) (uint64, error) {
 	if raw == "" {
 		return 0, nil

@@ -11,39 +11,31 @@ import (
 	"centavo/bank/internal/platform/failpoint"
 )
 
-// Sweeper timings.
 const (
 	SweeperInterval = 10 * time.Second
 	SweeperLeaseTTL = 30 * time.Second
-	// StuckAfter is how long a transfer may sit in created or sent before
-	// the sweeper asks the partner about it.
-	StuckAfter   = 30 * time.Second
-	sweeperBatch = 100
+	StuckAfter      = 30 * time.Second
+	sweeperBatch    = 100
 )
 
-// LeaseSweeper is the sweeper's row in worker_leases.
 const LeaseSweeper = "sweeper"
 
-// errSweeperLeaseLost stops a pass whose lease moved to another worker.
 var errSweeperLeaseLost = errors.New("sweeper lease lost to another worker")
 
-// StuckTransfer is a transfer the saga left in created or sent.
 type StuckTransfer struct {
 	ID         transfer.ID
 	EndToEndID transfer.EndToEndID
 	ClientRef  string
 }
 
-// LeaseStore keeps the leases of the singleton loops.
 type LeaseStore interface {
-	// AcquireLease takes or renews the lease; the token grows when the lease
-	// changes hands. false means another holder has it.
+	// The token grows when the lease changes hands.
 	AcquireLease(ctx context.Context, lease Lease, ttl time.Duration) (int64, bool, error)
 	// AcquireLeaseAt is the naive acquisition: expiry computed from the
 	// caller's own clock.
 	AcquireLeaseAt(ctx context.Context, lease Lease, now time.Time, ttl time.Duration) (int64, bool, error)
-	// HoldsLease checks the lease and keeps it from moving until the
-	// transaction ends, so the check and the writes after it are atomic.
+	// Keeps the lease from moving until the transaction ends, so the check and
+	// the writes after it are atomic.
 	HoldsLease(ctx context.Context, lease Lease, token int64) (bool, error)
 	ListStuck(ctx context.Context, olderThan time.Duration, limit int) ([]StuckTransfer, error)
 }
@@ -61,7 +53,6 @@ type Sweeper struct {
 	logger     *slog.Logger
 }
 
-// SweeperConfig wires a sweeper.
 type SweeperConfig struct {
 	UnitOfWork UnitOfWork
 	Lease      LeasePolicy
@@ -71,14 +62,12 @@ type SweeperConfig struct {
 	Logger     *slog.Logger
 }
 
-// NewSweeper builds the sweeper.
 func NewSweeper(config SweeperConfig) Sweeper {
 	return Sweeper{
 		unitOfWork: config.UnitOfWork, lease: config.Lease, machine: config.Machine, partner: config.Partner, owner: config.Owner, logger: config.Logger,
 	}
 }
 
-// Run sweeps until ctx ends.
 func (s Sweeper) Run(ctx context.Context) {
 	ticker := time.NewTicker(SweeperInterval)
 	defer ticker.Stop()
@@ -97,8 +86,6 @@ func (s Sweeper) Run(ctx context.Context) {
 	}
 }
 
-// RunOnce sweeps the transfers stuck for longer than olderThan, if this
-// worker holds the lease.
 func (s Sweeper) RunOnce(ctx context.Context, olderThan time.Duration) error {
 	var (
 		token  int64
@@ -140,8 +127,8 @@ func (s Sweeper) RunOnce(ctx context.Context, olderThan time.Duration) error {
 	return nil
 }
 
-// sweep asks the partner outside any transaction, then walks the transfer to
-// the answer in a transaction that first checks the lease.
+// Asks the partner outside any transaction, then walks the transfer to the
+// answer in a transaction that first checks the lease.
 func (s Sweeper) sweep(ctx context.Context, candidate StuckTransfer, token int64) error {
 	ctx = correlation.With(ctx, candidate.ClientRef)
 

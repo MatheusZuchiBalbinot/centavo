@@ -21,7 +21,6 @@ const (
 	retryAfterSeconds = 1
 )
 
-// limiter is a token bucket: burst tokens, refilled at perSecond.
 type limiter struct {
 	mu        sync.Mutex
 	perSecond float64
@@ -31,7 +30,6 @@ type limiter struct {
 	now       func() time.Time
 }
 
-// rateLimits are the limiters of the route groups, built once per handler.
 type rateLimits struct {
 	writes  *limiter
 	resolve *limiter
@@ -50,7 +48,6 @@ func newLimiter(perSecond, burst int, now func() time.Time) *limiter {
 	return &limiter{perSecond: float64(perSecond), burst: float64(burst), tokens: float64(burst), last: now(), now: now}
 }
 
-// allow takes one token, if there is one.
 func (l *limiter) allow() bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -68,8 +65,7 @@ func (l *limiter) allow() bool {
 	return true
 }
 
-// limited refuses a request with 429 when its limiter is empty; nothing of
-// it ran, so the client may retry with the same key.
+// Nothing of the request ran, so the client may retry with the same key.
 func (a apiHandlers) limited(l *limiter, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if l.allow() {

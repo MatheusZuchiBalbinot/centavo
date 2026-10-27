@@ -17,7 +17,6 @@ const (
 	incomingTransfersTable   = "incoming_transfers"
 )
 
-// externalTransferRow is a row of external_transfers.
 type externalTransferRow struct {
 	ID             uuid.UUID `db:"id"`
 	EndToEndID     string    `db:"end_to_end_id"`
@@ -32,8 +31,7 @@ type externalTransferRow struct {
 	CreatedAt      time.Time `db:"created_at"`
 }
 
-// newExternalTransferRow is what a new transfer writes: created_at and the
-// failure code come from the database.
+// created_at and the failure code come from the database.
 type newExternalTransferRow struct {
 	ID             uuid.UUID `db:"id"`
 	EndToEndID     string    `db:"end_to_end_id"`
@@ -46,7 +44,6 @@ type newExternalTransferRow struct {
 	StatusSeq      int       `db:"status_seq"`
 }
 
-// transitionRow is a row of external_transfer_transitions.
 type transitionRow struct {
 	TransferID          uuid.UUID  `db:"transfer_id"`
 	Seq                 int        `db:"seq"`
@@ -57,14 +54,12 @@ type transitionRow struct {
 	CorrelationID       string     `db:"correlation_id"`
 }
 
-// transitionReadRow is a transition as read back, with its time.
 type transitionReadRow struct {
 	transitionRow
 
 	CreatedAt time.Time `db:"created_at"`
 }
 
-// incomingTransferRow is a row of incoming_transfers.
 type incomingTransferRow struct {
 	ID            uuid.UUID `db:"id"`
 	EndToEndID    string    `db:"end_to_end_id"`

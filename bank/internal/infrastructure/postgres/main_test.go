@@ -38,7 +38,6 @@ type testDatabase struct {
 	appURL      string
 }
 
-// schema says which defense constraints the test database has.
 type schema struct {
 	hasAtomicLedger   bool
 	hasBalanceLocking bool
@@ -139,8 +138,6 @@ func migrate(ctx context.Context) error {
 	return migrateDefenses(ctx, true)
 }
 
-// migrateDefenses puts the atomic_ledger and balance_locking constraints in
-// (robust) or takes them out.
 func migrateDefenses(ctx context.Context, isRobust bool) error {
 	return migrateSchema(ctx, schema{hasAtomicLedger: isRobust, hasBalanceLocking: isRobust, hasIdempotency: isRobust, hasInbox: isRobust, hasFencing: isRobust})
 }
@@ -181,7 +178,6 @@ func terminate(container *tcpostgres.PostgresContainer) {
 	}
 }
 
-// requireDatabase skips integration tests in -short runs.
 func requireDatabase(t *testing.T) {
 	t.Helper()
 

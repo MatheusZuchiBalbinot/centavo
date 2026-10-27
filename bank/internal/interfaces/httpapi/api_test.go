@@ -24,7 +24,6 @@ const validKey = "r0001-p01-000001"
 
 var errStorageDown = errors.New("connection refused to 10.0.0.5:5432 by bank_app")
 
-// resolvedDeposit is the request the fake resolver knows as applied.
 const resolvedDeposit = `{"account_id":"a","amount_cents":100}`
 
 type fakeTransfer struct {
@@ -37,8 +36,7 @@ type fakeDeposit struct {
 	err error
 }
 
-// fakeWriter runs the write once, as a naive writer without storage would;
-// the key semantics are covered by the integration tests.
+// The key semantics are covered by the integration tests.
 type fakeWriter struct {
 	lastWrite application.Write
 	err       error

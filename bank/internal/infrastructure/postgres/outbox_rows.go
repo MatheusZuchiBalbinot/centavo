@@ -16,8 +16,7 @@ const (
 	inboxEventsTable    = "inbox_events"
 )
 
-// outboxMessageRow is what enqueueing writes to outbox_messages; the
-// lease, attempts and status columns start at their defaults.
+// The lease, attempts and status columns start at their defaults.
 type outboxMessageRow struct {
 	Topic         string    `db:"topic"`
 	AggregateID   uuid.UUID `db:"aggregate_id"`
@@ -25,7 +24,6 @@ type outboxMessageRow struct {
 	CorrelationID string    `db:"correlation_id"`
 }
 
-// outboxClaimRow is a leased message as the claim returns it.
 type outboxClaimRow struct {
 	ID            int64     `db:"id"`
 	AggregateID   uuid.UUID `db:"aggregate_id"`
@@ -34,7 +32,6 @@ type outboxClaimRow struct {
 	CorrelationID string    `db:"correlation_id"`
 }
 
-// inboxEventRow is what the intake writes to inbox_events.
 type inboxEventRow struct {
 	EventID       string `db:"event_id"`
 	EventType     string `db:"event_type"`
@@ -43,14 +40,12 @@ type inboxEventRow struct {
 	CorrelationID string `db:"correlation_id"`
 }
 
-// inboxClaimRow is a claimed event as the claim returns it.
 type inboxClaimRow struct {
 	ID int64 `db:"id"`
 
 	inboxEventRow
 }
 
-// inboxPayload is the part of a partner event kept as JSON.
 type inboxPayload struct {
 	AmountCents int64  `json:"amount_cents"`
 	Sequence    int    `json:"sequence"`
@@ -83,7 +78,6 @@ func inboxEventRowOf(event application.PartnerEvent, correlationID string) (inbo
 	}, nil
 }
 
-// toDomain decodes the event the inbox kept.
 func (row inboxClaimRow) toDomain() (application.InboxEvent, error) {
 	var fields inboxPayload
 

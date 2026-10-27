@@ -31,7 +31,6 @@ type statementLine struct {
 	CorrelationID        string              `json:"correlation_id"`
 }
 
-// Statement reads the participant's statement after a sequence number.
 func (c Client) Statement(ctx context.Context, afterSeq int64, limit int) ([]application.StatementEntry, error) {
 	query := url.Values{"participant_id": {c.participantID}, "after_seq": {strconv.FormatInt(afterSeq, 10)}, "limit": {strconv.Itoa(limit)}}
 

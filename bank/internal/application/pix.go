@@ -23,7 +23,6 @@ import (
 // partner_idempotency, inbox, state_machine, recovery and resilient_client
 // defenses.
 
-// Causes recorded in the transition history.
 const (
 	causeAPI     TransitionCause = "api"
 	causeRelay   TransitionCause = "relay"
@@ -38,11 +37,8 @@ const (
 
 const firstRelayAttempt = 1
 
-// Errors of the PIX use cases.
 var (
-	ErrUnknownEvent = errors.New("unknown partner event")
-	// ErrAlreadyCredited means the incoming PIX was credited before (a PIX in
-	// is credited once per end_to_end_id).
+	ErrUnknownEvent    = errors.New("unknown partner event")
 	ErrAlreadyCredited = errors.New("incoming PIX already credited")
 )
 
@@ -56,10 +52,8 @@ const (
 	PartnerUnknown
 )
 
-// pendingOnBoot bounds the boot scan of the naive relay.
 const pendingOnBoot = 500
 
-// ExternalTransfer is a PIX out as stored.
 type ExternalTransfer struct {
 	ID             transfer.ID
 	EndToEndID     transfer.EndToEndID
@@ -74,7 +68,6 @@ type ExternalTransfer struct {
 	CreatedAt      time.Time
 }
 
-// TransitionRecord is one line of a transfer's state history.
 type TransitionRecord struct {
 	TransferID          transfer.ID
 	Seq                 int
@@ -86,14 +79,12 @@ type TransitionRecord struct {
 	CreatedAt           time.Time
 }
 
-// StatusChange is the new status of a transfer.
 type StatusChange struct {
 	TransferID  transfer.ID
 	To          transfer.Status
 	FailureCode string
 }
 
-// IncomingRecord is a PIX in as stored.
 type IncomingRecord struct {
 	ID            uuid.UUID
 	EndToEndID    transfer.EndToEndID
@@ -102,39 +93,28 @@ type IncomingRecord struct {
 	SourceEventID string
 }
 
-// PixStore keeps external transfers, their transitions and incoming PIX.
 type PixStore interface {
 	InsertExternalTransfer(ctx context.Context, external ExternalTransfer) (time.Time, error)
 	InsertTransition(ctx context.Context, transition TransitionRecord) error
 	FindExternalTransfer(ctx context.Context, id transfer.ID) (ExternalTransfer, []TransitionRecord, error)
 	FindExternalTransferByEndToEnd(ctx context.Context, endToEndID transfer.EndToEndID) (ExternalTransfer, error)
-	// ClaimAttempt moves the transfer from one end_to_end_id to the next, so
-	// only one relay sends each attempt.
+	// So only one relay sends each attempt.
 	ClaimAttempt(ctx context.Context, id transfer.ID, seen, next transfer.EndToEndID) (bool, error)
-	// OverwriteStatus sets the status without checking the current one and
-	// returns what it was and the new sequence number.
 	OverwriteStatus(ctx context.Context, change StatusChange) (transfer.Status, int, error)
-	// LockExternalTransfer locks the transfer for the rest of the
-	// transaction and returns it.
 	LockExternalTransfer(ctx context.Context, id transfer.ID) (ExternalTransfer, error)
-	// AdvanceStatus is the guarded compare-and-set: it changes the status
-	// only if the sequence number is still the one read under the lock.
+	// The guarded compare-and-set: only if the sequence number is still the one
+	// read under the lock.
 	AdvanceStatus(ctx context.Context, change StatusChange, seenSeq int) error
 	InsertIncoming(ctx context.Context, incoming IncomingRecord) error
-	// LockEndToEnd holds one PIX for the rest of the transaction, by its
-	// end_to_end_id, before any of its rows exists: an incoming PIX has none
+	// By end_to_end_id, before any of its rows exists: an incoming PIX has none
 	// until it is credited.
 	LockEndToEnd(ctx context.Context, endToEndID transfer.EndToEndID) error
-	// LockTransfersOf locks the transfers of these end_to_end_ids, in id order.
 	LockTransfersOf(ctx context.Context, endToEndIDs []transfer.EndToEndID) error
-	// ListCreated returns transfers still in created, oldest first.
 	ListCreated(ctx context.Context, limit int) ([]transfer.ID, error)
 }
 
-// PartnerAnswer is how the partner answered a submission.
 type PartnerAnswer int
 
-// PartnerSubmission is one PIX sent to the partner.
 type PartnerSubmission struct {
 	EndToEndID     transfer.EndToEndID
 	AmountCents    money.Cents
@@ -142,13 +122,11 @@ type PartnerSubmission struct {
 	CorrelationID  string
 }
 
-// PartnerSubmitter sends a PIX to the partner.
 type PartnerSubmitter interface {
 	Submit(ctx context.Context, submission PartnerSubmission) PartnerAnswer
 }
 
-// nextAttemptOf reads the attempt from E<id>-<attempt>; the fixed id means
-// no attempt yet.
+// The fixed id means no attempt yet.
 func nextAttemptOf(endToEndID transfer.EndToEndID) int {
 	_, suffix, hasAttempt := strings.Cut(endToEndID.String(), "-")
 	if !hasAttempt {
@@ -163,7 +141,6 @@ func nextAttemptOf(endToEndID transfer.EndToEndID) int {
 	return attempt + 1
 }
 
-// postTransferStep writes one step of a transfer's saga in the ledger.
 func postTransferStep(ctx context.Context, stores PostingStores, external ExternalTransfer, step transfer.Posting) (ledger.TransactionID, error) {
 	kind, entries, err := stepEntries(external, step)
 	if err != nil {

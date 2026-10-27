@@ -1,5 +1,3 @@
-// Package ledger holds accounts, ledger transactions and entries, and the rules
-// that decide whether money may move.
 package ledger
 
 import (
@@ -14,7 +12,6 @@ import (
 	"centavo/bank/internal/domain/money"
 )
 
-// The kinds of account.
 const (
 	AccountKindCustomer AccountKind = "customer"
 	AccountKindSystem   AccountKind = "system"
@@ -29,7 +26,6 @@ var (
 	suspenseAccountID          = AccountID(uuid.MustParse("00000000-0000-7000-8000-000000000004"))
 )
 
-// The kinds of ledger transaction.
 const (
 	TransactionKindDeposit          TransactionKind = "deposit"
 	TransactionKindInternalTransfer TransactionKind = "internal_transfer"
@@ -38,14 +34,11 @@ const (
 	TransactionKindPixOutRefund     TransactionKind = "pix_out_refund"
 	TransactionKindPixOutReturn     TransactionKind = "pix_out_return"
 	TransactionKindPixInCredit      TransactionKind = "pix_in_credit"
-	// TransactionKindAdjustment moves an explained divergence with the partner
-	// to suspense.
-	TransactionKindAdjustment TransactionKind = "reconciliation_adjustment"
+	TransactionKindAdjustment       TransactionKind = "reconciliation_adjustment"
 )
 
 const maxHolderNameLength = 120
 
-// Errors of the ledger's rules.
 var (
 	ErrAccountNotFound    = errors.New("account not found")
 	ErrSameAccount        = errors.New("a transfer needs two distinct accounts")
@@ -55,25 +48,18 @@ var (
 	errIDGenerationFailed = errors.New("generating id")
 )
 
-// AccountID identifies an account.
 type AccountID uuid.UUID
 
-// TransactionID identifies a ledger transaction.
 type TransactionID uuid.UUID
 
-// OperationID identifies one client write as the bank executed it.
 type OperationID uuid.UUID
 
-// AccountKind tells customer accounts (floor at zero) from system accounts.
 type AccountKind string
 
-// TransactionKind is the kind of a ledger transaction.
 type TransactionKind string
 
-// Seq is the position of an entry within its account: 1, 2, 3...
 type Seq int64
 
-// Account is a customer or system account.
 type Account struct {
 	ID         AccountID
 	Kind       AccountKind
@@ -81,31 +67,25 @@ type Account struct {
 	CreatedAt  time.Time
 }
 
-// Position is where an account stands: its balance and the position of its
-// last entry.
 type Position struct {
 	Balance money.Balance
 	LastSeq Seq
 }
 
-// Transaction is the header of a ledger transaction; its entries sum to zero.
-// Every transaction names its cause (ledger_tx_has_cause): the client
-// operation, the external transfer or the incoming PIX behind it.
+// Its entries sum to zero, and every transaction names its cause
+// (ledger_tx_has_cause): the client operation, the external transfer or the
+// incoming PIX behind it.
 type Transaction struct {
-	ID            TransactionID
-	Kind          TransactionKind
-	OperationID   *OperationID
-	ClientRef     string
-	CorrelationID string
-	// ExternalTransferID is the PIX out the transaction belongs to.
-	ExternalTransferID *uuid.UUID
-	// IncomingTransferID is the PIX in the transaction credits.
-	IncomingTransferID *uuid.UUID
-	// ReconciliationItemID is the divergence an adjustment books.
+	ID                   TransactionID
+	Kind                 TransactionKind
+	OperationID          *OperationID
+	ClientRef            string
+	CorrelationID        string
+	ExternalTransferID   *uuid.UUID
+	IncomingTransferID   *uuid.UUID
 	ReconciliationItemID *int64
 }
 
-// Entry is one immutable line that changes the balance of an account.
 type Entry struct {
 	TransactionID TransactionID
 	AccountID     AccountID
@@ -114,7 +94,6 @@ type Entry struct {
 	BalanceAfter  money.Balance
 }
 
-// StatementLine is an entry as the account holder sees it.
 type StatementLine struct {
 	Seq             Seq
 	TransactionID   TransactionID
@@ -124,52 +103,44 @@ type StatementLine struct {
 	CreatedAt       time.Time
 }
 
-// NewAccountID generates a time-ordered account id.
 func NewAccountID() (AccountID, error) {
 	id, err := newV7()
 
 	return AccountID(id), err
 }
 
-// NewTransactionID generates a time-ordered transaction id.
 func NewTransactionID() (TransactionID, error) {
 	id, err := newV7()
 
 	return TransactionID(id), err
 }
 
-// NewOperationID generates a time-ordered operation id.
 func NewOperationID() (OperationID, error) {
 	id, err := newV7()
 
 	return OperationID(id), err
 }
 
-// ExternalCashAccountID is sys_external_cash, which mirrors money that came in
-// by direct deposit.
+// Mirrors money that came in by direct deposit.
 func ExternalCashAccountID() AccountID {
 	return externalCashAccountID
 }
 
-// PixOutTransitAccountID is sys_pix_out_transit: money reserved for PIX out
-// that has not settled or come back yet.
+// Money reserved for PIX out that has not settled or come back yet.
 func PixOutTransitAccountID() AccountID {
 	return pixOutTransitAccountID
 }
 
-// PartnerSettlementAccountID is sys_partner_settlement: the mirror of the
-// bank's reserve at the partner.
+// The mirror of the bank's reserve at the partner.
 func PartnerSettlementAccountID() AccountID {
 	return partnerSettlementAccountID
 }
 
-// SuspenseAccountID is sys_reconciliation_suspense: divergences with the
-// partner that are explained and not yet settled.
+// Divergences with the partner that are explained and not yet settled.
 func SuspenseAccountID() AccountID {
 	return suspenseAccountID
 }
 
-// ParseAccountID reads an account id from its canonical text form.
 func ParseAccountID(raw string) (AccountID, error) {
 	id, err := uuid.Parse(raw)
 	if err != nil {
@@ -185,7 +156,6 @@ func (id TransactionID) String() string { return uuid.UUID(id).String() }
 
 func (id OperationID) String() string { return uuid.UUID(id).String() }
 
-// ParseHolderName trims and validates the name of a customer.
 func ParseHolderName(raw string) (string, error) {
 	name := strings.TrimSpace(raw)
 	length := utf8.RuneCountInString(name)
@@ -198,7 +168,6 @@ func ParseHolderName(raw string) (string, error) {
 	return name, nil
 }
 
-// CheckTransferAccounts refuses an internal transfer from an account to itself.
 func CheckTransferAccounts(from, to AccountID) error {
 	if from == to {
 		return ErrSameAccount
@@ -207,8 +176,6 @@ func CheckTransferAccounts(from, to AccountID) error {
 	return nil
 }
 
-// Debit returns the position after paying amount, refusing to overdraw (a
-// customer balance never goes below zero).
 func (p Position) Debit(amount money.Amount) (Position, error) {
 	if !p.Balance.Covers(amount) {
 		return Position{}, ErrInsufficientFunds

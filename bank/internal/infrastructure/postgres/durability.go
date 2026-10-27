@@ -8,12 +8,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// ErrNotDurable is a robust bank on connections that acknowledge commits before
-// they are durable, which the durable_db defense forbids.
 var ErrNotDurable = errors.New("synchronous_commit is not on: a confirmed commit could be lost in a crash")
 
-// CheckDurability reads synchronous_commit as the bank's own connections
-// see it.
+// As the bank's own connections see it.
 func CheckDurability(ctx context.Context, pool *pgxpool.Pool) error {
 	var setting string
 

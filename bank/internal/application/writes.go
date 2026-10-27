@@ -11,8 +11,7 @@ import (
 	"centavo/bank/internal/platform/labevent"
 )
 
-// Errors the storage layer classifies its failures into. The HTTP layer maps
-// them; only the robust unit of work produces them.
+// Only the robust unit of work produces these; the HTTP layer maps them.
 var (
 	// ErrTransient is safe to retry: nothing was applied (serialization
 	// failure, deadlock, or a connection error before the request was sent).
@@ -20,8 +19,7 @@ var (
 	// ErrOutcomeUnknown is the ambiguous one: the connection failed during or
 	// after the commit, so the write may or may not be applied.
 	ErrOutcomeUnknown = errors.New("the storage did not confirm the outcome")
-	// ErrUnavailable means the storage gave up on the request in time.
-	ErrUnavailable = errors.New("storage temporarily unavailable")
+	ErrUnavailable    = errors.New("storage temporarily unavailable")
 )
 
 // The internal retry of a unit of work: a few quick tries, well inside the
@@ -32,40 +30,31 @@ const (
 	unitMaxDelay   = 200 * time.Millisecond
 )
 
-// KeyClaim is a request trying to own an idempotency key.
 type KeyClaim struct {
 	Key         idempotency.Key
 	Endpoint    string
 	RequestHash idempotency.RequestHash
 }
 
-// KeyStore keeps idempotency keys. Both claims race on the primary key: the
-// second one waits for the first to commit, which makes the key itself the lock.
+// Both claims race on the primary key: the second waits for the first to
+// commit, which makes the key itself the lock.
 type KeyStore interface {
-	// ClaimKey inserts the key as pending and reports true, or returns the
-	// existing record and false.
 	ClaimKey(ctx context.Context, claim KeyClaim) (idempotency.Record, bool, error)
 	CompleteKey(ctx context.Context, key idempotency.Key, operationID ledger.OperationID, response idempotency.StoredResponse) error
-	// VoidKey inserts a tombstone and reports true, or returns the existing
-	// record and false.
 	VoidKey(ctx context.Context, key idempotency.Key) (idempotency.Record, bool, error)
-	// TouchKey rewrites the key's row unchanged. The write is the point: its
-	// commit waits for the synchronous standby like any other, and its WAL
-	// comes after the commit that stored the answer, so once it returns that
-	// answer is on the replica too.
+	// The write is the point: its commit waits for the synchronous standby like
+	// any other, and its WAL comes after the commit that stored the answer, so
+	// once it returns that answer is on the replica too.
 	TouchKey(ctx context.Context, key idempotency.Key) error
 }
 
-// Write is one client write, ready to run exactly once per key.
 type Write struct {
 	Key         idempotency.Key
 	Endpoint    string
 	RequestHash idempotency.RequestHash
-	// Apply runs the use case in the unit of work and encodes the answer.
-	Apply func(ctx context.Context, stores Stores, operationID ledger.OperationID) (idempotency.StoredResponse, error)
+	Apply       func(ctx context.Context, stores Stores, operationID ledger.OperationID) (idempotency.StoredResponse, error)
 }
 
-// KeyPolicy is the idempotency defense's strategy inside a unit of work.
 type KeyPolicy interface {
 	Run(ctx context.Context, stores Stores, write Write) (idempotency.StoredResponse, error)
 }
@@ -75,35 +64,30 @@ type KeyPolicy interface {
 // before the commit erases both and a retry after it gets the stored answer.
 type KeysInTheSameCommit struct{}
 
-// RetryPolicy bounds how often a unit of work is redone.
 type RetryPolicy struct {
 	MaxRetries int
 	BaseDelay  time.Duration
 	MaxDelay   time.Duration
 }
 
-// Writer runs client writes.
 type Writer struct {
 	unitOfWork UnitOfWork
 	keys       KeyPolicy
 	retries    RetryPolicy
 }
 
-// WriterDependencies are the strategies a writer runs on.
 type WriterDependencies struct {
 	UnitOfWork UnitOfWork
 	Keys       KeyPolicy
 	Retries    RetryPolicy
 }
 
-// IdempotencyStrategy is everything the idempotency defense decides.
 type IdempotencyStrategy struct {
 	Keys     KeyPolicy
 	Resolver Resolver
 	Retries  RetryPolicy
 }
 
-// Run claims the key or replays it.
 func (KeysInTheSameCommit) Run(ctx context.Context, stores Stores, write Write) (idempotency.StoredResponse, error) {
 	claim := KeyClaim{Key: write.Key, Endpoint: write.Endpoint, RequestHash: write.RequestHash}
 
@@ -139,25 +123,20 @@ func (KeysInTheSameCommit) Run(ctx context.Context, stores Stores, write Write) 
 	return response, nil
 }
 
-// UnitRetries is idempotency's internal retry: the unit is idempotent, so
-// redoing it after a transient or ambiguous failure is safe, and the key
-// decides whether it was already applied.
+// The unit is idempotent, so redoing it after a transient or ambiguous
+// failure is safe, and the key decides whether it was already applied.
 func UnitRetries() RetryPolicy {
 	return RetryPolicy{MaxRetries: unitMaxRetries, BaseDelay: unitBaseDelay, MaxDelay: unitMaxDelay}
 }
 
-// NoRetries is the naive bank: whatever fails, fails.
 func NoRetries() RetryPolicy {
 	return RetryPolicy{}
 }
 
-// NewWriter builds a writer.
 func NewWriter(deps WriterDependencies) Writer {
 	return Writer{unitOfWork: deps.UnitOfWork, keys: deps.Keys, retries: deps.Retries}
 }
 
-// Execute runs the write, redoing the whole unit on transient and ambiguous
-// failures while the policy allows.
 func (w Writer) Execute(ctx context.Context, write Write) (idempotency.StoredResponse, error) {
 	for attempt := 0; ; attempt++ {
 		response, err := w.runOnce(ctx, write)
@@ -175,8 +154,6 @@ func (w Writer) Execute(ctx context.Context, write Write) (idempotency.StoredRes
 	}
 }
 
-// RobustIdempotency is the idempotency defense: keys in the same commit as the
-// effect, resolve with tombstones and internal retries of the idempotent unit.
 func RobustIdempotency(unitOfWork UnitOfWork) IdempotencyStrategy {
 	return IdempotencyStrategy{Keys: KeysInTheSameCommit{}, Resolver: NewTombstoneResolver(unitOfWork), Retries: UnitRetries()}
 }
@@ -212,7 +189,6 @@ func (w Writer) runOnce(ctx context.Context, write Write) (idempotency.StoredRes
 	return response, err
 }
 
-// delay is exponential with full jitter.
 func (p RetryPolicy) delay(attempt int) time.Duration {
 	ceiling := min(p.BaseDelay<<attempt, p.MaxDelay)
 	if ceiling <= 0 {

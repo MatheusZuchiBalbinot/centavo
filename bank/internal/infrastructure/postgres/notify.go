@@ -11,20 +11,15 @@ import (
 	"centavo/bank/internal/domain/transfer"
 )
 
-// PixOutChannel is the NOTIFY channel of new PIX out.
 const PixOutChannel = "pix_out"
 
-// reconnectDelay paces the listener after a lost connection.
 const reconnectDelay = time.Second
 
-// NotifyPublisher publishes a transfer with NOTIFY: the naive publication,
-// which nobody receives while no worker is listening.
+// The naive publication, which nobody receives while no worker is listening.
 type NotifyPublisher struct {
 	store LedgerStore
 }
 
-// Listener holds a connection with LISTEN on Channel and calls Handle for
-// every notification.
 type Listener struct {
 	Pool    *pgxpool.Pool
 	Channel string
@@ -32,18 +27,16 @@ type Listener struct {
 	Logger  *slog.Logger
 }
 
-// NewNotifyPublisher wraps a pool.
 func NewNotifyPublisher(pool *pgxpool.Pool) NotifyPublisher {
 	return NotifyPublisher{store: NewLedgerStore(pool)}
 }
 
-// Publish sends the transfer id on the pix_out channel.
 func (p NotifyPublisher) Publish(ctx context.Context, id transfer.ID) error {
 	return p.store.Notify(ctx, PixOutChannel, id.String())
 }
 
-// Run listens, reconnecting until ctx ends. Notifications sent while the
-// connection is down are lost: NOTIFY is not a queue.
+// Notifications sent while the connection is down are lost: NOTIFY is not a
+// queue.
 func (l Listener) Run(ctx context.Context) {
 	for ctx.Err() == nil {
 		err := listenOnce(ctx, l.Pool, l.Channel, l.Handle)

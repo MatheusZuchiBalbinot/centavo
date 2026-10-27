@@ -66,22 +66,19 @@ var errUnhealthy = errors.New("health endpoint did not answer 200")
 
 type role string
 
-// naiveVariants are the naive strategies of a chaoslab build; the production
-// build has none (naive_production.go).
+// The production build has none (naive_production.go).
 type naiveVariants struct {
 	unitOfWork  application.UnitOfWork
 	locker      application.Locker
 	idempotency application.IdempotencyStrategy
 }
 
-// partner is what the worker calls on the partner: sends and status queries.
 type partner interface {
 	application.PartnerSubmitter
 	application.PartnerStatusReader
 	application.PartnerStatementReader
 }
 
-// sagaDependencies are shared by the worker's PIX loops.
 type sagaDependencies struct {
 	unitOfWork application.UnitOfWork
 	machine    application.StateMachine
@@ -230,8 +227,6 @@ func newUseCases(pool *pgxpool.Pool, configuration config.Config) (httpapi.UseCa
 	return useCases, nil
 }
 
-// newPublication picks outbox: the outbox row in the transfer's own commit, or
-// the naive NOTIFY after it.
 func newPublication(pool *pgxpool.Pool, profile defenses.Profile) application.Publication {
 	if profile.IsEnabled(defenses.Outbox) {
 		return application.OutboxPublication{}
@@ -240,7 +235,6 @@ func newPublication(pool *pgxpool.Pool, profile defenses.Profile) application.Pu
 	return application.NewNotifyAfterCommit(postgres.NewNotifyPublisher(pool))
 }
 
-// newWebhook picks inbox: write to the inbox, or apply in the request.
 func newWebhook(profile defenses.Profile, unitOfWork application.UnitOfWork, machine application.StateMachine) httpapi.WebhookApplier {
 	if profile.IsEnabled(defenses.Inbox) {
 		return application.NewInboxIntake(unitOfWork)
@@ -249,8 +243,6 @@ func newWebhook(profile defenses.Profile, unitOfWork application.UnitOfWork, mac
 	return application.NewNaiveWebhook(unitOfWork, machine)
 }
 
-// newStateMachine picks state_machine: guarded transitions, or the naive
-// overwrite.
 func newStateMachine(profile defenses.Profile) application.StateMachine {
 	if profile.IsEnabled(defenses.StateMachine) {
 		return application.GuardedTransitions{}
@@ -276,9 +268,8 @@ func newIdempotency(pool *pgxpool.Pool, profile defenses.Profile, unitOfWork app
 	return naive.idempotency, nil
 }
 
-// newMoneyDependencies is the composition root: the robust strategy unless the
-// profile turns its defense off, in which case the naive variant of the
-// chaoslab build.
+// The robust strategy unless the profile turns its defense off; then the
+// chaoslab build's naive variant.
 func newMoneyDependencies(pool *pgxpool.Pool, profile defenses.Profile) (application.MoneyDependencies, error) {
 	deps := application.MoneyDependencies{UnitOfWork: postgres.NewUnitOfWork(pool), Locker: application.RowLocker{}}
 
@@ -344,9 +335,6 @@ func serveWorker(ctx context.Context, configuration config.Config, logger *slog.
 	return httpserver.Run(ctx, servers...)
 }
 
-// startSaga starts the worker's PIX loops, each in the variant the profile
-// picks: the relay (outbox, partner_idempotency, resilient_client), the inbox
-// processor (inbox) and the sweeper (recovery).
 func startSaga(ctx context.Context, pool *pgxpool.Pool, configuration config.Config, logger *slog.Logger) error {
 	err := configuration.Partner.RequireEndpoint()
 	if err != nil {
@@ -386,8 +374,6 @@ func startSaga(ctx context.Context, pool *pgxpool.Pool, configuration config.Con
 	return nil
 }
 
-// newLeasePolicy picks fencing: leases by the database's clock with a token
-// checked at write time, or by the worker's own clock and word.
 func newLeasePolicy(profile defenses.Profile) application.LeasePolicy {
 	if profile.IsEnabled(defenses.Fencing) {
 		return application.FencedLeases{}
@@ -396,8 +382,6 @@ func newLeasePolicy(profile defenses.Profile) application.LeasePolicy {
 	return application.LocalClockLeases{}
 }
 
-// newBatchPolicy picks reconciliation: a batch in one commit with the cursor,
-// or an entry at a time with the cursor saved last.
 func newBatchPolicy(profile defenses.Profile) application.BatchPolicy {
 	if profile.IsEnabled(defenses.Reconciliation) {
 		return application.AtomicBatches{}
@@ -406,8 +390,6 @@ func newBatchPolicy(profile defenses.Profile) application.BatchPolicy {
 	return application.EntryByEntry{}
 }
 
-// newPartner picks resilient_client's circuit breaker around the partner
-// client.
 func newPartner(configuration config.Config) partner {
 	client := partnerclient.New(configuration.Partner.BaseURL, configuration.Partner.ParticipantID)
 
@@ -418,8 +400,6 @@ func newPartner(configuration config.Config) partner {
 	return client
 }
 
-// startRelay starts what sends PIX out to the partner: the outbox relay with
-// outbox, or the naive LISTEN relay.
 func startRelay(ctx context.Context, pool *pgxpool.Pool, profile defenses.Profile, saga sagaDependencies) {
 	if profile.IsEnabled(defenses.Outbox) {
 		relayConfig := application.OutboxRelayConfig{
@@ -438,8 +418,6 @@ func startRelay(ctx context.Context, pool *pgxpool.Pool, profile defenses.Profil
 	go relayPendingOnBoot(ctx, relay, saga.logger)
 }
 
-// newEndToEnd picks partner_idempotency: one end_to_end_id per transfer, or one
-// per attempt.
 func newEndToEnd(profile defenses.Profile) application.EndToEndPolicy {
 	if profile.IsEnabled(defenses.PartnerIdempotency) {
 		return application.FixedEndToEnd{}
@@ -448,8 +426,6 @@ func newEndToEnd(profile defenses.Profile) application.EndToEndPolicy {
 	return application.NewEndToEndPerAttempt{}
 }
 
-// newDoubt picks resilient_client's answer to a doubtful send: retry later, or
-// give up.
 func newDoubt(profile defenses.Profile, machine application.StateMachine) application.DoubtPolicy {
 	if profile.IsEnabled(defenses.ResilientClient) {
 		return application.RetryOnDoubt{}
@@ -465,8 +441,7 @@ func relayPendingOnBoot(ctx context.Context, relay application.NaiveRelay, logge
 	}
 }
 
-// withChaos arms the chaos controls and adds the chaos port; a production
-// build gets back exactly the servers it passed in.
+// A production build gets back exactly the servers it passed in.
 func withChaos(selectedRole role, configuration config.Config, servers ...*http.Server) ([]*http.Server, error) {
 	chaosConfig := chaos.Config{
 		Token: configuration.Chaos.Token, FailpointSpec: configuration.Chaos.FailpointSpec, Seed: configuration.Chaos.Seed,
@@ -505,7 +480,6 @@ func migrate(ctx context.Context, configuration config.Config, logger *slog.Logg
 	return postgres.MigrateDefenses(ctx, configuration.DatabaseURL, defenseMigrations, logger)
 }
 
-// defenseMigrationsOf lists the defenses that have constraints of their own.
 func defenseMigrationsOf(profile defenses.Profile) ([]postgres.DefenseMigrations, error) {
 	var list []postgres.DefenseMigrations
 
@@ -523,9 +497,8 @@ func defenseMigrationsOf(profile defenses.Profile) ([]postgres.DefenseMigrations
 	return list, nil
 }
 
-// checkSchema is the startup validation. A mismatch refuses to start; an
-// unreachable database does not, because under chaos it comes back, and bank
-// migrate already ran before.
+// A mismatch refuses to start; an unreachable database does not, because
+// under chaos it comes back, and bank migrate already ran before.
 func checkSchema(ctx context.Context, pool *pgxpool.Pool, configuration config.Config, logger *slog.Logger) error {
 	err := checkDurability(ctx, pool, configuration, logger)
 	if err != nil {
@@ -535,9 +508,9 @@ func checkSchema(ctx context.Context, pool *pgxpool.Pool, configuration config.C
 	return checkDefenseSchema(ctx, pool, configuration, logger)
 }
 
-// checkDurability is durable_db's startup check: a robust bank refuses to run
-// on connections that acknowledge commits before they are durable. As with the
-// schema, an unreachable database is only a warning.
+// A robust bank refuses to run on connections that acknowledge commits
+// before they are durable. As with the schema, an unreachable database is
+// only a warning.
 func checkDurability(ctx context.Context, pool *pgxpool.Pool, configuration config.Config, logger *slog.Logger) error {
 	if !configuration.Defenses.IsEnabled(defenses.DurableDB) {
 		return nil
@@ -611,7 +584,7 @@ func newLogger(selectedRole role, configuration config.Config) *slog.Logger {
 	return slog.New(handler).With("service", "bank-"+string(selectedRole), "instance", instanceName(), "defenses", configuration.Defenses.String())
 }
 
-// instanceName is the container hostname, which tells instances apart in the logs.
+// The container hostname tells instances apart in the logs.
 func instanceName() string {
 	hostname, err := os.Hostname()
 	if err != nil {

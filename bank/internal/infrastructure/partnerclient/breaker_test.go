@@ -12,7 +12,6 @@ import (
 
 var anySubmission = application.PartnerSubmission{EndToEndID: "E0001", AmountCents: 100, DestinationKey: "dest-0001"}
 
-// switchablePartner answers 500 until it is told to recover.
 type switchablePartner struct {
 	calls       atomic.Int32
 	isRecovered atomic.Bool

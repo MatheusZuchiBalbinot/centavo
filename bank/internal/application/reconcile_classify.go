@@ -12,14 +12,12 @@ import (
 // rule for: the batch stops rather than move money by default.
 var errUnknownTransferStatus = errors.New("reconciliation has no rule for the transfer's status")
 
-// The kinds of a partner statement line.
 const (
 	StatementSettlement StatementKind = "settlement"
 	StatementReturn     StatementKind = "return"
 	StatementIncoming   StatementKind = "incoming"
 )
 
-// The verdicts of reconciling one statement line.
 const (
 	DivergenceMatched           Divergence = "matched"
 	DivergenceMissingSettlement Divergence = "missing_settlement"
@@ -30,7 +28,6 @@ const (
 	DivergenceUnknownEntry      Divergence = "unknown_entry"
 )
 
-// The actions recorded with each item.
 const (
 	actionNone     ReconciliationAction = "none"
 	actionWalk     ReconciliationAction = "walk_to_partner_status"
@@ -41,29 +38,23 @@ const (
 	actionWalkAndSuspense ReconciliationAction = "walk_and_suspense"
 )
 
-// StatementKind is a line of the partner's statement.
 type StatementKind string
 
-// StatementEntry is one line of the partner's statement, numbered by seq.
 type StatementEntry struct {
 	Seq         int64
 	Kind        StatementKind
 	EndToEndID  transfer.EndToEndID
 	AmountCents money.Cents
-	// AccountID is the destination of an incoming PIX.
-	AccountID string
+	AccountID   string
 	// CorrelationID is the one the PIX came with, its client_ref for a PIX
 	// out: the reconciler's failpoints match it, like any other step of the PIX.
 	CorrelationID string
 }
 
-// Divergence is how a statement entry compares with the ledger.
 type Divergence string
 
-// ReconciliationAction is what the reconciler did about one statement entry.
 type ReconciliationAction string
 
-// entryFacts are what the ledger says about one statement entry.
 type entryFacts struct {
 	transfer    ExternalTransfer
 	hasTransfer bool
@@ -74,21 +65,18 @@ type entryFacts struct {
 	isAccountKnown bool
 }
 
-// verdict is what the reconciler books for an entry.
 type verdict struct {
 	divergence Divergence
 	action     ReconciliationAction
-	// walkTo is the partner status to walk the transfer to, if any.
-	walkTo transfer.PartnerStatus
+	walkTo     transfer.PartnerStatus
 	// suspenseCents moves money from the partner reserve mirror to suspense:
 	// positive when the partner paid out more than the ledger knows (a
 	// receivable), negative when it paid in more (a payable).
 	suspenseCents money.Cents
 }
 
-// classify compares one statement entry with the ledger. It never touches a
-// customer's account without a known cause: what has no explanation goes to
-// suspense (an unexplained divergence goes to suspense, never to a customer).
+// It never touches a customer's account without a known cause: an
+// unexplained divergence goes to suspense, never to a customer.
 func classify(entry StatementEntry, facts entryFacts) (verdict, error) {
 	switch entry.Kind {
 	case StatementSettlement:

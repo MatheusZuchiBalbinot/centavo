@@ -9,10 +9,8 @@ import (
 	"centavo/bank/internal/domain/transfer"
 )
 
-// TransitionCause is what moved a transfer, as the transition history records it.
 type TransitionCause string
 
-// TransitionCommand asks to move one transfer from a status to another.
 type TransitionCommand struct {
 	TransferID transfer.ID
 	// From is the status the trigger was meant for: a webhook "settled"
@@ -24,18 +22,14 @@ type TransitionCommand struct {
 	CorrelationID string
 }
 
-// TransitionStores are what a transition writes: the transfer, its history and
-// the posting of the step.
 type TransitionStores interface {
 	PixStore
 	PostingStores
 }
 
-// StateMachine is the state_machine defense's strategy: how a transfer changes
-// status, inside the caller's unit of work.
 type StateMachine interface {
-	// Move applies the command. The guarded machine refuses, with
-	// transfer.ErrInvalidStateTransition, a transfer that is not in From.
+	// The guarded machine refuses, with transfer.ErrInvalidStateTransition, a
+	// transfer that is not in From.
 	Move(ctx context.Context, stores TransitionStores, command TransitionCommand) error
 }
 
@@ -58,7 +52,6 @@ type transitionStep struct {
 	command  TransitionCommand
 }
 
-// Move applies the transition or refuses it.
 func (GuardedTransitions) Move(ctx context.Context, stores TransitionStores, command TransitionCommand) error {
 	external, err := stores.LockExternalTransfer(ctx, command.TransferID)
 	if err != nil {
@@ -86,7 +79,6 @@ func (GuardedTransitions) Move(ctx context.Context, stores TransitionStores, com
 	return recordStep(ctx, stores, step)
 }
 
-// Move overwrites the status.
 func (OverwriteTransitions) Move(ctx context.Context, stores TransitionStores, command TransitionCommand) error {
 	external, _, err := stores.FindExternalTransfer(ctx, command.TransferID)
 	if err != nil {
@@ -105,8 +97,6 @@ func (OverwriteTransitions) Move(ctx context.Context, stores TransitionStores, c
 	return recordStep(ctx, stores, step)
 }
 
-// recordStep posts the step's ledger transaction, if any, and appends it to
-// the transfer's history.
 func recordStep(ctx context.Context, stores TransitionStores, step transitionStep) error {
 	var ledgerTransactionID *ledger.TransactionID
 
@@ -128,8 +118,6 @@ func recordStep(ctx context.Context, stores TransitionStores, step transitionSte
 	return stores.InsertTransition(ctx, transition)
 }
 
-// postingTowards is what the naive code posts for a target status, without
-// asking where the transfer comes from.
 func postingTowards(to transfer.Status) transfer.Posting {
 	switch to {
 	case transfer.StatusConfirmed:

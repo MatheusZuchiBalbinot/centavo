@@ -20,7 +20,6 @@ const (
 	fileMode   = 0o644
 )
 
-// Config says where this process writes its defense events.
 type Config struct {
 	Dir      string
 	Service  string
@@ -46,8 +45,7 @@ var recorder struct {
 	tokens map[string]int64
 }
 
-// Configure sets where defense events go; until it is called none is
-// recorded.
+// Until it is called none is recorded.
 func Configure(config Config) {
 	recorder.mu.Lock()
 	defer recorder.mu.Unlock()
@@ -71,8 +69,8 @@ func recordLease(ctx context.Context, resource string, token int64) {
 	}
 }
 
-// record appends one event. A failure to write is dropped: the defense acted
-// either way, and the lab only loses the telling of it.
+// A failure to write is dropped: the defense acted either way, and the lab
+// only loses the telling of it.
 func record(ctx context.Context, defense Defense, detail string, count int) {
 	recorder.mu.Lock()
 	defer recorder.mu.Unlock()

@@ -12,7 +12,6 @@ import (
 	"centavo/bank/internal/domain/transfer"
 )
 
-// errUnexpectedStatus is an answer that is neither a status nor not found.
 var errUnexpectedStatus = errors.New("partner status query failed")
 
 type statusResponse struct {
@@ -20,9 +19,8 @@ type statusResponse struct {
 	Reason string `json:"reason"`
 }
 
-// Status asks the partner for a PIX's authoritative status. 404 is the
-// partner saying it never received it; anything but 200 or 404 is an error,
-// never a status.
+// 404 is the partner saying it never received it; anything but 200 or 404
+// is an error, never a status.
 func (c Client) Status(ctx context.Context, endToEndID transfer.EndToEndID) (application.AuthoritativeStatus, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+transferPath(endToEndID.String()), http.NoBody)
 	if err != nil {

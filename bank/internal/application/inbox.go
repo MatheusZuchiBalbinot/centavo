@@ -12,21 +12,17 @@ import (
 	"centavo/bank/internal/platform/failpoint"
 )
 
-// Inbox timings.
 const (
 	InboxPoll       = 500 * time.Millisecond
 	inboxRetryDelay = 2 * time.Second
 )
 
-// Final statuses of an inbox event.
 const (
 	InboxProcessed InboxStatus = "processed"
-	// InboxConflict is an event the bank cannot apply: it waits for a human or
-	// for the reconciliation.
+	// Waits for a human or for the reconciliation.
 	InboxConflict InboxStatus = "conflict"
 )
 
-// Inbox outcomes, kept with the event for the audit.
 const (
 	outcomeApplied   = "applied"
 	outcomeDuplicate = "duplicate"
@@ -35,33 +31,27 @@ const (
 	outcomeResynced = "resynced"
 )
 
-// errNoInboxEvent ends a processor pass with nothing to do.
 var errNoInboxEvent = errors.New("no inbox event ready")
 
-// InboxStatus is where an inbox event ended.
 type InboxStatus string
 
-// InboxEvent is a stored partner event waiting to be applied.
 type InboxEvent struct {
 	ID            int64
 	Event         PartnerEvent
 	CorrelationID string
 }
 
-// InboxStore keeps the inbox.
 type InboxStore interface {
-	// InsertInbox records the event; false means it was already there.
 	InsertInbox(ctx context.Context, event PartnerEvent, correlationID string) (bool, error)
 	ClaimInbox(ctx context.Context) (InboxEvent, bool, error)
-	// ReclaimInbox locks an event again in a later transaction, if it is
-	// still pending and no other processor holds it.
+	// Only if still pending and no other processor holds it.
 	ReclaimInbox(ctx context.Context, id int64) (bool, error)
 	FinishInbox(ctx context.Context, id int64, status InboxStatus, outcome string) error
 	DeferInbox(ctx context.Context, id int64, delay time.Duration, reason string) error
 }
 
-// InboxProcessor applies inbox events, each in the same transaction that marks
-// it, so a crash in between leaves neither.
+// Each event is applied in the transaction that marks it, so a crash in
+// between leaves neither.
 type InboxProcessor struct {
 	unitOfWork UnitOfWork
 	events     eventApplier
@@ -70,7 +60,6 @@ type InboxProcessor struct {
 	logger     *slog.Logger
 }
 
-// InboxProcessorConfig wires a processor.
 type InboxProcessorConfig struct {
 	UnitOfWork UnitOfWork
 	Machine    StateMachine
@@ -80,14 +69,12 @@ type InboxProcessorConfig struct {
 	Logger  *slog.Logger
 }
 
-// NewInboxProcessor builds the processor.
 func NewInboxProcessor(config InboxProcessorConfig) InboxProcessor {
 	return InboxProcessor{
 		unitOfWork: config.UnitOfWork, events: eventApplier{machine: config.Machine}, machine: config.Machine, partner: config.Partner, logger: config.Logger,
 	}
 }
 
-// Run drains the inbox, then polls it until ctx ends.
 func (p InboxProcessor) Run(ctx context.Context) {
 	ticker := time.NewTicker(InboxPoll)
 	defer ticker.Stop()
@@ -103,7 +90,6 @@ func (p InboxProcessor) Run(ctx context.Context) {
 	}
 }
 
-// RunOnce applies one event; false means the inbox had none ready.
 func (p InboxProcessor) RunOnce(ctx context.Context) (bool, error) {
 	var claimed InboxEvent
 

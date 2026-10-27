@@ -1,4 +1,3 @@
-// Package migrations embeds the SQL migrations into the bank binary.
 package migrations
 
 import (
@@ -13,13 +12,10 @@ var files embed.FS
 
 const defensesDir = "defenses"
 
-// Base returns the base schema migrations, shared by every defense profile.
 func Base() (fs.FS, error) {
 	return fs.Sub(files, "base")
 }
 
-// Defense returns the migrations that belong to one defense, and false when
-// the defense has no constraints of its own.
 func Defense(name string) (fs.FS, bool, error) {
 	dir := defensesDir + "/" + name
 

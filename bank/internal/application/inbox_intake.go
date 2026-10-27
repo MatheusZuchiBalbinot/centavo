@@ -14,12 +14,10 @@ type InboxIntake struct {
 	unitOfWork UnitOfWork
 }
 
-// NewInboxIntake builds the handler's use case.
 func NewInboxIntake(unitOfWork UnitOfWork) InboxIntake {
 	return InboxIntake{unitOfWork: unitOfWork}
 }
 
-// Apply records the event.
 func (i InboxIntake) Apply(ctx context.Context, event PartnerEvent) error {
 	return i.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
 		// The partner echoes the PIX's correlation id in the webhook; an

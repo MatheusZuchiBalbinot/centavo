@@ -83,8 +83,6 @@ func TestClassify(t *testing.T) {
 	}
 }
 
-// TestClassify_RefusesAnUnknownTransferStatus: a status the reconciliation
-// has no rule for stops the batch instead of moving money to suspense.
 func TestClassify_RefusesAnUnknownTransferStatus(t *testing.T) {
 	t.Parallel()
 

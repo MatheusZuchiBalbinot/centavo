@@ -1,4 +1,3 @@
-// Package workers runs the background loops of the worker role.
 package workers
 
 import (
@@ -12,13 +11,11 @@ const (
 	keyCleanupBatch    = 1_000
 )
 
-// KeyCleaner deletes one batch of expired idempotency keys.
 type KeyCleaner interface {
 	DeleteExpiredKeys(ctx context.Context, batch int) (int64, error)
 }
 
-// CleanKeys deletes expired keys every few minutes until ctx ends. Two
-// workers can run it at once: SKIP LOCKED gives them different batches.
+// Two workers can run it at once: SKIP LOCKED gives them different batches.
 func CleanKeys(ctx context.Context, cleaner KeyCleaner, logger *slog.Logger) {
 	ticker := time.NewTicker(keyCleanupInterval)
 	defer ticker.Stop()

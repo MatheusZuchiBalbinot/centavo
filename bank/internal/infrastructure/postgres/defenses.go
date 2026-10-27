@@ -14,7 +14,6 @@ import (
 	"github.com/pressly/goose/v3/lock"
 )
 
-// defenseVersionTablePrefix gives each defense its own goose version table.
 const defenseVersionTablePrefix = "goose_defense_"
 
 // ErrSchemaProfileMismatch means the process and the database disagree on
@@ -23,17 +22,13 @@ var ErrSchemaProfileMismatch = errors.New("the database schema does not match th
 
 const appliedDefenseSQL = `SELECT to_regclass($1) IS NOT NULL`
 
-// DefenseMigrations are the constraints of one defense and whether the
-// profile wants them.
 type DefenseMigrations struct {
 	Name      string
 	Files     fs.FS
 	IsEnabled bool
 }
 
-// MigrateDefenses applies the migrations of every enabled defense and rolls
-// back those of every disabled one, so the database ends up with exactly the
-// constraints of its profile.
+// So the database ends up with exactly the constraints of its profile.
 func MigrateDefenses(ctx context.Context, databaseURL string, defenses []DefenseMigrations, logger *slog.Logger) error {
 	connConfig, err := pgx.ParseConfig(databaseURL)
 	if err != nil {
@@ -77,10 +72,9 @@ func MigrateDefenses(ctx context.Context, databaseURL string, defenses []Defense
 	return nil
 }
 
-// CheckDefenseSchema refuses a process whose profile differs from the
-// database's: with balance_locking off in the database but on in the process,
-// for instance, a lost update would still be caught by the missing constraint
-// and the round would prove nothing.
+// With balance_locking off in the database but on in the process, for
+// instance, a lost update would still be caught by the missing constraint and
+// the round would prove nothing.
 func CheckDefenseSchema(ctx context.Context, pool *pgxpool.Pool, defenses []DefenseMigrations) error {
 	for _, defense := range defenses {
 		isApplied, err := isDefenseApplied(ctx, pool, defense.Name)
@@ -96,14 +90,12 @@ func CheckDefenseSchema(ctx context.Context, pool *pgxpool.Pool, defenses []Defe
 	return nil
 }
 
-// applyDefense runs every migration of a defense that is on.
 func applyDefense(ctx context.Context, provider *goose.Provider) error {
 	_, err := provider.Up(ctx)
 
 	return err
 }
 
-// revertDefense undoes every migration of a defense that is off.
 func revertDefense(ctx context.Context, provider *goose.Provider) error {
 	_, err := provider.DownTo(ctx, 0)
 

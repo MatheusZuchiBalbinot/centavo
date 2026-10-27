@@ -17,7 +17,6 @@ import (
 
 const insufficientPrivilege = "42501"
 
-// bank wires the use cases to a real database, as cmd/bank does.
 type bank struct {
 	pool         *pgxpool.Pool
 	openAccount  application.OpenAccount
@@ -266,7 +265,6 @@ func (b bank) statement(t *testing.T, accountID ledger.AccountID) []ledger.State
 	return page.Lines
 }
 
-// transactionsWithClientRef counts the ledger transactions a client key produced.
 func (b bank) transactionsWithClientRef(t *testing.T, key idempotency.Key) int {
 	t.Helper()
 

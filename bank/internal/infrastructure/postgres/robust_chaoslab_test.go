@@ -31,8 +31,6 @@ type pausingStatement struct {
 	meantime  func()
 }
 
-// TestInternalTransfer_CrashBetweenDebitAndCredit_LeavesNoPartialEntries is a
-// regression test, with its positive control.
 func TestInternalTransfer_CrashBetweenDebitAndCredit_LeavesNoPartialEntries(t *testing.T) {
 	cases := []struct {
 		name               string
@@ -431,7 +429,6 @@ func naiveMoney(t *testing.T, b bank, profile string) application.MoneyDependenc
 	return deps
 }
 
-// armFP08 fails the reconciliation once, between two entries of a batch.
 func armFP08(t *testing.T) {
 	t.Helper()
 

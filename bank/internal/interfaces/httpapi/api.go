@@ -13,38 +13,30 @@ import (
 	"centavo/bank/internal/domain/ledger"
 )
 
-// AccountGetter reads one customer account.
 type AccountGetter interface {
 	Execute(ctx context.Context, id ledger.AccountID) (application.AccountView, error)
 }
 
-// StatementGetter pages through an account's entries.
 type StatementGetter interface {
 	Execute(ctx context.Context, query application.StatementQuery) (application.StatementPage, error)
 }
 
-// AccountOpener opens customer accounts inside a unit of work.
 type AccountOpener interface {
 	Apply(ctx context.Context, customers application.CustomerCreator, holderName string) (application.AccountView, error)
 }
 
-// Depositor runs direct deposits inside a unit of work.
 type Depositor interface {
 	Apply(ctx context.Context, stores application.MoneyStores, operationID ledger.OperationID, input application.DepositInput) (application.DepositResult, error)
 }
 
-// Transferrer runs internal transfers inside a unit of work.
 type Transferrer interface {
 	Apply(ctx context.Context, stores application.MoneyStores, operationID ledger.OperationID, input application.TransferInput) (application.TransferResult, error)
 }
 
-// WriteExecutor runs a client write exactly once per idempotency key
-// (idempotency) or every time (naive).
 type WriteExecutor interface {
 	Execute(ctx context.Context, write application.Write) (idempotency.StoredResponse, error)
 }
 
-// UseCases are the application entry points the API exposes.
 type UseCases struct {
 	Writer       WriteExecutor
 	Resolver     application.Resolver
@@ -83,7 +75,6 @@ type statementLineResponse struct {
 	CreatedAt         time.Time `json:"created_at"`
 }
 
-// NewAPIHandler serves the client API (8080).
 func NewAPIHandler(useCases UseCases, logger *slog.Logger) http.Handler {
 	api := apiHandlers{useCases: useCases, logger: logger}
 	// The limits count real time, never the clock the chaos lab can skew.

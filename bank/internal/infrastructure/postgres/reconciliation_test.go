@@ -17,7 +17,6 @@ import (
 // reconciled in the shared database.
 const seqGap = 1_000
 
-// fakeStatement is a partner statement fixed by the test.
 type fakeStatement struct {
 	entries []application.StatementEntry
 }
@@ -135,7 +134,6 @@ func (f *fakeStatement) Statement(_ context.Context, afterSeq int64, limit int) 
 	return page, nil
 }
 
-// add appends an entry after the last one.
 func (f *fakeStatement) add(kind application.StatementKind, endToEndID transfer.EndToEndID, cents money.Cents, accountID string) {
 	seq := f.entries[len(f.entries)-1].Seq + 1
 	f.entries = append(f.entries, application.StatementEntry{Seq: seq, Kind: kind, EndToEndID: endToEndID, AmountCents: cents, AccountID: accountID})
@@ -186,7 +184,6 @@ func (p pixBank) systemBalance(t *testing.T, id ledger.AccountID) int64 {
 	return balance
 }
 
-// reconcile runs the robust reconciler (reconciliation) once.
 func (p pixBank) reconcile(t *testing.T, statement application.PartnerStatementReader) {
 	t.Helper()
 

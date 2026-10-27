@@ -6,22 +6,18 @@ import (
 	"centavo/bank/internal/domain/idempotency"
 )
 
-// Resolution is what resolve answers about one key.
 type Resolution struct {
-	Outcome idempotency.Outcome
-	// Response is the stored answer of an applied operation, when the bank has it.
+	Outcome  idempotency.Outcome
 	Response *idempotency.StoredResponse
 }
 
-// ResolveRequest is the request whose outcome the client asks about: its key
-// and what it sent, since a key can end up holding another request.
+// Its key and what it sent, since a key can end up holding another request.
 type ResolveRequest struct {
 	Key         idempotency.Key
 	Endpoint    string
 	RequestHash idempotency.RequestHash
 }
 
-// Resolver turns an operation with an unknown outcome into a known one.
 type Resolver interface {
 	Resolve(ctx context.Context, request ResolveRequest) (Resolution, error)
 }
@@ -32,12 +28,10 @@ type TombstoneResolver struct {
 	unitOfWork UnitOfWork
 }
 
-// NewTombstoneResolver builds the resolver.
 func NewTombstoneResolver(unitOfWork UnitOfWork) TombstoneResolver {
 	return TombstoneResolver{unitOfWork: unitOfWork}
 }
 
-// Resolve voids an unknown key or reports how a known one ended.
 func (r TombstoneResolver) Resolve(ctx context.Context, request ResolveRequest) (Resolution, error) {
 	var resolution Resolution
 

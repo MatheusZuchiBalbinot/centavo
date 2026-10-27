@@ -197,9 +197,8 @@ func TestMigrateDefenses_TakesTheConstraintsOutAndBackIn(t *testing.T) {
 	}
 }
 
-// assertChainedAndNeverNegative checks each account's entries chain and
-// customer balances never go negative on one account, the way the checker does:
-// positions 1..n, chained balances, materialized equal to the sum.
+// The way the checker does: positions 1..n, chained balances, materialized
+// equal to the sum.
 func assertChainedAndNeverNegative(t *testing.T, b bank, account ledger.AccountID, want int64) {
 	t.Helper()
 

@@ -1,5 +1,5 @@
-// Package partnerclient calls the partner's PIX API. It is the only place that
-// knows the partner's HTTP contract.
+// Package partnerclient is the only place that knows the partner's HTTP
+// contract.
 package partnerclient
 
 import (
@@ -15,12 +15,10 @@ import (
 	"centavo/bank/internal/domain/transfer"
 )
 
-// attemptTimeout is the partner call's timeout.
 const attemptTimeout = 2 * time.Second
 
 const maxResponseBytes = 64 << 10
 
-// Client sends PIX to the partner.
 type Client struct {
 	baseURL       string
 	participantID string
@@ -34,14 +32,13 @@ type submitRequest struct {
 	DestinationKey string              `json:"destination_key"`
 }
 
-// New builds a client for one participant.
 func New(baseURL, participantID string) Client {
 	return Client{baseURL: baseURL, participantID: participantID, http: &http.Client{Timeout: attemptTimeout}}
 }
 
-// Submit sends one PIX once. 202 and 200 are accepted, 422 is a definitive
-// refusal, anything else (timeout, 5xx, a broken connection) is unknown:
-// the partner may have processed it.
+// 202 and 200 are accepted, 422 is a definitive refusal, anything else
+// (timeout, 5xx, a broken connection) is unknown: the partner may have
+// processed it.
 func (c Client) Submit(ctx context.Context, submission application.PartnerSubmission) application.PartnerAnswer {
 	payload := submitRequest{
 		EndToEndID: submission.EndToEndID, ParticipantID: c.participantID, AmountCents: int64(submission.AmountCents), DestinationKey: submission.DestinationKey,

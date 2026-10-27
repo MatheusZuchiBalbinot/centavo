@@ -15,23 +15,18 @@ import (
 	"github.com/pressly/goose/v3/lock"
 )
 
-// baseVersionTable keeps the base schema apart from the per-defense migration
-// tables.
 const baseVersionTable = "goose_base_version"
 
-// PoolConfig sizes a connection pool for one process role.
 type PoolConfig struct {
 	DatabaseURL    string
 	MaxConnections int32
-	// IsRelaxed turns synchronous_commit off on every connection: the naive
-	// variant of the durable_db defense, where a commit is acknowledged before
-	// its WAL leaves shared memory.
+	// The naive variant of the durable_db defense: a commit is acknowledged
+	// before its WAL leaves shared memory.
 	IsRelaxed bool
 }
 
-// NewPool creates a lazily connecting pool; reachability is reported by the
-// health endpoint instead of blocking startup, since the database may be down
-// under chaos.
+// Connects lazily: reachability is reported by the health endpoint instead
+// of blocking startup, since the database may be down under chaos.
 func NewPool(ctx context.Context, configuration PoolConfig) (*pgxpool.Pool, error) {
 	poolConfig, err := pgxpool.ParseConfig(configuration.DatabaseURL)
 	if err != nil {
@@ -52,8 +47,8 @@ func NewPool(ctx context.Context, configuration PoolConfig) (*pgxpool.Pool, erro
 	return pool, nil
 }
 
-// MigrateBase applies the base migrations under a PostgreSQL advisory lock,
-// so concurrent `bank migrate` runs serialize instead of racing.
+// Under a PostgreSQL advisory lock, so concurrent `bank migrate` runs
+// serialize instead of racing.
 func MigrateBase(ctx context.Context, databaseURL string, migrations fs.FS, logger *slog.Logger) error {
 	connConfig, err := pgx.ParseConfig(databaseURL)
 	if err != nil {

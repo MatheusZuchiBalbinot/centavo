@@ -16,10 +16,8 @@ import (
 	"centavo/bank/internal/infrastructure/partnerclient"
 )
 
-// expiredLease is a lease that ends before the next claim looks at it.
 const expiredLease = time.Millisecond
 
-// recordingPartner accepts every PIX and keeps the end_to_end_id of each call.
 type recordingPartner struct {
 	mu          sync.Mutex
 	endToEndIDs []transfer.EndToEndID
@@ -33,7 +31,6 @@ type dyingAfterSubmit struct {
 	die     context.CancelFunc
 }
 
-// statusAnswer is a partner that answers every status query the same way.
 type statusAnswer transfer.PartnerStatus
 
 // TestPixOut_CrashAfterSave_IsStillSubmitted is a regression test: the API died
@@ -316,7 +313,6 @@ func (p *recordingPartner) calls() []transfer.EndToEndID {
 	return append([]transfer.EndToEndID{}, p.endToEndIDs...)
 }
 
-// newOutboxBank is the PIX: the transfer and its outbox message share a commit.
 func newOutboxBank(t *testing.T) pixBank {
 	t.Helper()
 
@@ -388,7 +384,6 @@ func (d dyingAfterSubmit) Submit(ctx context.Context, submission application.Par
 	return answer
 }
 
-// markSent records the partner's acceptance, as the relay would.
 func (p pixBank) markSent(t *testing.T, id transfer.ID) {
 	t.Helper()
 
@@ -406,7 +401,6 @@ func (a statusAnswer) Status(context.Context, transfer.EndToEndID) (application.
 	return application.AuthoritativeStatus{Status: transfer.PartnerStatus(a)}, nil
 }
 
-// newInbox is inbox over the test database.
 func newInbox(fixture pixBank, partner application.PartnerStatusReader) (application.InboxIntake, application.InboxProcessor) {
 	config := application.InboxProcessorConfig{UnitOfWork: fixture.unitOfWork, Machine: application.GuardedTransitions{}, Partner: partner, Logger: discardLogger()}
 

@@ -8,29 +8,22 @@ import "errors"
 // amount is positive and at most R$ 1,000,000.00: R$ 1.000.000,00).
 const MaxOperationCents Cents = 100_000_000
 
-// Errors of validating an amount.
 var (
 	ErrAmountNotPositive = errors.New("amount must be greater than zero")
 	ErrAmountAboveLimit  = errors.New("amount is above the per-operation limit")
 	ErrBalanceOverflow   = errors.New("balance overflow")
 )
 
-// Cents is the smallest unit of money.
 type Cents int64
 
-// Amount is the value of one operation: always positive and at most
-// MaxOperationCents.
 type Amount struct {
 	cents Cents
 }
 
-// Balance is a signed account balance.
 type Balance struct {
 	cents Cents
 }
 
-// NewAmount validates an operation value: positive and at most
-// MaxOperationCents.
 func NewAmount(cents Cents) (Amount, error) {
 	isPositive := cents > 0
 	if !isPositive {
@@ -45,27 +38,22 @@ func NewAmount(cents Cents) (Amount, error) {
 	return Amount{cents: cents}, nil
 }
 
-// Cents returns the amount as a positive number of cents.
 func (a Amount) Cents() Cents {
 	return a.cents
 }
 
-// Negated returns the amount as a debit: a negative number of cents.
 func (a Amount) Negated() Cents {
 	return -a.cents
 }
 
-// NewBalance wraps a balance read from storage.
 func NewBalance(cents Cents) Balance {
 	return Balance{cents: cents}
 }
 
-// Cents returns the balance as a signed number of cents.
 func (b Balance) Cents() Cents {
 	return b.cents
 }
 
-// Add returns the balance moved by delta, refusing to wrap around.
 func (b Balance) Add(delta Cents) (Balance, error) {
 	sum := b.cents + delta
 
@@ -77,7 +65,6 @@ func (b Balance) Add(delta Cents) (Balance, error) {
 	return Balance{cents: sum}, nil
 }
 
-// Covers reports whether the balance is enough to pay the amount.
 func (b Balance) Covers(amount Amount) bool {
 	return b.cents >= amount.cents
 }

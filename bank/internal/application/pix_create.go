@@ -11,7 +11,6 @@ import (
 	"centavo/bank/internal/domain/transfer"
 )
 
-// PixOutInput asks to send money out through the partner.
 type PixOutInput struct {
 	AccountID      ledger.AccountID
 	Amount         money.Amount
@@ -19,7 +18,6 @@ type PixOutInput struct {
 	Write          WriteContext
 }
 
-// PixOutResult is what the client gets back: the transfer starts as created.
 type PixOutResult struct {
 	TransferID transfer.ID
 	EndToEndID transfer.EndToEndID
@@ -27,35 +25,29 @@ type PixOutResult struct {
 	CreatedAt  time.Time
 }
 
-// PixOutStores are what creating a PIX out writes: the reserve, the transfer
-// and, with the outbox, its message.
 type PixOutStores interface {
 	MoneyStores
 	PixStore
 	OutboxStore
 }
 
-// CreatePixOut creates the transfer and reserves its amount in the same step,
-// so the money is never promised twice.
+// Creates the transfer and reserves its amount in the same step, so the
+// money is never promised twice.
 type CreatePixOut struct {
 	locker      Locker
 	publication Publication
 }
 
-// reservation is a PIX out whose funds are checked, ready to move to transit.
 type reservation struct {
 	external ExternalTransfer
 	debited  ledger.Position
 	write    WriteContext
 }
 
-// NewCreatePixOut builds the use case.
 func NewCreatePixOut(locker Locker, publication Publication) CreatePixOut {
 	return CreatePixOut{locker: locker, publication: publication}
 }
 
-// Apply runs inside the writer's unit of work: lock, check funds, move the
-// amount to sys_pix_out_transit and record the transfer and its first state.
 func (c CreatePixOut) Apply(ctx context.Context, stores PixOutStores, operationID ledger.OperationID, input PixOutInput) (PixOutResult, error) {
 	debited, err := c.reserveFunds(ctx, stores, input)
 	if err != nil {
@@ -89,8 +81,6 @@ func (c CreatePixOut) Apply(ctx context.Context, stores PixOutStores, operationI
 	return PixOutResult{TransferID: external.ID, EndToEndID: external.EndToEndID, Status: transfer.StatusCreated, CreatedAt: createdAt}, nil
 }
 
-// reserveFunds locks the customer and transit and returns the customer's
-// position after the debit, refusing to take a customer below zero.
 func (c CreatePixOut) reserveFunds(ctx context.Context, stores MoneyStores, input PixOutInput) (ledger.Position, error) {
 	// Transit is locked with the customer, in id order, so the reserve takes
 	// it first, like a refund that moves transit then the customer.
@@ -107,7 +97,6 @@ func (c CreatePixOut) reserveFunds(ctx context.Context, stores MoneyStores, inpu
 	return source.Debit(input.Amount)
 }
 
-// recordTransfer creates the external transfer in created.
 func recordTransfer(ctx context.Context, stores PixStore, operationID ledger.OperationID, input PixOutInput) (ExternalTransfer, time.Time, error) {
 	id, err := transfer.NewID()
 	if err != nil {
@@ -127,8 +116,6 @@ func recordTransfer(ctx context.Context, stores PixStore, operationID ledger.Ope
 	return external, createdAt, nil
 }
 
-// postReserve writes the reserve: the customer's debit and its twin in
-// sys_pix_out_transit, in one ledger transaction tied to the transfer.
 func postReserve(ctx context.Context, stores PostingStores, r reservation) (ledger.TransactionID, error) {
 	transaction, err := newTransaction(ledger.TransactionKindPixOutReserve, r.write, r.external.OperationID)
 	if err != nil {

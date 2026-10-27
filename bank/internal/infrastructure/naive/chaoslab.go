@@ -39,15 +39,12 @@ func NewUnitOfWork(pool *pgxpool.Pool) application.UnitOfWork {
 	return postgres.NewAutocommit(pool)
 }
 
-// NewIdempotency is the naive variant of idempotency: keys only recorded, a
-// resolve without tombstones and no retries.
 func NewIdempotency(pool *pgxpool.Pool) application.IdempotencyStrategy {
 	resolver := ClientRefResolver{store: postgres.NewLedgerStore(pool)}
 
 	return application.IdempotencyStrategy{Keys: IgnoredKeys{}, Resolver: resolver, Retries: application.NoRetries()}
 }
 
-// Run executes every request as a new operation.
 func (IgnoredKeys) Run(ctx context.Context, stores application.Stores, write application.Write) (idempotency.StoredResponse, error) {
 	operationID, err := ledger.NewOperationID()
 	if err != nil {
@@ -57,7 +54,6 @@ func (IgnoredKeys) Run(ctx context.Context, stores application.Stores, write app
 	return write.Apply(ctx, stores, operationID)
 }
 
-// Resolve answers from the ledger as it is right now.
 func (r ClientRefResolver) Resolve(ctx context.Context, request application.ResolveRequest) (application.Resolution, error) {
 	isApplied, err := r.store.IsClientRefApplied(ctx, request.Key)
 	if err != nil {
@@ -71,7 +67,6 @@ func (r ClientRefResolver) Resolve(ctx context.Context, request application.Reso
 	return application.Resolution{Outcome: idempotency.OutcomeVoided}, nil
 }
 
-// Lock does nothing.
 func (NoLocker) Lock(context.Context, application.PositionLocker, []ledger.AccountID) error {
 	return nil
 }

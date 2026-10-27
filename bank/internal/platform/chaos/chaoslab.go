@@ -22,7 +22,6 @@ import (
 	"centavo/bank/internal/platform/labevent"
 )
 
-// Routes of the chaos server.
 const (
 	failpointsRoute = "/chaos/failpoints"
 	failpointRoute  = "/chaos/failpoints/{name}"
@@ -47,8 +46,6 @@ type skewRequest struct {
 	TTL    string `json:"ttl"`
 }
 
-// Setup records fired failpoints in the shared volume and arms the rules of
-// CENTAVO_FAILPOINTS.
 func Setup(config Config) error {
 	failpoint.ConfigureEvents(failpoint.EventsConfig{Dir: EventsDir, Service: config.Service, Instance: config.Instance})
 	labevent.Configure(labevent.Config{Dir: EventsDir, Service: config.Service, Instance: config.Instance})
@@ -56,7 +53,6 @@ func Setup(config Config) error {
 	return failpoint.ArmFromSpec(config.FailpointSpec, config.Seed, time.Now())
 }
 
-// Server is the chaos control server.
 func Server(config Config) *http.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("PUT "+failpointRoute, armFailpoint)
@@ -68,9 +64,8 @@ func Server(config Config) *http.Server {
 	return httpserver.New(Addr, requireToken(config.Token, mux))
 }
 
-// KillMain finds the main process of the container (the binary started by tini,
-// not this chaos-kill invocation) and sends it SIGKILL. The images have no
-// shell and no kill command, so the binary kills itself this way.
+// The images have no shell and no kill command, so the binary kills its own
+// main process (the one tini started, not this chaos-kill invocation).
 func KillMain(binary string) error {
 	entries, err := os.ReadDir(procDir)
 	if err != nil {
@@ -97,8 +92,6 @@ func KillMain(binary string) error {
 	return errNoMainProcess
 }
 
-// requireToken is the safety rule that every chaos call carries the chaos
-// token: every control call carries the secret.
 func requireToken(token string, next http.Handler) http.Handler {
 	expected := []byte(token)
 
@@ -153,7 +146,6 @@ func clearFailpoints(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, map[string]bool{"cleared": true})
 }
 
-// setClock skews this process's wall clock.
 func setClock(w http.ResponseWriter, r *http.Request) {
 	var request skewRequest
 
@@ -199,8 +191,7 @@ func writeJSON(w http.ResponseWriter, body any) {
 	_ = json.NewEncoder(w).Encode(body)
 }
 
-// isMainProcess matches "<binary> api|worker|serve", never healthcheck or
-// another chaos-kill.
+// Never healthcheck or another chaos-kill.
 func isMainProcess(pid int, binary string) bool {
 	path := filepath.Join(procDir, strconv.Itoa(pid), cmdlineFile)
 

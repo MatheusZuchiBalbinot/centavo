@@ -10,14 +10,10 @@ import (
 	"centavo/bank/internal/domain/money"
 )
 
-// recordingWriter keeps the order balances were moved in.
 type recordingWriter struct {
 	moved []ledger.AccountID
 }
 
-// TestPostAll_PostsInAccountOrder: the order the caller lists the lines in
-// does not matter, the balances move system accounts first, as every writer
-// takes them.
 func TestPostAll_PostsInAccountOrder(t *testing.T) {
 	t.Parallel()
 

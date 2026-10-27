@@ -16,26 +16,21 @@ import (
 	"centavo/bank/internal/platform/labevent"
 )
 
-// Reconciler timings.
 const (
 	ReconcileInterval   = time.Minute
 	ReconcilerLeaseTTL  = 30 * time.Second
 	reconcileBatchLimit = 500
 )
 
-// LeaseReconciler is the reconciler's row in worker_leases.
 const LeaseReconciler = "reconciler"
 
-// causeReconciliation marks the transitions a reconciliation walks.
 const causeReconciliation TransitionCause = "reconciliation"
 
 var (
 	errReconcilerLeaseLost = errors.New("reconciler lease lost to another worker")
-	// errCursorMoved means another reconciler booked the batch first.
-	errCursorMoved = errors.New("reconciliation cursor moved under the batch")
+	errCursorMoved         = errors.New("reconciliation cursor moved under the batch")
 )
 
-// ReconciliationItem is one statement entry as reconciled.
 type ReconciliationItem struct {
 	RunID       int64
 	PartnerSeq  int64
@@ -46,34 +41,25 @@ type ReconciliationItem struct {
 	Action      ReconciliationAction
 }
 
-// ReconciliationStore keeps the cursor, the runs and the items.
 type ReconciliationStore interface {
 	ReadCursor(ctx context.Context) (int64, error)
-	// AdvanceCursor is the compare-and-set.
 	AdvanceCursor(ctx context.Context, from, to int64) (bool, error)
-	// SaveCursor is the naive write, with no check of where it was.
 	SaveCursor(ctx context.Context, to int64) error
 	StartRun(ctx context.Context, from, to, token int64) (int64, error)
 	FinishRun(ctx context.Context, runID int64) error
 	InsertItem(ctx context.Context, item ReconciliationItem) (int64, error)
-	// CountItems counts the entries of a kind already reconciled for an
-	// end_to_end_id.
 	CountItems(ctx context.Context, endToEndID transfer.EndToEndID, kind StatementKind) (int, error)
 	IsIncomingCredited(ctx context.Context, endToEndID transfer.EndToEndID) (bool, error)
 }
 
-// PartnerStatementReader reads the partner's statement after a sequence number.
 type PartnerStatementReader interface {
 	Statement(ctx context.Context, afterSeq int64, limit int) ([]StatementEntry, error)
 }
 
-// BatchPolicy is the reconciliation defense's strategy: how a batch is booked.
 type BatchPolicy interface {
 	Book(ctx context.Context, r Reconciler, batch statementBatch) error
 }
 
-// Reconciler is the reconciliation: it reads the partner's statement from a
-// cursor and books every entry against the ledger.
 type Reconciler struct {
 	unitOfWork UnitOfWork
 	lease      LeasePolicy
@@ -84,7 +70,6 @@ type Reconciler struct {
 	logger     *slog.Logger
 }
 
-// ReconcilerConfig wires a reconciler.
 type ReconcilerConfig struct {
 	UnitOfWork UnitOfWork
 	Lease      LeasePolicy
@@ -105,28 +90,22 @@ type AtomicBatches struct{}
 // entries booked and the cursor behind them, so the next run books them again.
 type EntryByEntry struct{}
 
-// actStores are what acting on a classified entry writes: a walk to the
-// partner's status, a credit or a suspense posting.
 type actStores interface {
 	TransitionStores
 	creditStores
 }
 
-// entryStores are what booking one statement entry reads and writes.
 type entryStores interface {
 	actStores
 	factStores
 }
 
-// factStores are what classifying a statement entry reads: the ledger's
-// transfers and incoming PIX, balances and earlier items.
 type factStores interface {
 	PixStore
 	PositionStore
 	ReconciliationStore
 }
 
-// statementBatch is a contiguous slice of the statement.
 type statementBatch struct {
 	from    int64
 	to      int64
@@ -141,7 +120,6 @@ type actCommand struct {
 	itemID   int64
 }
 
-// NewReconciler builds the reconciler.
 func NewReconciler(config ReconcilerConfig) Reconciler {
 	return Reconciler{
 		unitOfWork: config.UnitOfWork, lease: config.Lease, machine: config.Machine, statement: config.Statement,
@@ -149,7 +127,6 @@ func NewReconciler(config ReconcilerConfig) Reconciler {
 	}
 }
 
-// Run reconciles until ctx ends.
 func (r Reconciler) Run(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -168,8 +145,6 @@ func (r Reconciler) Run(ctx context.Context, interval time.Duration) {
 	}
 }
 
-// RunOnce books every statement entry after the cursor, a batch at a time,
-// if this worker holds the lease.
 func (r Reconciler) RunOnce(ctx context.Context) error {
 	for ctx.Err() == nil {
 		batch, isHeld, err := r.nextBatch(ctx)
@@ -206,7 +181,6 @@ func (r Reconciler) RunOnce(ctx context.Context) error {
 	return ctx.Err()
 }
 
-// Book books the whole batch or nothing.
 func (AtomicBatches) Book(ctx context.Context, r Reconciler, batch statementBatch) error {
 	corrected := 0
 
@@ -269,7 +243,6 @@ func (AtomicBatches) Book(ctx context.Context, r Reconciler, batch statementBatc
 	return err
 }
 
-// Book books the batch an entry at a time.
 func (EntryByEntry) Book(ctx context.Context, r Reconciler, batch statementBatch) error {
 	var runID int64
 
@@ -360,8 +333,7 @@ func (r Reconciler) nextBatch(ctx context.Context) (statementBatch, bool, error)
 	return batch, true, nil
 }
 
-// bookEntry classifies one entry and books it, in the caller's unit of work;
-// it reports whether the entry corrected something the bank had missed.
+// Reports whether the entry corrected something the bank had missed.
 func (r Reconciler) bookEntry(ctx context.Context, stores entryStores, runID int64, entry StatementEntry) (bool, error) {
 	ctx = correlation.With(ctx, entryCorrelation(entry))
 
@@ -425,8 +397,8 @@ func (r Reconciler) act(ctx context.Context, stores actStores, command actComman
 	return bookSuspense(ctx, stores, command.itemID, command.decision.suspenseCents)
 }
 
-// bookSuspense posts a reconciliation adjustment: the partner reserve mirror
-// moves by what the partner did, and suspense holds the other side.
+// The partner reserve mirror moves by what the partner did, and suspense
+// holds the other side.
 func bookSuspense(ctx context.Context, stores PostingStores, itemID int64, cents money.Cents) error {
 	transactionID, err := ledger.NewTransactionID()
 	if err != nil {
@@ -449,7 +421,6 @@ func bookSuspense(ctx context.Context, stores PostingStores, itemID int64, cents
 	return err
 }
 
-// factsOf reads what the ledger knows about an entry.
 func factsOf(ctx context.Context, stores factStores, entry StatementEntry) (entryFacts, error) {
 	var facts entryFacts
 
@@ -532,8 +503,7 @@ func lockBatch(ctx context.Context, stores PixStore, batch statementBatch) error
 	return stores.LockTransfersOf(ctx, endToEndIDs)
 }
 
-// entryFailpointContext carries the entry's PIX correlation id to a
-// failpoint: the lab arms them for the round's correlation ids, and the
+// The lab arms failpoints for the round's correlation ids, and the
 // reconciler has no request of its own to take one from.
 func entryFailpointContext(ctx context.Context, entry StatementEntry) context.Context {
 	if entry.CorrelationID == "" {
@@ -543,8 +513,7 @@ func entryFailpointContext(ctx context.Context, entry StatementEntry) context.Co
 	return correlation.With(ctx, entry.CorrelationID)
 }
 
-// batchFailpointContext is entryFailpointContext for a step that covers the
-// whole batch: it takes the first entry that has a correlation id.
+// Takes the first entry of the batch that has a correlation id.
 func batchFailpointContext(ctx context.Context, batch statementBatch) context.Context {
 	for _, entry := range batch.entries {
 		if entry.CorrelationID != "" {
@@ -555,7 +524,6 @@ func batchFailpointContext(ctx context.Context, batch statementBatch) context.Co
 	return ctx
 }
 
-// entryCorrelation ties the ledger rows a reconciliation writes to the entry.
 func entryCorrelation(entry StatementEntry) string {
 	return fmt.Sprintf("recon-%d", entry.Seq)
 }

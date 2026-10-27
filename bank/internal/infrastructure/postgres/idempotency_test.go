@@ -22,7 +22,6 @@ import (
 
 const depositEndpoint = "/v1/deposits"
 
-// writes is the robust idempotency stack over the test database.
 type writes struct {
 	bank     bank
 	writer   application.Writer
@@ -305,8 +304,6 @@ func newWrites(t *testing.T) writes {
 	return writes{bank: b, writer: writer, resolver: strategy.Resolver}
 }
 
-// depositWrite builds the write the HTTP layer would: hash of the raw body,
-// answer encoded in the unit of work.
 func (w writes) depositWrite(t *testing.T, key idempotency.Key, account ledger.AccountID, cents money.Cents) application.Write {
 	t.Helper()
 
@@ -336,7 +333,6 @@ func resolveOf(write application.Write) application.ResolveRequest {
 	return application.ResolveRequest{Key: write.Key, Endpoint: write.Endpoint, RequestHash: write.RequestHash}
 }
 
-// keyVersion is the transaction that wrote the key's current row version.
 func (w writes) keyVersion(t *testing.T, key idempotency.Key) string {
 	t.Helper()
 

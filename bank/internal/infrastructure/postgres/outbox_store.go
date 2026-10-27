@@ -52,34 +52,28 @@ const reclaimInboxSQL = `SELECT id FROM inbox_events WHERE id = @id AND status =
 // even after its lease expired, as long as no one took a newer one.
 const ownedByLeaseSQL = "id = @id AND lease_token = @token AND status = 'pending'"
 
-// afterDelaySQL is now plus a delay given in milliseconds.
 const afterDelaySQL = "now() + @delay_ms::bigint * interval '1 millisecond'"
 
-// failureCodeSQL keeps the failure code only on a transfer that failed.
 const failureCodeSQL = "failure_code = CASE WHEN @status::external_transfer_status = 'failed' THEN @failure_code ELSE NULL END"
 
 // errStaleStatus is a compare-and-set that lost: the caller read the status
 // without the lock, which the guarded machine never does.
 var errStaleStatus = errors.New("transfer status changed since it was read")
 
-// outboxStore keeps the outbox and the locks of the transfers it relays.
 type outboxStore struct {
 	db querier
 }
 
-// inboxStore keeps the partner events waiting to be applied.
 type inboxStore struct {
 	db querier
 }
 
-// EnqueueOutbox writes the message in the caller's transaction.
 func (s outboxStore) EnqueueOutbox(ctx context.Context, message application.OutboxMessage) error {
 	_, err := insertRow("enqueueing outbox message", outboxMessagesTable, outboxMessageRowOf(message)).Exec(ctx, s.db)
 
 	return err
 }
 
-// ClaimOutbox leases up to limit messages.
 func (s outboxStore) ClaimOutbox(ctx context.Context, owner string, ttl time.Duration, limit int) ([]application.OutboxClaim, error) {
 	values := args{"owner": owner, "ttl_ms": ttl.Milliseconds(), "limit": limit}
 
@@ -97,7 +91,6 @@ func (s outboxStore) ClaimOutbox(ctx context.Context, owner string, ttl time.Dur
 	return claims, nil
 }
 
-// FinishOutbox marks the message delivered if the token still owns it.
 func (s outboxStore) FinishOutbox(ctx context.Context, id, token int64) (bool, error) {
 	finish := update("finishing outbox message", outboxMessagesTable).
 		SetSQL("status = 'delivered', delivered_at = now(), lease_owner = NULL, lease_expires_at = NULL", nil).
@@ -108,8 +101,6 @@ func (s outboxStore) FinishOutbox(ctx context.Context, id, token int64) (bool, e
 	return finished == 1, err
 }
 
-// LockExternalTransfer locks the transfer until the transaction ends and
-// returns it.
 func (s outboxStore) LockExternalTransfer(ctx context.Context, id transfer.ID) (application.ExternalTransfer, error) {
 	query := selectFrom[externalTransferRow]("locking external transfer", externalTransfersTable).
 		Where("id = @id", args{"id": uuid.UUID(id)}).
@@ -118,8 +109,6 @@ func (s outboxStore) LockExternalTransfer(ctx context.Context, id transfer.ID) (
 	return readExternalTransfer(ctx, s.db, query)
 }
 
-// AdvanceStatus changes the status if the sequence is still the one seen:
-// the compare-and-set.
 func (s outboxStore) AdvanceStatus(ctx context.Context, change application.StatusChange, seenSeq int) error {
 	advance := update("advancing status", externalTransfersTable).
 		Set("status", string(change.To)).
@@ -130,7 +119,6 @@ func (s outboxStore) AdvanceStatus(ctx context.Context, change application.Statu
 	return advance.ExecOne(ctx, s.db, errStaleStatus)
 }
 
-// DeferOutbox reschedules the message if the token still owns it.
 func (s outboxStore) DeferOutbox(ctx context.Context, claim application.OutboxClaim, delay time.Duration, reason string) (bool, error) {
 	deferral := update("deferring outbox message", outboxMessagesTable).
 		SetSQL("next_attempt_at = "+afterDelaySQL, args{"delay_ms": delay.Milliseconds()}).
@@ -143,9 +131,8 @@ func (s outboxStore) DeferOutbox(ctx context.Context, claim application.OutboxCl
 	return deferred == 1, err
 }
 
-// InsertInbox records the event unless it is already there: the unique
-// (source, event_id) of the inbox migration turns a redelivery into
-// nothing.
+// The unique (source, event_id) of the inbox migration turns a redelivery
+// into nothing.
 func (s inboxStore) InsertInbox(ctx context.Context, event application.PartnerEvent, correlationID string) (bool, error) {
 	row, err := inboxEventRowOf(event, correlationID)
 	if err != nil {
@@ -159,14 +146,12 @@ func (s inboxStore) InsertInbox(ctx context.Context, event application.PartnerEv
 	return inserted == 1, err
 }
 
-// ReclaimInbox locks a pending event no other transaction holds.
 func (s inboxStore) ReclaimInbox(ctx context.Context, id int64) (bool, error) {
 	var locked int64
 
 	return scanOptionalRow(ctx, s.db, newStatement("reclaiming inbox event", reclaimInboxSQL, args{"id": id}), &locked)
 }
 
-// ClaimInbox returns the next event to apply, or false when none is ready.
 func (s inboxStore) ClaimInbox(ctx context.Context) (application.InboxEvent, bool, error) {
 	rows, err := queryRows(ctx, s.db, newStatement("claiming inbox event", claimInboxSQL), pgx.RowToStructByName[inboxClaimRow])
 	if err != nil {
@@ -182,7 +167,6 @@ func (s inboxStore) ClaimInbox(ctx context.Context) (application.InboxEvent, boo
 	return event, err == nil, err
 }
 
-// FinishInbox closes the event with its outcome.
 func (s inboxStore) FinishInbox(ctx context.Context, id int64, status application.InboxStatus, outcome string) error {
 	finish := update("finishing inbox event", inboxEventsTable).
 		Set("status", string(status)).
@@ -195,7 +179,6 @@ func (s inboxStore) FinishInbox(ctx context.Context, id int64, status applicatio
 	return err
 }
 
-// DeferInbox puts the event back for a later attempt.
 func (s inboxStore) DeferInbox(ctx context.Context, id int64, delay time.Duration, reason string) error {
 	deferral := update("deferring inbox event", inboxEventsTable).
 		SetSQL("next_attempt_at = "+afterDelaySQL, args{"delay_ms": delay.Milliseconds()}).

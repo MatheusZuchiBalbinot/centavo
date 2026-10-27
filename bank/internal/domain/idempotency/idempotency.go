@@ -1,4 +1,3 @@
-// Package idempotency holds the identity of a client's logical operation.
 package idempotency
 
 import (
@@ -12,13 +11,11 @@ import (
 // characters usually mean a buggy client.
 var keyFormat = regexp.MustCompile(`^[A-Za-z0-9._:-]{8,128}$`)
 
-// Errors of reading an Idempotency-Key.
 var (
 	ErrKeyMissing = errors.New("the Idempotency-Key header is required")
 	ErrKeyInvalid = errors.New("the Idempotency-Key header must have 8 to 128 characters among letters, digits and . _ : -")
 )
 
-// The states of a stored key.
 const (
 	// StatusPending exists only inside the transaction that owns the key.
 	StatusPending   Status = "pending"
@@ -27,7 +24,6 @@ const (
 	StatusVoided Status = "voided"
 )
 
-// The outcomes resolve reports for a key.
 const (
 	OutcomeApplied Outcome = "applied"
 	OutcomeVoided  Outcome = "voided"
@@ -36,34 +32,26 @@ const (
 	OutcomeSuperseded Outcome = "superseded"
 )
 
-// Errors of replaying or resolving a key.
 var (
 	ErrKeyMismatch       = errors.New("the Idempotency-Key was already used with another request")
 	ErrOperationVoided   = errors.New("the operation was voided by resolve; nothing will be applied for this key")
 	ErrRequestInProgress = errors.New("another request with the same Idempotency-Key is still running")
 )
 
-// Key is the client-generated identity of one logical operation; retries reuse
-// it (every client write carries an Idempotency-Key).
 type Key string
 
-// Status is where a key stands.
 type Status string
 
-// Outcome is what resolve says about an operation whose result the client
-// does not know.
 type Outcome string
 
-// RequestHash binds a key to the exact request it was first used with.
+// Binds a key to the exact request it was first used with.
 type RequestHash [sha256.Size]byte
 
-// StoredResponse is the answer a completed key gives to every retry.
 type StoredResponse struct {
 	Status int
 	Body   []byte
 }
 
-// Record is a key as stored.
 type Record struct {
 	Key         Key
 	Endpoint    string
@@ -72,7 +60,6 @@ type Record struct {
 	Response    StoredResponse
 }
 
-// ParseKey validates a key received from a client.
 func ParseKey(raw string) (Key, error) {
 	if raw == "" {
 		return "", ErrKeyMissing
@@ -85,10 +72,9 @@ func ParseKey(raw string) (Key, error) {
 	return Key(raw), nil
 }
 
-// HashRequest hashes the endpoint and the raw body; a retry sends the same
-// bytes. A NUL separates the two, which is unambiguous because endpoints are
-// the server's own paths and never contain one; the client only controls the
-// body.
+// A NUL separates the endpoint from the body, which is unambiguous because
+// endpoints are the server's own paths and never contain one; the client
+// only controls the body.
 func HashRequest(endpoint string, body []byte) RequestHash {
 	hasher := sha256.New()
 
@@ -103,7 +89,6 @@ func HashRequest(endpoint string, body []byte) RequestHash {
 	return hash
 }
 
-// Replay decides what a request gets when its key already exists.
 func (r Record) Replay(endpoint string, hash RequestHash) (StoredResponse, error) {
 	switch r.Status {
 	case StatusVoided:

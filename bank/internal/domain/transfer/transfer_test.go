@@ -73,8 +73,6 @@ func TestParseDestinationKey(t *testing.T) {
 	}
 }
 
-// FuzzParseDestinationKey: an accepted key is the input, 3 to 77 characters
-// long, all of them in the allowed set.
 func FuzzParseDestinationKey(f *testing.F) {
 	for _, seed := range []string{"", "ab", "dest-0001", "user@example.com", "+5511999999999", "a b c"} {
 		f.Add(seed)

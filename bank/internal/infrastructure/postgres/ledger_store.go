@@ -15,11 +15,10 @@ import (
 	"centavo/bank/internal/domain/money"
 )
 
-// customerFloorCents is the lowest a customer balance may go.
 const customerFloorCents = 0
 
-// createCustomerSQL writes the account and its zero balance in one
-// statement, so neither exists without the other.
+// One statement, so neither the account nor its balance exists without the
+// other.
 const createCustomerSQL = `
 WITH account AS (
     INSERT INTO accounts (id, kind, holder_name)
@@ -31,9 +30,8 @@ WITH account AS (
 )
 SELECT created_at FROM account`
 
-// LedgerStore implements the account, position and ledger interfaces of the
-// application layer. Every method is a single statement; whether statements
-// commit together depends on the querier it was built on.
+// Every method is a single statement; whether statements commit together
+// depends on the querier it was built on.
 type LedgerStore struct {
 	ledgerRows
 	keyStore
@@ -44,26 +42,22 @@ type LedgerStore struct {
 	reconciliationStore
 }
 
-// querier is what both a pool and a transaction offer: on a pool every
-// statement is its own autocommit, inside a transaction they commit together.
+// On a pool every statement is its own autocommit; inside a transaction
+// they commit together.
 type querier interface {
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
-// ledgerRows keeps balances, positions, transactions and entries.
 type ledgerRows struct {
 	db querier
 }
 
-// NewLedgerStore runs every statement in its own autocommit on the pool.
 func NewLedgerStore(pool *pgxpool.Pool) LedgerStore {
 	return storesOn(pool)
 }
 
-// storesOn builds every store over one querier: the pool, or the
-// transaction of a unit of work.
 func storesOn(db querier) LedgerStore {
 	return LedgerStore{
 		ledgerRows: ledgerRows{db: db}, keyStore: keyStore{db: db}, pixStore: pixStore{db: db},
@@ -71,9 +65,8 @@ func storesOn(db querier) LedgerStore {
 	}
 }
 
-// LockPositions takes the row locks of the accounts' balances in id order, so
-// two transfers in opposite directions never wait for each other in a cycle.
-// The locks last until the transaction ends.
+// In id order, so two transfers in opposite directions never wait for each
+// other in a cycle. The locks last until the transaction ends.
 func (s ledgerRows) LockPositions(ctx context.Context, ids []ledger.AccountID) error {
 	uuids := make([]uuid.UUID, len(ids))
 
@@ -90,7 +83,6 @@ func (s ledgerRows) LockPositions(ctx context.Context, ids []ledger.AccountID) e
 	return err
 }
 
-// CreateCustomer inserts the account and its zero balance in one statement.
 func (s ledgerRows) CreateCustomer(ctx context.Context, account ledger.Account) (time.Time, error) {
 	var createdAt time.Time
 
@@ -100,7 +92,6 @@ func (s ledgerRows) CreateCustomer(ctx context.Context, account ledger.Account) 
 	return createdAt, err
 }
 
-// FindCustomer reads a customer account and its materialized balance.
 func (s ledgerRows) FindCustomer(ctx context.Context, id ledger.AccountID) (ledger.Account, money.Balance, error) {
 	row, err := selectFrom[customerRow]("reading customer account", customersWithBalances).
 		Where("a.id = @id", args{"id": uuid.UUID(id)}).
@@ -114,8 +105,7 @@ func (s ledgerRows) FindCustomer(ctx context.Context, id ledger.AccountID) (ledg
 	return account, money.NewBalance(money.Cents(row.BalanceCents)), nil
 }
 
-// ReadCustomerPosition reads a customer's balance and last entry position,
-// without locking the row.
+// Without locking the row.
 func (s ledgerRows) ReadCustomerPosition(ctx context.Context, id ledger.AccountID) (ledger.Position, error) {
 	row, err := selectFrom[positionRow]("reading customer position", customersWithBalances).
 		Where("b.account_id = @id", args{"id": uuid.UUID(id)}).
@@ -127,7 +117,6 @@ func (s ledgerRows) ReadCustomerPosition(ctx context.Context, id ledger.AccountI
 	return row.toDomain(), nil
 }
 
-// OverwritePosition stores a position the caller computed.
 func (s ledgerRows) OverwritePosition(ctx context.Context, id ledger.AccountID, position ledger.Position) error {
 	return update("overwriting position", accountBalancesTable).
 		Set("balance_cents", int64(position.Balance.Cents())).
@@ -137,7 +126,6 @@ func (s ledgerRows) OverwritePosition(ctx context.Context, id ledger.AccountID, 
 		ExecOne(ctx, s.db, ledger.ErrAccountNotFound)
 }
 
-// IncrementBalance adds delta in the database and returns the new position.
 func (s ledgerRows) IncrementBalance(ctx context.Context, id ledger.AccountID, delta money.Cents) (ledger.Position, error) {
 	var row positionRow
 
@@ -154,7 +142,6 @@ func (s ledgerRows) IncrementBalance(ctx context.Context, id ledger.AccountID, d
 	return row.toDomain(), nil
 }
 
-// InsertTransaction appends a ledger transaction header.
 func (s ledgerRows) InsertTransaction(ctx context.Context, transaction ledger.Transaction) (time.Time, error) {
 	var createdAt time.Time
 
@@ -164,15 +151,14 @@ func (s ledgerRows) InsertTransaction(ctx context.Context, transaction ledger.Tr
 	return createdAt, err
 }
 
-// InsertEntry appends one ledger entry.
 func (s ledgerRows) InsertEntry(ctx context.Context, entry ledger.Entry) error {
 	_, err := insertRow("inserting ledger entry", ledgerEntriesTable, ledgerEntryRowOf(entry)).Exec(ctx, s.db)
 
 	return err
 }
 
-// ReadStatement reads one page of an account's entries. The id breaks ties:
-// without the balance_locking defense, two entries can share a position.
+// The id breaks ties: without the balance_locking defense, two entries can
+// share a position.
 func (s ledgerRows) ReadStatement(ctx context.Context, query application.StatementQuery) ([]ledger.StatementLine, error) {
 	rows, err := selectFrom[statementLineRow]("reading statement", entriesWithTransactions).
 		Where("e.account_id = @account_id AND e.account_seq > @after_seq", args{"account_id": uuid.UUID(query.AccountID), "after_seq": int64(query.AfterSeq)}).
@@ -192,7 +178,6 @@ func (s ledgerRows) ReadStatement(ctx context.Context, query application.Stateme
 	return lines, nil
 }
 
-// accountNotFoundOr turns a missing row into the domain error.
 func accountNotFoundOr(err error) error {
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ledger.ErrAccountNotFound

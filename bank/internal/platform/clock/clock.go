@@ -6,7 +6,6 @@ package clock
 
 import "time"
 
-// Now is the process's wall clock: time.Now plus the skew the lab set.
 func Now() time.Time {
 	now := time.Now()
 

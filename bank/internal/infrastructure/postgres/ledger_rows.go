@@ -14,34 +14,28 @@ const (
 	ledgerTransactionsTable = "ledger_transactions"
 	ledgerEntriesTable      = "ledger_entries"
 
-	// customersWithBalances joins a customer account to its balance; the
-	// row models read from it name their columns by alias.
+	// The row models read from it name their columns by alias.
 	customersWithBalances = "accounts a JOIN account_balances b ON b.account_id = a.id AND a.kind = 'customer'"
 
-	// entriesWithTransactions joins each entry to its transaction's kind.
 	entriesWithTransactions = "ledger_entries e JOIN ledger_transactions t ON t.id = e.transaction_id"
 )
 
-// accountIDRow reads only an account id.
 type accountIDRow struct {
 	AccountID uuid.UUID `db:"account_id"`
 }
 
-// customerRow is a customer account with its materialized balance.
 type customerRow struct {
 	HolderName   string    `db:"holder_name"   read:"a.holder_name"`
 	CreatedAt    time.Time `db:"created_at"    read:"a.created_at"`
 	BalanceCents int64     `db:"balance_cents" read:"b.balance_cents"`
 }
 
-// positionRow is a balance and the position of its last entry.
 type positionRow struct {
 	BalanceCents int64 `db:"balance_cents"  read:"b.balance_cents"`
 	LastEntrySeq int64 `db:"last_entry_seq" read:"b.last_entry_seq"`
 }
 
-// ledgerTransactionRow is a row of ledger_transactions; an empty client
-// reference is stored as NULL.
+// An empty client reference is stored as NULL.
 type ledgerTransactionRow struct {
 	ID                   uuid.UUID  `db:"id"`
 	Kind                 string     `db:"kind"`
@@ -53,7 +47,6 @@ type ledgerTransactionRow struct {
 	ReconciliationItemID *int64     `db:"reconciliation_item_id"`
 }
 
-// ledgerEntryRow is a row of ledger_entries.
 type ledgerEntryRow struct {
 	TransactionID     uuid.UUID `db:"transaction_id"`
 	AccountID         uuid.UUID `db:"account_id"`
@@ -62,7 +55,6 @@ type ledgerEntryRow struct {
 	BalanceAfterCents int64     `db:"balance_after_cents"`
 }
 
-// statementLineRow is an entry with its transaction's kind.
 type statementLineRow struct {
 	AccountSeq        int64     `db:"account_seq"         read:"e.account_seq"`
 	TransactionID     uuid.UUID `db:"transaction_id"      read:"e.transaction_id"`

@@ -6,7 +6,6 @@ import (
 	"time"
 )
 
-// Backoff of the relay towards the partner.
 const (
 	relayBackoffBase = 200 * time.Millisecond
 	relayBackoffCap  = 30 * time.Second
@@ -15,11 +14,8 @@ const (
 	maxBackoffDoublings = 16
 )
 
-// doubtReason is what a deferred message records as its last error.
 const doubtReason = "partner answer unknown"
 
-// DoubtStores are what a doubtful answer touches: the outbox message and,
-// when the transfer is given up, its transition.
 type DoubtStores interface {
 	OutboxStore
 	TransitionStores
@@ -46,12 +42,10 @@ type GiveUpOnDoubt struct {
 // (partner_idempotency), gets the partner's answer.
 type RetryOnDoubt struct{}
 
-// NewGiveUpOnDoubt builds the naive policy.
 func NewGiveUpOnDoubt(machine StateMachine) GiveUpOnDoubt {
 	return GiveUpOnDoubt{machine: machine}
 }
 
-// OnUnknown closes the message and fails the transfer.
 func (g GiveUpOnDoubt) OnUnknown(ctx context.Context, stores DoubtStores, claim OutboxClaim, external ExternalTransfer) error {
 	isOurs, err := stores.FinishOutbox(ctx, claim.ID, claim.Token)
 	if err != nil {
@@ -67,7 +61,6 @@ func (g GiveUpOnDoubt) OnUnknown(ctx context.Context, stores DoubtStores, claim 
 	return ignoreMovedOn(g.machine.Move(ctx, stores, command))
 }
 
-// OnUnknown reschedules the message.
 func (RetryOnDoubt) OnUnknown(ctx context.Context, stores DoubtStores, claim OutboxClaim, _ ExternalTransfer) error {
 	isOurs, err := stores.DeferOutbox(ctx, claim, fullJitterBackoff(claim.Attempts), doubtReason)
 	if err != nil {
@@ -81,9 +74,7 @@ func (RetryOnDoubt) OnUnknown(ctx context.Context, stores DoubtStores, claim Out
 	return nil
 }
 
-// fullJitterBackoff waits a random time between zero and the exponential
-// ceiling, so workers coming back from a partner outage do not all return at
-// once.
+// So workers coming back from a partner outage do not all return at once.
 func fullJitterBackoff(attempts int) time.Duration {
 	doublings := min(max(attempts-1, 0), maxBackoffDoublings)
 	ceiling := min(relayBackoffBase<<doublings, relayBackoffCap)

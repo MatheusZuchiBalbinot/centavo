@@ -8,14 +8,12 @@ import (
 	"centavo/bank/internal/platform/failpoint"
 )
 
-// NaiveRelay sends transfers to the partner.
 type NaiveRelay struct {
 	unitOfWork UnitOfWork
 	partner    PartnerSubmitter
 	machine    StateMachine
 }
 
-// NewNaiveRelay builds the relay.
 func NewNaiveRelay(unitOfWork UnitOfWork, partner PartnerSubmitter, machine StateMachine) NaiveRelay {
 	return NaiveRelay{unitOfWork: unitOfWork, partner: partner, machine: machine}
 }

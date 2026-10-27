@@ -18,10 +18,8 @@ import (
 // Conditions are SQL fragments with @name placeholders, never values
 // spliced into the text: every value travels as an argument.
 
-// args are a query's named arguments.
 type args = pgx.NamedArgs
 
-// selectQuery reads rows of one table into the row model T.
 type selectQuery[T any] struct {
 	step     string
 	from     string
@@ -32,12 +30,11 @@ type selectQuery[T any] struct {
 	isLock   bool
 }
 
-// selectFrom starts a read of table into T; step names it in errors.
 func selectFrom[T any](step, table string) selectQuery[T] {
 	return selectQuery[T]{step: step, from: table, args: args{}}
 }
 
-// Where adds a condition; several are joined with AND.
+// Several conditions are joined with AND.
 func (q selectQuery[T]) Where(condition string, values args) selectQuery[T] {
 	q.where = append(append([]string(nil), q.where...), condition)
 	q.args = mergeArgs(q.args, values)
@@ -51,8 +48,8 @@ func (q selectQuery[T]) OrderBy(expression string) selectQuery[T] {
 	return q
 }
 
-// Limit caps the rows read; the cap travels as an argument, so the SQL text
-// stays the same whatever the cap.
+// The cap travels as an argument, so the SQL text stays the same whatever
+// the cap.
 func (q selectQuery[T]) Limit(limit int) selectQuery[T] {
 	q.hasLimit = true
 	q.args = mergeArgs(q.args, args{"limit": limit})
@@ -60,14 +57,12 @@ func (q selectQuery[T]) Limit(limit int) selectQuery[T] {
 	return q
 }
 
-// ForUpdate locks the rows read until the transaction ends.
 func (q selectQuery[T]) ForUpdate() selectQuery[T] {
 	q.isLock = true
 
 	return q
 }
 
-// SQL is the statement the query runs.
 func (q selectQuery[T]) SQL() string {
 	var text strings.Builder
 
@@ -89,13 +84,11 @@ func (q selectQuery[T]) SQL() string {
 	return text.String()
 }
 
-// All reads every row.
 func (q selectQuery[T]) All(ctx context.Context, db querier) ([]T, error) {
 	return queryRows(ctx, db, q.statement(), pgx.RowToStructByName[T])
 }
 
-// One reads the one row the query must find; a missing row stays
-// pgx.ErrNoRows under the wrap, for the store to map.
+// A missing row stays pgx.ErrNoRows under the wrap, for the store to map.
 func (q selectQuery[T]) One(ctx context.Context, db querier) (T, error) {
 	rows, err := q.All(ctx, db)
 	if err != nil {
@@ -113,7 +106,6 @@ func (q selectQuery[T]) One(ctx context.Context, db querier) (T, error) {
 	return rows[0], nil
 }
 
-// First reads the row if there is one, and reports whether there was.
 func (q selectQuery[T]) First(ctx context.Context, db querier) (T, bool, error) {
 	row, err := q.One(ctx, db)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -127,7 +119,6 @@ func (q selectQuery[T]) statement() statement {
 	return newStatement(q.step, q.SQL(), q.args)
 }
 
-// insertQuery writes one row model into a table.
 type insertQuery struct {
 	step      string
 	into      string
@@ -137,7 +128,6 @@ type insertQuery struct {
 	returning []string
 }
 
-// insertRow starts an insert of row into table, one column per field.
 func insertRow[T any](step, table string, row T) insertQuery {
 	columns := columnsOf[T]()
 	names := make([]string, len(columns))
@@ -149,15 +139,12 @@ func insertRow[T any](step, table string, row T) insertQuery {
 	return insertQuery{step: step, into: table, columns: names, args: valuesOf(row)}
 }
 
-// OnConflictDoNothing turns a row that clashes with the unique key target,
-// such as "(source, event_id)", into no row at all.
 func (q insertQuery) OnConflictDoNothing(target string) insertQuery {
 	q.conflict = target
 
 	return q
 }
 
-// Returning reads columns of the inserted row back.
 func (q insertQuery) Returning(columns ...string) insertQuery {
 	q.returning = columns
 
@@ -184,23 +171,19 @@ func (q insertQuery) SQL() string {
 	return text
 }
 
-// Exec runs the insert and reports how many rows it wrote.
 func (q insertQuery) Exec(ctx context.Context, db querier) (int64, error) {
 	return execute(ctx, db, newStatement(q.step, q.SQL(), q.args))
 }
 
-// Scan runs the insert and reads its RETURNING columns.
 func (q insertQuery) Scan(ctx context.Context, db querier, dest ...any) error {
 	return scanRow(ctx, db, newStatement(q.step, q.SQL(), q.args), dest...)
 }
 
-// ScanOptional is Scan for an insert that may write nothing, such as one ON
-// CONFLICT DO NOTHING; it reports whether a row came back.
+// For an insert that may write nothing, such as one ON CONFLICT DO NOTHING.
 func (q insertQuery) ScanOptional(ctx context.Context, db querier, dest ...any) (bool, error) {
 	return scanOptionalRow(ctx, db, newStatement(q.step, q.SQL(), q.args), dest...)
 }
 
-// updateQuery changes rows of one table.
 type updateQuery struct {
 	step      string
 	table     string
@@ -210,12 +193,10 @@ type updateQuery struct {
 	returning []string
 }
 
-// update starts an update of table; it needs at least one Set and one Where.
 func update(step, table string) updateQuery {
 	return updateQuery{step: step, table: table, args: args{}}
 }
 
-// Set assigns a value to a column.
 func (q updateQuery) Set(column string, value any) updateQuery {
 	q.set = append(append([]string(nil), q.set...), column+" = @"+column)
 	q.args = mergeArgs(q.args, args{column: value})
@@ -223,8 +204,6 @@ func (q updateQuery) Set(column string, value any) updateQuery {
 	return q
 }
 
-// SetSQL assigns an expression, such as now() or seq + 1, with its own
-// named arguments if any.
 func (q updateQuery) SetSQL(assignment string, values args) updateQuery {
 	q.set = append(append([]string(nil), q.set...), assignment)
 	q.args = mergeArgs(q.args, values)
@@ -239,7 +218,6 @@ func (q updateQuery) Where(condition string, values args) updateQuery {
 	return q
 }
 
-// Returning reads columns of the updated row back.
 func (q updateQuery) Returning(columns ...string) updateQuery {
 	q.returning = columns
 
@@ -259,7 +237,6 @@ func (q updateQuery) SQL() string {
 	return text.String()
 }
 
-// Exec runs the update and reports how many rows it touched.
 func (q updateQuery) Exec(ctx context.Context, db querier) (int64, error) {
 	st, err := q.statement()
 	if err != nil {
@@ -269,8 +246,8 @@ func (q updateQuery) Exec(ctx context.Context, db querier) (int64, error) {
 	return execute(ctx, db, st)
 }
 
-// ExecOne runs an update that must touch exactly one row; any other count
-// is errNone, the store's own error for "that row is not there".
+// Any count but one is errNone, the store's own error for "that row is not
+// there".
 func (q updateQuery) ExecOne(ctx context.Context, db querier, errNone error) error {
 	touched, err := q.Exec(ctx, db)
 	if err != nil {
@@ -284,8 +261,6 @@ func (q updateQuery) ExecOne(ctx context.Context, db querier, errNone error) err
 	return nil
 }
 
-// Scan runs an update of one row and reads its RETURNING columns; no row
-// stays pgx.ErrNoRows under the wrap.
 func (q updateQuery) Scan(ctx context.Context, db querier, dest ...any) error {
 	st, err := q.statement()
 	if err != nil {
@@ -314,8 +289,7 @@ func writeWhere(text *strings.Builder, conditions []string) {
 	text.WriteString(" WHERE " + strings.Join(conditions, " AND "))
 }
 
-// mergeArgs adds values to a copy of current; a name given twice keeps the
-// newer value.
+// A name given twice keeps the newer value.
 func mergeArgs(current, values args) args {
 	merged := make(args, len(current)+len(values))
 	maps.Copy(merged, current)

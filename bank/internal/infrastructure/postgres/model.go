@@ -18,7 +18,6 @@ import (
 //		From string `db:"from_status" read:"coalesce(from_status::text, '')"`
 //	}
 
-// column is one field of a row model.
 type column struct {
 	name  string
 	read  string
@@ -29,7 +28,6 @@ type column struct {
 // model type, a fixed and small set.
 var columnCache sync.Map
 
-// columnsOf lists a row model's columns in field order.
 func columnsOf[T any]() []column {
 	var zero T
 
@@ -62,8 +60,7 @@ func readColumns(model reflect.Type) []column {
 	return columns
 }
 
-// columnsOfField is a field's column, or, for an embedded row model, its
-// columns, as pgx flattens it when scanning.
+// Embedded row models are flattened, as pgx does when scanning.
 func columnsOfField(model reflect.Type, field reflect.StructField) []column {
 	isEmbedded := field.Anonymous && field.Type.Kind() == reflect.Struct
 	if isEmbedded {
@@ -89,8 +86,7 @@ func columnsOfField(model reflect.Type, field reflect.StructField) []column {
 	return []column{{name: name, read: read, field: field.Index}}
 }
 
-// selectList is the SELECT list of a row model, each expression named after
-// its column so the rows scan back by name.
+// Each expression is named after its column, so the rows scan back by name.
 func selectList[T any]() string {
 	columns := columnsOf[T]()
 	parts := make([]string, len(columns))
@@ -106,7 +102,6 @@ func selectList[T any]() string {
 	return strings.Join(parts, ", ")
 }
 
-// valuesOf reads a row model's fields as named arguments, one per column.
 func valuesOf[T any](row T) map[string]any {
 	value := reflect.ValueOf(row)
 	columns := columnsOf[T]()

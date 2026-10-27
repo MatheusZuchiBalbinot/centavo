@@ -14,7 +14,6 @@ import (
 	"centavo/bank/internal/domain/transfer"
 )
 
-// sweptNow makes every transfer in created or sent count as stuck.
 const sweptNow = time.Duration(0)
 
 // pausingPartner answers with a status and, before the sweeper can use it, lets
@@ -145,8 +144,6 @@ func TestSweeper_LeavesAnUnknownCreatedTransferToTheOutbox(t *testing.T) {
 	}
 }
 
-// TestSweeper_OnlyTheLeaseHolderSweeps: a second worker finds the lease
-// taken and does nothing.
 func TestSweeper_OnlyTheLeaseHolderSweeps(t *testing.T) {
 	fixture := newOutboxBank(t)
 	fixture.releaseSweeperLease(t)
@@ -285,7 +282,6 @@ func (p pixBank) sweeper(partner application.PartnerStatusReader, owner string) 
 	return application.NewSweeper(config)
 }
 
-// releaseSweeperLease lets each test start with a free lease.
 func (p pixBank) releaseSweeperLease(t *testing.T) {
 	t.Helper()
 

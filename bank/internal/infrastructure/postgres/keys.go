@@ -21,9 +21,8 @@ var errKeyNotPending = errors.New("completing an idempotency key that this unit 
 
 const clientRefAppliedSQL = `SELECT EXISTS (SELECT 1 FROM ledger_transactions WHERE client_ref = @client_ref)`
 
-// deleteExpiredKeysSQL keeps an hour of margin past the 24 hours of idempotency
-// keys live 24 hours by the database clock and measures both with the database
-// clock, immune to any worker's clock.
+// Keys live 24 hours by the database clock; this keeps an hour of margin
+// past that, measured with the same clock, immune to any worker's.
 const deleteExpiredKeysSQL = `
 DELETE FROM idempotency_keys
 WHERE key IN (
@@ -34,7 +33,6 @@ WHERE key IN (
     FOR UPDATE SKIP LOCKED
 )`
 
-// claimedKeyRow is a key a request takes: pending until it completes.
 type claimedKeyRow struct {
 	Key         string `db:"key"`
 	Endpoint    string `db:"endpoint"`
@@ -42,14 +40,12 @@ type claimedKeyRow struct {
 	Status      string `db:"status"`
 }
 
-// voidedKeyRow is the tombstone of a key nobody may use any more.
 type voidedKeyRow struct {
 	Key    string `db:"key"`
 	Status string `db:"status"`
 }
 
-// keyRecordRow is a stored key; a tombstone has no request or response, read
-// as their zero values.
+// A tombstone has no request or response, read as their zero values.
 type keyRecordRow struct {
 	Endpoint       string `db:"endpoint"        read:"coalesce(endpoint, '')"`
 	RequestHash    []byte `db:"request_hash"    read:"coalesce(request_hash, ''::bytea)"`
@@ -58,14 +54,13 @@ type keyRecordRow struct {
 	ResponseBody   []byte `db:"response_body"   read:"coalesce(response_body, ''::bytea)"`
 }
 
-// keyStore keeps idempotency keys.
 type keyStore struct {
 	db querier
 }
 
-// ClaimKey inserts the key as pending. If another request holds it, the
-// INSERT waits on the primary key until that request commits; then the key
-// exists and the stored record comes back instead.
+// If another request holds the key, the INSERT waits on the primary key
+// until that request commits; then the key exists and the stored record
+// comes back instead.
 func (s keyStore) ClaimKey(ctx context.Context, claim application.KeyClaim) (idempotency.Record, bool, error) {
 	var inserted string
 
@@ -90,7 +85,6 @@ func (s keyStore) ClaimKey(ctx context.Context, claim application.KeyClaim) (ide
 	return record, false, err
 }
 
-// TouchKey writes a new version of the key's row with the same values.
 func (s keyStore) TouchKey(ctx context.Context, key idempotency.Key) error {
 	_, err := update("touching idempotency key", idempotencyKeysTable).
 		SetSQL("expires_at = expires_at", nil).
@@ -100,7 +94,6 @@ func (s keyStore) TouchKey(ctx context.Context, key idempotency.Key) error {
 	return keyError(err)
 }
 
-// VoidKey leaves a tombstone, or returns the record that is already there.
 func (s keyStore) VoidKey(ctx context.Context, key idempotency.Key) (idempotency.Record, bool, error) {
 	var inserted string
 
@@ -123,7 +116,6 @@ func (s keyStore) VoidKey(ctx context.Context, key idempotency.Key) (idempotency
 	return record, false, err
 }
 
-// CompleteKey stores the answer in the same transaction as the effect.
 func (s keyStore) CompleteKey(ctx context.Context, key idempotency.Key, operationID ledger.OperationID, response idempotency.StoredResponse) error {
 	return update("completing idempotency key", idempotencyKeysTable).
 		Set("status", string(idempotency.StatusCompleted)).
@@ -134,8 +126,8 @@ func (s keyStore) CompleteKey(ctx context.Context, key idempotency.Key, operatio
 		ExecOne(ctx, s.db, errKeyNotPending)
 }
 
-// IsClientRefApplied tells whether any ledger transaction carries the key.
-// The naive resolve answers with it, with no tombstone to stop a late request.
+// The naive resolve answers with it, with no tombstone to stop a late
+// request.
 func (s keyStore) IsClientRefApplied(ctx context.Context, key idempotency.Key) (bool, error) {
 	var isApplied bool
 
@@ -145,7 +137,6 @@ func (s keyStore) IsClientRefApplied(ctx context.Context, key idempotency.Key) (
 	return isApplied, err
 }
 
-// DeleteExpiredKeys removes one batch of expired keys and reports how many.
 func (s keyStore) DeleteExpiredKeys(ctx context.Context, batch int) (int64, error) {
 	return execute(ctx, s.db, newStatement("deleting expired idempotency keys", deleteExpiredKeysSQL, args{"batch": batch}))
 }
@@ -167,8 +158,8 @@ func (s keyStore) readKey(ctx context.Context, key idempotency.Key) (idempotency
 	return record, nil
 }
 
-// keyError turns a lock timeout on the key into "another request is running":
-// its outcome is unknown, and the client should retry with the same key.
+// A lock timeout on the key means another request is running: its outcome
+// is unknown, and the client should retry with the same key.
 func keyError(err error) error {
 	var pgErr *pgconn.PgError
 

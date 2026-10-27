@@ -22,14 +22,12 @@ const (
 	incomingExistsSQL = `SELECT EXISTS (SELECT 1 FROM incoming_transfers WHERE end_to_end_id = @end_to_end_id)`
 )
 
-// reconciliationRunRow is a batch as it starts.
 type reconciliationRunRow struct {
 	FromPartnerSeq int64 `db:"from_partner_seq"`
 	ToPartnerSeq   int64 `db:"to_partner_seq"`
 	FencingToken   int64 `db:"fencing_token"`
 }
 
-// reconciliationItemRow is how one statement entry was reconciled.
 type reconciliationItemRow struct {
 	RunID            int64  `db:"run_id"`
 	PartnerSeq       int64  `db:"partner_seq"`
@@ -40,25 +38,22 @@ type reconciliationItemRow struct {
 	Action           string `db:"action"`
 }
 
-// cursorRow is the one row of reconciliation_cursor.
 type cursorRow struct {
 	LastPartnerSeq int64 `db:"last_partner_seq"`
 }
 
-// reconciliationStore keeps reconciliation runs, items and the cursor.
 type reconciliationStore struct {
 	db querier
 }
 
-// ReadCursor returns the last statement entry reconciled.
 func (s reconciliationStore) ReadCursor(ctx context.Context) (int64, error) {
 	row, err := selectFrom[cursorRow]("reading the reconciliation cursor", reconciliationCursorTable).One(ctx, s.db)
 
 	return row.LastPartnerSeq, err
 }
 
-// AdvanceCursor moves the cursor from where the batch started; zero rows
-// means another reconciler booked it first.
+// Moves only from where the batch started; zero rows means another
+// reconciler booked it first.
 func (s reconciliationStore) AdvanceCursor(ctx context.Context, from, to int64) (bool, error) {
 	advanced, err := update("advancing the reconciliation cursor", reconciliationCursorTable).
 		Set("last_partner_seq", to).
@@ -68,14 +63,12 @@ func (s reconciliationStore) AdvanceCursor(ctx context.Context, from, to int64) 
 	return advanced == 1, err
 }
 
-// SaveCursor writes the cursor without looking at where it was.
 func (s reconciliationStore) SaveCursor(ctx context.Context, to int64) error {
 	_, err := execute(ctx, s.db, newStatement("saving the reconciliation cursor", saveCursorSQL, args{"to": to}))
 
 	return err
 }
 
-// StartRun records a batch.
 func (s reconciliationStore) StartRun(ctx context.Context, from, to, token int64) (int64, error) {
 	var id int64
 
@@ -85,7 +78,6 @@ func (s reconciliationStore) StartRun(ctx context.Context, from, to, token int64
 	return id, err
 }
 
-// FinishRun marks the batch booked.
 func (s reconciliationStore) FinishRun(ctx context.Context, runID int64) error {
 	_, err := update("finishing a reconciliation run", reconciliationRunsTable).
 		SetSQL("finished_at = now()", nil).
@@ -95,7 +87,6 @@ func (s reconciliationStore) FinishRun(ctx context.Context, runID int64) error {
 	return err
 }
 
-// InsertItem records how one entry was reconciled.
 func (s reconciliationStore) InsertItem(ctx context.Context, item application.ReconciliationItem) (int64, error) {
 	var id int64
 
@@ -108,7 +99,6 @@ func (s reconciliationStore) InsertItem(ctx context.Context, item application.Re
 	return id, err
 }
 
-// CountItems counts the entries of a kind already reconciled for an end_to_end_id.
 func (s reconciliationStore) CountItems(ctx context.Context, endToEndID transfer.EndToEndID, kind application.StatementKind) (int, error) {
 	var count int
 
@@ -118,7 +108,6 @@ func (s reconciliationStore) CountItems(ctx context.Context, endToEndID transfer
 	return count, err
 }
 
-// IsIncomingCredited reports a PIX in already in incoming_transfers.
 func (s reconciliationStore) IsIncomingCredited(ctx context.Context, endToEndID transfer.EndToEndID) (bool, error) {
 	var isCredited bool
 

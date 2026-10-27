@@ -1,4 +1,3 @@
-// Package httpapi translates HTTP requests into use cases and back.
 package httpapi
 
 import (
@@ -8,7 +7,6 @@ import (
 	"time"
 )
 
-// HealthPath is the admin route the lab and the container healthcheck poll.
 const HealthPath = "/internal/health"
 
 // databaseCheckTimeout keeps a frozen or partitioned database from hanging
@@ -25,19 +23,16 @@ const (
 	checkResultError checkResult = "error"
 )
 
-// Pinger checks that a dependency is reachable.
 type Pinger interface {
 	Ping(ctx context.Context) error
 }
 
-// BuildInfo identifies the running process in the health response.
 type BuildInfo struct {
 	Service      string
 	Version      string
 	IsChaosBuild bool
 	Env          string
 	Defenses     string
-	// DefenseNotes explain profiles where a defense depends on one that is off.
 	DefenseNotes []string
 }
 
@@ -61,7 +56,6 @@ type healthHandler struct {
 	database Pinger
 }
 
-// NewAdminHandler serves the admin port (9090).
 func NewAdminHandler(info BuildInfo, database Pinger) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET "+HealthPath, healthHandler{info: info, database: database})

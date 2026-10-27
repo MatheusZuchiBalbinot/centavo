@@ -37,10 +37,10 @@ const (
 	internalMessage       = "internal error; the outcome of the request is unknown"
 )
 
-// errValidation marks malformed input; the wrapped text tells the client what.
+// The wrapped text tells the client what is malformed.
 var errValidation = errors.New("invalid request")
 
-// errRateLimited means the route's limiter is empty; nothing of the request ran.
+// Nothing of the request ran.
 var errRateLimited = errors.New("too many requests; retry later with the same key")
 
 // errorMappings is the only place where an error becomes an HTTP status.
@@ -72,8 +72,7 @@ var fixedMessages = map[errorCode]string{
 	codeOutcomeUnknown: outcomeUnknownMessage, codeTemporarilyUnavailable: unavailableMessage,
 }
 
-// errorCode is the machine-readable code clients branch on. Only 4xx codes are
-// definitive; every 5xx is indeterminate.
+// Only 4xx codes are definitive; every 5xx is indeterminate.
 type errorCode string
 
 type errorMapping struct {
@@ -92,8 +91,7 @@ type errorDetail struct {
 	CorrelationID string    `json:"correlation_id"`
 }
 
-// writeError answers with the mapped status, or a generic 500 that never
-// leaks the cause; the cause goes to the log instead.
+// A generic 500 never leaks the cause; the cause goes to the log instead.
 func writeError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, err error) {
 	ctx := r.Context()
 	detail := errorDetail{CorrelationID: correlationIDFrom(ctx)}
@@ -133,10 +131,10 @@ func writeError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, err
 	writeJSON(w, http.StatusInternalServerError, errorBody{Error: detail})
 }
 
-// clientMessage is the sentinel's own text: an error wrapped on the way up
-// also carries the internal steps it went through, which are no business of
-// the client and change with every refactoring. A validation error is the
-// exception: its wrapped text says which field is wrong.
+// Only the sentinel's own text: an error wrapped on the way up also carries
+// the internal steps it went through, which are no business of the client
+// and change with every refactoring. A validation error is the exception:
+// its wrapped text says which field is wrong.
 func clientMessage(mapping errorMapping, err error) string {
 	if errors.Is(mapping.target, errValidation) {
 		return err.Error()

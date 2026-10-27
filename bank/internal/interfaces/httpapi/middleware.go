@@ -15,7 +15,6 @@ import (
 
 const correlationHeader = "X-Correlation-Id"
 
-// requestDeadline bounds each request.
 const requestDeadline = 5 * time.Second
 
 // correlationFormat keeps log lines and stored ids free of control characters.
@@ -28,7 +27,6 @@ var securityHeaders = map[string]string{
 	"Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
 }
 
-// withRequestContext attaches the correlation id and the request deadline.
 func withRequestContext(next http.Handler, logger *slog.Logger) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		correlationID, err := correlationIDOf(r)
@@ -47,8 +45,7 @@ func withRequestContext(next http.Handler, logger *slog.Logger) http.Handler {
 	})
 }
 
-// correlationIDOf takes the client's id (the load generator sends the
-// operation id) or generates one.
+// The load generator sends the operation id.
 func correlationIDOf(r *http.Request) (string, error) {
 	received := r.Header.Get(correlationHeader)
 	if received == "" {
@@ -75,7 +72,6 @@ func correlationIDFrom(ctx context.Context) string {
 	return correlation.From(ctx)
 }
 
-// withSecurityHeaders sets securityHeaders on every answer.
 func withSecurityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		for name, value := range securityHeaders {

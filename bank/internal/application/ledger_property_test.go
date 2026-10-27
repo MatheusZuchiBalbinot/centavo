@@ -35,7 +35,6 @@ type memoryLedger struct {
 	entries      []ledger.Entry
 }
 
-// randomSteps draws one deposit or one transfer between random accounts.
 type randomSteps struct {
 	deposit  application.Deposit
 	transfer application.TransferInternal
@@ -193,9 +192,6 @@ func (s randomSteps) apply(t *rapid.T, amount money.Amount, write application.Wr
 	return err
 }
 
-// assertLedgerInvariants is every transaction sums to zero, each account's
-// entries chain and customer balances never go negative over the in-memory
-// ledger.
 func assertLedgerInvariants(t *rapid.T, bank *memoryLedger) {
 	sums := map[ledger.TransactionID]money.Cents{}
 	counts := map[ledger.TransactionID]int{}

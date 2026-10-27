@@ -19,7 +19,6 @@ import (
 	"centavo/bank/internal/infrastructure/postgres"
 )
 
-// pixBank is the naive PIX over the test database.
 type pixBank struct {
 	writes
 	unitOfWork application.UnitOfWork
@@ -238,7 +237,6 @@ func (p pixBank) status(t *testing.T, id transfer.ID) application.ExternalTransf
 	return view
 }
 
-// fakePartner answers every submission with the same status code.
 func fakePartner(t *testing.T, status int, calls *atomic.Int32) partnerclient.Client {
 	t.Helper()
 

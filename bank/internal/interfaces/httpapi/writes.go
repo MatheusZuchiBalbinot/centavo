@@ -22,7 +22,6 @@ const (
 	maxBodyBytes = 16 << 10
 )
 
-// resolvableEndpoints are the writes whose keys resolve can settle.
 var resolvableEndpoints = map[string]bool{accountsEndpoint: true, depositsEndpoint: true, transfersEndpoint: true, pixOutEndpoint: true}
 
 type openAccountRequest struct {
@@ -53,22 +52,16 @@ type transferResponse struct {
 	CreatedAt        time.Time `json:"created_at"`
 }
 
-// applyFunc runs a use case inside the writer's unit of work and encodes the
-// answer that the key will keep.
 type applyFunc func(ctx context.Context, stores application.Stores, operationID ledger.OperationID) (idempotency.StoredResponse, error)
 
-// writeRequest is one client write as the handler prepared it.
 type writeRequest struct {
-	endpoint string
-	body     []byte
-	apply    applyFunc
-	// afterCommit runs once the write is committed; nil for most writes.
+	endpoint    string
+	body        []byte
+	apply       applyFunc
 	afterCommit func(ctx context.Context) error
 }
 
-// resolveRequest names the request whose outcome the client asks about, as it
-// sent it: the key alone cannot tell it from another request that took the same
-// key.
+// The key alone cannot tell it from another request that took the same key.
 type resolveRequest struct {
 	Endpoint string          `json:"endpoint"`
 	Body     json.RawMessage `json:"body"`
@@ -183,8 +176,7 @@ func (a apiHandlers) applyTransfer(input application.TransferInput) applyFunc {
 	}
 }
 
-// runWrite runs the write through the writer and sends the stored answer:
-// the same bytes on the first try and on every retry.
+// The same bytes on the first try and on every retry.
 func (a apiHandlers) runWrite(w http.ResponseWriter, r *http.Request, request writeRequest) {
 	key, err := idempotency.ParseKey(r.Header.Get(idempotencyHeader))
 	if err != nil {
@@ -223,8 +215,6 @@ func (a apiHandlers) runWrite(w http.ResponseWriter, r *http.Request, request wr
 	writeStored(w, response)
 }
 
-// resolve answers "applied" or "voided" for an operation whose outcome the
-// client does not know.
 func (a apiHandlers) resolve(w http.ResponseWriter, r *http.Request) {
 	key, err := idempotency.ParseKey(r.PathValue("key"))
 	if err != nil {
@@ -325,16 +315,15 @@ func transferInputOf(r *http.Request, body []byte) (application.TransferInput, e
 	return application.TransferInput{From: from, To: to, Amount: amount, Write: writeContextOf(r)}, nil
 }
 
-// writeContextOf carries the key as client_ref; runWrite has already
-// validated it by the time a use case runs.
+// runWrite has already validated the key by the time a use case runs.
 func writeContextOf(r *http.Request) application.WriteContext {
 	key := idempotency.Key(r.Header.Get(idempotencyHeader))
 
 	return application.WriteContext{Key: key, CorrelationID: correlationIDFrom(r.Context())}
 }
 
-// readBody reads the raw body, refusing oversized ones; the raw bytes feed
-// the request hash, so a retry with the same body matches.
+// The raw bytes feed the request hash, so a retry with the same body
+// matches.
 func readBody(w http.ResponseWriter, r *http.Request) ([]byte, error) {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBodyBytes))
 	if err != nil {
@@ -344,7 +333,6 @@ func readBody(w http.ResponseWriter, r *http.Request) ([]byte, error) {
 	return body, nil
 }
 
-// decodeBody reads one JSON object, refusing unknown fields and trailing data.
 func decodeBody(body []byte, target any) error {
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()

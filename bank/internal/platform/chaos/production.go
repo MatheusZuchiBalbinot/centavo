@@ -9,7 +9,6 @@ import (
 
 var errNotAChaosBuild = errors.New("chaos-kill exists only in chaoslab builds")
 
-// Setup does nothing in a production build.
 func Setup(Config) error {
 	return nil
 }
@@ -19,7 +18,6 @@ func Server(Config) *http.Server {
 	return nil
 }
 
-// KillMain refuses to run in a production build.
 func KillMain(string) error {
 	return errNotAChaosBuild
 }

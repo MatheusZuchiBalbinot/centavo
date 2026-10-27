@@ -44,19 +44,16 @@ FOR SHARE`
 // on their updated_at.
 const stuckSinceSQL = "status IN ('created', 'sent') AND updated_at < now() - @older_ms::bigint * interval '1 millisecond'"
 
-// stuckTransferRow is a transfer the sweeper looks at again.
 type stuckTransferRow struct {
 	ID         uuid.UUID `db:"id"`
 	EndToEndID string    `db:"end_to_end_id"`
 	ClientRef  string    `db:"client_ref"`
 }
 
-// leaseStore keeps the leases of the singleton loops.
 type leaseStore struct {
 	db querier
 }
 
-// AcquireLease takes or renews the lease.
 func (s leaseStore) AcquireLease(ctx context.Context, lease application.Lease, ttl time.Duration) (int64, bool, error) {
 	var token int64
 
@@ -66,7 +63,6 @@ func (s leaseStore) AcquireLease(ctx context.Context, lease application.Lease, t
 	return token, isHeld, err
 }
 
-// AcquireLeaseAt takes or renews the lease by the caller's clock.
 func (s leaseStore) AcquireLeaseAt(ctx context.Context, lease application.Lease, now time.Time, ttl time.Duration) (int64, bool, error) {
 	var token int64
 
@@ -76,7 +72,6 @@ func (s leaseStore) AcquireLeaseAt(ctx context.Context, lease application.Lease,
 	return token, isHeld, err
 }
 
-// HoldsLease checks the lease within the caller's transaction.
 func (s leaseStore) HoldsLease(ctx context.Context, lease application.Lease, token int64) (bool, error) {
 	var one int
 
@@ -85,7 +80,6 @@ func (s leaseStore) HoldsLease(ctx context.Context, lease application.Lease, tok
 	return scanOptionalRow(ctx, s.db, newStatement("checking lease "+lease.Resource, holdsLeaseSQL, values), &one)
 }
 
-// ListStuck returns the transfers that sat in created or sent for too long.
 func (s leaseStore) ListStuck(ctx context.Context, olderThan time.Duration, limit int) ([]application.StuckTransfer, error) {
 	rows, err := selectFrom[stuckTransferRow]("listing stuck transfers", externalTransfersTable).
 		Where(stuckSinceSQL, args{"older_ms": olderThan.Milliseconds()}).

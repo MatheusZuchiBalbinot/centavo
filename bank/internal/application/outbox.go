@@ -15,10 +15,8 @@ import (
 	"centavo/bank/internal/platform/labevent"
 )
 
-// TopicPixOutSubmit is the outbox topic of a PIX out to send.
 const TopicPixOutSubmit = "pix_out.submit"
 
-// Outbox timings.
 const (
 	OutboxLeaseTTL   = 30 * time.Second
 	OutboxPoll       = 500 * time.Millisecond
@@ -29,7 +27,6 @@ const (
 // and must throw its result away.
 var errLeaseLost = errors.New("outbox lease lost to another relay")
 
-// OutboxMessage is a message to deliver after the commit that wrote it.
 type OutboxMessage struct {
 	Topic         string
 	AggregateID   uuid.UUID
@@ -37,7 +34,7 @@ type OutboxMessage struct {
 	CorrelationID string
 }
 
-// OutboxClaim is a message a relay leased: only its token may finish it.
+// Only its token may finish it.
 type OutboxClaim struct {
 	ID            int64
 	AggregateID   uuid.UUID
@@ -46,15 +43,10 @@ type OutboxClaim struct {
 	CorrelationID string
 }
 
-// OutboxStore keeps the outbox.
 type OutboxStore interface {
 	EnqueueOutbox(ctx context.Context, message OutboxMessage) error
-	// ClaimOutbox leases up to limit ready messages with a fresh token each.
 	ClaimOutbox(ctx context.Context, owner string, ttl time.Duration, limit int) ([]OutboxClaim, error)
-	// FinishOutbox marks the message delivered if the token still owns it.
 	FinishOutbox(ctx context.Context, id, token int64) (bool, error)
-	// DeferOutbox releases the message for another attempt after delay, if
-	// the token still owns it.
 	DeferOutbox(ctx context.Context, claim OutboxClaim, delay time.Duration, reason string) (bool, error)
 }
 
@@ -62,22 +54,17 @@ type OutboxStore interface {
 // the same commit as the transfer, so it can never be lost between the two.
 type OutboxPublication struct{}
 
-// EndToEndPolicy is the partner_idempotency defense's strategy: which
-// end_to_end_id a send uses.
 type EndToEndPolicy interface {
 	Next(external ExternalTransfer) transfer.EndToEndID
 }
 
-// FixedEndToEnd is the partner_idempotency defense: the id derived at creation,
-// on every send, so the partner sees a retry as the same PIX and never pays
-// twice (the end_to_end_id is fixed at creation).
+// The partner_idempotency defense: the id derived at creation on every
+// send, so the partner sees a retry as the same PIX and never pays twice.
 type FixedEndToEnd struct{}
 
-// NewEndToEndPerAttempt is the naive variant: E<id>-<attempt>.
 type NewEndToEndPerAttempt struct{}
 
-// OutboxRelay delivers outbox messages to the partner, with a lease per message
-// and the token as fencing.
+// A lease per message, with its token as fencing.
 type OutboxRelay struct {
 	unitOfWork UnitOfWork
 	partner    PartnerSubmitter
@@ -89,26 +76,21 @@ type OutboxRelay struct {
 	logger     *slog.Logger
 }
 
-// OutboxRelayConfig wires a relay.
 type OutboxRelayConfig struct {
 	UnitOfWork UnitOfWork
 	Partner    PartnerSubmitter
 	EndToEnd   EndToEndPolicy
 	Machine    StateMachine
 	Doubt      DoubtPolicy
-	// Owner names this relay in the leases it takes.
-	Owner string
-	// LeaseTTL is how long a message stays with this relay before another
-	// may take it; OutboxLeaseTTL in production.
-	LeaseTTL time.Duration
-	Logger   *slog.Logger
+	Owner      string
+	LeaseTTL   time.Duration
+	Logger     *slog.Logger
 }
 
 type pixOutPayload struct {
 	TransferID string `json:"transfer_id"`
 }
 
-// WithinCommit writes the outbox message.
 func (OutboxPublication) WithinCommit(ctx context.Context, stores OutboxStore, external ExternalTransfer, correlationID string) error {
 	payload, err := json.Marshal(pixOutPayload{TransferID: external.ID.String()})
 	if err != nil {
@@ -120,22 +102,19 @@ func (OutboxPublication) WithinCommit(ctx context.Context, stores OutboxStore, e
 	return stores.EnqueueOutbox(ctx, message)
 }
 
-// AfterCommit does nothing: the relay polls the table.
+// Nothing after the commit: the relay polls the table.
 func (OutboxPublication) AfterCommit(context.Context, transfer.ID) error {
 	return nil
 }
 
-// Next returns the transfer's own id.
 func (FixedEndToEnd) Next(external ExternalTransfer) transfer.EndToEndID {
 	return external.ID.EndToEndID()
 }
 
-// Next returns the id of the following attempt.
 func (NewEndToEndPerAttempt) Next(external ExternalTransfer) transfer.EndToEndID {
 	return external.ID.AttemptEndToEndID(nextAttemptOf(external.EndToEndID))
 }
 
-// NewOutboxRelay builds the relay.
 func NewOutboxRelay(config OutboxRelayConfig) OutboxRelay {
 	return OutboxRelay{
 		unitOfWork: config.UnitOfWork, partner: config.Partner, endToEnd: config.EndToEnd, machine: config.Machine,
@@ -143,8 +122,7 @@ func NewOutboxRelay(config OutboxRelayConfig) OutboxRelay {
 	}
 }
 
-// Run polls the outbox until ctx ends. Polling is the source of truth; a NOTIFY
-// would only make it sooner.
+// Polling is the source of truth; a NOTIFY would only make it sooner.
 func (r OutboxRelay) Run(ctx context.Context) {
 	ticker := time.NewTicker(OutboxPoll)
 	defer ticker.Stop()
@@ -163,7 +141,6 @@ func (r OutboxRelay) Run(ctx context.Context) {
 	}
 }
 
-// RunOnce leases one batch and delivers it.
 func (r OutboxRelay) RunOnce(ctx context.Context) error {
 	var claims []OutboxClaim
 
@@ -200,8 +177,8 @@ func (r OutboxRelay) RunOnce(ctx context.Context) error {
 	return nil
 }
 
-// countResumed counts the claimed messages that already had an attempt: a
-// relay that died or was refused before, picked up again.
+// Messages that already had an attempt: a relay that died or was refused
+// before, picked up again.
 func countResumed(claims []OutboxClaim) int {
 	resumed := 0
 
@@ -255,8 +232,7 @@ func (r OutboxRelay) deliver(ctx context.Context, claim OutboxClaim) error {
 	return r.finish(ctx, claim, &command)
 }
 
-// useEndToEnd switches the transfer to the id this send uses; with
-// partner_idempotency it never changes.
+// With partner_idempotency the id never changes.
 func (r OutboxRelay) useEndToEnd(ctx context.Context, external ExternalTransfer) (ExternalTransfer, error) {
 	next := r.endToEnd.Next(external)
 	if next == external.EndToEndID {
@@ -274,8 +250,7 @@ func (r OutboxRelay) useEndToEnd(ctx context.Context, external ExternalTransfer)
 	return external, err
 }
 
-// finish closes the message and applies the partner's answer in one commit;
-// a stale token aborts both.
+// A stale token aborts both the close and the partner's answer.
 func (r OutboxRelay) finish(ctx context.Context, claim OutboxClaim, command *TransitionCommand) error {
 	return r.unitOfWork.Run(ctx, func(ctx context.Context, stores Stores) error {
 		isOurs, err := stores.FinishOutbox(ctx, claim.ID, claim.Token)
@@ -309,7 +284,6 @@ func (r OutboxRelay) load(ctx context.Context, id transfer.ID) (ExternalTransfer
 	return external, err
 }
 
-// answerCommand is what the partner's answer does to a transfer in created.
 // Only the naive relay gets here with a doubtful answer, and takes it for a
 // failure.
 func answerCommand(external ExternalTransfer, answer PartnerAnswer) TransitionCommand {
@@ -329,8 +303,8 @@ func answerCommand(external ExternalTransfer, answer PartnerAnswer) TransitionCo
 	return command
 }
 
-// ignoreMovedOn drops the guarded machine's refusal: the transfer moved on
-// while the partner was answering, and that answer no longer speaks for it.
+// The transfer moved on while the partner was answering, and that answer no
+// longer speaks for it.
 func ignoreMovedOn(err error) error {
 	if errors.Is(err, transfer.ErrInvalidStateTransition) {
 		return nil

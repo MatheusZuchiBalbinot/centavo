@@ -68,8 +68,6 @@ func TestHealth_RejectsOtherMethods(t *testing.T) {
 	}
 }
 
-// TestHealth_SendsSecurityHeaders: the admin port, like the client one,
-// answers with headers that keep a browser from rendering or sniffing it.
 func TestHealth_SendsSecurityHeaders(t *testing.T) {
 	recorder, _ := getHealth(t, httpapi.NewAdminHandler(testBuildInfo, fakePinger{}))
 

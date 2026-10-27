@@ -8,28 +8,23 @@ import (
 	"centavo/bank/internal/domain/transfer"
 )
 
-// Causes of the transitions a resync records.
 const (
 	causeResync  TransitionCause = "resync"
 	causeSweeper TransitionCause = "sweeper"
 )
 
-// errPartnerUnreachable is a status query that got no answer.
 var errPartnerUnreachable = errors.New("partner status unreachable")
 
-// AuthoritativeStatus is the partner's answer to a status query: what no
-// webhook can override.
+// What no webhook can override.
 type AuthoritativeStatus struct {
 	Status transfer.PartnerStatus
 	Reason string
 }
 
-// PartnerStatusReader queries a PIX's authoritative status.
 type PartnerStatusReader interface {
 	Status(ctx context.Context, endToEndID transfer.EndToEndID) (AuthoritativeStatus, error)
 }
 
-// pathWalk is one resync: a transfer walked to an authoritative status.
 type pathWalk struct {
 	transferID    transfer.ID
 	authoritative AuthoritativeStatus
@@ -37,10 +32,9 @@ type pathWalk struct {
 	correlationID string
 }
 
-// walkPath applies, in the caller's unit of work, the shortest valid path from
-// the transfer's current status to the partner's, each step a guarded
-// transition with its own posting. The current status is read under the lock,
-// so a concurrent walk finds nothing left to do.
+// The shortest valid path from the transfer's status to the partner's, each
+// step a guarded transition with its own posting. The status is read under
+// the lock, so a concurrent walk finds nothing left to do.
 func walkPath(ctx context.Context, stores TransitionStores, machine StateMachine, walk pathWalk) error {
 	external, err := stores.LockExternalTransfer(ctx, walk.transferID)
 	if err != nil {
@@ -72,7 +66,6 @@ func walkPath(ctx context.Context, stores TransitionStores, machine StateMachine
 	return nil
 }
 
-// isUnresolvable reports a disagreement a resync must not settle by itself.
 func isUnresolvable(err error) bool {
 	return errors.Is(err, transfer.ErrStatusConflict) || errors.Is(err, transfer.ErrSentButUnknown)
 }

@@ -21,53 +21,44 @@ import (
 	"centavo/bank/internal/domain/money"
 )
 
-// CustomerCreator persists a new customer account with an empty balance.
 type CustomerCreator interface {
 	CreateCustomer(ctx context.Context, account ledger.Account) (time.Time, error)
 }
 
-// CustomerReader reads a customer account and its materialized balance.
 type CustomerReader interface {
 	FindCustomer(ctx context.Context, id ledger.AccountID) (ledger.Account, money.Balance, error)
 }
 
-// PositionReader reads where a customer account stands, without locking it.
-// It returns ledger.ErrAccountNotFound for unknown and system accounts.
+// ledger.ErrAccountNotFound for unknown and system accounts.
 type PositionReader interface {
 	ReadCustomerPosition(ctx context.Context, id ledger.AccountID) (ledger.Position, error)
 }
 
-// PositionWriter moves materialized balances, each call in its own statement.
+// Each call in its own statement.
 type PositionWriter interface {
-	// OverwritePosition stores a position computed by the application.
 	OverwritePosition(ctx context.Context, id ledger.AccountID, position ledger.Position) error
-	// IncrementBalance adds delta in the database and returns the new position.
 	IncrementBalance(ctx context.Context, id ledger.AccountID, delta money.Cents) (ledger.Position, error)
 }
 
-// PositionStore reads and moves customer positions.
 type PositionStore interface {
 	PositionReader
 	PositionWriter
 }
 
-// LedgerWriter appends ledger transactions and entries.
 type LedgerWriter interface {
 	InsertTransaction(ctx context.Context, transaction ledger.Transaction) (time.Time, error)
 	InsertEntry(ctx context.Context, entry ledger.Entry) error
 }
 
-// StatementReader reads one page of an account's entries in account_seq order.
 type StatementReader interface {
 	ReadStatement(ctx context.Context, query StatementQuery) ([]ledger.StatementLine, error)
 }
 
-// PositionLocker takes the row locks of balances for the rest of the unit of work.
+// The locks last for the rest of the unit of work.
 type PositionLocker interface {
 	LockPositions(ctx context.Context, ids []ledger.AccountID) error
 }
 
-// Stores are the repositories of one unit of work.
 type Stores interface {
 	PositionStore
 	PositionLocker
@@ -81,28 +72,23 @@ type Stores interface {
 	ReconciliationStore
 }
 
-// PostingStores are what posting a transaction needs: the balances it moves and
-// the ledger rows it writes.
 type PostingStores interface {
 	PositionWriter
 	LedgerWriter
 }
 
-// MoneyStores are what a write that moves money between accounts needs: the
-// balances, their locks and the ledger.
 type MoneyStores interface {
 	PositionStore
 	PositionLocker
 	LedgerWriter
 }
 
-// UnitOfWork runs fn with stores whose writes commit together (atomic_ledger)
-// or one by one (naive). fn's error rolls a real transaction back.
+// Writes commit together with atomic_ledger, or one by one when naive. fn's
+// error rolls a real transaction back.
 type UnitOfWork interface {
 	Run(ctx context.Context, fn func(ctx context.Context, stores Stores) error) error
 }
 
-// Locker decides which balance rows a use case locks before reading them.
 type Locker interface {
 	Lock(ctx context.Context, stores PositionLocker, ids []ledger.AccountID) error
 }
@@ -112,40 +98,32 @@ type Locker interface {
 // keeps two transfers in opposite directions from deadlocking.
 type RowLocker struct{}
 
-// MoneyDependencies are the strategies a money-moving use case runs on.
 type MoneyDependencies struct {
 	UnitOfWork UnitOfWork
 	Locker     Locker
 }
 
-// WriteContext identifies the client request behind a write.
 type WriteContext struct {
 	Key           idempotency.Key
 	CorrelationID string
 }
 
-// poster moves one account's balance and appends the matching entry.
 type poster struct {
 	positions PositionWriter
 	entries   LedgerWriter
 }
 
-// posting is one line of a ledger transaction: an account and how much it
-// moves.
 type posting struct {
 	account ledger.AccountID
 	delta   money.Cents
 }
 
-// debitLine is a customer debit: the account, the position ledger.Position.Debit
-// computed for it and the amount taken.
 type debitLine struct {
 	account ledger.AccountID
 	debited ledger.Position
 	amount  money.Amount
 }
 
-// Lock sorts the ids and locks their rows.
 func (RowLocker) Lock(ctx context.Context, stores PositionLocker, ids []ledger.AccountID) error {
 	ordered := slices.Clone(ids)
 	slices.SortFunc(ordered, compareAccountIDs)
@@ -157,9 +135,8 @@ func compareAccountIDs(a, b ledger.AccountID) int {
 	return bytes.Compare(a[:], b[:])
 }
 
-// newTransaction ties the ledger transaction to the operation; with idempotency
-// the operation id comes from the idempotency key, without it every request is
-// a new operation and the key is only recorded as client_ref.
+// With idempotency the operation id comes from the key; without it every
+// request is a new operation and the key is only recorded as client_ref.
 func newTransaction(kind ledger.TransactionKind, write WriteContext, operationID ledger.OperationID) (ledger.Transaction, error) {
 	transactionID, err := ledger.NewTransactionID()
 	if err != nil {
@@ -173,9 +150,9 @@ func newTransaction(kind ledger.TransactionKind, write WriteContext, operationID
 	return transaction, nil
 }
 
-// post adds delta to the account in the database and appends the entry. The
-// increment is atomic, so concurrent posts never lose each other; only the
-// debit path, which checks funds first, writes a value it computed itself.
+// The increment is atomic, so concurrent posts never lose each other; only
+// the debit path, which checks funds first, writes a value it computed
+// itself.
 func (p poster) post(ctx context.Context, transactionID ledger.TransactionID, accountID ledger.AccountID, delta money.Cents) (ledger.Position, error) {
 	position, err := p.positions.IncrementBalance(ctx, accountID, delta)
 	if err != nil {
@@ -192,12 +169,11 @@ func (p poster) post(ctx context.Context, transactionID ledger.TransactionID, ac
 	return position, nil
 }
 
-// postAll posts a transaction's lines in account id order, whatever order
-// the caller lists them in. Every write takes balances in that order, system
-// accounts first, so two writers never wait on each other in a circle; a
-// write that posted a customer before a system account deadlocked against a
-// refund or a return several times a minute (see lock_order_test.go). It
-// returns each account's new position.
+// In account id order, whatever order the caller lists them in: every write
+// takes balances in that order, system accounts first, so two writers never
+// wait on each other in a circle. A write that posted a customer before a
+// system account deadlocked against a refund or a return several times a
+// minute (see lock_order_test.go).
 func (p poster) postAll(ctx context.Context, transactionID ledger.TransactionID, postings []posting) (map[ledger.AccountID]ledger.Position, error) {
 	ordered := slices.Clone(postings)
 	slices.SortFunc(ordered, func(a, b posting) int { return compareAccountIDs(a.account, b.account) })
@@ -216,10 +192,8 @@ func (p poster) postAll(ctx context.Context, transactionID ledger.TransactionID,
 	return positions, nil
 }
 
-// debit writes a customer's debit: the position the caller computed with
-// ledger.Position.Debit, under the lock it took, and the matching entry. It is
-// the one write of a balance computed here instead of incremented in SQL, so
-// the funds check and the write see the same locked row, and a customer never
+// The one balance write computed here instead of incremented in SQL, so the
+// funds check and the write see the same locked row, and a customer never
 // goes below zero.
 func (p poster) debit(ctx context.Context, transactionID ledger.TransactionID, line debitLine) error {
 	err := p.positions.OverwritePosition(ctx, line.account, line.debited)

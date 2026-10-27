@@ -5,8 +5,6 @@ import (
 	"time"
 )
 
-// TestLimiter_RefusesPastTheBurstAndRefillsWithTime: a burst goes through,
-// the next request waits for the refill, and time brings tokens back.
 func TestLimiter_RefusesPastTheBurstAndRefillsWithTime(t *testing.T) {
 	t.Parallel()
 
