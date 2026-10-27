@@ -20,7 +20,7 @@ describe('historyOf', () => {
 	it('tells what happened to one process, newest first, in plain words', () => {
 		expect(historyOf({ kind: 'node', id: 'worker1' }, events)).toEqual([
 			{ key: '2000-1', tMs: 2_000, text: 'Ficou reiniciando.', tone: 'state' },
-			{ key: '1000-0', tMs: 1_000, text: 'Você derrubou o bank-worker-1.', tone: 'attack' },
+			{ key: '1000-0', tMs: 1_000, text: 'O bank-worker-1 foi derrubado por um ataque manual.', tone: 'attack' },
 		]);
 		expect(historyOf({ kind: 'node', id: 'worker2' }, events)).toMatchObject([{ tone: 'defense' }]);
 	});

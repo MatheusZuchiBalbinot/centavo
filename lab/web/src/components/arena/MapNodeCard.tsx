@@ -42,6 +42,7 @@ const STATUS_ICONS: Readonly<Partial<Record<NodeView['status'], LucideIcon>>> = 
 
 const ICON_SIZE = 18;
 const BADGE_ICON_SIZE = 12;
+const TIMER_ICON_SIZE = 10;
 const MS_PER_SECOND = 1_000;
 
 const reactions: Readonly<Partial<Record<string, string>>> = messages.arena.reactions;
@@ -110,24 +111,24 @@ export default function MapNodeCard({ node, view, frame, nowMs, operationsPerSec
 				<span className={styles.nodeName}>{name}</span>
 				<span className={styles.nodeStatus}>{status}</span>
 			</span>
-			<NodeBadges badges={badges} timer={timer} />
+			{timer === null ? null : (
+				<span className={styles.nodeTimer} data-status={timer.status} aria-hidden="true">
+					<Timer size={TIMER_ICON_SIZE} />
+					{format(messages.arena.timer, { seconds: timer.seconds })}
+				</span>
+			)}
+			<NodeBadges badges={badges} />
 		</button>
 	);
 }
 
-function NodeBadges({ badges, timer }: { badges: readonly Badge[]; timer: NodeTimer | null }): React.JSX.Element | null {
-	if (badges.length === 0 && timer === null) {
+function NodeBadges({ badges }: { badges: readonly Badge[] }): React.JSX.Element | null {
+	if (badges.length === 0) {
 		return null;
 	}
 
 	return (
 		<span className={styles.nodeBadges} aria-hidden="true">
-			{timer === null ? null : (
-				<span className={styles.nodeTimer} data-status={timer.status}>
-					<Timer size={BADGE_ICON_SIZE} />
-					{format(messages.arena.timer, { seconds: timer.seconds })}
-				</span>
-			)}
 			{badges.map((badge) => (
 				<span key={badge.key} className={styles.nodeBadge} data-tone={badge.tone}>
 					{badge.icon === null ? null : <badge.icon size={BADGE_ICON_SIZE} />}

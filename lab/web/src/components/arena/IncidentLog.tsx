@@ -42,14 +42,12 @@ export default function IncidentLog({ incidents, headline }: IncidentLogProps): 
 function IncidentItem({ incident }: { incident: Incident }): React.JSX.Element {
 	return (
 		<li className={styles.incident} data-manual={incident.isManual}>
-			<p className={styles.incidentHead}>
-				<span className={styles.incidentLabel}>
-					<span className="visually-hidden">{messages.arena.incidents.attack} </span>
-					{incident.label}
-				</span>
-				<span>
-					{incident.what} {incident.isManual ? <span className={styles.youBadge}>{messages.arena.incidents.you}</span> : null}
-				</span>
+			<span className={styles.incidentLabel}>
+				<span className="visually-hidden">{messages.arena.incidents.attack} </span>
+				{incident.label}
+			</span>
+			<p className={styles.incidentWhat}>
+				{incident.what} {incident.isManual ? <span className={styles.manualBadge}>{messages.arena.incidents.manual}</span> : null}
 			</p>
 			<ResponseLine response={incident.response} />
 			<p className={styles.incidentLine} data-recovery={incident.recovery.kind}>
@@ -73,9 +71,8 @@ function ResponseLine({ response }: { response: Response }): React.JSX.Element {
 	return (
 		<p className={styles.incidentLine} data-response="answered">
 			<ShieldCheck size={ICON_SIZE} aria-hidden="true" />
-			<span>
-				{response.what} <b>{format(messages.arena.incidents.after, { elapsed: formatElapsed(response.afterMs) })}</b>
-			</span>
+			<span>{response.what}</span>
+			<b>{format(messages.arena.incidents.after, { elapsed: formatElapsed(response.afterMs) })}</b>
 		</p>
 	);
 }

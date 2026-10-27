@@ -297,12 +297,12 @@ export const messages = {
 		},
 		someone: 'um processo',
 		manual: {
-			kill: 'Você derrubou o {target}.',
-			freeze: 'Você congelou o {target} por {duration}.',
-			cut: 'Você cortou a rede em {target}.',
-			slow: 'Você deixou a rede lenta em {target}.',
-			databaseKill: 'Você derrubou o Postgres.',
-			databaseFreeze: 'Você congelou o Postgres por {duration}.',
+			kill: 'O {target} foi derrubado por um ataque manual.',
+			freeze: 'O {target} foi congelado ({duration}) por um ataque manual.',
+			cut: 'A rede em {target} foi cortada por um ataque manual.',
+			slow: 'A rede em {target} foi desacelerada por um ataque manual.',
+			databaseKill: 'O Postgres foi derrubado por um ataque manual.',
+			databaseFreeze: 'O Postgres foi congelado ({duration}) por um ataque manual.',
 		},
 		defenses: {
 			'lease.acquired': {
@@ -584,7 +584,7 @@ export const messages = {
 			title: 'Ataque e defesa',
 			empty: 'Nenhum ataque ainda.',
 			attack: 'Ataque',
-			you: 'você',
+			manual: 'manual',
 			waiting: 'Aguardando a defesa…',
 			noResponse: 'Sem defesa registrada.',
 			after: 'em {elapsed}',
@@ -604,7 +604,7 @@ export const messages = {
 			linkBack: 'A rede voltou ao normal.',
 		},
 		manual: {
-			title: 'Você ataca',
+			title: 'Ataque manual',
 			help: 'O ataque entra no histórico da rodada, e o verificador confere o resultado como confere os outros.',
 			actions: { kill: 'Derrubar agora', freeze: 'Congelar por 20 s', cut: 'Cortar por 15 s', slow: 'Deixar lenta por 20 s' },
 			sent: 'Enviado. O laboratório executa em até um segundo.',
