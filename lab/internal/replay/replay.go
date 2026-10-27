@@ -13,8 +13,11 @@ import (
 	"centavo/lab/internal/history"
 )
 
-// maxEvents bounds the timeline a replay keeps; the counters see them all.
-const maxEvents = 2_000
+// maxDefenseEvents bounds the timeline a replay keeps. Defenses grow with the
+// load, and a busy round would otherwise crowd out its own late attacks and
+// its cure; the nemesis's events follow the scenario's schedule and are always
+// kept. The counters see every event.
+const maxDefenseEvents = 2_000
 
 const (
 	familyProcess   EventFamily = "process"
@@ -109,6 +112,7 @@ type Builder struct {
 	replay    Replay
 	invokes   map[string]int64
 	latencies map[int][]float64
+	defenses  int
 }
 
 type nemesisValue struct {
@@ -243,8 +247,12 @@ func percentile(sorted []float64, percent int) float64 {
 }
 
 func (b *Builder) addEvent(record history.Record, event Event) {
-	if len(b.replay.Events) >= maxEvents {
-		return
+	if event.Family == familyDefense {
+		if b.defenses >= maxDefenseEvents {
+			return
+		}
+
+		b.defenses++
 	}
 
 	event.TMillis = record.TimeNS / int64(time.Millisecond)
