@@ -34,7 +34,8 @@ describe('incidentsOf', () => {
 
 		const [freeze, kill] = incidentsOf(events, 7_000);
 
-		expect(freeze).toMatchObject({ label: '2', isManual: true, what: 'O bank-worker-2 congelou por 20s.' });
+		expect(freeze).toMatchObject({ label: '2', kind: 'freeze', isManual: true, what: 'O bank-worker-2 congelou por 20s.' });
+		expect(kill?.kind).toBe('kill');
 		expect(freeze?.response).toMatchObject({ kind: 'answered', afterMs: 1_000 });
 		expect(kill?.response).toEqual({ kind: 'none' });
 		expect(incidentsOf(events, 5_500)[0]?.response).toEqual({ kind: 'waiting' });

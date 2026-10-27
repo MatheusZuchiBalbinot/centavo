@@ -55,6 +55,10 @@ const ATTACK_KINDS: Readonly<Partial<Record<RoundEvent['kind'], AttackKind>>> = 
 	arm_partner_modes: 'partner',
 };
 
+export function attackKindOf(event: RoundEvent): AttackKind {
+	return ATTACK_KINDS[event.kind] ?? 'other';
+}
+
 // In time order; attacks keep the numbers the log and the feed give them.
 export function occurrencesOf(events: readonly RoundEvent[], transfers: readonly RoundTransfer[]): readonly Occurrence[] {
 	const occurrences: Occurrence[] = [];
@@ -63,7 +67,7 @@ export function occurrencesOf(events: readonly RoundEvent[], transfers: readonly
 	for (const [index, event] of events.entries()) {
 		if (isAttackEvent(event)) {
 			attacks += 1;
-			occurrences.push({ row: 'attack', key: `e${index}`, kind: ATTACK_KINDS[event.kind] ?? 'other', tMs: event.tMs, number: attacks, event });
+			occurrences.push({ row: 'attack', key: `e${index}`, kind: attackKindOf(event), tMs: event.tMs, number: attacks, event });
 			continue;
 		}
 
@@ -106,7 +110,7 @@ type Field = OccurrenceDetails['fields'][number];
 
 function attackDetails(event: RoundEvent, number: number, at: Field): OccurrenceDetails {
 	const copy = messages.arena.occurrences;
-	const kind = copy.kinds[ATTACK_KINDS[event.kind] ?? 'other'];
+	const kind = copy.kinds[attackKindOf(event)];
 	const fields = [
 		at,
 		{ label: copy.fields.target, value: event.target },

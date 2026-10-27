@@ -1,5 +1,6 @@
 import type { RoundEvent } from '../api/replay';
 import { describeEvent } from './feed';
+import { attackKindOf, type AttackKind } from './occurrences';
 import { isAttackEvent, isDefenseEvent, isHealStart, isNetworkEnd } from './phase';
 
 // How the bank got back from one attack: the time it took, or why there is
@@ -14,6 +15,8 @@ export type Response =
 export type Incident = {
 	readonly key: string;
 	readonly label: string;
+	// The color the strip gives the same attack.
+	readonly kind: AttackKind;
 	readonly atMs: number;
 	readonly what: string;
 	readonly isManual: boolean;
@@ -103,6 +106,7 @@ function incidentOf({ run, nextAtMs, seen, nowMs }: IncidentInput): Incident {
 	return {
 		key: `${first.tMs}-${run.firstNumber}`,
 		label: labelOf(run),
+		kind: attackKindOf(first),
 		atMs: first.tMs,
 		what: describeEvent(first).what,
 		isManual: first.isManual,

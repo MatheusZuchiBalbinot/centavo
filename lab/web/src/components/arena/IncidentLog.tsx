@@ -1,4 +1,4 @@
-import { Clock, ShieldCheck } from 'lucide-react';
+import { Clock } from 'lucide-react';
 
 import { formatElapsed } from '../../domain/duration';
 import type { Incident, Recovery, Response } from '../../domain/incidents';
@@ -42,8 +42,9 @@ export default function IncidentLog({ incidents, headline }: IncidentLogProps): 
 function IncidentItem({ incident }: { incident: Incident }): React.JSX.Element {
 	return (
 		<li className={styles.incident} data-manual={incident.isManual}>
-			<span className={styles.incidentLabel}>
-				<span className="visually-hidden">{messages.arena.incidents.attack} </span>
+			<span className={styles.incidentMark}>
+				<span className={styles.incidentDot} data-kind={incident.kind} data-manual={incident.isManual} aria-hidden="true" />
+				<span className="visually-hidden">{messages.arena.incidents.occurrence} </span>
 				{incident.label}
 			</span>
 			<p className={styles.incidentWhat}>
@@ -62,7 +63,7 @@ function ResponseLine({ response }: { response: Response }): React.JSX.Element {
 	if (response.kind !== 'answered') {
 		return (
 			<p className={styles.incidentLine} data-response={response.kind}>
-				<ShieldCheck size={ICON_SIZE} aria-hidden="true" />
+				<span className={styles.lineDot} aria-hidden="true" />
 				{response.kind === 'waiting' ? messages.arena.incidents.waiting : messages.arena.incidents.noResponse}
 			</p>
 		);
@@ -70,7 +71,7 @@ function ResponseLine({ response }: { response: Response }): React.JSX.Element {
 
 	return (
 		<p className={styles.incidentLine} data-response="answered">
-			<ShieldCheck size={ICON_SIZE} aria-hidden="true" />
+			<span className={styles.lineDot} aria-hidden="true" />
 			<span>{response.what}</span>
 			<b>{format(messages.arena.incidents.after, { elapsed: formatElapsed(response.afterMs) })}</b>
 		</p>

@@ -211,27 +211,34 @@
 	font-size: var(--text-sm);
 }
 
-.incident > :not(.incidentLabel) {
+.incident > :not(.incidentMark) {
 	grid-column: 2;
 }
 
-.incidentLabel {
+/* The same dot the strip draws for this occurrence, then its number. */
+.incidentMark {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
 	justify-self: start;
-	padding: 0 6px;
-	white-space: nowrap;
-	border: 1px solid color-mix(in oklch, var(--warning) 55%, transparent);
-	border-radius: var(--radius-full);
-	background: var(--warning-soft);
-	color: var(--warning);
-	font-family: var(--font-mono);
+	color: var(--muted);
 	font-size: var(--text-2xs);
 	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
 }
 
-.incident[data-manual='true'] .incidentLabel {
-	border-color: color-mix(in oklch, var(--violet) 55%, transparent);
-	background: var(--violet-soft);
-	color: var(--violet);
+.incidentDot {
+	--color: var(--muted);
+
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	background: var(--color);
+}
+
+.incidentDot[data-manual='true'] {
+	box-shadow: 0 0 0 1.5px var(--fg);
 }
 
 .incidentWhat {
@@ -263,7 +270,22 @@
 	margin-top: 2px;
 }
 
-.incidentLine[data-response='answered'] svg,
+/* The bank's reaction wears the strip's defense green; a hollow dot while
+   none came. */
+.lineDot {
+	justify-self: center;
+	width: 8px;
+	height: 8px;
+	margin-top: 4px;
+	border-radius: 50%;
+	box-shadow: inset 0 0 0 1.5px var(--faint);
+}
+
+.incidentLine[data-response='answered'] .lineDot {
+	background: var(--success);
+	box-shadow: none;
+}
+
 .incidentLine[data-recovery='back'] svg {
 	color: var(--success);
 }
@@ -275,7 +297,7 @@
 	white-space: nowrap;
 }
 
-.incidentLine[data-response='waiting'] svg {
+.incidentLine[data-response='waiting'] .lineDot {
 	animation: wait 1.4s ease-in-out infinite;
 }
 

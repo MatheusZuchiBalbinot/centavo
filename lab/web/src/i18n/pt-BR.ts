@@ -591,12 +591,12 @@ export const messages = {
 		},
 		reactionUnknown: 'se defendeu',
 		incidents: {
-			title: 'Ataque e defesa',
-			empty: 'Nenhum ataque ainda.',
-			attack: 'Ataque',
+			title: 'Ocorrências',
+			empty: 'Nenhuma ocorrência ainda.',
+			occurrence: 'Ocorrência',
 			manual: 'manual',
-			waiting: 'Aguardando a defesa…',
-			noResponse: 'Sem defesa registrada.',
+			waiting: 'Aguardando a reação do banco…',
+			noResponse: 'Nenhuma reação registrada.',
 			after: 'em {elapsed}',
 			recovery: {
 				back: 'Voltou ao normal em {elapsed}.',
@@ -604,7 +604,7 @@ export const messages = {
 				until_cure: 'Dura até a cura.',
 				absorbed: 'Sem queda visível.',
 			},
-			older: 'Mais {count} ataque(s) antes destes, na linha do tempo.',
+			older: 'Mais {count} ocorrência(s) antes destas, na linha das ocorrências.',
 		},
 		inspector: {
 			back: 'Voltar ao resumo',
@@ -637,7 +637,7 @@ export const messages = {
 		bubble: 'Ataque {label} · agora',
 		bubbleManual: 'Ataque manual {label} · agora',
 		occurrences: {
-			title: 'Ocorrências',
+			title: 'Linha das ocorrências',
 			label: 'Ocorrências da rodada',
 			hint: 'Passe o mouse num ponto, ou foque aqui e use as setas.',
 			now: 'agora {clock}',
