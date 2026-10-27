@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"centavo/lab/internal/history"
@@ -108,4 +109,52 @@ func readReport(t *testing.T, roundDir string) Report {
 	}
 
 	return report
+}
+
+// The seed replays the scenario's attacks, not the ones a person launched
+// from the panel; the report says how many of those the round had.
+func TestCheck_ReportCountsTheManualAttacksTheSeedWillNotRepeat(t *testing.T) {
+	t.Parallel()
+
+	b := newRoundBuilder(t)
+	alice, bob := b.createAccount(), b.createAccount()
+	b.deposit(alice, 1_000)
+	b.nemesis(history.FunctionKill, map[string]string{"target": "bank-worker-1", "via": "manual"})
+	b.nemesis(history.FunctionKill, map[string]string{"target": "bank-api", "via": "random"})
+	b.nemesis(history.FunctionNetwork, map[string]any{"proxies": []string{"api_pg"}, "toxic": "blackhole", "phase": "start", "via": "manual"})
+	b.nemesis(history.FunctionNetwork, map[string]any{"proxies": []string{"api_pg"}, "toxic": "blackhole", "phase": "end", "via": "manual"})
+	b.operation(history.FunctionTransfer, transferArgs{From: alice, To: bob, AmountCents: 300}, history.TypeOK, writeValue{TransactionID: "tx-never-written"})
+
+	roundDir := t.TempDir()
+	writeRound(t, roundDir, b.records, b.snapshot())
+
+	manifest := `{"round":"r0001","scenario":"random-kills","seed":"0x5eed","duration":"3m0s"}`
+
+	err := os.WriteFile(filepath.Join(roundDir, manifestFile), []byte(manifest), 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = Check(roundDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	report := readReport(t, roundDir)
+
+	isCounted := len(report.ManualAttacks) == 2 && report.ManualAttacks[history.FunctionKill] == 1 && report.ManualAttacks[history.FunctionNetwork] == 1
+	if !isCounted {
+		t.Fatalf("manual attacks %+v, want one kill and one network fault", report.ManualAttacks)
+	}
+
+	markdown, err := os.ReadFile(filepath.Join(roundDir, reportMDFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, want := range []string{"| Ataques manuais | 2 (queda 1, rede 1) |", "não os 2 ataques manuais desta rodada"} {
+		if !strings.Contains(string(markdown), want) {
+			t.Fatalf("report.md lacks %q:\n%s", want, markdown)
+		}
+	}
 }

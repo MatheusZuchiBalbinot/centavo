@@ -150,7 +150,10 @@ func Check(roundDir string) (Result, error) {
 		return Result{}, err
 	}
 
-	err = writeReports(roundDir, newReport(meta, result, events, histories))
+	report := newReport(meta, result, events, histories)
+	report.ManualAttacks = ops.manualAttacks
+
+	err = writeReports(roundDir, report)
 	if err != nil {
 		return Result{}, err
 	}

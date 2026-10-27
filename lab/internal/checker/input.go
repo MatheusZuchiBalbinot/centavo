@@ -110,6 +110,16 @@ type operations struct {
 	ordered     []*operation
 	lastT       int64
 	resolutions map[string][]string
+	// No invariant reads them; the report says how many a person launched,
+	// because the seed does not repeat those.
+	manualAttacks map[history.Function]int
+}
+
+// How the nemesis marks a fault launched from the panel, and the record that
+// only closes a network fault already counted.
+type nemesisMarks struct {
+	Via   string `json:"via"`
+	Phase string `json:"phase"`
 }
 
 type ledger struct {
@@ -147,7 +157,7 @@ func isClientKind(kind snapshot.TransactionKind) bool {
 }
 
 func newOperations() operations {
-	return operations{byID: map[string]*operation{}, resolutions: map[string][]string{}}
+	return operations{byID: map[string]*operation{}, resolutions: map[string][]string{}, manualAttacks: map[history.Function]int{}}
 }
 
 func indexOperations(records []history.Record) operations {
@@ -168,6 +178,10 @@ func indexOperations(records []history.Record) operations {
 func (ops *operations) add(record history.Record) {
 	ops.lastT = max(ops.lastT, record.TimeNS)
 
+	if record.Process.IsNemesis() {
+		ops.countManual(record)
+	}
+
 	if record.Type == history.TypeInvoke {
 		// validate runs once the whole history is read and reports a value
 		// that does not decode; until then a bad one just reuses no key.
@@ -185,6 +199,17 @@ func (ops *operations) add(record history.Record) {
 	if isKnownCompletion {
 		o.result = record.Type
 		o.value = record.Value
+	}
+}
+
+func (ops *operations) countManual(record history.Record) {
+	var marks nemesisMarks
+
+	err := json.Unmarshal(record.Value, &marks)
+	isManualStart := err == nil && marks.Via == viaManual && marks.Phase != phaseEnd
+
+	if isManualStart {
+		ops.manualAttacks[record.F]++
 	}
 }
 

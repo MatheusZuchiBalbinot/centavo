@@ -54,6 +54,10 @@ func (b *roundBuilder) record(record history.Record) {
 	b.records = append(b.records, record)
 }
 
+func (b *roundBuilder) nemesis(function history.Function, value any) {
+	b.record(history.Record{Process: history.Nemesis(), Type: history.TypeInfo, F: function, Value: mustJSON(b.t, value)})
+}
+
 func (b *roundBuilder) newOp() string {
 	op := b.upcomingOp()
 	b.nextOp++

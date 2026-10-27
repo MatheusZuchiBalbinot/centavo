@@ -22,6 +22,18 @@ const (
 	maxReportedViolations = 1_000
 	maxFailurePaths       = 10
 	maxPathLines          = 20
+
+	viaManual = "manual"
+	phaseEnd  = "end"
+)
+
+// The order the report lists the manual attacks in, and their names.
+var (
+	manualFunctions = []history.Function{history.FunctionKill, history.FunctionFreeze, history.FunctionNetwork, history.FunctionDatabase}
+	manualNames     = map[history.Function]string{
+		history.FunctionKill: manualKill, history.FunctionFreeze: manualFreeze,
+		history.FunctionNetwork: manualNetwork, history.FunctionDatabase: manualDatabase,
+	}
 )
 
 type Report struct {
@@ -39,6 +51,8 @@ type Report struct {
 	ExampleByRule    map[Rule]string   `json:"example_by_rule"`
 	Violations       []Violation       `json:"violations"`
 	FailurePaths     []FailurePath     `json:"failure_paths"`
+	// By the nemesis function that ran them: kill, freeze, network, database.
+	ManualAttacks map[history.Function]int `json:"manual_attacks,omitempty"`
 }
 
 type FailurePath struct {
@@ -175,6 +189,12 @@ func renderMarkdown(report Report) string {
 	fmt.Fprintf(&b, reportScenario, orDash(report.Scenario))
 	fmt.Fprintf(&b, reportSeed, orDash(report.Seed))
 	fmt.Fprintf(&b, reportDuration, orDash(report.Duration))
+
+	manual := manualTotal(report.ManualAttacks)
+	if manual > 0 {
+		fmt.Fprintf(&b, reportManualAttacks, manual, manualSummary(report.ManualAttacks))
+	}
+
 	fmt.Fprintf(&b, reportOperations, ops.Total, ops.OK, ops.Fail, ops.Info, ops.Open)
 	fmt.Fprintf(&b, reportChecker, report.CheckerVersion)
 
@@ -226,9 +246,41 @@ func writeFirstViolation(b *strings.Builder, report Report) {
 		}
 	}
 
-	if report.Scenario != "" {
-		fmt.Fprintf(b, reportReproduce, report.Scenario, report.Seed, report.Duration)
+	if report.Scenario == "" {
+		return
 	}
+
+	fmt.Fprintf(b, reportReproduce, report.Scenario, report.Seed, report.Duration)
+
+	manual := manualTotal(report.ManualAttacks)
+	if manual > 0 {
+		fmt.Fprintf(b, reportReproduceManual, manual)
+	}
+}
+
+func manualTotal(attacks map[history.Function]int) int {
+	total := 0
+
+	for _, count := range attacks {
+		total += count
+	}
+
+	return total
+}
+
+func manualSummary(attacks map[history.Function]int) string {
+	parts := []string{}
+
+	for _, function := range manualFunctions {
+		count := attacks[function]
+		if count == 0 {
+			continue
+		}
+
+		parts = append(parts, fmt.Sprintf(reportManualPart, manualNames[function], count))
+	}
+
+	return strings.Join(parts, ", ")
 }
 
 func writeViolationSummary(b *strings.Builder, report Report) {
