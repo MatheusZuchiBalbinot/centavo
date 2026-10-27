@@ -200,14 +200,15 @@
 }
 
 .incidentHead {
-	display: flex;
-	flex-wrap: wrap;
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
 	align-items: baseline;
-	gap: 4px 8px;
+	gap: 8px;
 	font-weight: 500;
 }
 
 .incidentLabel {
+	justify-self: start;
 	padding: 0 7px;
 	border: 1px solid color-mix(in oklch, var(--warning) 55%, transparent);
 	border-radius: var(--radius-full);
@@ -225,6 +226,7 @@
 }
 
 .youBadge {
+	display: inline-block;
 	padding: 0 6px;
 	border-radius: var(--radius-full);
 	background: var(--violet-soft);

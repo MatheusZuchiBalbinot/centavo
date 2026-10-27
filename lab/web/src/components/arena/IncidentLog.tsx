@@ -47,8 +47,9 @@ function IncidentItem({ incident }: { incident: Incident }): React.JSX.Element {
 					<span className="visually-hidden">{messages.arena.incidents.attack} </span>
 					{incident.label}
 				</span>
-				<span>{incident.what}</span>
-				{incident.isManual ? <span className={styles.youBadge}>{messages.arena.incidents.you}</span> : null}
+				<span>
+					{incident.what} {incident.isManual ? <span className={styles.youBadge}>{messages.arena.incidents.you}</span> : null}
+				</span>
 			</p>
 			<ResponseLine response={incident.response} />
 			<p className={styles.incidentLine} data-recovery={incident.recovery.kind}>
