@@ -626,6 +626,7 @@
 	display: inline-flex;
 	align-items: center;
 	gap: 3px;
+	white-space: nowrap;
 	padding: 0 6px;
 	border-radius: var(--radius-full);
 	background: var(--primary-soft);

@@ -6,13 +6,14 @@ import { manualActionsOf } from '../../domain/manualAttacks';
 import { curveOf, frameOf, pointOf, type MapFrame } from '../../domain/mapGeometry';
 import type { LinkView, SystemState } from '../../domain/systemState';
 import { isSameTarget, linksOf, MAP_LINKS, MAP_NODES, nodesOf, targetKeyOf, type MapLink, type MapTarget, type NodeId } from '../../domain/topology';
+import { totalOf, type Traffic } from '../../domain/traffic';
 import { useElementSize } from '../../hooks/useElementSize';
 import { format } from '../../i18n/format';
 import { messages } from '../../i18n/pt-BR';
 import styles from './Arena.module.css';
 import { INSPECTOR_ID } from './ArenaInspector';
 import MapNodeCard from './MapNodeCard';
-import MapPackets, { BUSY_LINKS, totalOf, type Traffic } from './MapPackets';
+import MapPackets, { BUSY_LINKS } from './MapPackets';
 
 const HALF = 0.5;
 

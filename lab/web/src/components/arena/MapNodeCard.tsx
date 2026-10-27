@@ -46,7 +46,14 @@ const MS_PER_SECOND = 1_000;
 
 const reactions: Readonly<Partial<Record<string, string>>> = messages.arena.reactions;
 
-type Badge = { readonly key: string; readonly text: string; readonly tone: 'info' | 'violet' | 'warning'; readonly icon: LucideIcon | null };
+// shown is what fits on the node; text is what a screen reader hears.
+type Badge = {
+	readonly key: string;
+	readonly text: string;
+	readonly shown: string;
+	readonly tone: 'info' | 'violet' | 'warning';
+	readonly icon: LucideIcon | null;
+};
 
 // How long a process has been out, or how long its freeze still lasts.
 type NodeTimer = { readonly seconds: number; readonly status: NodeView['status'] };
@@ -124,7 +131,7 @@ function NodeBadges({ badges, timer }: { badges: readonly Badge[]; timer: NodeTi
 			{badges.map((badge) => (
 				<span key={badge.key} className={styles.nodeBadge} data-tone={badge.tone}>
 					{badge.icon === null ? null : <badge.icon size={BADGE_ICON_SIZE} />}
-					{badge.text}
+					{badge.shown}
 				</span>
 			))}
 		</span>
@@ -135,15 +142,15 @@ function badgesOf(view: NodeView): readonly Badge[] {
 	const badges: Badge[] = [];
 
 	if (view.isLeader) {
-		badges.push({ key: 'leader', text: messages.arena.leader, tone: 'info', icon: null });
+		badges.push({ key: 'leader', text: messages.arena.leader, shown: messages.arena.leader, tone: 'info', icon: null });
 	}
 
 	if (view.isLying) {
-		badges.push({ key: 'lying', text: messages.arena.lying, tone: 'violet', icon: VenetianMask });
+		badges.push({ key: 'lying', text: messages.arena.lying, shown: messages.arena.lying, tone: 'violet', icon: VenetianMask });
 	}
 
 	if (view.clockSkew !== null) {
-		badges.push({ key: 'skew', text: format(messages.arena.skew, { offset: view.clockSkew }), tone: 'warning', icon: Clock });
+		badges.push({ key: 'skew', text: format(messages.arena.skew, { offset: view.clockSkew }), shown: view.clockSkew, tone: 'warning', icon: Clock });
 	}
 
 	return badges;

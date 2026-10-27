@@ -13,6 +13,7 @@ import { isAttackEvent, type Phase } from '../../domain/phase';
 import { systemStateAt } from '../../domain/systemState';
 import { attackSecondsOf, spanOf } from '../../domain/timeline';
 import { targetKeyOf, type MapTarget } from '../../domain/topology';
+import { trafficAt } from '../../domain/traffic';
 import { useArenaSound } from '../../hooks/useArenaSound';
 import { useModalDialog } from '../../hooks/useModalDialog';
 import { useSpaceKey } from '../../hooks/useSpaceKey';
@@ -24,14 +25,12 @@ import styles from './Arena.module.css';
 import ArenaInspector from './ArenaInspector';
 import ArenaSummary from './ArenaSummary';
 import ArenaTicker from './ArenaTicker';
-import type { Traffic } from './MapPackets';
 import SystemMap from './SystemMap';
 import VerdictStamp from './VerdictStamp';
 
 const MS_PER_SECOND = 1_000;
 const BUBBLE_MS = 6_000;
 const PERCENT = 100;
-const NO_TRAFFIC: Traffic = { ok: 0, fail: 0, info: 0 };
 
 export type ArenaProps = {
 	readonly eyebrow: string;
@@ -84,8 +83,7 @@ export default function Arena(props: ArenaProps): React.JSX.Element {
 	const nowSeconds = nowMs / MS_PER_SECOND;
 	const seen = replay.events.filter((event) => event.tMs <= nowMs);
 	const state = systemStateAt(replay.events, nowMs);
-	const latest = replay.seconds.findLast((second) => second.t <= nowSeconds) ?? replay.seconds.at(-1);
-	const traffic: Traffic = latest ?? NO_TRAFFIC;
+	const traffic = trafficAt(replay.seconds, nowSeconds, isLive && !isFinished);
 	const incidents = incidentsOf(replay.events, nowMs);
 	const span = spanOf({
 		durationSeconds: attackSecondsOf(replay),

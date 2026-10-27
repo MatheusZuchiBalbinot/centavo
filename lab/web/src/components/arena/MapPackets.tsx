@@ -3,10 +3,8 @@ import type { CSSProperties } from 'react';
 import { curveOf, type MapFrame } from '../../domain/mapGeometry';
 import type { SystemState } from '../../domain/systemState';
 import { MAP_LINKS, type LinkId, type MapLink } from '../../domain/topology';
+import { totalOf, type Traffic } from '../../domain/traffic';
 import styles from './Arena.module.css';
-
-// What the clients' operations ended in during the last second.
-export type Traffic = { readonly ok: number; readonly fail: number; readonly info: number };
 
 type Outcome = keyof Traffic;
 
@@ -43,10 +41,6 @@ export default function MapPackets({ state, frame, traffic }: MapPacketsProps): 
 			))}
 		</div>
 	);
-}
-
-export function totalOf(traffic: Traffic): number {
-	return traffic.ok + traffic.fail + traffic.info;
 }
 
 function packetsOf({ link, state, frame, traffic }: PacketInput): readonly Packet[] {
