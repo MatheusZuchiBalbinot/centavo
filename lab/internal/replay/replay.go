@@ -13,11 +13,11 @@ import (
 	"centavo/lab/internal/history"
 )
 
-// maxDefenseEvents bounds the timeline a replay keeps. Defenses grow with the
-// load, and a busy round would otherwise crowd out its own late attacks and
-// its cure; the nemesis's events follow the scenario's schedule and are always
-// kept. The counters see every event.
-const maxDefenseEvents = 2_000
+// maxDefensesPerSecond bounds the timeline a replay keeps. Defenses grow with
+// the load: a total cap would fill up early in a busy round and draw the bank
+// as if it stopped defending itself, so the cap is per second. The nemesis's
+// events follow the scenario's schedule and are always kept.
+const maxDefensesPerSecond = 12
 
 const (
 	familyProcess   EventFamily = "process"
@@ -113,7 +113,7 @@ type Builder struct {
 	replay        Replay
 	invokes       map[string]int64
 	latencies     map[int][]float64
-	defenses      int
+	defenses      map[int]int
 	moves         map[string]pendingMove
 	movesBySecond map[int]int
 }
@@ -148,7 +148,7 @@ func NewBuilder(round, scenario, seed string) *Builder {
 
 	return &Builder{
 		replay: replay, invokes: map[string]int64{}, latencies: map[int][]float64{},
-		moves: map[string]pendingMove{}, movesBySecond: map[int]int{},
+		defenses: map[int]int{}, moves: map[string]pendingMove{}, movesBySecond: map[int]int{},
 	}
 }
 
@@ -263,11 +263,12 @@ func percentile(sorted []float64, percent int) float64 {
 
 func (b *Builder) addEvent(record history.Record, event Event) {
 	if event.Family == familyDefense {
-		if b.defenses >= maxDefenseEvents {
+		second := int(record.TimeNS / int64(time.Second))
+		if b.defenses[second] >= maxDefensesPerSecond {
 			return
 		}
 
-		b.defenses++
+		b.defenses[second]++
 	}
 
 	event.TMillis = record.TimeNS / int64(time.Millisecond)

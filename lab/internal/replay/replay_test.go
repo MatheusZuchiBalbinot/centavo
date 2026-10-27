@@ -114,17 +114,19 @@ func TestBuilder_MarksTheAttacksAPersonLaunched(t *testing.T) {
 	}
 }
 
-// A round under load registers thousands of defenses; its late attacks and
-// its cure must still reach the timeline.
-func TestBuilder_KeepsTheAttacksAndTheCurePastTheDefenseBound(t *testing.T) {
+// A round under load registers thousands of defenses. The timeline keeps a
+// dozen of each second, so the bank's answers cover the whole round, and the
+// late attacks and the cure always reach it.
+func TestBuilder_KeepsDefensesAcrossTheRoundAndTheAttacksAndCurePastThem(t *testing.T) {
 	t.Parallel()
 
 	b := NewBuilder("r0001", "duplicate-concurrent", "0x5eed")
 	nemesis := history.Nemesis()
 	defense := []byte(`{"defense":"idempotency.replayed","target":"bank-api","count":1}`)
+	seconds := 3
 
-	for k := range maxDefenseEvents + 500 {
-		b.Feed(history.Record{Process: nemesis, Type: history.TypeInfo, F: history.FunctionDefense, Value: defense, TimeNS: int64(k) * int64(time.Millisecond)})
+	for k := range seconds * 100 {
+		b.Feed(history.Record{Process: nemesis, Type: history.TypeInfo, F: history.FunctionDefense, Value: defense, TimeNS: int64(k) * int64(10*time.Millisecond)})
 	}
 
 	late := int64(10 * time.Second)
@@ -132,13 +134,15 @@ func TestBuilder_KeepsTheAttacksAndTheCurePastTheDefenseBound(t *testing.T) {
 	b.Feed(history.Record{Process: nemesis, Type: history.TypeInfo, F: history.FunctionHealStart, TimeNS: late + int64(time.Second)})
 
 	events := b.Replay().Events
-	if len(events) != maxDefenseEvents+2 {
-		t.Fatalf("%d events, want the %d defenses the bound keeps plus the kill and the cure", len(events), maxDefenseEvents)
+	if len(events) != seconds*maxDefensesPerSecond+2 {
+		t.Fatalf("%d events, want %d defenses in each of the %d seconds plus the kill and the cure", len(events), maxDefensesPerSecond, seconds)
 	}
 
-	isKept := events[len(events)-2].Kind == history.FunctionKill && events[len(events)-1].Kind == history.FunctionHealStart
+	lastDefense := events[len(events)-3]
+	isKept := lastDefense.TMillis >= 2_000 && events[len(events)-2].Kind == history.FunctionKill && events[len(events)-1].Kind == history.FunctionHealStart
+
 	if !isKept {
-		t.Fatalf("the last events are %+v", events[len(events)-2:])
+		t.Fatalf("the last events are %+v", events[len(events)-3:])
 	}
 }
 
