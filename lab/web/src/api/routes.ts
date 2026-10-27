@@ -1,6 +1,5 @@
 import type { RoundId } from './ids';
 
-// Every path the panel calls; nothing else in the app writes an /api/ path.
 export const API_ROUTES = {
 	lab: '/api/lab',
 	stop: '/api/lab/stop',

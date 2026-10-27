@@ -18,8 +18,6 @@ type HeadlineInput = {
 	readonly reading: AuditorReading | null;
 };
 
-// headlineOf is the round's first line: what is happening now, or how it
-// ended.
 export function headlineOf(input: HeadlineInput): string {
 	const { replay, phase } = input;
 
@@ -38,8 +36,8 @@ export function headlineOf(input: HeadlineInput): string {
 	}
 }
 
-// replayHeadlineOf is the first line of a replay: the recording keeps no
-// auditor readings, so under attack it only says how long it has run.
+// The recording keeps no auditor readings, so under attack it only says how
+// long the attack has run.
 export function replayHeadlineOf(input: Omit<HeadlineInput, 'reading'>): string {
 	if (input.phase === 'attack') {
 		return format(messages.arena.replayAttack, { elapsed: formatDuration(input.elapsedSeconds) });
@@ -48,7 +46,6 @@ export function replayHeadlineOf(input: Omit<HeadlineInput, 'reading'>): string 
 	return headlineOf({ ...input, reading: null });
 }
 
-// disabledDefenses lists the defenses the profile turned off.
 export function disabledDefenses(defenses: string): readonly string[] {
 	return defenses
 		.split(PROFILE_SEPARATOR)
@@ -57,7 +54,6 @@ export function disabledDefenses(defenses: string): readonly string[] {
 		.map((change) => change.slice(DISABLED_PREFIX.length));
 }
 
-// expectationOf says what the defense profile should make of the round.
 export function expectationOf(defenses: string): string {
 	if (defenses === '') {
 		return messages.round.expectUnknown;

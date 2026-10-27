@@ -16,7 +16,6 @@ export type RoundPages =
 			readonly loadMore: () => void;
 	  };
 
-// useRoundPages reads the finished rounds a page at a time, newest first.
 export function useRoundPages(): RoundPages {
 	const [rounds, setRounds] = useState<readonly RoundSummary[] | null>(null);
 	const [cursor, setCursor] = useState<RoundId | null>(null);

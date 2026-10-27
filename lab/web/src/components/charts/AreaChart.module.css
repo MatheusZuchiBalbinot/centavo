@@ -102,7 +102,6 @@
 	font-weight: 600;
 }
 
-/* The newest sample breathes while the round is live. */
 .pulse {
 	fill: var(--series-blue);
 	transform-box: fill-box;

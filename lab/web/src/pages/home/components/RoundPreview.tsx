@@ -8,8 +8,6 @@ import styles from './Composer.module.css';
 
 type RoundPreviewProps = { readonly attack: AttackId; readonly durationSeconds: number };
 
-// RoundPreview says, before anything starts, what the round will do and what
-// it should end with.
 export default function RoundPreview({ attack, durationSeconds }: RoundPreviewProps): React.JSX.Element {
 	const { preview } = messages;
 	const steps = [

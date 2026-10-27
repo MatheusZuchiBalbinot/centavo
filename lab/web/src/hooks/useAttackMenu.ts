@@ -4,7 +4,6 @@ import { fetchAttackMenu, type AttackMenu } from '../api/attacks';
 
 type MenuReading = { readonly kind: 'loading' } | { readonly kind: 'ready'; readonly menu: AttackMenu } | { readonly kind: 'failed' };
 
-// useAttackMenu reads the lab's attack menu once.
 export function useAttackMenu(): MenuReading {
 	const [reading, setReading] = useState<MenuReading>({ kind: 'loading' });
 

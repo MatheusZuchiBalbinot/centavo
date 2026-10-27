@@ -11,7 +11,6 @@ type DurationPickerProps = {
 	readonly onSelect: (seconds: number) => void;
 };
 
-// DurationPicker is a native radio group drawn as one segmented track.
 export default function DurationPicker({ durationsSeconds, selected, isDisabled, onSelect }: DurationPickerProps): React.JSX.Element {
 	return (
 		<div className={styles.segmented}>

@@ -16,9 +16,7 @@ type Kind = 'attack' | 'defense';
 
 const KINDS: readonly Kind[] = ['attack', 'defense'];
 
-// useAttackToasts announces the attacks and the defenses that arrive after
-// the page opened. events is the whole list; newEvents is how many of its
-// last items are new.
+// events is the whole list; newEvents is how many of its last items are new.
 export function useAttackToasts(events: readonly RoundEvent[], newEvents: number): void {
 	const { push } = useToasts();
 	const announced = useRef(0);

@@ -51,7 +51,6 @@
 	box-shadow: 0 0 0 5px color-mix(in oklch, var(--intro-color) 15%, transparent);
 }
 
-/* Live: the ring sends out a wave every two seconds. */
 .intro[data-live='true'] .ring {
 	animation: ring-wave 2s ease-out infinite;
 }

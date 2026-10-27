@@ -13,7 +13,6 @@ export type StartChoice = { readonly attack: AttackId; readonly durationSeconds:
 
 type StartRound = { readonly isStarting: boolean; readonly start: (choice: StartChoice) => Promise<boolean> };
 
-// useStartRound asks the lab for a round and says how it went in a toast.
 export function useStartRound(): StartRound {
 	const [isStarting, setStarting] = useState(false);
 	const { push } = useToasts();

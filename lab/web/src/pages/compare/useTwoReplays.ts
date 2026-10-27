@@ -6,13 +6,10 @@ import { fetchReplay, type Replay } from '../../api/replay';
 
 export type TwoReplays =
 	| { readonly kind: 'loading' }
-	// missing names the rounds that do not exist; failed is a lab that did
-	// not answer.
 	| { readonly kind: 'missing'; readonly rounds: readonly RoundId[] }
 	| { readonly kind: 'failed' }
 	| { readonly kind: 'ready'; readonly left: Replay; readonly right: Replay };
 
-// useTwoReplays reads two finished rounds for the side by side view.
 export function useTwoReplays(left: RoundId, right: RoundId): TwoReplays {
 	const [reading, setReading] = useState<TwoReplays>({ kind: 'loading' });
 

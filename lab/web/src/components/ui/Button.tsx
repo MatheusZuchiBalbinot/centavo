@@ -19,7 +19,6 @@ export function Button({ variant = 'secondary', size = 'regular', className, ...
 	return <button type="button" {...props} className={classOf({ variant, size }, className)} />;
 }
 
-// LinkButton navigates, so it is a link that looks like a button.
 export function LinkButton({ variant = 'secondary', size = 'regular', className, ...props }: LinkButtonProps): React.JSX.Element {
 	return <Link {...props} className={classOf({ variant, size }, className)} />;
 }

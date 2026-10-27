@@ -81,7 +81,6 @@
 	font-size: var(--text-xs);
 }
 
-/* The streak is the card's headline: how long the bank has held. */
 .streak {
 	margin-top: 6px;
 	color: var(--success);

@@ -2,10 +2,8 @@ import { useLayoutEffect, useState } from 'react';
 
 export type Size = { readonly width: number; readonly height: number };
 
-// Until the first measure, a map lays out at this size.
 const FALLBACK: Size = { width: 900, height: 520 };
 
-// useElementSize follows an element's size, so a drawing can use real pixels.
 export function useElementSize(ref: React.RefObject<HTMLElement | null>): Size {
 	const [size, setSize] = useState<Size>(FALLBACK);
 

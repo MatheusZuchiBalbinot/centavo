@@ -2,12 +2,10 @@ import { useEffect, useState } from 'react';
 
 import { fetchLabState, type LabState } from '../api/lab';
 
-// How often the bar asks the lab what it is doing.
 const LAB_POLL_MS = 3_000;
 
 export type LabReading = { readonly kind: 'loading' } | { readonly kind: 'ready'; readonly state: LabState } | { readonly kind: 'offline' };
 
-// useLabState polls the lab's state for as long as the component lives.
 export function useLabState(): LabReading {
 	const [reading, setReading] = useState<LabReading>({ kind: 'loading' });
 

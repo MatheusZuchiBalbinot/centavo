@@ -257,7 +257,6 @@
 	gap: 8px;
 }
 
-/* The preview follows the page while the attack cards scroll past it. */
 .previewSticky {
 	position: sticky;
 	top: calc(var(--header-h) + 16px);

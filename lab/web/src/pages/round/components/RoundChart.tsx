@@ -27,8 +27,6 @@ type RoundChartProps = {
 	readonly onHighlight: (range: AttackRange | null) => void;
 };
 
-// RoundChart is the round second by second, one metric at a time, with each
-// attack marked where it landed and the cure shaded.
 export default function RoundChart({
 	replay,
 	isLive,
@@ -52,7 +50,6 @@ export default function RoundChart({
 	const attacks = replay.events.filter(isAttackEvent);
 	const markers = attacks.map((event) => ({ at: event.tMs / MS_PER_SECOND }));
 
-	// describeMarker tells the attacks a marker stands for, in the words of the feed.
 	function describeMarker(range: AttackRange): string {
 		const first = attacks[range.from - 1];
 		const last = attacks[range.to - 1] ?? first;

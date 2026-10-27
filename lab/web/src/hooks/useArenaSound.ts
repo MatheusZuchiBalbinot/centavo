@@ -11,8 +11,6 @@ type ArenaSound = { readonly isOn: boolean; readonly toggle: () => void };
 
 type ArenaSoundInput = { readonly attacks: number; readonly verdict: Verdict | null };
 
-// useArenaSound plays a cue for each new attack and one for the verdict,
-// while the person has the sound on; it starts off and is remembered.
 export function useArenaSound({ attacks, verdict }: ArenaSoundInput): ArenaSound {
 	const [isOn, setOn] = useState(() => readStored(STORAGE_KEYS.sound, isBoolean) ?? false);
 	const heard = useRef({ attacks, verdict, lastAttackAt: 0 });

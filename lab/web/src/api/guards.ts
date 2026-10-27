@@ -1,5 +1,4 @@
-// Small type guards for what the lab sends; nothing from the network is used
-// before one of them accepts it.
+// Nothing from the network is used before one of these guards accepts it.
 
 type JsonObject = Readonly<Record<string, unknown>>;
 

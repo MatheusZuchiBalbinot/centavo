@@ -5,44 +5,34 @@ import { isAttackEvent, isDefenseEvent, isStateEvent } from './phase';
 
 export type FeedTone = 'attack' | 'defense' | 'heal' | 'other';
 
-// A feed item says what happened and what should follow from it. Attacks of
-// the same kind in a row are one item: a burst of the same failpoint reads
-// as one line with a count, not as a wall of identical lines.
+// Attacks of the same kind in a row are one item: a burst of the same
+// failpoint reads as one line with a count, not as a wall of lines.
 export type FeedItem = {
 	readonly key: string;
 	readonly fromMs: number;
 	readonly toMs: number;
 	readonly tone: FeedTone;
-	// label matches the markers on the chart: "7", or "10–14" for a group;
-	// cure events have none.
+	// Matches the chart's markers: "7", or "10–14" for a group.
 	readonly label: string | null;
 	readonly count: number;
 	readonly what: string;
 	readonly expected: string;
-	// code is the fault's technical name (a failpoint, a toxic), shown apart
-	// so the sentence stays readable.
 	readonly code: string;
-	// raw are the events behind the item, for the technical mode.
 	readonly raw: readonly RoundEvent[];
 };
 
 type NumberedEvent = { readonly event: RoundEvent; readonly number: number | null; readonly index: number };
 
-// More targets than this are counted instead of listed.
 const MAX_LISTED_TARGETS = 3;
 
-// The kinds whose detail is a code name rather than words.
 const CODE_KINDS: ReadonlySet<RoundEvent['kind']> = new Set(['failpoint_fired', 'network', 'arm_partner_modes', 'database']);
 
-// feedOf tells every event of the round, newest first, numbering the attacks
-// in the order they happened and grouping repeats.
 export function feedOf(events: readonly RoundEvent[]): readonly FeedItem[] {
 	// Process states draw the map; told in the feed they would be three lines
 	// for every kill.
 	return groupRuns(numbered(events)).filter(isTold).map(itemOf).reverse();
 }
 
-// describeEvent is the sentence of one event, also used by its toast.
 export function describeEvent(event: RoundEvent): { what: string; expected: string } {
 	return describe(event, event.target || messages.feed.someone, event.count);
 }
@@ -61,8 +51,6 @@ function numbered(events: readonly RoundEvent[]): readonly NumberedEvent[] {
 	});
 }
 
-// groupRuns puts consecutive attacks of the same kind and fault together;
-// cure events always stand alone.
 function groupRuns(events: readonly NumberedEvent[]): readonly (readonly NumberedEvent[])[] {
 	const runs: NumberedEvent[][] = [];
 
@@ -82,8 +70,6 @@ function groupRuns(events: readonly NumberedEvent[]): readonly (readonly Numbere
 	return runs;
 }
 
-// isRepeat groups attacks of the same fault, and defenses of the same kind;
-// the cure and the process states always stand alone.
 function isRepeat(previous: NumberedEvent, current: NumberedEvent): boolean {
 	const areAttacks = previous.number !== null && current.number !== null;
 	const areDefenses = isDefenseEvent(previous.event) && isDefenseEvent(current.event);
@@ -128,8 +114,6 @@ function describe(event: RoundEvent, target: string, count: number): { what: str
 const defenseCopy: Readonly<Partial<Record<string, { what: string; expect: string }>>> = messages.feed.defenses;
 const subjects: Readonly<Partial<Record<string, string>>> = messages.feed.subjects;
 
-// copyOf picks the sentence of an event; a defense the panel does not know
-// yet is told as one, never as something else.
 function copyOf(event: RoundEvent): { what: string; expect: string } {
 	if (event.kind !== 'defense') {
 		return messages.feed.events[event.kind];
@@ -142,8 +126,6 @@ function subjectOf(subject: string): string {
 	return subjects[subject] ?? subject;
 }
 
-// targetsOf names who was hit: "bank-worker-1 e bank-worker-2", or a count
-// when the list would be long.
 function targetsOf(run: readonly NumberedEvent[]): string {
 	const targets = [...new Set(run.map((item) => item.event.target).filter(Boolean))];
 

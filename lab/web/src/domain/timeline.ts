@@ -1,7 +1,6 @@
 import type { Replay, RoundSecond } from '../api/replay';
 import { isHealStart } from './phase';
 
-// Tick spacing of the time axis, by how long the round lasts.
 const TICKS = [
 	{ upTo: 120, every: 15 },
 	{ upTo: 420, every: 30 },
@@ -20,9 +19,8 @@ type TimelineSpanInput = {
 
 const MS_PER_SECOND = 1_000;
 
-// attackSecondsOf is how long the attack lasted: the planned duration, or,
-// for a round stopped early, up to the start of its cure. Axes and clocks
-// use it so a round stopped at 0:43 is not drawn as three minutes long.
+// Axes and clocks use this so a round stopped at 0:43 is not drawn as three
+// minutes long.
 export function attackSecondsOf(replay: Replay): number {
 	const heal = replay.isStopped ? replay.events.find(isHealStart) : undefined;
 
@@ -33,8 +31,6 @@ export function attackSecondsOf(replay: Replay): number {
 	return Math.min(replay.durationSeconds, heal.tMs / MS_PER_SECOND);
 }
 
-// spanOf is how many seconds the axis covers: the planned attack, or more
-// when the cure runs past it.
 export function spanOf(input: TimelineSpanInput): number {
 	const lastSecond = input.seconds.at(-1)?.t ?? 0;
 
@@ -52,13 +48,10 @@ export function ticksOf(span: number): readonly number[] {
 	return ticks;
 }
 
-// A marker on the timeline: one attack, or several that landed too close to
-// tell apart, labeled with the range of their numbers.
 type Marker = { readonly x: number; readonly label: string; readonly first: number; readonly last: number };
 
-// clusterMarkers merges attacks closer than minGap in viewBox units, so
-// their numbers stay readable; positions are in the order the attacks
-// happened, which is also left to right.
+// Positions come in the order the attacks happened, which is also left to
+// right.
 export function clusterMarkers(positions: readonly number[], minGap: number): readonly Marker[] {
 	const markers: Marker[] = [];
 	let start = 0;

@@ -39,7 +39,6 @@
 	gap: 8px;
 }
 
-/* Phases: four segments, like an instance group's health bars. */
 .stepper {
 	display: grid;
 	flex: 1 1 320px;
@@ -70,7 +69,6 @@
 	background: color-mix(in oklch, var(--primary) 30%, var(--border));
 }
 
-/* The current phase moves: a light sweeps along its bar. */
 .step[data-state='current'] .stepBar::after {
 	content: '';
 	position: absolute;
@@ -118,14 +116,12 @@
 	font-size: var(--text-2xs);
 }
 
-/* Scoreboard */
 .tiles {
 	display: grid;
 	grid-template-columns: repeat(4, minmax(0, 1fr));
 	gap: 14px;
 }
 
-/* Body */
 .grid {
 	display: grid;
 	grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
@@ -184,7 +180,6 @@
 	background: color-mix(in oklch, var(--success) 12%, transparent);
 }
 
-/* Guarantees */
 .guaranteeList {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -227,7 +222,6 @@
 	font-size: var(--text-xs);
 }
 
-/* Feed */
 .feed {
 	align-self: stretch;
 }
@@ -271,7 +265,6 @@
 	font-weight: 600;
 }
 
-/* A group's mark holds a range, "10–14", so it widens into a pill. */
 .feedMark[data-wide='true'] {
 	width: auto;
 	min-width: 22px;
@@ -371,7 +364,6 @@
 	font-size: var(--text-2xs);
 }
 
-/* Stop dialog */
 .dialog {
 	max-width: 440px;
 	padding: 20px;
@@ -404,7 +396,6 @@
 	margin-top: 18px;
 }
 
-/* Result */
 .side {
 	display: grid;
 	gap: 14px;
@@ -474,7 +465,6 @@
 	}
 }
 
-/* A round that could not be opened: what happened and the way out. */
 .unopened {
 	display: grid;
 	justify-items: start;

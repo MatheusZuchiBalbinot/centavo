@@ -1,10 +1,9 @@
 import { useLayoutEffect, useState } from 'react';
 
-// Until the first measure, charts lay out at this width.
 const FALLBACK_WIDTH = 640;
 
-// useElementWidth follows an element's width, so a chart can draw in real
-// pixels instead of scaling a fixed canvas (which shrinks its text).
+// Draws in real pixels instead of scaling a fixed canvas, which shrinks
+// its text.
 export function useElementWidth(ref: React.RefObject<HTMLElement | null>): number {
 	const [width, setWidth] = useState(FALLBACK_WIDTH);
 

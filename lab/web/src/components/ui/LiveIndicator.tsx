@@ -1,11 +1,8 @@
-// What a live indicator says: data arriving now, waiting for it, the lab
-// out of reach, or nothing running.
 export type LiveState = 'live' | 'waiting' | 'offline' | 'idle';
 
 type LiveIndicatorProps = {
 	readonly state: LiveState;
 	readonly label: string;
-	// age says how fresh the data is, "há 2 s".
 	readonly age?: string;
 };
 

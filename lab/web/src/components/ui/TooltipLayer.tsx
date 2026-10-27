@@ -12,9 +12,8 @@ const MARGIN_PX = 10;
 
 type Placement = { readonly left: number; readonly top: number; readonly side: 'above' | 'below' };
 
-// TooltipLayer draws the one tooltip of the page, portaled to the body so no
-// card's overflow clips it. While open, the anchor points at it with
-// aria-describedby, so a screen reader reads it with the element.
+// Portaled to the body so no card's overflow clips it. While open, the
+// anchor points at it with aria-describedby, so a screen reader reads both.
 export default function TooltipLayer(): React.JSX.Element | null {
 	const { active, holdOpen, release } = useActiveTooltip();
 	const id = useId();
@@ -86,8 +85,6 @@ function TooltipBody({ content }: { content: TooltipContent }): React.JSX.Elemen
 	);
 }
 
-// placementOf puts the bubble below its anchor, or above when there is no
-// room below, and keeps it inside the window.
 function placementOf(active: ActiveTooltip, bubble: DOMRect): Placement {
 	const { rect } = active;
 	const centered = rect.left + rect.width / 2 - bubble.width / 2;

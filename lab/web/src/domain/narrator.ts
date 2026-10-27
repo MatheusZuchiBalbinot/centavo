@@ -3,18 +3,14 @@ import { messages } from '../i18n/pt-BR';
 import { describeEvent } from './feed';
 import { isAttackEvent, isDefenseEvent, type Phase } from './phase';
 
-// How long the narrator keeps telling an attack, and a defense, after it.
 const ATTACK_WINDOW_MS = 15_000;
 const DEFENSE_WINDOW_MS = 20_000;
 
 export type Narration = {
 	readonly now: string;
-	// The bank's side: a defense that just acted, or what should come of the
-	// last attack while the bank has not shown it yet.
 	readonly defense: { readonly text: string; readonly isWaiting: boolean } | null;
 };
 
-// narrate tells the arena's two sentences at a moment of the round.
 export function narrate(events: readonly RoundEvent[], nowMs: number, phase: Phase): Narration {
 	const seen = events.filter((event) => event.tMs <= nowMs);
 	const attack = latest(seen, isAttackEvent, nowMs, ATTACK_WINDOW_MS);

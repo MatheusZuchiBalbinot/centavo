@@ -100,8 +100,6 @@ function FollowedRound({ round }: { round: RoundId }): React.JSX.Element {
 	);
 }
 
-// elapsedOf is how long the attack has been running, from the round's own
-// start; it stops growing at the planned duration.
 function elapsedOf(replay: Replay, now: number): number {
 	if (replay.startedAt === null) {
 		return replay.seconds.length;
@@ -118,8 +116,6 @@ type UnopenedProps = {
 	readonly onRetry: () => void;
 };
 
-// Unopened is the page before the first snapshot: still connecting, a round
-// that does not exist, or a lab that did not answer.
 function Unopened({ round, availability, onRetry }: UnopenedProps): React.JSX.Element {
 	switch (availability) {
 		case 'open':

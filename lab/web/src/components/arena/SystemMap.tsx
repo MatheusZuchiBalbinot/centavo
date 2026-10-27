@@ -26,11 +26,9 @@ const ICON_SIZE = 18;
 const MS_PER_SECOND = 1_000;
 const HALF = 0.5;
 
-// Packets per link: more on the busy links, never more than this many.
 const MAX_PACKETS = 3;
 const OPERATIONS_PER_PACKET = 8;
 
-// Links that carry the clients' traffic, whose packets follow its rate.
 const BUSY_LINKS: ReadonlySet<string> = new Set(['client_api', 'api_pg']);
 
 type SystemMapProps = {
@@ -41,7 +39,6 @@ type SystemMapProps = {
 	readonly isLive: boolean;
 };
 
-// SystemMap draws the lab's system and what the round does to it right now.
 export default function SystemMap({ state, operationsPerSecond, bubble, nowMs, isLive }: SystemMapProps): React.JSX.Element {
 	const box = useRef<HTMLDivElement>(null);
 	const size = useElementSize(box);
@@ -89,8 +86,6 @@ function LinkLabel({ link, view, frame }: LinkPartProps): React.JSX.Element | nu
 
 type PacketsProps = { readonly state: SystemState; readonly frame: MapFrame; readonly operationsPerSecond: number };
 
-// Packets run along the links that carry traffic, slower on a slow link and
-// not at all on a cut one or out of a process that is down.
 function Packets({ state, frame, operationsPerSecond }: PacketsProps): React.JSX.Element {
 	const packets = MAP_LINKS.flatMap((link) => packetsOf(link, state, frame, operationsPerSecond));
 
@@ -206,8 +201,6 @@ function statusText(id: NodeId, view: NodeView, nowMs: number, operationsPerSeco
 
 type AttackBubbleProps = { readonly event: RoundEvent; readonly label: string; readonly frame: MapFrame };
 
-// AttackBubble points at the node the newest attack hit, on the side with
-// more room.
 function AttackBubble({ event, label, frame }: AttackBubbleProps): React.JSX.Element {
 	const { what, expected } = describeEvent(event);
 	const anchor = pointOf(anchorOf(event), frame);
@@ -222,8 +215,6 @@ function AttackBubble({ event, label, frame }: AttackBubbleProps): React.JSX.Ele
 	);
 }
 
-// anchorOf is the node an attack points at: the process it hit, or where the
-// link it slowed or cut starts; the API when it names neither.
 function anchorOf(event: RoundEvent): NodeId {
 	const node = nodesOf(event.target)[0];
 

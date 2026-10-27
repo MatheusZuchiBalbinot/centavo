@@ -8,13 +8,10 @@ import { Button } from '../ui/Button';
 import styles from './Arena.module.css';
 
 const MS_PER_SECOND = 1_000;
-// The scrubber moves a second at a time with the arrow keys.
 const STEP_MS = 1_000;
 
 type ReplayPlayerProps = { readonly playback: Playback; readonly endMs: number };
 
-// ReplayPlayer plays a recorded round in the arena: play and pause, the
-// speed, and a bar to drag to any moment.
 export default function ReplayPlayer({ playback, endMs }: ReplayPlayerProps): React.JSX.Element {
 	const at = formatClock(playback.positionMs / MS_PER_SECOND);
 	const total = formatClock(endMs / MS_PER_SECOND);

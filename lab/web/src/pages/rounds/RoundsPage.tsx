@@ -12,7 +12,6 @@ import { messages } from '../../i18n/pt-BR';
 import { comparePath } from '../../routes';
 import { useRoundPages, type RoundPages } from './useRoundPages';
 
-// Comparing takes exactly two rounds.
 const ROUNDS_COMPARED = 2;
 
 export default function RoundsPage(): React.JSX.Element {

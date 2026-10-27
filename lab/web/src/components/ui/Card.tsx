@@ -1,7 +1,6 @@
 type CardProps = {
 	readonly title: string;
 	readonly titleId: string;
-	// aside sits at the right of the title: a note, a live indicator, toggles.
 	readonly aside?: React.ReactNode;
 	readonly as?: 'section' | 'article' | 'aside';
 	readonly className?: string;
@@ -9,7 +8,6 @@ type CardProps = {
 	readonly children: React.ReactNode;
 };
 
-// Card is a titled surface; its title names the section for assistive tech.
 export function Card({
 	title,
 	titleId,

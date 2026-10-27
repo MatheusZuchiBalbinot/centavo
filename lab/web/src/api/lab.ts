@@ -3,7 +3,6 @@ import { isNumber, isObject, isString } from './guards';
 import { isAttackId, isRoundId, type AttackId, type RoundId } from './ids';
 import { API_ROUTES } from './routes';
 
-// What the lab is doing; a round only exists while it runs or stops.
 export type LabState =
 	| { readonly status: 'idle' }
 	| {

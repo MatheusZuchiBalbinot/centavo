@@ -4,8 +4,6 @@ import { LiveIndicator, type LiveState } from './ui/LiveIndicator';
 
 type LabStatusProps = { readonly reading: LabReading };
 
-// LabStatus is the top bar's word on the lab: free, running a round live,
-// stopping one, or out of reach.
 export default function LabStatus({ reading }: LabStatusProps): React.JSX.Element {
 	const { state, label } = describe(reading);
 

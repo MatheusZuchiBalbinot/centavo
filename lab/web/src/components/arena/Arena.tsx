@@ -23,7 +23,6 @@ import SystemMap from './SystemMap';
 import VerdictStamp from './VerdictStamp';
 
 const MS_PER_SECOND = 1_000;
-// The bubble tells the newest attack for this long.
 const BUBBLE_MS = 6_000;
 const PERCENT = 100;
 
@@ -33,15 +32,13 @@ export type ArenaProps = {
 	readonly replay: Replay;
 	readonly reading: AuditorReading | null;
 	readonly phase: Phase;
-	// nowMs is the moment of the round the arena shows, from its start.
+	// Milliseconds since the round started.
 	readonly nowMs: number;
 	readonly ageSeconds: number | null;
-	// wallMs is the clock time of this render, for how old the money reading is.
+	// The clock time of this render, for how old the money reading is.
 	readonly wallMs: number;
-	// betLine settles the bet made in the surprise draw, once there is a verdict.
 	readonly betLine: string | null;
 	readonly actions?: React.ReactNode;
-	// isLive marks a round happening now; a replay plays a recorded one.
 	readonly isLive: boolean;
 	readonly player?: React.ReactNode;
 	readonly onWatchAgain?: () => void;
@@ -49,8 +46,6 @@ export type ArenaProps = {
 	readonly onClose: () => void;
 };
 
-// Arena is the round on one screen: the system with every attack landing on
-// it, the money, what happens and how the bank answers, and the verdict.
 export default function Arena(props: ArenaProps): React.JSX.Element {
 	const { eyebrow, title, replay, reading, phase, nowMs, ageSeconds, wallMs, betLine, actions, isLive, player, onWatchAgain, onSpace, onClose } =
 		props;
@@ -58,7 +53,6 @@ export default function Arena(props: ArenaProps): React.JSX.Element {
 
 	const sound = useArenaSound({ attacks: replay.events.filter(isAttackEvent).length, verdict: replay.verdict });
 
-	// Space pauses a replay while the arena itself has focus.
 	useSpaceKey(dialog, onSpace);
 	const isFinished = phase === 'verdict';
 	const nowSeconds = nowMs / MS_PER_SECOND;
@@ -217,8 +211,6 @@ function MoneyCard(props: MoneyCardProps): React.JSX.Element {
 
 type MoneyView = { readonly value: string; readonly hint: string; readonly isBroken: boolean };
 
-// moneyViewOf is the money card's word: the checker's at the end, the live
-// auditor's meanwhile, and nothing a replay did not record.
 function moneyViewOf({ replay, reading, isFinished, isLive, wallMs }: MoneyCardProps): MoneyView {
 	if (isFinished) {
 		const isBroken = replay.checks.some((check) => check.id === 'I1' && check.status === 'failed');
@@ -313,8 +305,6 @@ function finalTone(status: GuaranteeCheck['status']): 'ok' | 'broken' | 'later' 
 	return status === 'failed' ? 'broken' : 'ok';
 }
 
-// bubbleOf is the newest attack while it is still news, numbered as in the
-// feed.
 function bubbleOf(seen: Replay['events'], nowMs: number): { event: Replay['events'][number]; label: string } | null {
 	const attacks = seen.filter(isAttackEvent);
 	const last = attacks.at(-1);

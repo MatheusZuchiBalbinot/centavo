@@ -1,7 +1,6 @@
 import type { AuditorReading, Replay, RoundSecond } from '../api/replay';
 import type { StreamMessage } from '../api/roundStream';
 
-// What the page knows about a round it follows.
 export type RoundState =
 	| { readonly kind: 'connecting' }
 	| {
@@ -15,8 +14,7 @@ export type RoundState =
 
 export const initialRoundState: RoundState = { kind: 'connecting' };
 
-// reduceRound applies one stream message. A snapshot replaces everything,
-// which is also how a reconnection catches up.
+// A snapshot replaces everything, which is also how a reconnection catches up.
 export function reduceRound(state: RoundState, message: StreamMessage): RoundState {
 	switch (message.type) {
 		case 'snapshot':
@@ -32,8 +30,7 @@ export function reduceRound(state: RoundState, message: StreamMessage): RoundSta
 	}
 }
 
-// mergeSeconds replaces the seconds already known and appends the new ones;
-// the stream resends the last second because it may still have grown.
+// The stream resends the last second because it may still have grown.
 export function mergeSeconds(known: readonly RoundSecond[], update: readonly RoundSecond[]): readonly RoundSecond[] {
 	const first = update[0];
 

@@ -14,10 +14,8 @@ import styles from './RoundPage.module.css';
 
 const MS_PER_SECOND = 1_000;
 
-// The feed shows this many items; the chart has all of them.
 const MAX_FEED_ITEMS = 60;
 
-// What the feed can be narrowed to.
 type FeedFilter = 'all' | FeedTone;
 
 const FILTERS: readonly FeedFilter[] = ['all', 'attack', 'defense', 'heal'];
@@ -29,9 +27,7 @@ type EventFeedProps = {
 	readonly onHighlight: (range: AttackRange | null) => void;
 };
 
-// EventFeed tells each event in two halves: what happened, and what should
-// happen because of it. Toasts announce new attacks, so the list itself is
-// not a live region.
+// Toasts announce new attacks, so the list itself is not a live region.
 export default function EventFeed({ events, isCalm, highlight, onHighlight }: EventFeedProps): React.JSX.Element {
 	const [filter, setFilter] = useState<FeedFilter>('all');
 	const all = feedOf(events);
@@ -113,7 +109,6 @@ function FeedEntry({ item, highlight, onHighlight }: FeedEntryProps): React.JSX.
 	);
 }
 
-// RawEvents shows the events behind an item as the history recorded them.
 function RawEvents({ events }: { events: readonly RoundEvent[] }): React.JSX.Element {
 	return (
 		<details className={styles.feedRaw}>
@@ -127,7 +122,6 @@ function rawLine(event: RoundEvent): string {
 	return [`t=${event.tMs}ms`, event.kind, event.target, event.detail, event.duration].filter(Boolean).join('  ');
 }
 
-// timeOf is when the item happened: one moment, or the span of a group.
 function timeOf(item: FeedItem): string {
 	const from = formatClock(item.fromMs / MS_PER_SECOND);
 

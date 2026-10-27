@@ -5,8 +5,6 @@ import { readStored, STORAGE_KEYS, writeStored } from '../storage';
 
 type ViewModeProviderProps = { readonly children: React.ReactNode };
 
-// ViewModeProvider keeps the chosen mode for the whole panel and remembers
-// it in this browser.
 export function ViewModeProvider({ children }: ViewModeProviderProps): React.JSX.Element {
 	const [mode, setModeState] = useState<ViewMode>(() => readStored(STORAGE_KEYS.viewMode, isViewMode) ?? 'explained');
 

@@ -17,13 +17,10 @@ const EVERYTHING = 'everything';
 
 const knownAttacks: Readonly<Record<string, AttackCopy>> = messages.attacks;
 
-// attackCopy is how the panel describes an attack; one the panel does not
-// know yet is shown by its id.
 export function attackCopy(id: AttackId): AttackCopy {
 	return knownAttacks[id] ?? { name: id, ...messages.unknownAttack };
 }
 
-// attackOfScenario finds the family a scenario belongs to.
 export function attackOfScenario(attacks: readonly Attack[], scenario: string): Attack | null {
 	return attacks.find(isFamilyOf(scenario)) ?? null;
 }
@@ -32,7 +29,6 @@ function isFamilyOf(scenario: string): (attack: Attack) => boolean {
 	return (attack) => attack.id !== EVERYTHING && attack.scenarios.includes(scenario);
 }
 
-// totalAttacks adds up every fault the nemesis injected in a round.
 export function totalAttacks(counters: ChaosCounters): number {
 	return (
 		counters.kills +

@@ -174,7 +174,6 @@
 	font-size: var(--text-sm);
 }
 
-/* On a phone the sidebar becomes a strip of links above the page. */
 @media (max-width: 860px) {
 	/* The page takes the leftover height; without this a short page stretches
      the strip of links instead. */

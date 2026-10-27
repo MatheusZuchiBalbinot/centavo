@@ -1,5 +1,3 @@
-// Every text the panel shows, in its one language. Components read them by
-// key; a text with {placeholders} goes through format().
 export const messages = {
 	appName: 'Centavo',
 	brandSub: 'laboratório de caos',

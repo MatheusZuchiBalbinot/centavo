@@ -3,7 +3,6 @@ import RoundsTable from '../../../components/RoundsTable';
 import { Card } from '../../../components/ui/Card';
 import { messages } from '../../../i18n/pt-BR';
 
-// How many rounds the home page lists.
 const ROUNDS_SHOWN = 6;
 
 type RecentRoundsProps = { readonly rounds: readonly RoundSummary[] };

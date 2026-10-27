@@ -9,16 +9,13 @@ type MetricTileProps = {
 	readonly label: string;
 	readonly value: string;
 	readonly hint: string;
-	// The recent values, oldest first; the tile draws them as a sparkline.
 	readonly trend: readonly number[];
 	readonly tone?: MetricTone;
-	// help says how the number is computed, behind a "?" next to the label.
 	readonly help?: string;
 };
 
 const BOX = 100;
 
-// MetricTile is one number with its recent past under it.
 export default function MetricTile({ label, value, hint, trend, tone = 'neutral', help }: MetricTileProps): React.JSX.Element {
 	return (
 		<div className={styles.tile} data-tone={tone}>

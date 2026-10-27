@@ -4,7 +4,6 @@ import { isRoundId, type RoundId } from './ids';
 import { parseCounters, parseVerdict, type ChaosCounters, type Verdict } from './rounds';
 import { replayPath } from './routes';
 
-// One second of what the clients saw.
 export type RoundSecond = {
 	readonly t: number;
 	readonly ok: number;
@@ -14,7 +13,6 @@ export type RoundSecond = {
 	readonly p99Ms: number;
 };
 
-// What the nemesis did, as the history names it.
 type EventKind =
 	| 'kill'
 	| 'freeze'

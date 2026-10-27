@@ -3,13 +3,11 @@ import { useEffect, useState } from 'react';
 import { fetchReplay, type Replay } from '../../api/replay';
 import { fetchRounds, type RoundSummary } from '../../api/rounds';
 
-// The showcase looks this far back for a round worth replaying.
 const ROUNDS_READ = 10;
 
 export type ShowcaseReading = { readonly kind: 'loading' } | { readonly kind: 'ready'; readonly replay: Replay } | { readonly kind: 'none' };
 
-// useShowcaseReplay loads the newest round that reached a verdict, for the
-// showcase to replay; a stopped or inconclusive round tells too little.
+// A stopped or inconclusive round tells too little to replay.
 export function useShowcaseReplay(isWanted: boolean): ShowcaseReading {
 	const [reading, setReading] = useState<ShowcaseReading>({ kind: 'loading' });
 

@@ -13,8 +13,8 @@ type AttackPickerProps = {
 	readonly onSelect: (attack: AttackId) => void;
 };
 
-// AttackPicker is a native radio group drawn as cards: arrow keys move
-// between attacks, and the group is one Tab stop.
+// A native radio group: arrow keys move between attacks, and the group is
+// one Tab stop.
 export default function AttackPicker({ attacks, selected, isDisabled, onSelect }: AttackPickerProps): React.JSX.Element {
 	return (
 		<div className={styles.attacks}>

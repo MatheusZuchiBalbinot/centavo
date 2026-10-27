@@ -1,5 +1,3 @@
-// The terms the panel explains in place: the words that show up in its
-// texts, a plain sentence each, and the guarantees each one protects.
 export type TermId =
 	| 'lease'
 	| 'fencing'
@@ -22,9 +20,9 @@ export type TermId =
 export type GlossaryEntry = {
 	readonly term: string;
 	readonly text: string;
-	// The guarantees the idea protects, by id; empty for lab vocabulary.
+	// Guarantee ids; empty for lab vocabulary.
 	readonly protects: readonly string[];
-	// How the word appears in the panel's texts, lowercase, longest first.
+	// Lowercase, as the word appears in the panel's texts.
 	readonly forms: readonly string[];
 };
 

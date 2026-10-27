@@ -5,14 +5,11 @@ import { fetchReplay } from '../../../api/replay';
 import { openRoundStream, type StreamMessage } from '../../../api/roundStream';
 import { initialRoundState, reduceRound, type RoundState } from '../../../domain/roundState';
 
-// Whether the round can be followed: it can, it does not exist, or the lab
-// did not answer.
 export type StreamAvailability = 'open' | 'missing' | 'unreachable';
 
 type RoundStream = {
 	readonly state: RoundState;
 	readonly isConnected: boolean;
-	// lastMessageAt is when the stream last said anything, for "há 2 s".
 	readonly lastMessageAt: number | null;
 	readonly availability: StreamAvailability;
 	readonly retry: () => void;
@@ -22,7 +19,6 @@ type RoundStream = {
 // restart) is opened again after this pause, never in a tight loop.
 const REOPEN_DELAY_MS = 3_000;
 
-// useRoundStream follows one round for as long as the page shows it.
 export function useRoundStream(round: RoundId): RoundStream {
 	const [state, dispatch] = useReducer(reduceRound, initialRoundState);
 	const [isConnected, setConnected] = useState(true);

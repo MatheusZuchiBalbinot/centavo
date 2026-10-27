@@ -1,7 +1,5 @@
 import { createContext, useContext } from 'react';
 
-// How the panel tells what happens: in plain words, with the technical
-// details, or as a big screen for a demo.
 export type ViewMode = 'explained' | 'technical' | 'presentation';
 
 export const VIEW_MODES: readonly ViewMode[] = ['explained', 'technical', 'presentation'];

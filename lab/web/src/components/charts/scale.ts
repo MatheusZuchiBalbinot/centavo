@@ -1,7 +1,6 @@
 const NICE_STEP_MANTISSAS = [1, 2, 5, 10] as const;
 const TARGET_TICK_COUNT = 4;
 
-// niceTicks is a value axis from zero to a round number above max.
 export function niceTicks(max: number): readonly number[] {
 	if (max <= 0) {
 		return [0, 1];
@@ -28,9 +27,8 @@ const SCALE_PERCENTILE = 0.98;
 // Room above the covered values, so the line never touches the top.
 const SCALE_HEADROOM = 1.15;
 
-// scaleMaxOf is the top of a value axis: high enough for nearly every value
-// and for the latest one, which the chart labels, but not for a lone spike
-// such as the burst that creates the round's accounts in its first second.
+// Not so high that a lone spike, such as the burst that creates the round's
+// accounts in its first second, flattens everything else.
 export function scaleMaxOf(values: readonly number[]): number {
 	if (values.length === 0) {
 		return 0;

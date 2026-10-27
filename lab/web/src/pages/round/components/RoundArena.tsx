@@ -13,7 +13,6 @@ import { readStored, STORAGE_KEYS, writeStored } from '../../../storage';
 import type { ArenaQuery } from '../hooks/useArenaQuery';
 import RoundActions from './RoundActions';
 
-// A replay asked for by its link plays at this speed.
 const REPLAY_SPEED = 10;
 
 const BET_LINES = {
@@ -32,8 +31,6 @@ type RoundArenaProps = {
 	readonly query: ArenaQuery;
 };
 
-// RoundArena is the round page's arena: the round as it happens, or, once
-// it is over and a moment is asked for, its replay.
 export default function RoundArena(props: RoundArenaProps): React.JSX.Element | null {
 	const { round, replay, reading, phase, headline, now, ageSeconds, query } = props;
 	const isFinished = phase === 'verdict';
@@ -90,8 +87,6 @@ export default function RoundArena(props: RoundArenaProps): React.JSX.Element | 
 	);
 }
 
-// arenaNowOf is the moment the arena shows: now while the round runs, past
-// the attack into the cure, and the very end once it is over.
 function arenaNowOf(replay: Replay, now: number, isFinished: boolean): number {
 	const endMs = endOfMs(replay);
 
@@ -110,7 +105,6 @@ function eyebrowOf(isFinished: boolean, isSurprise: boolean): string {
 	return isSurprise ? messages.arena.eyebrowSurprise : messages.arena.eyebrow;
 }
 
-// recordBet keeps the bet in this browser, for the lab's scoreboard.
 function recordBet(round: RoundId, bet: Bet): void {
 	const book = readStored(STORAGE_KEYS.bets, isBetBook) ?? {};
 

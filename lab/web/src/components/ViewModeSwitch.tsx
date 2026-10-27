@@ -2,7 +2,6 @@ import { useViewMode, VIEW_MODES } from '../hooks/viewModeContext';
 import { messages } from '../i18n/pt-BR';
 import styles from './Layout.module.css';
 
-// ViewModeSwitch is the top bar's "Como mostrar" choice.
 export default function ViewModeSwitch(): React.JSX.Element {
 	const { mode, setMode } = useViewMode();
 

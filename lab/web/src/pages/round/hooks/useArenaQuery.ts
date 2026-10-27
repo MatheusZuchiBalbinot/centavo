@@ -17,8 +17,7 @@ export type ArenaQuery = {
 	readonly isOpen: boolean;
 	readonly isSurprise: boolean;
 	readonly bet: Bet | null;
-	// replayFromMs is where a replay starts, from ?t=m:ss; null follows the
-	// round as it is.
+	// From ?t=m:ss; null follows the round as it is.
 	readonly replayFromMs: number | null;
 	readonly open: () => void;
 	readonly close: () => void;
@@ -26,9 +25,8 @@ export type ArenaQuery = {
 	readonly keepMoment: (positionMs: number) => void;
 };
 
-// useArenaQuery keeps the arena's state in the address, so a copied link
-// opens the same view: the arena, the surprise and its bet, and the moment
-// of a replay.
+// The arena's state lives in the address, so a copied link opens the same
+// view: the arena, the surprise and its bet, and the moment of a replay.
 export function useArenaQuery(): ArenaQuery {
 	const [searchParams, setSearchParams] = useSearchParams();
 	const isPresenting = useViewMode().mode === 'presentation';

@@ -11,14 +11,11 @@ import { surpriseLivePath } from '../../routes';
 import { Button } from '../ui/Button';
 import DrawDialog, { type DrawSession } from './DrawDialog';
 
-// How long the reel spins before it stops on the attack.
 const SPIN_MS = 2_500;
 const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
 
 type SurpriseButtonProps = { readonly isBusy: boolean; readonly size?: 'regular' | 'large' };
 
-// SurpriseButton draws an attack and a duration, counts down and starts the
-// round, then follows it into the arena.
 export default function SurpriseButton({ isBusy, size = 'regular' }: SurpriseButtonProps): React.JSX.Element {
 	const menu = useAttackMenu();
 	const { isStarting, start } = useStartRound();

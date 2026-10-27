@@ -37,8 +37,6 @@ type DrawDialogProps = {
 	readonly onReady: (draw: SurpriseDraw) => void;
 };
 
-// DrawDialog is the surprise draw: a roulette of attacks that stops on one,
-// the attack in a sentence and a 3-2-1 before the round starts.
 export default function DrawDialog(props: DrawDialogProps): React.JSX.Element {
 	const { session, bet, isStarting, onBet, onRedraw, onCancel, onReady } = props;
 	const dialog = useRef<HTMLDialogElement>(null);

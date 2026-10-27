@@ -9,7 +9,6 @@ import { messages } from '../i18n/pt-BR';
 import { roundPath } from '../routes';
 import VerdictBadge from './VerdictBadge';
 
-// Picking is offered on the rounds page, for comparing two rounds.
 export type RoundPicking = {
 	readonly picked: readonly RoundId[];
 	readonly limit: number;
@@ -18,8 +17,6 @@ export type RoundPicking = {
 
 type RoundsTableProps = { readonly rounds: readonly RoundSummary[]; readonly picking?: RoundPicking };
 
-// RoundsTable lists finished rounds the way the pyle lists routes: one row
-// each, numbers in mono, the verdict as a badge.
 export default function RoundsTable({ rounds, picking }: RoundsTableProps): React.JSX.Element {
 	return (
 		// The table can be wider than the screen; the region takes focus so the

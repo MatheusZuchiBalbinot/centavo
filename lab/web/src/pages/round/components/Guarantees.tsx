@@ -15,8 +15,6 @@ type GuaranteesProps = {
 	readonly titleId?: string;
 };
 
-// Guarantees lists the eight promises the checker holds the bank to, each
-// with what is known about it so far.
 export default function Guarantees({ checks, reading, isFinished, titleId = 'guarantees-title' }: GuaranteesProps): React.JSX.Element {
 	const views = GUARANTEE_IDS.map((id) => ({ id, view: guaranteeView(id, checks, reading) }));
 	const held = views.filter(isHeld).length;

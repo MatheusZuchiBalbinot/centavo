@@ -5,15 +5,13 @@ export type GuaranteeId = 'I1' | 'I2' | 'I3' | 'I4' | 'I5' | 'I6' | 'I7' | 'I8';
 
 export const GUARANTEE_IDS: readonly GuaranteeId[] = ['I1', 'I2', 'I3', 'I4', 'I5', 'I6', 'I7', 'I8'];
 
-// How the panel shows one guarantee: what the checker said at the end, what
-// the live auditor says meanwhile, or nothing yet.
 export type GuaranteeView =
 	| { readonly kind: 'final'; readonly status: GuaranteeCheck['status']; readonly violations: number }
 	| { readonly kind: 'live'; readonly isHolding: boolean }
 	| { readonly kind: 'later' };
 
-// guaranteeView prefers the checker's verdict; before it, I1 and I4 follow
-// the auditor, which reads the money live, and the rest wait for the end.
+// Before the checker's verdict, I1 and I4 follow the auditor, which reads
+// the money live; the others wait for the end.
 export function guaranteeView(id: GuaranteeId, checks: readonly GuaranteeCheck[], reading: AuditorReading | null): GuaranteeView {
 	const final = checks.find((check) => check.id === id);
 
@@ -44,7 +42,6 @@ export function guaranteeCopy(id: GuaranteeId): {
 	return messages.guarantees[id];
 }
 
-// firstBroken is the first guarantee the checker found broken, in order.
 export function firstBroken(checks: readonly GuaranteeCheck[]): GuaranteeId | null {
 	const broken = new Set(checks.filter(isFailed).map(idOf));
 

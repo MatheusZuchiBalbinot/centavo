@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
-// useAutoDismiss calls dismiss after the delay, except while the pointer is
-// over the element or focus is inside it; leaving starts the delay over, so
-// the element never vanishes while someone reads or uses it.
+// The element never vanishes while someone reads or uses it: the delay
+// waits while the pointer is over it or the focus is inside it.
 export function useAutoDismiss<T extends HTMLElement>(delayMs: number, dismiss: () => void): React.RefObject<T | null> {
 	const ref = useRef<T>(null);
 	const [isPaused, setPaused] = useState(false);

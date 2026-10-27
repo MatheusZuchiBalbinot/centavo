@@ -1,6 +1,6 @@
 import { isObject, isString } from './guards';
 
-// The codes the lab answers with, plus two the client itself detects.
+// network and unexpected_response come from the client, not from the lab.
 type ApiErrorCode =
 	| 'invalid_request'
 	| 'unsupported_media_type'
@@ -21,7 +21,6 @@ export type ApiFailure = { readonly code: ApiErrorCode; readonly status: number 
 
 export type ApiResult<T> = { readonly ok: true; readonly data: T } | { readonly ok: false; readonly error: ApiFailure };
 
-// parse turns the lab's JSON into the app's type, or null when it does not fit.
 type Parser<T> = (body: unknown) => T | null;
 
 const KNOWN_CODES: ReadonlySet<string> = new Set<ApiErrorCode>([
@@ -83,7 +82,6 @@ async function request<T>(path: string, init: RequestInit, parse: Parser<T>): Pr
 	return { ok: true, data };
 }
 
-// fetchOrNull is fetch with a network failure as null instead of a throw.
 async function fetchOrNull(path: string, init: RequestInit): Promise<Response | null> {
 	try {
 		return await fetch(path, init);

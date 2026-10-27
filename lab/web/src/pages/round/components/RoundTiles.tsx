@@ -15,8 +15,6 @@ type RoundTilesProps = {
 	readonly isFinished: boolean;
 };
 
-// RoundTiles is the round's scoreboard: the money first, then how the
-// clients are being served.
 export default function RoundTiles({ replay, reading, isFinished }: RoundTilesProps): React.JSX.Element {
 	const latest = replay.seconds.at(-1);
 	const totals = replay.seconds.reduce(addSecond, { all: 0, trouble: 0 });
@@ -65,7 +63,6 @@ export default function RoundTiles({ replay, reading, isFinished }: RoundTilesPr
 
 type Money = { readonly text: string; readonly tone: MetricTone };
 
-// moneyOf trusts the checker once it has spoken, and the auditor before.
 function moneyOf(replay: Replay, reading: AuditorReading | null, isFinished: boolean): Money {
 	const conservation = replay.checks.find((check) => check.id === 'I1');
 
@@ -90,8 +87,6 @@ function latencyHint(latest: Replay['seconds'][number] | undefined, isTechnical:
 	return format(messages.round.latencyHintTechnical, { p99: Math.round(latest.p99Ms) });
 }
 
-// rateText is the latest second while the round runs, and the average of
-// the whole round once it is over.
 function rateText(replay: Replay, latest: Replay['seconds'][number] | undefined, isFinished: boolean): string {
 	if (latest === undefined) {
 		return '—';

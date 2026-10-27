@@ -2,17 +2,14 @@ import type { RoundEvent } from '../api/replay';
 import { isAttackEvent, isNetworkEnd } from './phase';
 import { linksOf, MAP_LINKS, MAP_NODES, nodesOf, type LinkId, type NodeId } from './topology';
 
-// How long a hit or a defense stays lit on the map after it happened.
 export const FLASH_MS = 2_500;
 
 const MS_PER_SECOND = 1_000;
 
-// What the map shows for a process.
 export type NodeStatus = 'up' | 'starting' | 'frozen' | 'down';
 
 export type NodeView = {
 	readonly status: NodeStatus;
-	// frozenUntilMs is set while a freeze with a known length lasts.
 	readonly frozenUntilMs: number | null;
 	readonly isHit: boolean;
 	readonly isDefending: boolean;
@@ -35,8 +32,7 @@ export type SystemState = {
 // Toxics that stop traffic; the others only slow it.
 const CUTTING_TOXICS: ReadonlySet<string> = new Set(['timeout', 'reset_peer', 'down', 'limit_data']);
 
-// systemStateAt is the map at a moment of the round: what every event up to
-// nowMs left behind. It is pure, so a replay can ask for any moment.
+// Pure, so a replay can ask for any moment.
 export function systemStateAt(events: readonly RoundEvent[], nowMs: number): SystemState {
 	const nodes = new Map<NodeId, MutableNode>(MAP_NODES.map((node) => [node.id, freshNode(node.id)]));
 	const links = new Map<LinkId, LinkView>(MAP_LINKS.map((link) => [link.id, { status: 'ok', toxic: null }]));
@@ -69,8 +65,6 @@ type Apply = {
 	readonly nowMs: number;
 };
 
-// applyEvent folds one event into the map; it returns the cure's state when
-// the event changes it.
 function applyEvent({ event, isRecent, nodes, links, nowMs }: Apply): boolean | undefined {
 	const targets = nodesOf(event.target).flatMap((id) => nodes.get(id) ?? []);
 
@@ -183,7 +177,6 @@ function moveLeader(nodes: Map<NodeId, MutableNode>): void {
 	}
 }
 
-// healAll is the cure: faults off, clocks back, the partner honest again.
 // Processes keep their last reported state; the lab reports them as they
 // come back.
 function healAll(nodes: Map<NodeId, MutableNode>, links: Map<LinkId, LinkView>): void {
@@ -197,8 +190,8 @@ function healAll(nodes: Map<NodeId, MutableNode>, links: Map<LinkId, LinkView>):
 	}
 }
 
-// bringAllUp ends the cure: it completes only once every process answers
-// its health check again, and the lab stops watching them there.
+// The cure completes only once every process answers its health check
+// again, and the lab stops watching them there.
 function bringAllUp(nodes: Map<NodeId, MutableNode>): void {
 	for (const node of nodes.values()) {
 		node.status = 'up';

@@ -8,15 +8,12 @@ type StatusIntroProps = {
 	readonly title: React.ReactNode;
 	readonly titleId?: string;
 	readonly description: React.ReactNode;
-	// isLive makes the signal ring breathe, the sign that the banner is
-	// following something as it happens.
 	readonly isLive?: boolean;
 	readonly icon?: React.ReactNode;
 	readonly footer?: React.ReactNode;
 	readonly headingLevel?: 1 | 2;
 };
 
-// StatusIntro is the banner that opens a page with its one-line state.
 export function StatusIntro({
 	tone,
 	eyebrow,

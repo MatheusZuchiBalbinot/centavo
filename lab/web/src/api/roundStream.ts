@@ -32,9 +32,8 @@ type StreamHandlers = {
 
 const MESSAGE_TYPES = ['snapshot', 'seconds', 'event', 'auditor', 'finished'] as const;
 
-// openRoundStream follows a round until it finishes; the browser reconnects
-// by itself after a drop, and the server answers each connection with a new
-// snapshot. It returns the function that closes the stream.
+// The browser reconnects by itself after a drop, and the server answers
+// each connection with a new snapshot.
 export function openRoundStream(round: RoundId, handlers: StreamHandlers): () => void {
 	const source = new EventSource(roundEventsPath(round));
 

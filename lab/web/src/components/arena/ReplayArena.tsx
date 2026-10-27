@@ -12,7 +12,6 @@ export type ReplayArenaProps = {
 	readonly replay: Replay;
 	readonly startMs: number;
 	readonly speed: PlaybackSpeed;
-	// A looping replay rests on the verdict for holdMs and starts over.
 	readonly isLooping: boolean;
 	readonly holdMs: number;
 	readonly wallMs: number;
@@ -21,8 +20,6 @@ export type ReplayArenaProps = {
 	readonly onClose: () => void;
 };
 
-// ReplayArena plays a recorded round in the arena, as it happened, at the
-// speed the player picks.
 export default function ReplayArena(props: ReplayArenaProps): React.JSX.Element {
 	const { eyebrow, replay, startMs, speed, isLooping, holdMs, wallMs, actions, onPause, onClose } = props;
 	const endMs = endOfMs(replay);

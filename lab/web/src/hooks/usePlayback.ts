@@ -17,7 +17,6 @@ type PlaybackInput = {
 	readonly endMs: number;
 	readonly startMs: number;
 	readonly speed: PlaybackSpeed;
-	// A looping player rests on the end for holdMs, then starts over.
 	readonly isLooping: boolean;
 	readonly holdMs: number;
 };
@@ -26,8 +25,6 @@ type PlaybackState = { readonly positionMs: number; readonly speed: PlaybackSpee
 
 const TICK_MS = 100;
 
-// usePlayback is the clock of a recorded round: it plays, pauses, jumps and
-// changes speed, and stops at the end unless it loops.
 export function usePlayback(input: PlaybackInput): Playback {
 	const { endMs, isLooping, holdMs } = input;
 	const [state, setState] = useState<PlaybackState>({
@@ -104,7 +101,6 @@ export function advance(state: PlaybackState, realMs: number, bounds: Bounds): P
 	return { ...state, positionMs: restedMs >= bounds.endMs + bounds.holdMs ? 0 : restedMs };
 }
 
-// Playing a finished recording again starts it from the top.
 function restartIfOver(state: PlaybackState, endMs: number): PlaybackState {
 	const isOver = state.positionMs >= endMs;
 

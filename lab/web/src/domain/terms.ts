@@ -1,6 +1,5 @@
 import { glossary, type TermId } from '../i18n/glossary';
 
-// A text cut into plain runs and glossary terms.
 export type TextSegment = { readonly kind: 'text'; readonly text: string } | { readonly kind: 'term'; readonly term: TermId; readonly text: string };
 
 type Form = { readonly term: TermId; readonly form: string };
@@ -13,8 +12,8 @@ const FORMS: readonly Form[] = (Object.keys(glossary) as TermId[])
 
 const PATTERN = new RegExp(`(?<!\\p{L})(${FORMS.map((entry) => escape(entry.form)).join('|')})(?!\\p{L})`, 'giu');
 
-// splitTerms marks the glossary terms of a text. Each term is marked once,
-// at its first appearance, so a sentence never turns into a row of links.
+// Each term is marked once, at its first appearance, so a sentence never
+// turns into a row of links.
 export function splitTerms(text: string): readonly TextSegment[] {
 	const segments: TextSegment[] = [];
 	const seen = new Set<TermId>();

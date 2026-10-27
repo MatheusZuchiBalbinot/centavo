@@ -5,14 +5,12 @@ import { disabledDefenses } from './headline';
 export type RoundRecord = { readonly round: RoundSummary['round']; readonly count: number };
 
 export type Scoreboard = {
-	// streak counts the newest robust rounds in a row that passed; a robust
-	// round that broke ends it, and nothing else does.
+	// Only a robust round that broke ends the streak.
 	readonly streak: number;
 	readonly mostAttacks: RoundRecord | null;
 	readonly mostKills: RoundRecord | null;
 };
 
-// scoreboardOf reads the lab's records from rounds listed newest first.
 // Only rounds with every defense on count: a control round is meant to
 // break, and an inconclusive one proves nothing either way.
 export function scoreboardOf(rounds: readonly RoundSummary[]): Scoreboard {
@@ -28,7 +26,6 @@ export function scoreboardOf(rounds: readonly RoundSummary[]): Scoreboard {
 	};
 }
 
-// isControl is a round run with some defense off, to show it is needed.
 export function isControl(round: { readonly defenses: string }): boolean {
 	return disabledDefenses(round.defenses).length > 0;
 }

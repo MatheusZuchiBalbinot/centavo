@@ -21,8 +21,6 @@ type ArenaTickerProps = {
 	readonly nowSeconds: number;
 };
 
-// ArenaTicker is the whole round on one line: the attacks numbered as in the
-// feed, the defenses as green dots, the cure shaded, and where we are now.
 export default function ArenaTicker({ events, spanSeconds, nowSeconds }: ArenaTickerProps): React.JSX.Element {
 	const box = useRef<HTMLDivElement>(null);
 	const track = useElementSize(box);

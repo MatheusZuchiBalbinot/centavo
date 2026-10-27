@@ -16,8 +16,6 @@ type VerdictStampProps = {
 	readonly children: React.ReactNode;
 };
 
-// VerdictStamp lands on the arena when the checker has spoken: a green stamp
-// and a little confetti when the bank held, a red one when it broke.
 export default function VerdictStamp({ verdict, facts, betLine, children }: VerdictStampProps): React.JSX.Element {
 	const isPass = verdict === 'pass';
 

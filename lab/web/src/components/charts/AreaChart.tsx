@@ -9,29 +9,23 @@ import { niceTicks, scaleLinear, scaleMaxOf } from './scale';
 
 export type ChartPoint = { readonly at: number; readonly value: number };
 
-// A moment on the time axis worth pointing at: an attack, numbered as in the
-// feed.
 type ChartMarker = { readonly at: number };
 
 type ChartBand = { readonly from: number; readonly to: number; readonly label: string };
 
 type AreaChartProps = {
 	readonly points: readonly ChartPoint[];
-	// The time axis, in seconds of the round, whatever part of it has data.
 	readonly domain: { readonly from: number; readonly to: number };
 	readonly formatValue: (value: number) => string;
 	readonly formatTime: (seconds: number) => string;
 	readonly markers: readonly ChartMarker[];
 	readonly band: ChartBand | null;
-	// isLive makes the newest point breathe while data arrives.
 	readonly isLive: boolean;
 	readonly label: string;
 	// scaleValues set the value axis when part of the series should not: the
 	// cure re-reads every transfer at once, and scaled to it the attack would
 	// be a flat line. Values above the axis are cut at the top.
 	readonly scaleValues?: readonly number[];
-	// The attack markers are interactive: each says what it marks, and
-	// pointing at one lights the same attacks elsewhere on the page.
 	readonly describeMarker: (range: AttackRange) => string;
 	readonly highlight: AttackRange | null;
 	readonly onHighlight: (range: AttackRange | null) => void;
@@ -44,15 +38,12 @@ const MARKER_ROW = 12;
 const MARKER_HEIGHT = 18;
 // Chips closer than this would touch: they merge into one, labeled "10–14".
 const MARKER_GAP_PX = 44;
-// Time labels keep at least this much room each.
 const MIN_TICK_SPACING_PX = 56;
 const MARKER_CHAR_PX = 7;
 const MARKER_PADDING_PX = 12;
 const END_RADIUS = 4;
 const RING = 2;
 
-// AreaChart draws one series as a line over a soft area, with the round's
-// attacks as numbered markers and the cure as a shaded band, in real pixels.
 export default function AreaChart({
 	points,
 	domain,
@@ -230,7 +221,6 @@ function Crosshair({ x, y, top, bottom }: CrosshairProps): React.JSX.Element {
 	);
 }
 
-// timeTicks thins the time labels until they fit the plot's width.
 function timeTicks(span: number, plotWidth: number): readonly number[] {
 	const ticks = ticksOf(span);
 	const room = ticks.length > 1 ? plotWidth / (ticks.length - 1) : plotWidth;

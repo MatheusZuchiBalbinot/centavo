@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 
-// useSpaceKey calls onSpace when Space is pressed while the element itself
-// has focus; on a button or a slider inside it, Space keeps its own meaning.
+// On a button or a slider inside the element, Space keeps its own meaning.
 export function useSpaceKey(ref: React.RefObject<HTMLElement | null>, onSpace: (() => void) | undefined): void {
 	const onSpaceRef = useRef(onSpace);
 	const isEnabled = onSpace !== undefined;

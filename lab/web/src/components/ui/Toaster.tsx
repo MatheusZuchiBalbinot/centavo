@@ -6,7 +6,6 @@ import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { messages } from '../../i18n/pt-BR';
 import styles from './Toaster.module.css';
 
-// How long a toast stays when nobody looks at it.
 const TOAST_LIFETIME_MS = 8_000;
 
 type ToasterProps = { readonly toasts: readonly Toast[]; readonly onDismiss: (id: number) => void };

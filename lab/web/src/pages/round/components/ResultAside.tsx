@@ -13,8 +13,7 @@ import styles from './RoundPage.module.css';
 
 type ResultAsideProps = { readonly replay: Replay };
 
-// ResultAside puts the verdict next to what the defense profile predicted: a
-// control round that breaks is the expected outcome, not a failure.
+// A control round that breaks is the expected outcome, not a failure.
 export default function ResultAside({ replay }: ResultAsideProps): React.JSX.Element {
 	const disabled = disabledDefenses(replay.defenses);
 	const isControl = disabled.length > 0;

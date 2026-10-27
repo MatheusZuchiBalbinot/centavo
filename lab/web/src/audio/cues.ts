@@ -1,5 +1,5 @@
-// The arena's sound cues, synthesized so the panel ships no audio files.
-// Sound only repeats what the screen already shows.
+// Synthesized, so the panel ships no audio files; sound only repeats what
+// the screen already shows.
 
 export type Cue = 'attack' | 'pass' | 'fail';
 
@@ -17,8 +17,7 @@ const SILENCE = 0.0001;
 // One context for the page: browsers cap how many can exist.
 let context: AudioContext | null = null;
 
-// unlockAudio creates or resumes the context; browsers allow it only from a
-// click, so the sound toggle calls it.
+// Browsers allow audio only after a click, so the sound toggle calls this.
 export function unlockAudio(): void {
 	if (typeof AudioContext === 'undefined') {
 		return;

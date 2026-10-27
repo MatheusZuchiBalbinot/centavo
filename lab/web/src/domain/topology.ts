@@ -1,6 +1,5 @@
-// The lab's system as the arena draws it: the processes and the links
-// between them, named as the lab's events name them (deploy/compose and the
-// Toxiproxy proxies).
+// Named as the lab's events name them: the compose services and the
+// Toxiproxy proxies.
 
 export type NodeId = 'clients' | 'api' | 'worker1' | 'worker2' | 'postgres' | 'replica' | 'partner' | 'auditor';
 
@@ -40,7 +39,6 @@ export const MAP_NODES: readonly MapNode[] = [
 	{ id: 'partner', x: PARTNER_X, y: MIDDLE, service: 'partner' },
 ];
 
-// Each link points the way the requests go; the packets follow it.
 export const MAP_LINKS: readonly MapLink[] = [
 	{ id: 'client_api', from: 'clients', to: 'api', bend: 0 },
 	{ id: 'api_pg', from: 'api', to: 'postgres', bend: 0 },
@@ -59,8 +57,6 @@ const NODE_BY_SERVICE: ReadonlyMap<string, NodeId> = new Map(
 
 const LINK_IDS: ReadonlySet<string> = new Set(MAP_LINKS.map((link) => link.id));
 
-// nodesOf reads the nodes an event names: "bank-worker-1", or several joined
-// by commas.
 export function nodesOf(target: string): readonly NodeId[] {
 	return namesOf(target).flatMap((name) => {
 		const node = NODE_BY_SERVICE.get(name);
@@ -69,7 +65,6 @@ export function nodesOf(target: string): readonly NodeId[] {
 	});
 }
 
-// linksOf reads the links a network event names: "api_pg, worker1_pg".
 export function linksOf(target: string): readonly LinkId[] {
 	return namesOf(target).filter(isLinkId);
 }

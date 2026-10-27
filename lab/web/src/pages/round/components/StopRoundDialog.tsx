@@ -6,8 +6,8 @@ import styles from './RoundPage.module.css';
 
 type StopRoundDialogProps = { readonly isStopping: boolean; readonly onConfirm: () => void };
 
-// StopRoundDialog asks before stopping, in a native modal dialog: it traps
-// focus, closes on Escape and gives focus back to the button that opened it.
+// A native modal dialog: it traps focus, closes on Escape and gives the
+// focus back to the button that opened it.
 export default function StopRoundDialog({ isStopping, onConfirm }: StopRoundDialogProps): React.JSX.Element {
 	const dialog = useRef<HTMLDialogElement>(null);
 

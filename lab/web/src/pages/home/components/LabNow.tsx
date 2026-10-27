@@ -12,7 +12,6 @@ import styles from './LabNow.module.css';
 
 type LabNowProps = { readonly rounds: readonly RoundSummary[] };
 
-// LabNow sums up the rounds the page read, and says over how many.
 export default function LabNow({ rounds }: LabNowProps): React.JSX.Element {
 	const operations = rounds.reduce(addOperations, 0);
 	const broken = rounds.filter(isBroken).length;
@@ -96,7 +95,6 @@ function RecordRow({ label, record }: { label: string; record: RoundRecord }): R
 	);
 }
 
-// BetScore is the person's own score: their bets live in their browser.
 function BetScore({ rounds }: { rounds: readonly RoundSummary[] }): React.JSX.Element | null {
 	const book = readStored(STORAGE_KEYS.bets, isBetBook) ?? {};
 	const verdicts = new Map<string, Verdict | null>(rounds.map((round) => [round.round, round.verdict]));

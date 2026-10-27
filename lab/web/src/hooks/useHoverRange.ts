@@ -2,9 +2,7 @@ import { useEffect, useLayoutEffect, useRef } from 'react';
 
 import type { AttackRange } from '../domain/highlight';
 
-// useHoverRange reports a range while the pointer or the focus is on the
-// element, and null when it leaves. The listeners are attached once; the
-// latest callback is read from a ref.
+// The listeners are attached once; the latest callback is read from a ref.
 export function useHoverRange(
 	ref: React.RefObject<Element | null>,
 	range: AttackRange | null,

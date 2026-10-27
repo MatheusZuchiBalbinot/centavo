@@ -11,12 +11,10 @@ import { messages } from '../../i18n/pt-BR';
 import { QUERY, roundPath, ROUTES } from '../../routes';
 import { useShowcaseReplay } from './useShowcaseReplay';
 
-// The showcase plays at this speed and rests on the verdict this long.
 const SHOWCASE_SPEED = 30;
 const SHOWCASE_HOLD_MS = 8_000;
 const CLOCK_TICK_MS = 1_000;
 
-// LivePage leads to the round the lab is running, as soon as it has an id.
 export default function LivePage(): React.JSX.Element {
 	useDocumentTitle(messages.live.title);
 

@@ -11,8 +11,6 @@ type PhaseStepperProps = {
 
 type StepState = 'done' | 'current' | 'upcoming';
 
-// PhaseStepper is the round's four steps as segments, the way the pyle shows
-// an instance group: done ones filled, the current one moving.
 export default function PhaseStepper({ phase, elapsedSeconds, durationSeconds }: PhaseStepperProps): React.JSX.Element {
 	const current = PHASES.indexOf(phase);
 
@@ -48,7 +46,6 @@ function PhaseStep({ phase, state, elapsedSeconds, durationSeconds }: PhaseStepP
 }
 
 function stateOf(index: number, current: number, phase: Phase): StepState {
-	// The verdict is the end: once it is in, every step is done.
 	const isDone = phase === 'verdict' || index < current;
 
 	if (isDone) {

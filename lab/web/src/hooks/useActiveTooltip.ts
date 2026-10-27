@@ -2,11 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { glossary, type TermId } from '../i18n/glossary';
 
-// What a tooltip shows: a short text, or a glossary entry.
 export type TooltipContent = { readonly kind: 'text'; readonly text: string } | { readonly kind: 'term'; readonly term: TermId };
 
 export type ActiveTooltip = {
-	// SVG chart markers carry tooltips too.
 	readonly anchor: HTMLElement | SVGElement;
 	readonly rect: DOMRect;
 	readonly content: TooltipContent;
@@ -23,10 +21,8 @@ const OPEN_DELAY_MS = 120;
 const CLOSE_DELAY_MS = 160;
 const ANCHOR_SELECTOR = '[data-tooltip], [data-term]';
 
-// useActiveTooltip follows the pointer and the focus over the page and
-// reports the element whose tooltip should show. Any element opts in with
-// data-tooltip="text" or data-term="lease". Escape closes it; a tap on a
-// term opens it on touch screens.
+// Any element opts in with data-tooltip="text" or data-term="lease". Escape
+// closes it; a tap on a term opens it on touch screens.
 export function useActiveTooltip(): TooltipControl {
 	const [active, setActive] = useState<ActiveTooltip | null>(null);
 	const openTimer = useRef<number | undefined>(undefined);

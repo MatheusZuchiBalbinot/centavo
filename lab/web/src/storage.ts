@@ -1,13 +1,11 @@
-// Keys of what the panel keeps in the browser, per person; nothing in it is
-// sensitive or needed by the lab.
+// Nothing in it is sensitive or needed by the lab.
 export const STORAGE_KEYS = {
 	viewMode: 'centavo.viewMode',
 	sound: 'centavo.sound',
 	bets: 'centavo.bets',
 } as const;
 
-// readStored returns the stored value when the guard accepts it; storage can
-// be missing, blocked or hold anything.
+// Storage can be missing, blocked or hold anything.
 export function readStored<T>(key: string, guard: (value: unknown) => value is T): T | null {
 	try {
 		const raw = window.localStorage.getItem(key);

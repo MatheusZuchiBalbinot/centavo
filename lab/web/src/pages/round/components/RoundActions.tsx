@@ -12,8 +12,6 @@ import StopRoundDialog from './StopRoundDialog';
 
 type RoundActionsProps = { readonly round: RoundId; readonly isFinished: boolean };
 
-// RoundActions copies the round's link and, while this round is the one the
-// lab runs, offers to stop it.
 export default function RoundActions({ round, isFinished }: RoundActionsProps): React.JSX.Element {
 	const lab = useLabReading();
 	const { push } = useToasts();

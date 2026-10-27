@@ -24,8 +24,6 @@ type RoundHeroProps = {
 	readonly onOpenArena: () => void;
 };
 
-// RoundHero opens the round: where it is, in one sentence, what it is doing
-// to the bank and what should come of it.
 export default function RoundHero({ round, replay, phase, headline, elapsedSeconds, isConnected, onOpenArena }: RoundHeroProps): React.JSX.Element {
 	const isFinished = phase === 'verdict';
 	const isTechnical = useViewMode().mode === 'technical';
@@ -74,7 +72,6 @@ export default function RoundHero({ round, replay, phase, headline, elapsedSecon
 	);
 }
 
-// TechnicalFacts are the round's identity for whoever wants to rerun it.
 function TechnicalFacts({ replay }: { replay: Replay }): React.JSX.Element {
 	const facts = [
 		format(messages.round.factScenario, { scenario: replay.scenario }),

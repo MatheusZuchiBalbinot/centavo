@@ -1,7 +1,6 @@
 import { vi } from 'vitest';
 
-// FakeEventSource stands in for the browser's, which jsdom lacks; a test
-// sends it messages as the lab would.
+// jsdom has no EventSource; a test sends messages as the lab would.
 export class FakeEventSource extends EventTarget {
 	static last: FakeEventSource | null = null;
 	static readonly CONNECTING = 0;

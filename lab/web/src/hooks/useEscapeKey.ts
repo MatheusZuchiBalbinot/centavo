@@ -1,8 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 
-// useEscapeKey calls onEscape when Escape is pressed anywhere on the page,
-// while isActive. The callback is kept in a ref so the listener is attached
-// once, not on every render.
+// The callback is kept in a ref so the listener is attached once, not on
+// every render.
 export function useEscapeKey(isActive: boolean, onEscape: () => void): void {
 	const callback = useRef(onEscape);
 
