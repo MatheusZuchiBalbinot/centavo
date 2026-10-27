@@ -7,6 +7,8 @@ coverage.*
 # Documentation, plans and agent working files stay local and are never committed.
 *.md
 !/README.md
+!/showcase/README.md
+!/docs/README.md
 /plans/
 /.claude/
 
