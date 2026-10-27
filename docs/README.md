@@ -138,8 +138,9 @@ ali e os botões: derrubar o processo, congelá-lo por 20 segundos, cortar a
 conexão por 15 ou deixá-la lenta por 20. O pedido vira um arquivo na pasta da
 rodada, o bot o executa com as mesmas ferramentas do roteiro e grava no
 histórico que o ataque foi manual. O verificador confere a rodada do mesmo
-jeito. São no máximo 12 ataques por minuto, para que ninguém segure o banco no
-chão a rodada inteira.
+jeito, e o relatório conta os ataques manuais à parte: a semente repete os do
+cenário, não os feitos à mão. São no máximo 12 ataques por minuto, para que
+ninguém segure o banco no chão a rodada inteira.
 
 ## As defesas
 
