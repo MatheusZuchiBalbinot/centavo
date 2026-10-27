@@ -2,9 +2,9 @@
 
 As telas do painel do Centavo, capturadas de rodadas reais do laboratório. A
 r0012 aparece na página do resultado e no replay, e o sorteio é o que criou a
-r0028. A arena ao vivo é da r0031, uma rodada que derruba a API no meio das
-transferências e em que também houve ataques feitos à mão. Todas as rodadas
-mostradas passaram, com as oito garantias mantidas.
+r0034. A arena ao vivo é da r0033, uma rodada de quedas aleatórias em que
+também houve ataques feitos à mão. Todas as rodadas mostradas passaram, com as
+oito garantias mantidas.
 
 ## Início
 
@@ -12,45 +12,48 @@ mostradas passaram, com as oito garantias mantidas.
 
 A página inicial convida a tentar fazer o banco perder um centavo. Dá para
 escolher um dos seis ataques e a duração, ou apertar "Ataque surpresa". Ao
-lado, o cartão do laboratório mostra a sequência atual (23 rodadas seguidas
+lado, o cartão do laboratório mostra a sequência atual (29 rodadas seguidas
 sem perder um centavo), as operações conferidas nas últimas rodadas e os
-recordes, como o de ataques numa rodada aprovada: 45, na r0023, com link para
-ela.
+recordes de uma rodada aprovada, com link para cada uma: 45 ataques na r0023 e
+17 processos derrubados na r0033.
 
 ## O sorteio
 
 ![O sorteio do ataque surpresa](sorteio.png)
 
 O ataque surpresa gira uma roleta com os ataques do cardápio e para em um.
-Aqui caiu em "Relógio adiantado e worker zumbi", com 5 minutos, e virou a
-r0028. A duração também é sorteada. Antes da contagem de 3 segundos, dá para
+Aqui caiu em "Parceiro mentindo", com 5 minutos, e virou a r0034. A duração também é sorteada. Antes da contagem de 3 segundos, dá para
 deixar um palpite: o banco aguenta ou vai quebrar. O palpite fica guardado no
 navegador, e o veredito diz se ele acertou.
 
 ## A arena ao vivo
 
-![A arena da r0031 aos 2 minutos](arena-ao-vivo.png)
+![A arena da r0033 aos 3 minutos](arena-ao-vivo.png)
 
 A rodada abre em tela cheia. O mapa mostra os processos do sistema e as
 conexões entre eles, com pontos correndo onde há tráfego. No caminho dos
 clientes, cada ponto é uma operação, e a cor diz como ela terminou: azul
 concluída, amarelo recusada, roxo sem resposta. Em vermelho fica o que bate
-num corte ou num processo caído e volta. A r0031 é do ataque "Derrubar os
-workers no meio do PIX" e caiu no cenário que mata a API entre o débito e o
-crédito de uma transferência. Aos 2 minutos e 17 segundos, a API está
-reiniciando há 17 segundos, depois do ataque 26, uma falha injetada no código.
+num corte ou num processo caído e volta. A r0033 é do ataque "Derrubar os
+workers no meio do PIX" e caiu no cenário de quedas aleatórias, uma a cada 15
+segundos em média. Aos 3 minutos e 11 segundos, o worker 1 está reiniciando há
+4 segundos, e o worker 2 mostra o que acabou de fazer: assumiu o lease do
+trabalho que o outro deixou.
 
-À direita, o auditor continua em R$ 0,00. Embaixo dele, cada ataque aparece
-com a primeira defesa que veio depois e o tempo até o alvo voltar ao normal.
-Nas falhas 22 a 26, o worker 2 assumiu o lease do conciliador 9 segundos
-depois da primeira.
+À direita, o auditor continua em R$ 0,00. Embaixo dele ficam as ocorrências,
+cada uma com o ponto da sua cor, a primeira reação do banco e o tempo até o
+alvo voltar ao normal. Na ocorrência 10, um ataque manual derrubou o worker 1;
+o worker 2 assumiu o lease do varredor 5,5 segundos depois, e o worker 1
+voltou em 6,5 segundos.
 
-No pé da tela ficam as ocorrências: cada ataque, cada defesa e cada
+No pé da tela fica a linha das ocorrências: cada ataque, cada defesa e cada
 transferência é um ponto, com uma cor para cada tipo, e os ataques manuais
-têm um anel branco. Na r0031, a linha das transferências tem buracos nos
-momentos em que a API caiu. Passar o mouse num ponto, ou focar a faixa e usar
-as setas, mostra o que aconteceu ali: o alvo de um ataque, ou as contas, o
-valor, o resultado e o tempo de resposta de uma transferência.
+têm um anel branco. Entre 1:40 e 2:00, a linha das transferências quase some.
+Foi o ataque manual que deixou lenta a conexão da API com o Postgres: só 29
+transferências terminaram nesses 20 segundos, contra 220 nos 20 anteriores.
+Passar o mouse num ponto, ou focar a linha e usar as setas, mostra o que
+aconteceu ali: o alvo de um ataque, ou as contas, o valor, o resultado e o
+tempo de resposta de uma transferência.
 
 ## Ataque manual
 
@@ -59,13 +62,14 @@ valor, o resultado e o tempo de resposta de uma transferência.
 Enquanto dura a fase de ataque, dá para atacar à mão. Um clique num processo
 ou numa conexão abre o que aconteceu ali e os botões: derrubar o processo,
 congelá-lo por 20 segundos, cortar a conexão por 15 ou deixá-la lenta por 20.
-Na imagem, o worker 1 acabou de cair no ataque manual 21. Ele está
+Na imagem, o worker 1 acabou de cair no ataque manual 10. Ele está
 reiniciando há 2 segundos, e os botões só voltam quando ele estiver de pé. O
-histórico ao lado mostra que ele já tinha caído aos 25 segundos, noutro
-ataque manual, e voltado aos 31. A r0031 teve cinco ataques manuais entre os
-35 da rodada, e o verificador conferiu tudo como confere as outras rodadas. O
-relatório conta esses ataques à parte, porque a semente repete os ataques do
-cenário, mas não os feitos à mão.
+histórico ao lado mostra que o cenário já o tinha derrubado aos 22 segundos;
+ele voltou aos 28, e por isso o ataque manual tentado aos 26 não pôde sair. A
+r0033 teve quatro ataques manuais entre os 20 da rodada, e o verificador
+conferiu tudo como confere as outras rodadas. O relatório conta esses ataques
+à parte, porque a semente repete os ataques do cenário, mas não os feitos à
+mão.
 
 ## O veredito
 
@@ -81,11 +85,11 @@ página da rodada.
 
 ## O replay
 
-![O replay da r0012 pausado em 1:44](replay.png)
+![O replay da r0012 pausado em 1:42](replay.png)
 
 Qualquer rodada terminada pode ser tocada de novo na arena, a 1, 10, 30 ou 60
 vezes a velocidade real, com uma barra para ir a qualquer momento. O link
-guarda o momento (`?t=1:44`), então dá para mandar alguém direto para o
+guarda o momento (`?t=1:42`), então dá para mandar alguém direto para o
 ataque que interessa. O replay não tem as leituras do auditor, e o cartão do
 dinheiro diz isso em vez de mostrar um valor.
 
@@ -127,7 +131,7 @@ registro cru do histórico.
 
 ## Modo Apresentação
 
-![A vitrine tocando a r0031 em replay](vitrine.png)
+![A vitrine tocando a r0033 em replay](vitrine.png)
 
 No modo Apresentação, a rodada ao vivo abre direto na arena. Com o laboratório
 livre, a página ao vivo vira uma vitrine que toca a rodada aprovada mais
