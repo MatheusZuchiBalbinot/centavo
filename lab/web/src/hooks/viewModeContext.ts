@@ -11,9 +11,9 @@ export type ViewModeApi = { readonly mode: ViewMode; readonly setMode: (mode: Vi
 export const ViewModeContext = createContext<ViewModeApi>({ mode: 'explained', setMode: () => undefined });
 
 export function useViewMode(): ViewModeApi {
-  return useContext(ViewModeContext);
+	return useContext(ViewModeContext);
 }
 
 export function isViewMode(value: unknown): value is ViewMode {
-  return value === 'explained' || value === 'technical' || value === 'presentation';
+	return value === 'explained' || value === 'technical' || value === 'presentation';
 }

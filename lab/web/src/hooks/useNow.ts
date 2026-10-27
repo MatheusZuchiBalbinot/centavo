@@ -3,19 +3,19 @@ import { useEffect, useState } from 'react';
 // useNow is the current time, updated every interval while isTicking; a
 // finished round stops ticking.
 export function useNow(intervalMs: number, isTicking: boolean): number {
-  const [now, setNow] = useState(() => Date.now());
+	const [now, setNow] = useState(() => Date.now());
 
-  useEffect(() => {
-    if (!isTicking) {
-      return;
-    }
+	useEffect(() => {
+		if (!isTicking) {
+			return;
+		}
 
-    const timer = window.setInterval(() => setNow(Date.now()), intervalMs);
+		const timer = window.setInterval(() => setNow(Date.now()), intervalMs);
 
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [intervalMs, isTicking]);
+		return () => {
+			window.clearInterval(timer);
+		};
+	}, [intervalMs, isTicking]);
 
-  return now;
+	return now;
 }

@@ -8,28 +8,28 @@ export type FetchAnswers = Readonly<Record<string, { readonly status: number; re
 const NOT_FOUND = { status: 404, body: { error: { code: 'not_found', message: 'none' } } };
 
 export function answerFetch(answers: FetchAnswers): void {
-  vi.spyOn(globalThis, 'fetch').mockImplementation(answer(answers));
+	vi.spyOn(globalThis, 'fetch').mockImplementation(answer(answers));
 }
 
 function answer(answers: FetchAnswers): (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> {
-  return (input, init) => {
-    const path = pathOf(input);
-    const method = init?.method ?? 'GET';
-    const found = answers[`${method} ${path}`] ?? answers[path] ?? NOT_FOUND;
-    const headers = { 'Content-Type': 'application/json' };
+	return (input, init) => {
+		const path = pathOf(input);
+		const method = init?.method ?? 'GET';
+		const found = answers[`${method} ${path}`] ?? answers[path] ?? NOT_FOUND;
+		const headers = { 'Content-Type': 'application/json' };
 
-    return Promise.resolve(new Response(JSON.stringify(found.body), { status: found.status, headers }));
-  };
+		return Promise.resolve(new Response(JSON.stringify(found.body), { status: found.status, headers }));
+	};
 }
 
 function pathOf(input: RequestInfo | URL): string {
-  if (typeof input === 'string') {
-    return new URL(input, 'http://panel.test').pathname;
-  }
+	if (typeof input === 'string') {
+		return new URL(input, 'http://panel.test').pathname;
+	}
 
-  if (input instanceof URL) {
-    return input.pathname;
-  }
+	if (input instanceof URL) {
+		return input.pathname;
+	}
 
-  return new URL(input.url).pathname;
+	return new URL(input.url).pathname;
 }

@@ -10,55 +10,55 @@ const GOLDEN_STEP = 0.618;
 const PERCENT = 100;
 
 type VerdictStampProps = {
-  readonly verdict: Verdict | null;
-  readonly facts: string;
-  readonly betLine: string | null;
-  readonly children: React.ReactNode;
+	readonly verdict: Verdict | null;
+	readonly facts: string;
+	readonly betLine: string | null;
+	readonly children: React.ReactNode;
 };
 
 // VerdictStamp lands on the arena when the checker has spoken: a green stamp
 // and a little confetti when the bank held, a red one when it broke.
 export default function VerdictStamp({ verdict, facts, betLine, children }: VerdictStampProps): React.JSX.Element {
-  const isPass = verdict === 'pass';
+	const isPass = verdict === 'pass';
 
-  return (
-    <div className={styles.stampLayer}>
-      {isPass ? <Confetti /> : null}
-      <div className={styles.stamp} data-verdict={verdict ?? 'none'} role="status">
-        <p className={styles.stampWord}>{stampWord(verdict)}</p>
-        <p className={styles.stampFacts}>{facts}</p>
-        {betLine === null ? null : <p className={styles.stampBet}>{betLine}</p>}
-        <div className={styles.stampActions}>{children}</div>
-      </div>
-    </div>
-  );
+	return (
+		<div className={styles.stampLayer}>
+			{isPass ? <Confetti /> : null}
+			<div className={styles.stamp} data-verdict={verdict ?? 'none'} role="status">
+				<p className={styles.stampWord}>{stampWord(verdict)}</p>
+				<p className={styles.stampFacts}>{facts}</p>
+				{betLine === null ? null : <p className={styles.stampBet}>{betLine}</p>}
+				<div className={styles.stampActions}>{children}</div>
+			</div>
+		</div>
+	);
 }
 
 function Confetti(): React.JSX.Element {
-  return (
-    <div className={styles.confetti} aria-hidden="true">
-      {Array.from({ length: CONFETTI }, (_, index) => (
-        <span
-          key={index}
-          style={{
-            left: `${((index * GOLDEN_STEP) % 1) * PERCENT}%`,
-            background: CONFETTI_COLORS[index % CONFETTI_COLORS.length],
-            animationDelay: `${(index % 12) * 0.07}s`,
-          }}
-        />
-      ))}
-    </div>
-  );
+	return (
+		<div className={styles.confetti} aria-hidden="true">
+			{Array.from({ length: CONFETTI }, (_, index) => (
+				<span
+					key={index}
+					style={{
+						left: `${((index * GOLDEN_STEP) % 1) * PERCENT}%`,
+						background: CONFETTI_COLORS[index % CONFETTI_COLORS.length],
+						animationDelay: `${(index % 12) * 0.07}s`,
+					}}
+				/>
+			))}
+		</div>
+	);
 }
 
 function stampWord(verdict: Verdict | null): string {
-  switch (verdict) {
-    case 'pass':
-      return messages.arena.stampPass;
-    case 'fail':
-      return messages.arena.stampFail;
-    case 'inconclusive':
-    case null:
-      return messages.arena.stampInconclusive;
-  }
+	switch (verdict) {
+		case 'pass':
+			return messages.arena.stampPass;
+		case 'fail':
+			return messages.arena.stampFail;
+		case 'inconclusive':
+		case null:
+			return messages.arena.stampInconclusive;
+	}
 }

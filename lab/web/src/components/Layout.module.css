@@ -1,243 +1,243 @@
 .skipLink {
-  position: absolute;
-  top: -10rem;
-  left: 16px;
-  z-index: 100;
-  padding: 8px 14px;
-  border-radius: var(--radius-md);
-  background: var(--primary);
-  color: var(--primary-fg);
-  font-weight: 600;
+	position: absolute;
+	top: -10rem;
+	left: 16px;
+	z-index: 100;
+	padding: 8px 14px;
+	border-radius: var(--radius-md);
+	background: var(--primary);
+	color: var(--primary-fg);
+	font-weight: 600;
 }
 
 .skipLink:focus {
-  top: 10px;
+	top: 10px;
 }
 
 .shell {
-  display: grid;
-  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
-  min-height: 100svh;
+	display: grid;
+	grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+	min-height: 100svh;
 }
 
 .sidebar {
-  position: sticky;
-  top: 0;
-  display: flex;
-  flex-direction: column;
-  height: 100svh;
-  border-right: 1px solid var(--border);
-  background: var(--chrome);
+	position: sticky;
+	top: 0;
+	display: flex;
+	flex-direction: column;
+	height: 100svh;
+	border-right: 1px solid var(--border);
+	background: var(--chrome);
 }
 
 .brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  height: var(--header-h);
-  padding: 0 20px;
-  border-bottom: 1px solid var(--border);
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	height: var(--header-h);
+	padding: 0 20px;
+	border-bottom: 1px solid var(--border);
 }
 
 .mark {
-  display: grid;
-  flex-shrink: 0;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: var(--radius-lg);
-  background: linear-gradient(140deg, oklch(0.78 0.13 158), oklch(0.62 0.14 200));
-  box-shadow:
-    0 0 0 1px var(--hairline-light),
-    0 4px 12px var(--primary-glow);
-  color: oklch(0.18 0.02 264);
-  font-size: var(--text-lg);
-  font-weight: 700;
+	display: grid;
+	flex-shrink: 0;
+	place-items: center;
+	width: 30px;
+	height: 30px;
+	border-radius: var(--radius-lg);
+	background: linear-gradient(140deg, oklch(0.78 0.13 158), oklch(0.62 0.14 200));
+	box-shadow:
+		0 0 0 1px var(--hairline-light),
+		0 4px 12px var(--primary-glow);
+	color: oklch(0.18 0.02 264);
+	font-size: var(--text-lg);
+	font-weight: 700;
 }
 
 .brandText {
-  display: grid;
+	display: grid;
 }
 
 .brandName {
-  font-size: var(--text-lg);
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  line-height: 1.2;
+	font-size: var(--text-lg);
+	font-weight: 600;
+	letter-spacing: -0.01em;
+	line-height: 1.2;
 }
 
 .brandSub {
-  color: var(--faint);
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
+	color: var(--faint);
+	font-family: var(--font-mono);
+	font-size: var(--text-2xs);
 }
 
 .nav {
-  flex: 1;
-  padding: 12px 10px;
+	flex: 1;
+	padding: 12px 10px;
 }
 
 .navGroup {
-  padding: 0 10px 6px;
-  color: var(--faint);
-  font-size: var(--text-2xs);
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+	padding: 0 10px 6px;
+	color: var(--faint);
+	font-size: var(--text-2xs);
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
 }
 
 .navItem {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 38px;
-  padding: 8px 10px;
-  color: var(--muted);
-  font-size: var(--text-md);
-  text-decoration: none;
-  transition:
-    background-color var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out);
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-height: 38px;
+	padding: 8px 10px;
+	color: var(--muted);
+	font-size: var(--text-md);
+	text-decoration: none;
+	transition:
+		background-color var(--duration-fast) var(--ease-out),
+		color var(--duration-fast) var(--ease-out);
 }
 
 .navItem:hover {
-  background: var(--surface-hover);
-  color: var(--fg);
+	background: var(--surface-hover);
+	color: var(--fg);
 }
 
 .navItemOn {
-  background: var(--primary-soft);
-  box-shadow: inset 3px 0 0 var(--primary);
-  color: var(--primary-on-soft);
-  font-weight: 500;
+	background: var(--primary-soft);
+	box-shadow: inset 3px 0 0 var(--primary);
+	color: var(--primary-on-soft);
+	font-weight: 500;
 }
 
 .navLive {
-  margin-left: auto;
-  padding: 1px 7px;
-  border-radius: var(--radius-full);
-  background: var(--success-soft);
-  color: var(--success);
-  font-size: var(--text-2xs);
-  font-weight: 600;
+	margin-left: auto;
+	padding: 1px 7px;
+	border-radius: var(--radius-full);
+	background: var(--success-soft);
+	color: var(--success);
+	font-size: var(--text-2xs);
+	font-weight: 600;
 }
 
 .notice {
-  padding: 14px 20px 18px;
-  border-top: 1px solid var(--border);
-  color: var(--faint);
-  font-size: var(--text-xs);
-  line-height: 1.45;
+	padding: 14px 20px 18px;
+	border-top: 1px solid var(--border);
+	color: var(--faint);
+	font-size: var(--text-xs);
+	line-height: 1.45;
 }
 
 .main {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
 }
 
 .topbar {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  height: var(--header-h);
-  padding: 0 22px;
-  border-bottom: 1px solid var(--border);
-  background: var(--chrome-translucent);
-  backdrop-filter: blur(8px);
+	position: sticky;
+	top: 0;
+	z-index: 20;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 14px;
+	height: var(--header-h);
+	padding: 0 22px;
+	border-bottom: 1px solid var(--border);
+	background: var(--chrome-translucent);
+	backdrop-filter: blur(8px);
 }
 
 .topbarSide {
-  display: flex;
-  align-items: center;
-  gap: 14px;
+	display: flex;
+	align-items: center;
+	gap: 14px;
 }
 
 .modeSwitch {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+	display: flex;
+	align-items: center;
+	gap: 4px;
 }
 
 .modeLabel {
-  margin-right: 4px;
-  color: var(--faint);
-  font-size: var(--text-xs);
+	margin-right: 4px;
+	color: var(--faint);
+	font-size: var(--text-xs);
 }
 
 .topbarTitle {
-  color: var(--muted);
-  font-size: var(--text-sm);
+	color: var(--muted);
+	font-size: var(--text-sm);
 }
 
 /* On a phone the sidebar becomes a strip of links above the page. */
 @media (max-width: 860px) {
-  /* The page takes the leftover height; without this a short page stretches
+	/* The page takes the leftover height; without this a short page stretches
      the strip of links instead. */
-  .shell {
-    grid-template-rows: auto 1fr;
-    grid-template-columns: minmax(0, 1fr);
-  }
+	.shell {
+		grid-template-rows: auto 1fr;
+		grid-template-columns: minmax(0, 1fr);
+	}
 
-  .sidebar {
-    min-width: 0;
-    position: static;
-    height: auto;
-    border-right: 0;
-    border-bottom: 1px solid var(--border);
-  }
+	.sidebar {
+		min-width: 0;
+		position: static;
+		height: auto;
+		border-right: 0;
+		border-bottom: 1px solid var(--border);
+	}
 
-  .brand {
-    height: 56px;
-    border-bottom: 0;
-  }
+	.brand {
+		height: 56px;
+		border-bottom: 0;
+	}
 
-  .nav {
-    padding: 0 10px 10px;
-  }
+	.nav {
+		padding: 0 10px 10px;
+	}
 
-  .nav ul {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-  }
+	.nav ul {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px;
+	}
 
-  .navGroup,
-  .notice {
-    display: none;
-  }
+	.navGroup,
+	.notice {
+		display: none;
+	}
 
-  .navItem {
-    border-radius: var(--radius-md);
-    white-space: nowrap;
-  }
+	.navItem {
+		border-radius: var(--radius-md);
+		white-space: nowrap;
+	}
 
-  .navItemOn {
-    box-shadow: none;
-  }
+	.navItemOn {
+		box-shadow: none;
+	}
 
-  /* The top bar wraps instead of pushing the lab's status off the screen,
+	/* The top bar wraps instead of pushing the lab's status off the screen,
      and scrolls away with the page so it never covers it. */
-  .topbar {
-    position: static;
-    flex-wrap: wrap;
-    gap: 8px;
-    height: auto;
-    min-height: 52px;
-    padding: 8px 14px;
-  }
+	.topbar {
+		position: static;
+		flex-wrap: wrap;
+		gap: 8px;
+		height: auto;
+		min-height: 52px;
+		padding: 8px 14px;
+	}
 
-  .topbarSide {
-    flex-wrap: wrap;
-    gap: 8px;
-  }
+	.topbarSide {
+		flex-wrap: wrap;
+		gap: 8px;
+	}
 
-  .topbarTitle,
-  .modeLabel {
-    display: none;
-  }
+	.topbarTitle,
+	.modeLabel {
+		display: none;
+	}
 }

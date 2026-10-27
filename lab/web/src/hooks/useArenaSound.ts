@@ -14,49 +14,49 @@ type ArenaSoundInput = { readonly attacks: number; readonly verdict: Verdict | n
 // useArenaSound plays a cue for each new attack and one for the verdict,
 // while the person has the sound on; it starts off and is remembered.
 export function useArenaSound({ attacks, verdict }: ArenaSoundInput): ArenaSound {
-  const [isOn, setOn] = useState(() => readStored(STORAGE_KEYS.sound, isBoolean) ?? false);
-  const heard = useRef({ attacks, verdict, lastAttackAt: 0 });
+	const [isOn, setOn] = useState(() => readStored(STORAGE_KEYS.sound, isBoolean) ?? false);
+	const heard = useRef({ attacks, verdict, lastAttackAt: 0 });
 
-  useEffect(() => {
-    const previous = heard.current;
-    const hasNewAttack = attacks > previous.attacks;
-    const hasNewVerdict = verdict !== null && previous.verdict === null;
+	useEffect(() => {
+		const previous = heard.current;
+		const hasNewAttack = attacks > previous.attacks;
+		const hasNewVerdict = verdict !== null && previous.verdict === null;
 
-    heard.current = { ...previous, attacks, verdict };
+		heard.current = { ...previous, attacks, verdict };
 
-    if (!isOn) {
-      return;
-    }
+		if (!isOn) {
+			return;
+		}
 
-    if (hasNewVerdict) {
-      playCue(verdict === 'fail' ? 'fail' : 'pass');
+		if (hasNewVerdict) {
+			playCue(verdict === 'fail' ? 'fail' : 'pass');
 
-      return;
-    }
+			return;
+		}
 
-    const now = performance.now();
-    const isSpaced = now - previous.lastAttackAt >= MIN_ATTACK_GAP_MS;
+		const now = performance.now();
+		const isSpaced = now - previous.lastAttackAt >= MIN_ATTACK_GAP_MS;
 
-    if (hasNewAttack && isSpaced) {
-      heard.current = { ...heard.current, lastAttackAt: now };
-      playCue('attack');
-    }
-  }, [attacks, verdict, isOn]);
+		if (hasNewAttack && isSpaced) {
+			heard.current = { ...heard.current, lastAttackAt: now };
+			playCue('attack');
+		}
+	}, [attacks, verdict, isOn]);
 
-  function toggle(): void {
-    const next = !isOn;
+	function toggle(): void {
+		const next = !isOn;
 
-    if (next) {
-      unlockAudio();
-    }
+		if (next) {
+			unlockAudio();
+		}
 
-    setOn(next);
-    writeStored(STORAGE_KEYS.sound, next);
-  }
+		setOn(next);
+		writeStored(STORAGE_KEYS.sound, next);
+	}
 
-  return { isOn, toggle };
+	return { isOn, toggle };
 }
 
 function isBoolean(value: unknown): value is boolean {
-  return typeof value === 'boolean';
+	return typeof value === 'boolean';
 }

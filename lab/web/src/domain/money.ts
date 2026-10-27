@@ -4,5 +4,5 @@ const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: '
 
 // formatCents writes an amount of cents in reais, "R$ 37,50".
 export function formatCents(cents: number): string {
-  return currency.format(cents / CENTS_PER_REAL);
+	return currency.format(cents / CENTS_PER_REAL);
 }

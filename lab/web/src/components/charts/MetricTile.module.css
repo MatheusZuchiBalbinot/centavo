@@ -1,100 +1,100 @@
 .tile {
-  --tile-color: var(--primary);
+	--tile-color: var(--primary);
 
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-  min-height: 132px;
-  padding: 14px 14px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: linear-gradient(180deg, var(--surface) 0%, var(--bg) 100%);
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+	min-height: 132px;
+	padding: 14px 14px 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: linear-gradient(180deg, var(--surface) 0%, var(--bg) 100%);
 }
 
 .tile[data-tone='success'] {
-  --tile-color: var(--success);
+	--tile-color: var(--success);
 }
 
 .tile[data-tone='warning'] {
-  --tile-color: var(--warning);
+	--tile-color: var(--warning);
 }
 
 .tile[data-tone='danger'] {
-  --tile-color: var(--danger);
+	--tile-color: var(--danger);
 }
 
 .labelRow {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 8px;
 }
 
 .label {
-  color: var(--muted);
-  font-size: var(--text-xs);
+	color: var(--muted);
+	font-size: var(--text-xs);
 }
 
 .value {
-  font-family: var(--font-mono);
-  font-size: var(--text-2xl);
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.15;
+	font-family: var(--font-mono);
+	font-size: var(--text-2xl);
+	font-variant-numeric: tabular-nums;
+	font-weight: 600;
+	letter-spacing: -0.02em;
+	line-height: 1.15;
 }
 
 .tile[data-tone='success'] .value,
 .tile[data-tone='warning'] .value,
 .tile[data-tone='danger'] .value {
-  color: var(--tile-color);
+	color: var(--tile-color);
 }
 
 .hint {
-  color: var(--faint);
-  font-size: var(--text-2xs);
+	color: var(--faint);
+	font-size: var(--text-2xs);
 }
 
 /* Room on the right for the last point, which sits on the edge. */
 .sparkline {
-  position: relative;
-  height: 34px;
-  margin-top: auto;
-  margin-right: 5px;
+	position: relative;
+	height: 34px;
+	margin-top: auto;
+	margin-right: 5px;
 }
 
 .sparkline svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
+	display: block;
+	width: 100%;
+	height: 100%;
+	overflow: visible;
 }
 
 .areaTop {
-  stop-color: var(--tile-color);
-  stop-opacity: 0.32;
+	stop-color: var(--tile-color);
+	stop-opacity: 0.32;
 }
 
 .areaBottom {
-  stop-color: var(--tile-color);
-  stop-opacity: 0;
+	stop-color: var(--tile-color);
+	stop-opacity: 0;
 }
 
 .line {
-  fill: none;
-  stroke: var(--tile-color);
-  stroke-width: 1.5;
-  stroke-linejoin: round;
+	fill: none;
+	stroke: var(--tile-color);
+	stroke-width: 1.5;
+	stroke-linejoin: round;
 }
 
 .dot {
-  position: absolute;
-  width: 6px;
-  height: 6px;
-  border: 2px solid var(--surface);
-  border-radius: 50%;
-  background: var(--tile-color);
-  box-sizing: content-box;
-  transform: translate(-50%, -50%);
+	position: absolute;
+	width: 6px;
+	height: 6px;
+	border: 2px solid var(--surface);
+	border-radius: 50%;
+	background: var(--tile-color);
+	box-sizing: content-box;
+	transform: translate(-50%, -50%);
 }

@@ -5,17 +5,17 @@ import { useLayoutEffect } from 'react';
 // the dialog out of the page: closing a dialog still in the page is what
 // lets the browser put the focus back on the button that opened it.
 export function useModalDialog(ref: React.RefObject<HTMLDialogElement | null>): void {
-  useLayoutEffect(() => {
-    const element = ref.current;
+	useLayoutEffect(() => {
+		const element = ref.current;
 
-    if (element === null || element.open) {
-      return;
-    }
+		if (element === null || element.open) {
+			return;
+		}
 
-    element.showModal();
+		element.showModal();
 
-    return () => {
-      element.close();
-    };
-  }, [ref]);
+		return () => {
+			element.close();
+		};
+	}, [ref]);
 }

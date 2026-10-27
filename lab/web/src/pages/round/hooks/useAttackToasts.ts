@@ -3,8 +3,7 @@ import { useEffect, useRef } from 'react';
 import type { RoundEvent } from '../../../api/replay';
 import { describeEvent } from '../../../domain/feed';
 import { isAttackEvent, isDefenseEvent } from '../../../domain/phase';
-import { useToasts } from '../../../hooks/toastContext';
-import type { ToastInput } from '../../../hooks/toastContext';
+import { useToasts, type ToastInput } from '../../../hooks/toastContext';
 import { format } from '../../../i18n/format';
 import { messages } from '../../../i18n/pt-BR';
 
@@ -21,75 +20,75 @@ const KINDS: readonly Kind[] = ['attack', 'defense'];
 // the page opened. events is the whole list; newEvents is how many of its
 // last items are new.
 export function useAttackToasts(events: readonly RoundEvent[], newEvents: number): void {
-  const { push } = useToasts();
-  const announced = useRef(0);
-  const pending = useRef<Record<Kind, RoundEvent[]>>({ attack: [], defense: [] });
-  const lastToastAt = useRef<Record<Kind, number>>({ attack: 0, defense: 0 });
+	const { push } = useToasts();
+	const announced = useRef(0);
+	const pending = useRef<Record<Kind, RoundEvent[]>>({ attack: [], defense: [] });
+	const lastToastAt = useRef<Record<Kind, number>>({ attack: 0, defense: 0 });
 
-  useEffect(() => {
-    // A new snapshot, after a reconnection, counts from zero again.
-    if (newEvents < announced.current) {
-      announced.current = 0;
-    }
+	useEffect(() => {
+		// A new snapshot, after a reconnection, counts from zero again.
+		if (newEvents < announced.current) {
+			announced.current = 0;
+		}
 
-    const fresh = events.slice(events.length - newEvents + announced.current);
+		const fresh = events.slice(events.length - newEvents + announced.current);
 
-    announced.current = newEvents;
-    pending.current.attack.push(...fresh.filter(isAttackEvent));
-    pending.current.defense.push(...fresh.filter(isDefenseEvent));
+		announced.current = newEvents;
+		pending.current.attack.push(...fresh.filter(isAttackEvent));
+		pending.current.defense.push(...fresh.filter(isDefenseEvent));
 
-    function flush(kind: Kind): void {
-      const burst = pending.current[kind];
+		function flush(kind: Kind): void {
+			const burst = pending.current[kind];
 
-      pending.current[kind] = [];
-      lastToastAt.current[kind] = Date.now();
+			pending.current[kind] = [];
+			lastToastAt.current[kind] = Date.now();
 
-      const toast = toastOf(kind, burst);
+			const toast = toastOf(kind, burst);
 
-      if (toast !== null) {
-        push(toast);
-      }
-    }
+			if (toast !== null) {
+				push(toast);
+			}
+		}
 
-    function hasPending(kind: Kind): boolean {
-      return pending.current[kind].length > 0;
-    }
+		function hasPending(kind: Kind): boolean {
+			return pending.current[kind].length > 0;
+		}
 
-    function schedule(kind: Kind): number {
-      const wait = lastToastAt.current[kind] + TOAST_WINDOW_MS - Date.now();
+		function schedule(kind: Kind): number {
+			const wait = lastToastAt.current[kind] + TOAST_WINDOW_MS - Date.now();
 
-      return window.setTimeout(() => flush(kind), Math.max(0, wait));
-    }
+			return window.setTimeout(() => flush(kind), Math.max(0, wait));
+		}
 
-    const timers = KINDS.filter(hasPending).map(schedule);
+		const timers = KINDS.filter(hasPending).map(schedule);
 
-    return () => {
-      for (const timer of timers) {
-        window.clearTimeout(timer);
-      }
-    };
-  }, [events, newEvents, push]);
+		return () => {
+			for (const timer of timers) {
+				window.clearTimeout(timer);
+			}
+		};
+	}, [events, newEvents, push]);
 }
 
 function toastOf(kind: Kind, burst: readonly RoundEvent[]): ToastInput | null {
-  const last = burst.at(-1);
+	const last = burst.at(-1);
 
-  if (last === undefined) {
-    return null;
-  }
+	if (last === undefined) {
+		return null;
+	}
 
-  const { what, expected } = describeEvent(last);
-  const tone = kind === 'attack' ? 'attack' : 'info';
+	const { what, expected } = describeEvent(last);
+	const tone = kind === 'attack' ? 'attack' : 'info';
 
-  if (burst.length === 1) {
-    return expected === '' ? { tone, title: what } : { tone, title: what, detail: expected };
-  }
+	if (burst.length === 1) {
+		return expected === '' ? { tone, title: what } : { tone, title: what, detail: expected };
+	}
 
-  const grouped = kind === 'attack' ? messages.toasts.grouped : messages.toasts.groupedDefenses;
+	const grouped = kind === 'attack' ? messages.toasts.grouped : messages.toasts.groupedDefenses;
 
-  return {
-    tone,
-    title: format(grouped, { count: burst.length }),
-    detail: format(messages.toasts.groupedDetail, { what }),
-  };
+	return {
+		tone,
+		title: format(grouped, { count: burst.length }),
+		detail: format(messages.toasts.groupedDetail, { what }),
+	};
 }

@@ -1,5 +1,4 @@
 import { fileURLToPath } from 'node:url';
-
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
 
@@ -11,8 +10,8 @@ const outDir = fileURLToPath(new URL('../internal/dashboard/web/app', import.met
 const labURL = 'http://localhost:8090';
 
 export default defineConfig({
-  plugins: [react()],
-  build: { outDir, emptyOutDir: true, sourcemap: false },
-  server: { proxy: { '/api': labURL, '/rounds': labURL } },
-  test: { environment: 'jsdom', setupFiles: ['src/test/setup.ts'], restoreMocks: true },
+	plugins: [react()],
+	build: { outDir, emptyOutDir: true, sourcemap: false },
+	server: { proxy: { '/api': labURL, '/rounds': labURL } },
+	test: { environment: 'jsdom', setupFiles: ['src/test/setup.ts'], restoreMocks: true },
 });

@@ -3,374 +3,365 @@ import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { appRoutes } from '../../App';
-import { formatClock } from '../../domain/duration';
 import type { RoundId } from '../../api/ids';
 import { API_ROUTES, replayPath, roundEventsPath } from '../../api/routes';
+import { appRoutes } from '../../App';
+import { formatClock } from '../../domain/duration';
 import { expectNoAxeViolations } from '../../test/axe';
 import { FakeEventSource, installFakeEventSource } from '../../test/eventSource';
 import { answerFetch } from '../../test/fetch';
 
 const counters = {
-  kills: 1,
-  failpoint_fires: 0,
-  network_episodes: 0,
-  database_faults: 0,
-  freezes: 0,
-  failovers: 0,
-  clock_skews: 0,
-  partner_lies: 0,
-  resolved: 0,
+	kills: 1,
+	failpoint_fires: 0,
+	network_episodes: 0,
+	database_faults: 0,
+	freezes: 0,
+	failovers: 0,
+	clock_skews: 0,
+	partner_lies: 0,
+	resolved: 0,
 };
 
 const snapshot = {
-  round: 'r0007',
-  scenario: 'kill-after-commit',
-  seed: '0x5eed',
-  seconds: [
-    { t: 0, ok: 20, fail: 0, info: 0, p50_ms: 8, p99_ms: 12 },
-    { t: 1, ok: 18, fail: 1, info: 1, p50_ms: 9, p99_ms: 30 },
-  ],
-  events: [{ t_ms: 1500, family: 'process', kind: 'kill', target: 'bank-api', text: 'processo morto: bank-api' }],
-  counters,
-  description: 'Mata a API depois de aplicar a escrita e antes de responder.',
-  duration_seconds: 180,
-  started_at: new Date().toISOString(),
-  defenses: 'robust',
-  built_at: new Date().toISOString(),
+	round: 'r0007',
+	scenario: 'kill-after-commit',
+	seed: '0x5eed',
+	seconds: [
+		{ t: 0, ok: 20, fail: 0, info: 0, p50_ms: 8, p99_ms: 12 },
+		{ t: 1, ok: 18, fail: 1, info: 1, p50_ms: 9, p99_ms: 30 },
+	],
+	events: [{ t_ms: 1500, family: 'process', kind: 'kill', target: 'bank-api', text: 'processo morto: bank-api' }],
+	counters,
+	description: 'Mata a API depois de aplicar a escrita e antes de responder.',
+	duration_seconds: 180,
+	started_at: new Date().toISOString(),
+	defenses: 'robust',
+	built_at: new Date().toISOString(),
 };
 
 const running = {
-  status: 'running',
-  round: 'r0007',
-  attack: 'workers-down',
-  scenario: 'kill-after-commit',
-  duration_seconds: 180,
-  started_at: snapshot.started_at,
+	status: 'running',
+	round: 'r0007',
+	attack: 'workers-down',
+	scenario: 'kill-after-commit',
+	duration_seconds: 180,
+	started_at: snapshot.started_at,
 };
 
 const allHeld = ['I1', 'I2', 'I3', 'I4', 'I5', 'I6', 'I7', 'I8'].map((id) => ({ id, status: 'ok', violations: 0 }));
 
 function renderRound(entry = '/rounds/r0007'): ReturnType<typeof render> {
-  const router = createMemoryRouter(appRoutes, { initialEntries: [entry] });
+	const router = createMemoryRouter(appRoutes, { initialEntries: [entry] });
 
-  return render(<RouterProvider router={router} />);
+	return render(<RouterProvider router={router} />);
 }
 
 function stream(): FakeEventSource {
-  const source = FakeEventSource.last;
+	const source = FakeEventSource.last;
 
-  if (source === null) {
-    throw new Error('the page opened no stream');
-  }
+	if (source === null) {
+		throw new Error('the page opened no stream');
+	}
 
-  return source;
+	return source;
 }
 
 afterEach(() => {
-  vi.unstubAllGlobals();
+	vi.unstubAllGlobals();
 });
 
 describe('the round page', () => {
-  it('follows the attack live and offers to stop the round the lab runs', async () => {
-    installFakeEventSource();
-    answerFetch({ [API_ROUTES.lab]: { status: 200, body: running } });
-
-    const { container } = renderRound();
-
-    expect(screen.getByText('Conectando à rodada…')).toBeInTheDocument();
-    expect(stream().url).toBe(roundEventsPath('r0007' as RoundId));
-
-    act(() => {
-      stream().send('snapshot', snapshot);
-      stream().send('auditor', {
-        at: new Date().toISOString(),
-        sum_cents: 0,
-        min_customer_balance_cents: 500,
-        unavailable: false,
-      });
-    });
-
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
-      /O banco está sob ataque há .*, e nenhum centavo sumiu\./,
-    );
-    expect(screen.getByText('R$ 0,00')).toBeInTheDocument();
-    expect(screen.getByText('Derrubei o bank-api.')).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: 'Parar rodada' })).toBeInTheDocument();
-    await expectNoAxeViolations(container);
-  });
-
-  it('shows the verdict next to what was expected, and closes the stream', () => {
-    installFakeEventSource();
-    answerFetch({ [API_ROUTES.lab]: { status: 200, body: { status: 'idle' } } });
-
-    renderRound();
-
-    act(() => {
-      stream().send('snapshot', snapshot);
-      stream().send('finished', { ...snapshot, verdict: 'pass', checks: allHeld });
-    });
-
-    expect(
-      screen.getByRole('heading', { level: 1, name: 'Passou: um ataque, nenhum centavo perdido.' }),
-    ).toBeInTheDocument();
-    expect(screen.getByText('Bateu com o esperado.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Parar rodada' })).not.toBeInTheDocument();
-    expect(stream().isClosed).toBe(true);
-  });
+	it('follows the attack live and offers to stop the round the lab runs', async () => {
+		installFakeEventSource();
+		answerFetch({ [API_ROUTES.lab]: { status: 200, body: running } });
+
+		const { container } = renderRound();
+
+		expect(screen.getByText('Conectando à rodada…')).toBeInTheDocument();
+		expect(stream().url).toBe(roundEventsPath('r0007' as RoundId));
 
-  it('turns a broken control round into the expected outcome', () => {
-    installFakeEventSource();
-    answerFetch({ [API_ROUTES.lab]: { status: 200, body: { status: 'idle' } } });
+		act(() => {
+			stream().send('snapshot', snapshot);
+			stream().send('auditor', {
+				at: new Date().toISOString(),
+				sum_cents: 0,
+				min_customer_balance_cents: 500,
+				unavailable: false,
+			});
+		});
+
+		expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/O banco está sob ataque há .*, e nenhum centavo sumiu\./);
+		expect(screen.getByText('R$ 0,00')).toBeInTheDocument();
+		expect(screen.getByText('Derrubei o bank-api.')).toBeInTheDocument();
+		expect(await screen.findByRole('button', { name: 'Parar rodada' })).toBeInTheDocument();
+		await expectNoAxeViolations(container);
+	});
+
+	it('shows the verdict next to what was expected, and closes the stream', () => {
+		installFakeEventSource();
+		answerFetch({ [API_ROUTES.lab]: { status: 200, body: { status: 'idle' } } });
 
-    renderRound();
+		renderRound();
 
-    const broken = allHeld.map((check) => (check.id === 'I1' ? { ...check, status: 'failed', violations: 2 } : check));
+		act(() => {
+			stream().send('snapshot', snapshot);
+			stream().send('finished', { ...snapshot, verdict: 'pass', checks: allHeld });
+		});
 
-    act(() => {
-      stream().send('finished', { ...snapshot, defenses: 'robust,-fencing', verdict: 'fail', checks: broken });
-    });
+		expect(screen.getByRole('heading', { level: 1, name: 'Passou: um ataque, nenhum centavo perdido.' })).toBeInTheDocument();
+		expect(screen.getByText('Bateu com o esperado.')).toBeInTheDocument();
+		expect(screen.queryByRole('button', { name: 'Parar rodada' })).not.toBeInTheDocument();
+		expect(stream().isClosed).toBe(true);
+	});
 
-    expect(
-      screen.getByRole('heading', { level: 1, name: 'Quebrou: nenhum dinheiro some nem aparece.' }),
-    ).toBeInTheDocument();
-    expect(screen.getByText('Bateu com o esperado: a defesa faz falta, e a rodada prova isso.')).toBeInTheDocument();
-    expect(screen.getByText('2 violação(ões)')).toBeInTheDocument();
-  });
+	it('turns a broken control round into the expected outcome', () => {
+		installFakeEventSource();
+		answerFetch({ [API_ROUTES.lab]: { status: 200, body: { status: 'idle' } } });
 
-  it('narrows the feed to the cure and back', async () => {
-    installFakeEventSource();
-    answerFetch({ [API_ROUTES.lab]: { status: 200, body: { status: 'idle' } } });
-    const user = userEvent.setup();
+		renderRound();
 
-    renderRound();
+		const broken = allHeld.map((check) => (check.id === 'I1' ? { ...check, status: 'failed', violations: 2 } : check));
 
-    const heal = { t_ms: 90_000, family: 'heal', kind: 'heal_start', text: 'cura começou' };
+		act(() => {
+			stream().send('finished', { ...snapshot, defenses: 'robust,-fencing', verdict: 'fail', checks: broken });
+		});
 
-    act(() => {
-      stream().send('snapshot', { ...snapshot, events: [...snapshot.events, heal] });
-    });
+		expect(screen.getByRole('heading', { level: 1, name: 'Quebrou: nenhum dinheiro some nem aparece.' })).toBeInTheDocument();
+		expect(screen.getByText('Bateu com o esperado: a defesa faz falta, e a rodada prova isso.')).toBeInTheDocument();
+		expect(screen.getByText('2 violação(ões)')).toBeInTheDocument();
+	});
 
-    await user.click(screen.getByRole('button', { name: 'Cura · 1' }));
+	it('narrows the feed to the cure and back', async () => {
+		installFakeEventSource();
+		answerFetch({ [API_ROUTES.lab]: { status: 200, body: { status: 'idle' } } });
+		const user = userEvent.setup();
 
-    expect(screen.queryByText('Derrubei o bank-api.')).not.toBeInTheDocument();
-    expect(screen.getByText('Os ataques pararam: começou a cura.')).toBeInTheDocument();
+		renderRound();
 
-    await user.click(screen.getByRole('button', { name: 'Tudo · 2' }));
+		const heal = { t_ms: 90_000, family: 'heal', kind: 'heal_start', text: 'cura começou' };
 
-    expect(screen.getByText('Derrubei o bank-api.')).toBeInTheDocument();
-  });
+		act(() => {
+			stream().send('snapshot', { ...snapshot, events: [...snapshot.events, heal] });
+		});
 
-  it('shows the technical details only in the technical mode, and remembers it', async () => {
-    installFakeEventSource();
-    window.localStorage.clear();
-    answerFetch({ [API_ROUTES.lab]: { status: 200, body: { status: 'idle' } } });
-    const user = userEvent.setup();
+		await user.click(screen.getByRole('button', { name: 'Cura · 1' }));
 
-    renderRound();
+		expect(screen.queryByText('Derrubei o bank-api.')).not.toBeInTheDocument();
+		expect(screen.getByText('Os ataques pararam: começou a cura.')).toBeInTheDocument();
 
-    const fired = {
-      t_ms: 4_000,
-      family: 'failpoint',
-      kind: 'failpoint_fired',
-      target: 'bank-api',
-      detail: 'api.after_commit',
-      text: 'x',
-    };
+		await user.click(screen.getByRole('button', { name: 'Tudo · 2' }));
 
-    act(() => {
-      stream().send('finished', { ...snapshot, events: [fired], verdict: 'pass', checks: allHeld });
-    });
+		expect(screen.getByText('Derrubei o bank-api.')).toBeInTheDocument();
+	});
 
-    expect(screen.queryByText('api.after_commit')).not.toBeInTheDocument();
-    expect(screen.queryByText('I1')).not.toBeInTheDocument();
+	it('shows the technical details only in the technical mode, and remembers it', async () => {
+		installFakeEventSource();
+		window.localStorage.clear();
+		answerFetch({ [API_ROUTES.lab]: { status: 200, body: { status: 'idle' } } });
+		const user = userEvent.setup();
 
-    await user.click(screen.getByRole('button', { name: 'Técnico' }));
+		renderRound();
 
-    expect(screen.getByText('api.after_commit')).toBeInTheDocument();
-    expect(screen.getByText('I1')).toBeInTheDocument();
-    expect(screen.getByText('semente 0x5eed')).toBeInTheDocument();
-    expect(window.localStorage.getItem('centavo.viewMode')).toBe('"technical"');
-  });
+		const fired = {
+			t_ms: 4_000,
+			family: 'failpoint',
+			kind: 'failpoint_fired',
+			target: 'bank-api',
+			detail: 'api.after_commit',
+			text: 'x',
+		};
 
-  it('opens the arena from its link, draws the attack on the map, and closes it', async () => {
-    installFakeEventSource();
-    answerFetch({ [API_ROUTES.lab]: { status: 200, body: running } });
-    const user = userEvent.setup();
+		act(() => {
+			stream().send('finished', { ...snapshot, events: [fired], verdict: 'pass', checks: allHeld });
+		});
 
-    renderRound('/rounds/r0007?arena=1');
+		expect(screen.queryByText('api.after_commit')).not.toBeInTheDocument();
+		expect(screen.queryByText('I1')).not.toBeInTheDocument();
 
-    act(() => {
-      stream().send('snapshot', snapshot);
-    });
+		await user.click(screen.getByRole('button', { name: 'Técnico' }));
 
-    const arena = screen.getByRole('dialog', { name: /O banco está sob ataque/ });
+		expect(screen.getByText('api.after_commit')).toBeInTheDocument();
+		expect(screen.getByText('I1')).toBeInTheDocument();
+		expect(screen.getByText('semente 0x5eed')).toBeInTheDocument();
+		expect(window.localStorage.getItem('centavo.viewMode')).toBe('"technical"');
+	});
 
-    expect(within(arena).getByRole('button', { name: 'API: derrubado' })).toBeInTheDocument();
-    expect(within(arena).getByRole('group', { name: 'Mapa do sistema' })).toBeInTheDocument();
-    await expectNoAxeViolations(arena);
+	it('opens the arena from its link, draws the attack on the map, and closes it', async () => {
+		installFakeEventSource();
+		answerFetch({ [API_ROUTES.lab]: { status: 200, body: running } });
+		const user = userEvent.setup();
 
-    await user.click(within(arena).getByRole('button', { name: 'Fechar' }));
+		renderRound('/rounds/r0007?arena=1');
 
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+		act(() => {
+			stream().send('snapshot', snapshot);
+		});
 
-    await user.click(screen.getByRole('button', { name: 'Abrir a arena' }));
+		const arena = screen.getByRole('dialog', { name: /O banco está sob ataque/ });
 
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
-  });
+		expect(within(arena).getByRole('button', { name: 'API: derrubado' })).toBeInTheDocument();
+		expect(within(arena).getByRole('group', { name: 'Mapa do sistema' })).toBeInTheDocument();
+		await expectNoAxeViolations(arena);
 
-  it('stamps the verdict on the arena when the round ends', () => {
-    installFakeEventSource();
-    answerFetch({ [API_ROUTES.lab]: { status: 200, body: { status: 'idle' } } });
+		await user.click(within(arena).getByRole('button', { name: 'Fechar' }));
 
-    renderRound('/rounds/r0007?arena=1');
+		expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
-    act(() => {
-      stream().send('finished', { ...snapshot, verdict: 'pass', checks: allHeld });
-    });
+		await user.click(screen.getByRole('button', { name: 'Abrir a arena' }));
 
-    const arena = screen.getByRole('dialog');
+		expect(screen.getByRole('dialog')).toBeInTheDocument();
+	});
 
-    expect(within(arena).getByText('Passou')).toBeInTheDocument();
-    expect(within(arena).getByText('um ataque · R$ 0,00 · 8 de 8 garantias')).toBeInTheDocument();
-  });
+	it('stamps the verdict on the arena when the round ends', () => {
+		installFakeEventSource();
+		answerFetch({ [API_ROUTES.lab]: { status: 200, body: { status: 'idle' } } });
 
-  it('settles the bet made in the surprise draw and keeps it in the browser', () => {
-    installFakeEventSource();
-    window.localStorage.clear();
-    answerFetch({ [API_ROUTES.lab]: { status: 200, body: { status: 'idle' } } });
+		renderRound('/rounds/r0007?arena=1');
 
-    renderRound('/rounds/r0007?arena=1&surprise=1&bet=breaks');
+		act(() => {
+			stream().send('finished', { ...snapshot, verdict: 'pass', checks: allHeld });
+		});
 
-    act(() => {
-      stream().send('finished', { ...snapshot, verdict: 'pass', checks: allHeld });
-    });
+		const arena = screen.getByRole('dialog');
 
-    expect(screen.getByText('Você apostou que quebraria. O banco aguentou.')).toBeInTheDocument();
-    expect(window.localStorage.getItem('centavo.bets')).toBe('{"r0007":"breaks"}');
-  });
+		expect(within(arena).getByText('Passou')).toBeInTheDocument();
+		expect(within(arena).getByText('um ataque · R$ 0,00 · 8 de 8 garantias')).toBeInTheDocument();
+	});
 
-  it('replays a finished round from the moment in its link, and keeps the moment on pause', async () => {
-    installFakeEventSource();
-    answerFetch({ [API_ROUTES.lab]: { status: 200, body: { status: 'idle' } } });
-    const user = userEvent.setup();
-    const router = createMemoryRouter(appRoutes, { initialEntries: ['/rounds/r0007?arena=1&t=0:01'] });
+	it('settles the bet made in the surprise draw and keeps it in the browser', () => {
+		installFakeEventSource();
+		window.localStorage.clear();
+		answerFetch({ [API_ROUTES.lab]: { status: 200, body: { status: 'idle' } } });
 
-    render(<RouterProvider router={router} />);
+		renderRound('/rounds/r0007?arena=1&surprise=1&bet=breaks');
 
-    act(() => {
-      // Three minutes of seconds, so the replay is still playing when the
-      // test pauses it.
-      const seconds = Array.from({ length: 180 }, (_, t) => ({ t, ok: 20, fail: 0, info: 0, p50_ms: 8, p99_ms: 12 }));
+		act(() => {
+			stream().send('finished', { ...snapshot, verdict: 'pass', checks: allHeld });
+		});
 
-      stream().send('finished', { ...snapshot, seconds, verdict: 'pass', checks: allHeld });
-    });
+		expect(screen.getByText('Você apostou que quebraria. O banco aguentou.')).toBeInTheDocument();
+		expect(window.localStorage.getItem('centavo.bets')).toBe('{"r0007":"breaks"}');
+	});
 
-    const arena = screen.getByRole('dialog', { name: /./ });
+	it('replays a finished round from the moment in its link, and keeps the moment on pause', async () => {
+		installFakeEventSource();
+		answerFetch({ [API_ROUTES.lab]: { status: 200, body: { status: 'idle' } } });
+		const user = userEvent.setup();
+		const router = createMemoryRouter(appRoutes, { initialEntries: ['/rounds/r0007?arena=1&t=0:01'] });
 
-    expect(within(arena).getByText('Rodada r0007 · replay')).toBeInTheDocument();
-    expect(within(arena).getByRole('slider', { name: 'Momento da rodada' })).toBeInTheDocument();
-    expect(within(arena).getByRole('button', { name: '10×' })).toHaveAttribute('aria-pressed', 'true');
-    await expectNoAxeViolations(arena);
+		render(<RouterProvider router={router} />);
 
-    await user.click(within(arena).getByRole('button', { name: 'Pausar' }));
+		act(() => {
+			// Three minutes of seconds, so the replay is still playing when the
+			// test pauses it.
+			const seconds = Array.from({ length: 180 }, (_, t) => ({ t, ok: 20, fail: 0, info: 0, p50_ms: 8, p99_ms: 12 }));
 
-    // How far the replay got before the click depends on the machine; the
-    // link has to keep exactly where the player stopped.
-    const stoppedAt = Number(within(arena).getByRole('slider', { name: 'Momento da rodada' }).getAttribute('value'));
-    const moment = new URLSearchParams(router.state.location.search).get('t');
+			stream().send('finished', { ...snapshot, seconds, verdict: 'pass', checks: allHeld });
+		});
 
-    expect(moment).toBe(formatClock(stoppedAt / 1_000));
-    expect(stoppedAt).toBeGreaterThanOrEqual(1_000);
-    expect(within(arena).getByRole('button', { name: 'Tocar' })).toBeInTheDocument();
-  });
+		const arena = screen.getByRole('dialog', { name: /./ });
 
-  it('offers the recorded round without the defense, side by side', async () => {
-    installFakeEventSource();
-    const control = {
-      round: 'r0004',
-      scenario: 'kill-after-commit',
-      verdict: 'fail',
-      seconds: 180,
-      operations: 900,
-      counters,
-      defenses: 'robust,-fencing',
-    };
-    answerFetch({
-      [API_ROUTES.lab]: { status: 200, body: { status: 'idle' } },
-      [API_ROUTES.rounds]: { status: 200, body: { rounds: [control] } },
-    });
+		expect(within(arena).getByText('Rodada r0007 · replay')).toBeInTheDocument();
+		expect(within(arena).getByRole('slider', { name: 'Momento da rodada' })).toBeInTheDocument();
+		expect(within(arena).getByRole('button', { name: '10×' })).toHaveAttribute('aria-pressed', 'true');
+		await expectNoAxeViolations(arena);
 
-    renderRound();
+		await user.click(within(arena).getByRole('button', { name: 'Pausar' }));
 
-    act(() => {
-      stream().send('finished', { ...snapshot, verdict: 'pass', checks: allHeld });
-    });
+		// How far the replay got before the click depends on the machine; the
+		// link has to keep exactly where the player stopped.
+		const stoppedAt = Number(within(arena).getByRole('slider', { name: 'Momento da rodada' }).getAttribute('value'));
+		const moment = new URLSearchParams(router.state.location.search).get('t');
 
-    expect(await screen.findByRole('link', { name: 'E sem a defesa?' })).toHaveAttribute(
-      'href',
-      '/compare/r0007/r0004',
-    );
-  });
+		expect(moment).toBe(formatClock(stoppedAt / 1_000));
+		expect(stoppedAt).toBeGreaterThanOrEqual(1_000);
+		expect(within(arena).getByRole('button', { name: 'Tocar' })).toBeInTheDocument();
+	});
 
-  it('closes only the stop confirmation when Esc is pressed on it inside the arena', async () => {
-    installFakeEventSource();
-    answerFetch({ [API_ROUTES.lab]: { status: 200, body: running } });
-    const user = userEvent.setup();
+	it('offers the recorded round without the defense, side by side', async () => {
+		installFakeEventSource();
+		const control = {
+			round: 'r0004',
+			scenario: 'kill-after-commit',
+			verdict: 'fail',
+			seconds: 180,
+			operations: 900,
+			counters,
+			defenses: 'robust,-fencing',
+		};
+		answerFetch({
+			[API_ROUTES.lab]: { status: 200, body: { status: 'idle' } },
+			[API_ROUTES.rounds]: { status: 200, body: { rounds: [control] } },
+		});
 
-    renderRound('/rounds/r0007?arena=1');
+		renderRound();
 
-    act(() => {
-      stream().send('snapshot', snapshot);
-    });
+		act(() => {
+			stream().send('finished', { ...snapshot, verdict: 'pass', checks: allHeld });
+		});
 
-    const arena = screen.getByRole('dialog', { name: /O banco está sob ataque/ });
+		expect(await screen.findByRole('link', { name: 'E sem a defesa?' })).toHaveAttribute('href', '/compare/r0007/r0004');
+	});
 
-    await user.click(await within(arena).findByRole('button', { name: 'Parar rodada' }));
+	it('closes only the stop confirmation when Esc is pressed on it inside the arena', async () => {
+		installFakeEventSource();
+		answerFetch({ [API_ROUTES.lab]: { status: 200, body: running } });
+		const user = userEvent.setup();
 
-    const confirmation = screen.getByRole('dialog', { name: 'Parar esta rodada?' });
+		renderRound('/rounds/r0007?arena=1');
 
-    fireEvent(confirmation, new Event('cancel', { cancelable: true }));
+		act(() => {
+			stream().send('snapshot', snapshot);
+		});
 
-    expect(screen.getByRole('dialog', { name: /O banco está sob ataque/ })).toBeInTheDocument();
-  });
+		const arena = screen.getByRole('dialog', { name: /O banco está sob ataque/ });
 
-  it('says the round does not exist when the lab refuses its stream and has no such round', async () => {
-    installFakeEventSource();
-    answerFetch({ [API_ROUTES.lab]: { status: 200, body: { status: 'idle' } } });
+		await user.click(await within(arena).findByRole('button', { name: 'Parar rodada' }));
 
-    renderRound();
+		const confirmation = screen.getByRole('dialog', { name: 'Parar esta rodada?' });
 
-    act(() => {
-      stream().refuse();
-    });
+		fireEvent(confirmation, new Event('cancel', { cancelable: true }));
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'A rodada r0007 não existe.' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Ver todas as rodadas' })).toHaveAttribute('href', '/rounds');
-  });
+		expect(screen.getByRole('dialog', { name: /O banco está sob ataque/ })).toBeInTheDocument();
+	});
 
-  it('offers to try again when the lab does not answer, and opens a new stream', async () => {
-    installFakeEventSource();
-    const failure = { status: 500, body: { error: { code: 'internal', message: 'boom' } } };
-    answerFetch({
-      [API_ROUTES.lab]: { status: 200, body: { status: 'idle' } },
-      [replayPath('r0007' as RoundId)]: failure,
-    });
-    const user = userEvent.setup();
+	it('says the round does not exist when the lab refuses its stream and has no such round', async () => {
+		installFakeEventSource();
+		answerFetch({ [API_ROUTES.lab]: { status: 200, body: { status: 'idle' } } });
 
-    renderRound();
+		renderRound();
 
-    const refused = stream();
+		act(() => {
+			stream().refuse();
+		});
 
-    act(() => {
-      refused.refuse();
-    });
+		expect(await screen.findByRole('heading', { level: 1, name: 'A rodada r0007 não existe.' })).toBeInTheDocument();
+		expect(screen.getByRole('link', { name: 'Ver todas as rodadas' })).toHaveAttribute('href', '/rounds');
+	});
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'O laboratório não respondeu.' })).toBeInTheDocument();
+	it('offers to try again when the lab does not answer, and opens a new stream', async () => {
+		installFakeEventSource();
+		const failure = { status: 500, body: { error: { code: 'internal', message: 'boom' } } };
+		answerFetch({
+			[API_ROUTES.lab]: { status: 200, body: { status: 'idle' } },
+			[replayPath('r0007' as RoundId)]: failure,
+		});
+		const user = userEvent.setup();
 
-    await user.click(screen.getByRole('button', { name: 'Tentar de novo' }));
+		renderRound();
 
-    expect(stream()).not.toBe(refused);
-    expect(screen.getByRole('heading', { level: 1, name: 'Conectando à rodada…' })).toBeInTheDocument();
-  });
+		const refused = stream();
+
+		act(() => {
+			refused.refuse();
+		});
+
+		expect(await screen.findByRole('heading', { level: 1, name: 'O laboratório não respondeu.' })).toBeInTheDocument();
+
+		await user.click(screen.getByRole('button', { name: 'Tentar de novo' }));
+
+		expect(stream()).not.toBe(refused);
+		expect(screen.getByRole('heading', { level: 1, name: 'Conectando à rodada…' })).toBeInTheDocument();
+	});
 });

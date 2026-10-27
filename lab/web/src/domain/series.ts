@@ -12,21 +12,21 @@ const TREND_SECONDS = 60;
 // seriesOf is one metric of every second: answers per second, the typical
 // response time, or the operations that went wrong (refused or unanswered).
 export function seriesOf(seconds: readonly RoundSecond[], metric: RoundMetric): readonly ChartPoint[] {
-  return seconds.map((second) => ({ at: second.t, value: valueOf(second, metric) }));
+	return seconds.map((second) => ({ at: second.t, value: valueOf(second, metric) }));
 }
 
 // trendOf is the same metric over the last minute, for a tile's sparkline.
 export function trendOf(seconds: readonly RoundSecond[], metric: RoundMetric): readonly number[] {
-  return seconds.slice(-TREND_SECONDS).map((second) => valueOf(second, metric));
+	return seconds.slice(-TREND_SECONDS).map((second) => valueOf(second, metric));
 }
 
 export function valueOf(second: RoundSecond, metric: RoundMetric): number {
-  switch (metric) {
-    case 'operations':
-      return second.ok + second.fail + second.info;
-    case 'latency':
-      return second.p50Ms;
-    case 'trouble':
-      return second.fail + second.info;
-  }
+	switch (metric) {
+		case 'operations':
+			return second.ok + second.fail + second.info;
+		case 'latency':
+			return second.p50Ms;
+		case 'trouble':
+			return second.fail + second.info;
+	}
 }

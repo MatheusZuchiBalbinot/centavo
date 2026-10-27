@@ -1,5 +1,4 @@
-import { createBrowserRouter, RouterProvider } from 'react-router';
-import type { RouteObject } from 'react-router';
+import { createBrowserRouter, RouterProvider, type RouteObject } from 'react-router';
 
 import Layout from './components/Layout';
 import ComparePage from './pages/compare/ComparePage';
@@ -11,21 +10,21 @@ import RoundsPage from './pages/rounds/RoundsPage';
 import { ROUTES } from './routes';
 
 export const appRoutes: RouteObject[] = [
-  {
-    element: <Layout />,
-    children: [
-      { path: ROUTES.home, element: <HomePage /> },
-      { path: ROUTES.live, element: <LivePage /> },
-      { path: ROUTES.rounds, element: <RoundsPage /> },
-      { path: ROUTES.round, element: <RoundPage /> },
-      { path: ROUTES.compare, element: <ComparePage /> },
-      { path: '*', element: <NotFoundPage /> },
-    ],
-  },
+	{
+		element: <Layout />,
+		children: [
+			{ path: ROUTES.home, element: <HomePage /> },
+			{ path: ROUTES.live, element: <LivePage /> },
+			{ path: ROUTES.rounds, element: <RoundsPage /> },
+			{ path: ROUTES.round, element: <RoundPage /> },
+			{ path: ROUTES.compare, element: <ComparePage /> },
+			{ path: '*', element: <NotFoundPage /> },
+		],
+	},
 ];
 
 const router = createBrowserRouter(appRoutes);
 
 export default function App(): React.JSX.Element {
-  return <RouterProvider router={router} />;
+	return <RouterProvider router={router} />;
 }

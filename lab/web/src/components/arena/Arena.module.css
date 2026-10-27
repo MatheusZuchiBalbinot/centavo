@@ -1,28 +1,28 @@
 /* The arena: one round on one screen, over the page. */
 .arena {
-  width: calc(100vw - 32px);
-  max-width: none;
-  height: calc(100dvh - 32px);
-  max-height: none;
-  margin: auto;
-  padding: 0;
-  overflow: hidden;
-  border: 1px solid var(--border-strong);
-  border-radius: 14px;
-  background: radial-gradient(circle at 30% 0%, oklch(0.25 0.04 230 / 60%), transparent 45%), var(--surface);
-  box-shadow: var(--shadow-modal);
-  color: var(--fg);
+	width: calc(100vw - 32px);
+	max-width: none;
+	height: calc(100dvh - 32px);
+	max-height: none;
+	margin: auto;
+	padding: 0;
+	overflow: hidden;
+	border: 1px solid var(--border-strong);
+	border-radius: 14px;
+	background: radial-gradient(circle at 30% 0%, oklch(0.25 0.04 230 / 60%), transparent 45%), var(--surface);
+	box-shadow: var(--shadow-modal);
+	color: var(--fg);
 }
 
 .arena[open] {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  grid-auto-rows: auto;
+	display: grid;
+	grid-template-rows: auto minmax(0, 1fr);
+	grid-auto-rows: auto;
 }
 
 .arena::backdrop {
-  background: oklch(0 0 0 / 60%);
-  backdrop-filter: blur(3px);
+	background: oklch(0 0 0 / 60%);
+	backdrop-filter: blur(3px);
 }
 
 /* Header */
@@ -30,825 +30,825 @@
    close button and the scrubber keep working once a round is over. */
 .head,
 .player {
-  position: relative;
-  z-index: 6;
+	position: relative;
+	z-index: 6;
 }
 
 .head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 18px;
-  padding: 14px 20px;
-  border-bottom: 1px solid var(--border);
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 12px 18px;
+	padding: 14px 20px;
+	border-bottom: 1px solid var(--border);
 }
 
 .headText {
-  flex: 1 1 280px;
-  min-width: 0;
+	flex: 1 1 280px;
+	min-width: 0;
 }
 
 .eyebrow {
-  color: var(--warning);
-  font-size: var(--text-xs);
-  font-weight: 600;
+	color: var(--warning);
+	font-size: var(--text-xs);
+	font-weight: 600;
 }
 
 .title {
-  font-size: var(--text-xl);
-  font-weight: 600;
-  letter-spacing: -0.02em;
+	font-size: var(--text-xl);
+	font-weight: 600;
+	letter-spacing: -0.02em;
 }
 
 .clock {
-  display: grid;
-  gap: 4px;
-  width: min(260px, 100%);
+	display: grid;
+	gap: 4px;
+	width: min(260px, 100%);
 }
 
 .clockRow {
-  display: flex;
-  justify-content: space-between;
-  color: var(--faint);
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
+	display: flex;
+	justify-content: space-between;
+	color: var(--faint);
+	font-family: var(--font-mono);
+	font-size: var(--text-2xs);
 }
 
 .clockBar {
-  height: 6px;
-  overflow: hidden;
-  border-radius: var(--radius-full);
-  background: var(--border);
+	height: 6px;
+	overflow: hidden;
+	border-radius: var(--radius-full);
+	background: var(--border);
 }
 
 .clockBar i {
-  display: block;
-  height: 100%;
-  border-radius: var(--radius-full);
-  background: var(--primary);
-  transition: width 0.9s linear;
+	display: block;
+	height: 100%;
+	border-radius: var(--radius-full);
+	background: var(--primary);
+	transition: width 0.9s linear;
 }
 
 .kbd {
-  padding: 0 5px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--faint);
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
+	padding: 0 5px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	color: var(--faint);
+	font-family: var(--font-mono);
+	font-size: var(--text-2xs);
 }
 
 /* Body */
 .body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
-  min-height: 0;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 360px;
+	min-height: 0;
 }
 
 .side {
-  display: grid;
-  align-content: start;
-  gap: 12px;
-  padding: 16px;
-  overflow-y: auto;
-  border-left: 1px solid var(--border);
+	display: grid;
+	align-content: start;
+	gap: 12px;
+	padding: 16px;
+	overflow-y: auto;
+	border-left: 1px solid var(--border);
 }
 
 .card {
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: linear-gradient(180deg, var(--surface-2), var(--surface));
+	padding: 12px 14px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: linear-gradient(180deg, var(--surface-2), var(--surface));
 }
 
 .cardTitle {
-  margin-bottom: 4px;
-  color: var(--muted);
-  font-size: var(--text-xs);
-  font-weight: 500;
+	margin-bottom: 4px;
+	color: var(--muted);
+	font-size: var(--text-xs);
+	font-weight: 500;
 }
 
 .money {
-  color: var(--success);
-  font-family: var(--font-mono);
-  font-size: 40px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.03em;
-  line-height: 1.1;
+	color: var(--success);
+	font-family: var(--font-mono);
+	font-size: 40px;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	letter-spacing: -0.03em;
+	line-height: 1.1;
 }
 
 .money[data-broken='true'] {
-  color: var(--danger);
+	color: var(--danger);
 }
 
 .hint {
-  margin-top: 4px;
-  color: var(--faint);
-  font-size: var(--text-xs);
+	margin-top: 4px;
+	color: var(--faint);
+	font-size: var(--text-xs);
 }
 
 .now {
-  font-size: var(--text-lg);
-  font-weight: 600;
-  line-height: 1.35;
-  letter-spacing: -0.01em;
+	font-size: var(--text-lg);
+	font-weight: 600;
+	line-height: 1.35;
+	letter-spacing: -0.01em;
 }
 
 .defense {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 10px;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-  font-size: var(--text-sm);
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	gap: 10px;
+	margin-top: 12px;
+	padding-top: 12px;
+	border-top: 1px solid var(--border);
+	font-size: var(--text-sm);
 }
 
 .shield {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-md);
-  background: var(--success-soft);
-  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--success) 45%, transparent);
-  color: var(--success);
+	display: grid;
+	place-items: center;
+	width: 28px;
+	height: 28px;
+	border-radius: var(--radius-md);
+	background: var(--success-soft);
+	box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--success) 45%, transparent);
+	color: var(--success);
 }
 
 .defense[data-waiting='true'] .shield {
-  background: var(--surface-2);
-  color: var(--muted);
-  box-shadow: inset 0 0 0 1px var(--border-strong);
-  animation: wait 1.4s ease-in-out infinite;
+	background: var(--surface-2);
+	color: var(--muted);
+	box-shadow: inset 0 0 0 1px var(--border-strong);
+	animation: wait 1.4s ease-in-out infinite;
 }
 
 .defenseTitle {
-  color: var(--success);
-  font-weight: 600;
+	color: var(--success);
+	font-weight: 600;
 }
 
 .defense[data-waiting='true'] .defenseTitle {
-  color: var(--muted);
+	color: var(--muted);
 }
 
 .defenseText {
-  color: var(--muted);
+	color: var(--muted);
 }
 
 .stats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 10px;
 }
 
 .stat b {
-  display: block;
-  font-family: var(--font-mono);
-  font-size: var(--text-xl);
-  font-variant-numeric: tabular-nums;
+	display: block;
+	font-family: var(--font-mono);
+	font-size: var(--text-xl);
+	font-variant-numeric: tabular-nums;
 }
 
 .stat span {
-  color: var(--faint);
-  font-size: var(--text-xs);
+	color: var(--faint);
+	font-size: var(--text-xs);
 }
 
 .stat[data-kind='attacks'] b {
-  color: var(--warning);
+	color: var(--warning);
 }
 
 .stat[data-kind='defenses'] b {
-  color: var(--success);
+	color: var(--success);
 }
 
 .chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 4px 0 0;
-  padding: 0;
-  list-style: none;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin: 4px 0 0;
+	padding: 0;
+	list-style: none;
 }
 
 .guaranteeChip {
-  padding: 2px 9px;
-  border-radius: var(--radius-full);
-  background: var(--surface-2);
-  color: var(--muted);
-  font-size: var(--text-xs);
-  font-weight: 500;
+	padding: 2px 9px;
+	border-radius: var(--radius-full);
+	background: var(--surface-2);
+	color: var(--muted);
+	font-size: var(--text-xs);
+	font-weight: 500;
 }
 
 .guaranteeChip[data-tone='ok'] {
-  background: var(--success-soft);
-  color: var(--success);
+	background: var(--success-soft);
+	color: var(--success);
 }
 
 .guaranteeChip[data-tone='broken'] {
-  background: var(--danger-soft);
-  color: var(--danger);
+	background: var(--danger-soft);
+	color: var(--danger);
 }
 
 /* Map */
 .map {
-  position: relative;
-  min-width: 0;
-  min-height: 360px;
-  margin: 28px 70px;
+	position: relative;
+	min-width: 0;
+	min-height: 360px;
+	margin: 28px 70px;
 }
 
 .links {
-  position: absolute;
-  inset: 0;
-  overflow: visible;
+	position: absolute;
+	inset: 0;
+	overflow: visible;
 }
 
 .link {
-  fill: none;
-  stroke: color-mix(in oklch, var(--primary) 40%, var(--border-strong));
-  stroke-width: 2;
-  transition: stroke var(--duration-slow) var(--ease-out);
+	fill: none;
+	stroke: color-mix(in oklch, var(--primary) 40%, var(--border-strong));
+	stroke-width: 2;
+	transition: stroke var(--duration-slow) var(--ease-out);
 }
 
 .link[data-status='slow'] {
-  stroke: var(--warning);
-  stroke-dasharray: 2 5;
+	stroke: var(--warning);
+	stroke-dasharray: 2 5;
 }
 
 .link[data-status='cut'] {
-  stroke: var(--danger);
-  stroke-dasharray: 4 6;
-  opacity: 0.7;
+	stroke: var(--danger);
+	stroke-dasharray: 4 6;
+	opacity: 0.7;
 }
 
 .linkLabel {
-  position: absolute;
-  z-index: 1;
-  padding: 1px 7px;
-  border-radius: var(--radius-full);
-  background: var(--warning-soft);
-  color: var(--warning);
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  white-space: nowrap;
-  transform: translate(-50%, -50%);
+	position: absolute;
+	z-index: 1;
+	padding: 1px 7px;
+	border-radius: var(--radius-full);
+	background: var(--warning-soft);
+	color: var(--warning);
+	font-family: var(--font-mono);
+	font-size: var(--text-2xs);
+	white-space: nowrap;
+	transform: translate(-50%, -50%);
 }
 
 .linkLabel[data-status='cut'] {
-  background: var(--danger-soft);
-  color: var(--danger);
+	background: var(--danger-soft);
+	color: var(--danger);
 }
 
 .packets {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
 }
 
 .packet {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--primary);
-  box-shadow: 0 0 8px var(--primary);
-  offset-rotate: 0deg;
-  animation: travel 1.6s linear infinite;
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--primary);
+	box-shadow: 0 0 8px var(--primary);
+	offset-rotate: 0deg;
+	animation: travel 1.6s linear infinite;
 }
 
 .packet[data-slow='true'] {
-  background: var(--warning);
-  box-shadow: 0 0 8px var(--warning);
-  animation-duration: 4.8s;
+	background: var(--warning);
+	box-shadow: 0 0 8px var(--warning);
+	animation-duration: 4.8s;
 }
 
 .node {
-  position: absolute;
-  z-index: 2;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 4px 10px;
-  width: 152px;
-  padding: 10px 12px;
-  border: 1.5px solid var(--border-strong);
-  border-radius: 12px;
-  background: var(--surface-2);
-  color: var(--fg);
-  font: inherit;
-  text-align: left;
-  cursor: help;
-  transform: translate(-50%, -50%);
-  transition:
-    border-color var(--duration-slow) var(--ease-out),
-    background var(--duration-slow) var(--ease-out);
+	position: absolute;
+	z-index: 2;
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	align-items: center;
+	gap: 4px 10px;
+	width: 152px;
+	padding: 10px 12px;
+	border: 1.5px solid var(--border-strong);
+	border-radius: 12px;
+	background: var(--surface-2);
+	color: var(--fg);
+	font: inherit;
+	text-align: left;
+	cursor: help;
+	transform: translate(-50%, -50%);
+	transition:
+		border-color var(--duration-slow) var(--ease-out),
+		background var(--duration-slow) var(--ease-out);
 }
 
 .node:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 3px;
+	outline: 2px solid var(--focus);
+	outline-offset: 3px;
 }
 
 .nodeIcon {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-md);
-  background: var(--surface);
-  color: var(--muted);
+	display: grid;
+	place-items: center;
+	width: 32px;
+	height: 32px;
+	border-radius: var(--radius-md);
+	background: var(--surface);
+	color: var(--muted);
 }
 
 .nodeText {
-  display: grid;
-  min-width: 0;
+	display: grid;
+	min-width: 0;
 }
 
 .nodeName {
-  font-size: var(--text-sm);
-  font-weight: 600;
+	font-size: var(--text-sm);
+	font-weight: 600;
 }
 
 .nodeStatus {
-  overflow: hidden;
-  color: var(--muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	overflow: hidden;
+	color: var(--muted);
+	font-family: var(--font-mono);
+	font-size: var(--text-2xs);
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .nodeBadges {
-  display: flex;
-  flex-wrap: wrap;
-  grid-column: 1 / -1;
-  gap: 4px;
+	display: flex;
+	flex-wrap: wrap;
+	grid-column: 1 / -1;
+	gap: 4px;
 }
 
 .nodeBadge {
-  padding: 0 6px;
-  border-radius: var(--radius-full);
-  background: var(--primary-soft);
-  color: var(--primary-on-soft);
-  font-size: var(--text-2xs);
-  font-weight: 500;
+	padding: 0 6px;
+	border-radius: var(--radius-full);
+	background: var(--primary-soft);
+	color: var(--primary-on-soft);
+	font-size: var(--text-2xs);
+	font-weight: 500;
 }
 
 .nodeBadge[data-tone='violet'] {
-  background: var(--violet-soft);
-  color: var(--violet);
+	background: var(--violet-soft);
+	color: var(--violet);
 }
 
 .nodeBadge[data-tone='warning'] {
-  background: var(--warning-soft);
-  color: var(--warning);
+	background: var(--warning-soft);
+	color: var(--warning);
 }
 
 .nodeBadge[data-tone='success'] {
-  background: var(--success-soft);
-  color: var(--success);
+	background: var(--success-soft);
+	color: var(--success);
 }
 
 .node[data-status='down'] {
-  border-color: var(--danger);
-  background: color-mix(in oklch, var(--danger) 16%, var(--surface-2));
+	border-color: var(--danger);
+	background: color-mix(in oklch, var(--danger) 16%, var(--surface-2));
 }
 
 .node[data-status='down'] .nodeIcon,
 .node[data-status='down'] .nodeName {
-  color: var(--danger);
+	color: var(--danger);
 }
 
 .node[data-status='starting'] {
-  border-color: var(--warning);
-  border-style: dashed;
+	border-color: var(--warning);
+	border-style: dashed;
 }
 
 .node[data-status='starting'] .nodeIcon {
-  color: var(--warning);
+	color: var(--warning);
 }
 
 .node[data-status='frozen'] {
-  border-color: var(--ice);
-  background: color-mix(in oklch, var(--ice) 14%, var(--surface-2));
+	border-color: var(--ice);
+	background: color-mix(in oklch, var(--ice) 14%, var(--surface-2));
 }
 
 .node[data-status='frozen'] .nodeIcon,
 .node[data-status='frozen'] .nodeName {
-  color: var(--ice);
+	color: var(--ice);
 }
 
 /* A hit shakes the node once; the shake is the attack landing. */
 .node[data-hit='true'] {
-  animation: shake 0.5s var(--ease-out);
+	animation: shake 0.5s var(--ease-out);
 }
 
 .node[data-defending='true'] {
-  border-color: var(--success);
-  box-shadow:
-    0 0 0 5px color-mix(in oklch, var(--success) 18%, transparent),
-    0 0 24px color-mix(in oklch, var(--success) 25%, transparent);
+	border-color: var(--success);
+	box-shadow:
+		0 0 0 5px color-mix(in oklch, var(--success) 18%, transparent),
+		0 0 24px color-mix(in oklch, var(--success) 25%, transparent);
 }
 
 .node[data-defending='true'] .nodeIcon {
-  color: var(--success);
+	color: var(--success);
 }
 
 .bubble {
-  position: absolute;
-  z-index: 3;
-  display: grid;
-  gap: 2px;
-  width: max-content;
-  max-width: 280px;
-  padding: 10px 12px;
-  border: 1px solid var(--danger);
-  border-radius: var(--radius-lg);
-  background: var(--elevated);
-  box-shadow: var(--shadow-modal);
-  font-size: var(--text-sm);
-  pointer-events: none;
-  animation: enter-rise var(--duration-slow) var(--ease-out);
+	position: absolute;
+	z-index: 3;
+	display: grid;
+	gap: 2px;
+	width: max-content;
+	max-width: 280px;
+	padding: 10px 12px;
+	border: 1px solid var(--danger);
+	border-radius: var(--radius-lg);
+	background: var(--elevated);
+	box-shadow: var(--shadow-modal);
+	font-size: var(--text-sm);
+	pointer-events: none;
+	animation: enter-rise var(--duration-slow) var(--ease-out);
 }
 
 .bubble[data-side='right'] {
-  transform: translate(92px, -110%);
+	transform: translate(92px, -110%);
 }
 
 .bubble[data-side='left'] {
-  transform: translate(calc(-100% - 92px), -110%);
+	transform: translate(calc(-100% - 92px), -110%);
 }
 
 .bubble strong {
-  color: var(--danger);
-  font-size: var(--text-xs);
+	color: var(--danger);
+	font-size: var(--text-xs);
 }
 
 .bubble small {
-  color: var(--muted);
-  font-size: var(--text-xs);
+	color: var(--muted);
+	font-size: var(--text-xs);
 }
 
 /* Ticker */
 .ticker {
-  padding: 12px 20px 14px;
-  border-top: 1px solid var(--border);
+	padding: 12px 20px 14px;
+	border-top: 1px solid var(--border);
 }
 
 .track {
-  position: relative;
-  height: 34px;
-  border-radius: var(--radius-lg);
-  background: var(--surface-2);
+	position: relative;
+	height: 34px;
+	border-radius: var(--radius-lg);
+	background: var(--surface-2);
 }
 
 .cure {
-  position: absolute;
-  inset: 0 0 0 auto;
-  right: 0;
-  border-left: 1px dashed color-mix(in oklch, var(--success) 50%, transparent);
-  border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
-  background: color-mix(in oklch, var(--success) 10%, transparent);
+	position: absolute;
+	inset: 0 0 0 auto;
+	right: 0;
+	border-left: 1px dashed color-mix(in oklch, var(--success) 50%, transparent);
+	border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+	background: color-mix(in oklch, var(--success) 10%, transparent);
 }
 
 .defenseDot {
-  position: absolute;
-  bottom: 3px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--success);
-  transform: translateX(-50%);
+	position: absolute;
+	bottom: 3px;
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--success);
+	transform: translateX(-50%);
 }
 
 .chip {
-  position: absolute;
-  top: 4px;
-  display: inline-flex;
-  align-items: center;
-  height: 20px;
-  padding: 0 7px;
-  border: 1px solid color-mix(in oklch, var(--warning) 55%, transparent);
-  border-radius: var(--radius-full);
-  background: var(--warning-soft);
-  color: var(--warning);
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  font-weight: 600;
-  white-space: nowrap;
-  transform: translateX(-50%);
+	position: absolute;
+	top: 4px;
+	display: inline-flex;
+	align-items: center;
+	height: 20px;
+	padding: 0 7px;
+	border: 1px solid color-mix(in oklch, var(--warning) 55%, transparent);
+	border-radius: var(--radius-full);
+	background: var(--warning-soft);
+	color: var(--warning);
+	font-family: var(--font-mono);
+	font-size: var(--text-2xs);
+	font-weight: 600;
+	white-space: nowrap;
+	transform: translateX(-50%);
 }
 
 .nowLine {
-  position: absolute;
-  top: -4px;
-  bottom: -4px;
-  width: 2px;
-  background: var(--primary);
-  box-shadow: 0 0 10px var(--primary);
-  transition: left 0.9s linear;
+	position: absolute;
+	top: -4px;
+	bottom: -4px;
+	width: 2px;
+	background: var(--primary);
+	box-shadow: 0 0 10px var(--primary);
+	transition: left 0.9s linear;
 }
 
 .scale {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 6px;
-  color: var(--faint);
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
+	display: flex;
+	justify-content: space-between;
+	margin-top: 6px;
+	color: var(--faint);
+	font-family: var(--font-mono);
+	font-size: var(--text-2xs);
 }
 
 .legend {
-  display: flex;
-  gap: 14px;
-  margin-top: 6px;
-  color: var(--muted);
-  font-size: var(--text-xs);
+	display: flex;
+	gap: 14px;
+	margin-top: 6px;
+	color: var(--muted);
+	font-size: var(--text-xs);
 }
 
 .legend span::before {
-  content: '';
-  display: inline-block;
-  width: 9px;
-  height: 9px;
-  margin-right: 6px;
-  border-radius: 3px;
-  vertical-align: -1px;
+	content: '';
+	display: inline-block;
+	width: 9px;
+	height: 9px;
+	margin-right: 6px;
+	border-radius: 3px;
+	vertical-align: -1px;
 }
 
 .legend [data-kind='attack']::before {
-  border: 1px solid var(--warning);
-  background: var(--warning-soft);
+	border: 1px solid var(--warning);
+	background: var(--warning-soft);
 }
 
 .legend [data-kind='defense']::before {
-  border-radius: 50%;
-  background: var(--success);
+	border-radius: 50%;
+	background: var(--success);
 }
 
 .legend [data-kind='cure']::before {
-  border: 1px dashed color-mix(in oklch, var(--success) 50%, transparent);
-  background: color-mix(in oklch, var(--success) 12%, transparent);
+	border: 1px dashed color-mix(in oklch, var(--success) 50%, transparent);
+	background: color-mix(in oklch, var(--success) 12%, transparent);
 }
 
 /* Verdict */
 .stampLayer {
-  position: absolute;
-  inset: 0;
-  z-index: 5;
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-  background: oklch(0 0 0 / 35%);
+	position: absolute;
+	inset: 0;
+	z-index: 5;
+	display: grid;
+	place-items: center;
+	overflow: hidden;
+	background: oklch(0 0 0 / 35%);
 }
 
 .stamp {
-  display: grid;
-  justify-items: center;
-  gap: 10px;
-  padding: 26px 36px;
-  border: 3px solid var(--success);
-  border-radius: 16px;
-  background: var(--elevated);
-  box-shadow:
-    0 0 0 8px var(--success-soft),
-    var(--shadow-modal);
-  text-align: center;
-  animation: stamp 0.45s cubic-bezier(0.3, 1.6, 0.5, 1);
+	display: grid;
+	justify-items: center;
+	gap: 10px;
+	padding: 26px 36px;
+	border: 3px solid var(--success);
+	border-radius: 16px;
+	background: var(--elevated);
+	box-shadow:
+		0 0 0 8px var(--success-soft),
+		var(--shadow-modal);
+	text-align: center;
+	animation: stamp 0.45s cubic-bezier(0.3, 1.6, 0.5, 1);
 }
 
 .stamp[data-verdict='fail'] {
-  border-color: var(--danger);
-  box-shadow:
-    0 0 0 8px var(--danger-soft),
-    var(--shadow-modal);
+	border-color: var(--danger);
+	box-shadow:
+		0 0 0 8px var(--danger-soft),
+		var(--shadow-modal);
 }
 
 .stamp[data-verdict='inconclusive'],
 .stamp[data-verdict='none'] {
-  border-color: var(--warning);
-  box-shadow:
-    0 0 0 8px var(--warning-soft),
-    var(--shadow-modal);
+	border-color: var(--warning);
+	box-shadow:
+		0 0 0 8px var(--warning-soft),
+		var(--shadow-modal);
 }
 
 .stampWord {
-  color: var(--success);
-  font-size: 48px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  line-height: 1;
+	color: var(--success);
+	font-size: 48px;
+	font-weight: 700;
+	letter-spacing: -0.03em;
+	line-height: 1;
 }
 
 .stamp[data-verdict='fail'] .stampWord {
-  color: var(--danger);
+	color: var(--danger);
 }
 
 .stamp[data-verdict='inconclusive'] .stampWord,
 .stamp[data-verdict='none'] .stampWord {
-  color: var(--warning);
+	color: var(--warning);
 }
 
 .stampFacts {
-  color: var(--muted);
+	color: var(--muted);
 }
 
 .stampActions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 6px;
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 8px;
+	margin-top: 6px;
 }
 
 .confetti {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
 }
 
 .confetti span {
-  position: absolute;
-  top: -12px;
-  width: 8px;
-  height: 12px;
-  border-radius: 2px;
-  opacity: 0;
-  animation: fall 2.4s ease-in forwards;
+	position: absolute;
+	top: -12px;
+	width: 8px;
+	height: 12px;
+	border-radius: 2px;
+	opacity: 0;
+	animation: fall 2.4s ease-in forwards;
 }
 
 @keyframes travel {
-  from {
-    offset-distance: 0%;
-  }
+	from {
+		offset-distance: 0%;
+	}
 
-  to {
-    offset-distance: 100%;
-  }
+	to {
+		offset-distance: 100%;
+	}
 }
 
 @keyframes shake {
-  20%,
-  60% {
-    translate: -4px 0;
-  }
+	20%,
+	60% {
+		translate: -4px 0;
+	}
 
-  40%,
-  80% {
-    translate: 4px 0;
-  }
+	40%,
+	80% {
+		translate: 4px 0;
+	}
 }
 
 @keyframes wait {
-  50% {
-    opacity: 0.45;
-  }
+	50% {
+		opacity: 0.45;
+	}
 }
 
 @keyframes stamp {
-  from {
-    opacity: 0;
-    transform: scale(1.6) rotate(-6deg);
-  }
+	from {
+		opacity: 0;
+		transform: scale(1.6) rotate(-6deg);
+	}
 
-  to {
-    opacity: 1;
-    transform: scale(1) rotate(0deg);
-  }
+	to {
+		opacity: 1;
+		transform: scale(1) rotate(0deg);
+	}
 }
 
 @keyframes fall {
-  0% {
-    opacity: 1;
-    transform: translateY(0) rotate(0deg);
-  }
+	0% {
+		opacity: 1;
+		transform: translateY(0) rotate(0deg);
+	}
 
-  100% {
-    opacity: 0;
-    transform: translateY(95vh) rotate(540deg);
-  }
+	100% {
+		opacity: 0;
+		transform: translateY(95vh) rotate(540deg);
+	}
 }
 
 /* Without motion, the packets and confetti have nothing to say. */
 @media (prefers-reduced-motion: reduce) {
-  .packets,
-  .confetti {
-    display: none;
-  }
+	.packets,
+	.confetti {
+		display: none;
+	}
 }
 
 @media (max-width: 1100px) {
-  .body {
-    grid-template-columns: minmax(0, 1fr);
-    overflow-y: auto;
-  }
+	.body {
+		grid-template-columns: minmax(0, 1fr);
+		overflow-y: auto;
+	}
 
-  .side {
-    border-top: 1px solid var(--border);
-    border-left: 0;
-    overflow-y: visible;
-  }
+	.side {
+		border-top: 1px solid var(--border);
+		border-left: 0;
+		overflow-y: visible;
+	}
 }
 
 @media (max-width: 760px) {
-  .arena {
-    width: 100vw;
-    height: 100dvh;
-    border-radius: 0;
-  }
+	.arena {
+		width: 100vw;
+		height: 100dvh;
+		border-radius: 0;
+	}
 
-  .map {
-    min-height: 520px;
-    margin: 28px 16px;
-  }
+	.map {
+		min-height: 520px;
+		margin: 28px 16px;
+	}
 
-  .node {
-    width: 118px;
-    padding: 8px;
-  }
+	.node {
+		width: 118px;
+		padding: 8px;
+	}
 
-  .nodeIcon {
-    display: none;
-  }
+	.nodeIcon {
+		display: none;
+	}
 
-  .bubble {
-    display: none;
-  }
+	.bubble {
+		display: none;
+	}
 }
 
 .stampBet {
-  padding: 4px 12px;
-  border-radius: var(--radius-full);
-  background: var(--violet-soft);
-  color: var(--violet);
-  font-size: var(--text-sm);
-  font-weight: 500;
+	padding: 4px 12px;
+	border-radius: var(--radius-full);
+	background: var(--violet-soft);
+	color: var(--violet);
+	font-size: var(--text-sm);
+	font-weight: 500;
 }
 
 /* Replay player */
 .player {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 14px;
-  padding: 10px 20px;
-  border-top: 1px solid var(--border);
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px 14px;
+	padding: 10px 20px;
+	border-top: 1px solid var(--border);
 }
 
 .scrubber {
-  flex: 1 1 240px;
-  min-width: 0;
-  min-height: 24px;
-  accent-color: var(--primary);
+	flex: 1 1 240px;
+	min-width: 0;
+	min-height: 24px;
+	accent-color: var(--primary);
 }
 
 .playerClock {
-  color: var(--muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  font-variant-numeric: tabular-nums;
+	color: var(--muted);
+	font-family: var(--font-mono);
+	font-size: var(--text-xs);
+	font-variant-numeric: tabular-nums;
 }
 
 .speeds {
-  display: inline-flex;
-  gap: 2px;
-  padding: 3px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-full);
-  background: var(--surface);
+	display: inline-flex;
+	gap: 2px;
+	padding: 3px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-full);
+	background: var(--surface);
 }
 
 .speed {
-  min-width: 40px;
-  min-height: 26px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: var(--radius-full);
-  background: none;
-  color: var(--muted);
-  font: inherit;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  cursor: pointer;
+	min-width: 40px;
+	min-height: 26px;
+	padding: 0 10px;
+	border: 0;
+	border-radius: var(--radius-full);
+	background: none;
+	color: var(--muted);
+	font: inherit;
+	font-family: var(--font-mono);
+	font-size: var(--text-xs);
+	cursor: pointer;
 }
 
 .speed[aria-pressed='true'] {
-  background: var(--primary-soft);
-  color: var(--primary-on-soft);
-  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--primary) 40%, transparent);
+	background: var(--primary-soft);
+	color: var(--primary-on-soft);
+	box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--primary) 40%, transparent);
 }
 
 .speed:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
+	outline: 2px solid var(--focus);
+	outline-offset: 2px;
 }
 
 /* A replay ticks ten times a second at up to 60x; easing that is meant for
    the live once-a-second tick would trail far behind it. */
 .arena[data-replay='true'] .nowLine,
 .arena[data-replay='true'] .clockBar i {
-  transition: none;
+	transition: none;
 }

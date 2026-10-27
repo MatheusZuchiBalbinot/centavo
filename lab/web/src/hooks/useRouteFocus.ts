@@ -8,16 +8,16 @@ export const PAGE_HEADING_ID = 'page-heading';
 // so a keyboard or screen reader user starts at the top of the new page.
 // The first render keeps the browser's own focus.
 export function useRouteFocus(): void {
-  const { pathname } = useLocation();
-  const isFirstRender = useRef(true);
+	const { pathname } = useLocation();
+	const isFirstRender = useRef(true);
 
-  useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
+	useEffect(() => {
+		if (isFirstRender.current) {
+			isFirstRender.current = false;
 
-      return;
-    }
+			return;
+		}
 
-    document.getElementById(PAGE_HEADING_ID)?.focus();
-  }, [pathname]);
+		document.getElementById(PAGE_HEADING_ID)?.focus();
+	}, [pathname]);
 }
