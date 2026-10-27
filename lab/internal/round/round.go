@@ -19,6 +19,7 @@ import (
 	"centavo/lab/internal/export"
 	"centavo/lab/internal/history"
 	"centavo/lab/internal/loadgen"
+	"centavo/lab/internal/manual"
 	"centavo/lab/internal/nemesis"
 	"centavo/lab/internal/seed"
 	"centavo/lab/internal/snapshot"
@@ -163,7 +164,7 @@ func Run(ctx context.Context, options Options) (Result, error) {
 		Round: id, Seed: options.Seed, Scenario: options.Scenario, History: writer, Docker: options.Chaos.Docker,
 		ChaosToken: options.Chaos.Token, EventsDir: options.Chaos.EventsDir, Logger: options.Logger,
 
-		PartnerAdminURL: options.Saga.PartnerURL, ParticipantID: options.Saga.ParticipantID,
+		PartnerAdminURL: options.Saga.PartnerURL, ParticipantID: options.Saga.ParticipantID, CommandsDir: filepath.Join(dir, manual.DirName),
 	}
 
 	bot := nemesis.New(nemesisConfig)

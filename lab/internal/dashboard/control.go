@@ -8,10 +8,12 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strconv"
 	"time"
 
 	"centavo/lab/internal/attacks"
+	"centavo/lab/internal/manual"
 	"centavo/lab/internal/runner"
 )
 
@@ -65,9 +67,10 @@ type roundsPage struct {
 }
 
 type control struct {
-	panel   panelHandlers
-	runner  RoundRunner
-	limiter *windowLimiter
+	panel         panelHandlers
+	runner        RoundRunner
+	startLimiter  *windowLimiter
+	attackLimiter *windowLimiter
 }
 
 func (c control) lab(w http.ResponseWriter, _ *http.Request) {
@@ -107,9 +110,9 @@ func (c control) start(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	retryAfter := c.limiter.wait()
+	retryAfter := c.startLimiter.wait()
 	if retryAfter > 0 {
-		w.Header().Set("Retry-After", strconv.Itoa(int(retryAfter.Seconds())+1))
+		setRetryAfter(w, retryAfter)
 		c.panel.writeError(w, r, errRateLimited)
 
 		return
@@ -133,7 +136,7 @@ func (c control) start(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c.limiter.record()
+	c.startLimiter.record()
 	c.panel.config.Logger.InfoContext(r.Context(), "round started from the panel",
 		"attack", request.Attack, "scenario", request.Scenario, "duration", request.Duration, "network", networkOf(r.RemoteAddr))
 	writeJSON(w, http.StatusAccepted, labResponseOf(state))
@@ -157,6 +160,61 @@ func (c control) stop(w http.ResponseWriter, r *http.Request) {
 	c.panel.config.Logger.InfoContext(r.Context(), "round stopped from the panel",
 		"scenario", state.Request.Scenario, "network", networkOf(r.RemoteAddr))
 	writeJSON(w, http.StatusAccepted, labResponseOf(state))
+}
+
+// The round runs in another process, so the command only reaches its
+// commands directory; 202 means the nemesis will carry it out within a beat.
+func (c control) attack(w http.ResponseWriter, r *http.Request) {
+	var command manual.Command
+
+	err := decodeJSON(w, r, &command)
+	if err != nil {
+		c.panel.writeError(w, r, err)
+
+		return
+	}
+
+	state := c.runner.State()
+
+	hasRound := state.Status == runner.StatusRunning || state.Status == runner.StatusStopping
+	if !hasRound {
+		c.panel.writeError(w, r, errLabIdle)
+
+		return
+	}
+
+	round := c.panel.tracker.roundStartedSince(state.StartedAt)
+	isUnderAttack := state.Status == runner.StatusRunning && round != ""
+
+	if !isUnderAttack {
+		c.panel.writeError(w, r, errAttackClosed)
+
+		return
+	}
+
+	retryAfter := c.attackLimiter.wait()
+	if retryAfter > 0 {
+		setRetryAfter(w, retryAfter)
+		c.panel.writeError(w, r, errAttacksLimited)
+
+		return
+	}
+
+	err = manual.Send(filepath.Join(c.panel.config.RoundsDir, round, manual.DirName), command)
+	if err != nil {
+		c.panel.writeError(w, r, err)
+
+		return
+	}
+
+	c.attackLimiter.record()
+	c.panel.config.Logger.InfoContext(r.Context(), "manual attack from the panel",
+		"round", round, "action", command.Action, "target", command.Target, "network", networkOf(r.RemoteAddr))
+	writeJSON(w, http.StatusAccepted, command)
+}
+
+func setRetryAfter(w http.ResponseWriter, retryAfter time.Duration) {
+	w.Header().Set("Retry-After", strconv.Itoa(int(retryAfter.Seconds())+1))
 }
 
 func labResponseOf(state runner.State) labResponse {

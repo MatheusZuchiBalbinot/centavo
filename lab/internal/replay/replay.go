@@ -82,7 +82,9 @@ type Event struct {
 	// many items one action covered.
 	Subject string `json:"subject,omitempty"`
 	Count   int    `json:"count,omitempty"`
-	Text    string `json:"text"`
+	// Manual is an attack a person launched from the panel.
+	Manual bool   `json:"manual,omitempty"`
+	Text   string `json:"text"`
 }
 
 type Counters struct {
@@ -125,7 +127,14 @@ type nemesisValue struct {
 	Defense   string   `json:"defense"`
 	Detail    string   `json:"detail"`
 	Count     int      `json:"count"`
+	Via       string   `json:"via"`
 }
+
+// viaManual is the nemesis's word for an attack launched from the panel.
+const viaManual = "manual"
+
+// databaseTarget is the one database the lab attacks.
+const databaseTarget = "postgres"
 
 func NewBuilder(round, scenario, seed string) *Builder {
 	replay := Replay{Round: round, Scenario: scenario, Seed: seed, Seconds: []Second{}, Events: []Event{}}
@@ -256,7 +265,7 @@ func (b *Builder) feedNemesis(record history.Record) {
 	switch record.F {
 	case history.FunctionKill:
 		counters.Kills++
-		b.addEvent(record, Event{Family: familyProcess, Target: value.Target, Text: eventKilled + value.Target})
+		b.addEvent(record, Event{Family: familyProcess, Target: value.Target, Manual: value.Via == viaManual, Text: eventKilled + value.Target})
 	case history.FunctionFailpointFired:
 		counters.FailpointFires++
 		text := fmt.Sprintf(eventFailpoint, value.Failpoint, value.Action, value.Instance)
@@ -264,12 +273,16 @@ func (b *Builder) feedNemesis(record history.Record) {
 	case history.FunctionFreeze:
 		counters.Freezes++
 		text := fmt.Sprintf(eventFrozen, value.Target, value.Duration)
-		b.addEvent(record, Event{Family: familyProcess, Target: value.Target, Duration: value.Duration, Text: text})
+		b.addEvent(record, Event{Family: familyProcess, Target: value.Target, Duration: value.Duration, Manual: value.Via == viaManual, Text: text})
 	case history.FunctionNetwork:
 		b.feedNetwork(record, value)
 	case history.FunctionDatabase:
 		counters.Database++
-		b.addEvent(record, Event{Family: familyDatabase, Detail: value.Action, Text: eventDatabase + value.Action})
+		event := Event{
+			Family: familyDatabase, Target: databaseTarget, Detail: value.Action, Duration: value.Duration,
+			Manual: value.Via == viaManual, Text: eventDatabase + value.Action,
+		}
+		b.addEvent(record, event)
 	case history.FunctionFailover:
 		b.feedFailover(record, value)
 	case history.FunctionSkewClock:
@@ -297,7 +310,11 @@ func (b *Builder) feedNetwork(record history.Record, value nemesisValue) {
 	target := strings.Join(value.Proxies, ", ")
 
 	if value.Phase == networkEnd {
-		b.addEvent(record, Event{Family: familyNetwork, Target: target, Detail: value.Toxic, Subject: networkEnd, Text: fmt.Sprintf(eventNetworkEnd, value.Proxies)})
+		end := Event{
+			Family: familyNetwork, Target: target, Detail: value.Toxic, Subject: networkEnd,
+			Manual: value.Via == viaManual, Text: fmt.Sprintf(eventNetworkEnd, value.Proxies),
+		}
+		b.addEvent(record, end)
 
 		return
 	}
@@ -308,7 +325,7 @@ func (b *Builder) feedNetwork(record history.Record, value nemesisValue) {
 
 	b.replay.Counters.Network++
 	text := fmt.Sprintf(eventNetwork, value.Toxic, value.Proxies)
-	b.addEvent(record, Event{Family: familyNetwork, Target: target, Detail: value.Toxic, Text: text})
+	b.addEvent(record, Event{Family: familyNetwork, Target: target, Detail: value.Toxic, Manual: value.Via == viaManual, Text: text})
 }
 
 func (b *Builder) feedFailover(record history.Record, value nemesisValue) {

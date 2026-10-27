@@ -44,7 +44,7 @@ func (n *Nemesis) killRandomly(ctx context.Context, fault scenarios.Fault) {
 			continue
 		}
 
-		err := n.kill(ctx, fault, service)
+		err := n.kill(ctx, service, viaRandom, fault.ID)
 		if err != nil {
 			n.config.Logger.WarnContext(ctx, "random kill", "target", service, "error", err)
 
@@ -57,7 +57,7 @@ func (n *Nemesis) killRandomly(ctx context.Context, fault scenarios.Fault) {
 
 // chaos-kill runs inside the target, so the process dies of its own SIGKILL
 // and the restart policy brings it back.
-func (n *Nemesis) kill(ctx context.Context, fault scenarios.Fault, service string) error {
+func (n *Nemesis) kill(ctx context.Context, service, via, faultID string) error {
 	t, isKnown := targetByService(service)
 	if !isKnown {
 		return fmt.Errorf("unknown target %s", service)
@@ -72,7 +72,7 @@ func (n *Nemesis) kill(ctx context.Context, fault scenarios.Fault, service strin
 		return fmt.Errorf("%s is not running", service)
 	}
 
-	err = n.record(history.FunctionKill, killRecord{Target: service, Via: "random", Fault: fault.ID})
+	err = n.record(history.FunctionKill, killRecord{Target: service, Via: via, Fault: faultID})
 	if err != nil {
 		return err
 	}

@@ -32,10 +32,10 @@ func TestNetwork_PartitionsBecomeToxiproxyCalls(t *testing.T) {
 			bot, fake := newNetworkNemesis(t)
 			fault := scenarios.Fault{ID: "cut", Kind: scenarios.FaultNetwork, Proxies: []string{"worker1_pg"}, Toxic: scenarios.Toxic{Type: tc.toxic, Stream: "downstream", Toxicity: 1}}
 
-			bot.applyNetwork(t.Context(), fault)
+			bot.applyNetwork(t.Context(), fault, "")
 			applied := slices.Clone(fake.calls)
 			fake.calls = nil
-			bot.removeNetwork(t.Context(), fault)
+			bot.removeNetwork(t.Context(), fault, "")
 
 			if !slices.Equal(applied, tc.wantApply) || !slices.Equal(fake.calls, tc.wantRemove) {
 				t.Fatalf("applied %v, removed %v", applied, fake.calls)

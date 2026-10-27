@@ -87,3 +87,28 @@ func TestPercentile_NearestRank(t *testing.T) {
 }
 
 func at(d time.Duration) int64 { return int64(d) }
+
+func TestBuilder_MarksTheAttacksAPersonLaunched(t *testing.T) {
+	t.Parallel()
+
+	b := NewBuilder("r0001", "random-kills", "0x5eed")
+	nemesis := history.Nemesis()
+
+	byHand := []byte(`{"target":"bank-worker-1","via":"manual"}`)
+	random := []byte(`{"target":"bank-api","via":"random","fault":"kills"}`)
+	database := []byte(`{"fault":"manual-x","action":"kill_postmaster","via":"manual"}`)
+
+	b.Feed(history.Record{Process: nemesis, Type: history.TypeInfo, F: history.FunctionKill, Value: byHand, TimeNS: int64(time.Second)})
+	b.Feed(history.Record{Process: nemesis, Type: history.TypeInfo, F: history.FunctionKill, Value: random, TimeNS: int64(2 * time.Second)})
+	b.Feed(history.Record{Process: nemesis, Type: history.TypeInfo, F: history.FunctionDatabase, Value: database, TimeNS: int64(3 * time.Second)})
+
+	events := b.Replay().Events
+	if len(events) != 3 {
+		t.Fatalf("events: %+v", events)
+	}
+
+	isRight := events[0].Manual && !events[1].Manual && events[2].Manual && events[2].Target == databaseTarget
+	if !isRight {
+		t.Fatalf("events: %+v", events)
+	}
+}

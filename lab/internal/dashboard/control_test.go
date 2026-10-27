@@ -17,6 +17,7 @@ import (
 
 	"centavo/lab/internal/attacks"
 	"centavo/lab/internal/dashboard"
+	"centavo/lab/internal/manual"
 	"centavo/lab/internal/runner"
 )
 
@@ -24,8 +25,9 @@ const (
 	panelHost  = "lab.test"
 	panelURL   = "http://" + panelHost
 	smokeStart = `{"attack":"calm","duration_seconds":180}`
-	// startsPerHour mirrors the panel's round start limit.
-	startsPerHour = 6
+	// startsPerHour and attacksPerMinute mirror the panel's limits.
+	startsPerHour    = 6
+	attacksPerMinute = 12
 )
 
 // isSingleRound refuses a second round like the real one; otherwise every
@@ -372,5 +374,164 @@ func TestLab_NamesTheRoundOnceItHasStarted(t *testing.T) {
 	isNamed := after.Status == "running" && after.Round == "r0002"
 	if !isNamed {
 		t.Fatalf("lab after the round started: %+v", after)
+	}
+}
+
+func TestAttack_ReachesTheRoundOnlyDuringItsAttackPhase(t *testing.T) {
+	t.Parallel()
+
+	roundsDir := t.TempDir()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	rounds := &fakeRunner{isSingleRound: true}
+	handler := dashboard.NewHandler(dashboard.Config{Live: noReading, RoundsDir: roundsDir, Logger: logger, Runner: rounds})
+	kill := postRequest{path: "/api/lab/attacks", body: `{"action":"kill","target":"bank-worker-1"}`, contentType: "application/json", origin: panelURL}
+
+	recorder := post(t, handler, kill)
+
+	isIdle := recorder.Code == http.StatusConflict && errorCodeOf(t, recorder) == "lab_idle"
+	if !isIdle {
+		t.Fatalf("attack with no round: %d %s", recorder.Code, recorder.Body)
+	}
+
+	startRound(t, handler, smokeStart)
+	startNamedRound(t, roundsDir, "r0007", rounds.State().StartedAt)
+
+	recorder = post(t, handler, kill)
+
+	isBeforeTheAttack := recorder.Code == http.StatusConflict && errorCodeOf(t, recorder) == "attack_closed"
+	if !isBeforeTheAttack {
+		t.Fatalf("attack before the attack phase: %d %s", recorder.Code, recorder.Body)
+	}
+
+	commandsDir := filepath.Join(roundsDir, "r0007", manual.DirName)
+
+	err := manual.Open(commandsDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	recorder = post(t, handler, kill)
+	if recorder.Code != http.StatusAccepted {
+		t.Fatalf("attack: %d %s", recorder.Code, recorder.Body)
+	}
+
+	commands, err := manual.Take(commandsDir)
+
+	isDelivered := err == nil && slices.Equal(commands, []manual.Command{{Action: manual.Kill, Target: "bank-worker-1"}})
+	if !isDelivered {
+		t.Fatalf("commands %+v, %v", commands, err)
+	}
+
+	_, err = rounds.Stop()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	recorder = post(t, handler, kill)
+
+	isAfterTheStop := recorder.Code == http.StatusConflict && errorCodeOf(t, recorder) == "attack_closed"
+	if !isAfterTheStop {
+		t.Fatalf("attack after the stop: %d %s", recorder.Code, recorder.Body)
+	}
+}
+
+func TestAttack_RefusesWhatThePanelDoesNotOffer(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name    string
+		request postRequest
+		status  int
+		code    string
+	}{
+		{"kill a link", postRequest{body: `{"action":"kill","target":"api_pg"}`}, http.StatusUnprocessableEntity, "unknown_attack"},
+		{"cut a process", postRequest{body: `{"action":"cut","target":"postgres"}`}, http.StatusUnprocessableEntity, "unknown_attack"},
+		{"the auditor", postRequest{body: `{"action":"kill","target":"auditor"}`}, http.StatusUnprocessableEntity, "unknown_attack"},
+		{"unknown field", postRequest{body: `{"action":"kill","target":"partner","seconds":600}`}, http.StatusBadRequest, "invalid_request"},
+		{"another site", postRequest{body: `{"action":"kill","target":"partner"}`, origin: "https://evil.test"}, http.StatusForbidden, "forbidden_origin"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			roundsDir := t.TempDir()
+			rounds := &fakeRunner{isSingleRound: true}
+			handler := dashboard.NewHandler(dashboard.Config{Live: noReading, RoundsDir: roundsDir, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), Runner: rounds})
+			commandsDir := underAttack(t, handler, rounds, roundsDir)
+
+			request := tc.request
+			request.path = "/api/lab/attacks"
+			request.contentType = "application/json"
+			request.origin = cmp.Or(request.origin, panelURL)
+
+			recorder := post(t, handler, request)
+
+			isExpected := recorder.Code == tc.status && errorCodeOf(t, recorder) == tc.code
+			if !isExpected {
+				t.Fatalf("got %d %s, want %d %s", recorder.Code, recorder.Body, tc.status, tc.code)
+			}
+
+			commands, _ := manual.Take(commandsDir)
+			if len(commands) != 0 {
+				t.Fatalf("a refused attack reached the round: %+v", commands)
+			}
+		})
+	}
+}
+
+func TestAttack_LimitsTheAttacksPerMinute(t *testing.T) {
+	t.Parallel()
+
+	roundsDir := t.TempDir()
+	rounds := &fakeRunner{isSingleRound: true}
+	handler := dashboard.NewHandler(dashboard.Config{Live: noReading, RoundsDir: roundsDir, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), Runner: rounds})
+	underAttack(t, handler, rounds, roundsDir)
+
+	slow := postRequest{path: "/api/lab/attacks", body: `{"action":"slow","target":"client_api"}`, contentType: "application/json", origin: panelURL}
+
+	for attack := range attacksPerMinute {
+		recorder := post(t, handler, slow)
+		if recorder.Code != http.StatusAccepted {
+			t.Fatalf("attack %d: %d %s", attack+1, recorder.Code, recorder.Body)
+		}
+	}
+
+	recorder := post(t, handler, slow)
+
+	isLimited := recorder.Code == http.StatusTooManyRequests && errorCodeOf(t, recorder) == "rate_limited" && recorder.Header().Get("Retry-After") != ""
+	if !isLimited {
+		t.Fatalf("attack past the limit: %d %s", recorder.Code, recorder.Body)
+	}
+}
+
+// underAttack starts a round and opens its attack phase, returning the
+// round's commands directory.
+func underAttack(t *testing.T, handler http.Handler, rounds *fakeRunner, roundsDir string) string {
+	t.Helper()
+
+	startRound(t, handler, smokeStart)
+	startNamedRound(t, roundsDir, "r0001", rounds.State().StartedAt)
+
+	commandsDir := filepath.Join(roundsDir, "r0001", manual.DirName)
+
+	err := manual.Open(commandsDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return commandsDir
+}
+
+func startNamedRound(t *testing.T, roundsDir, round string, startedAt time.Time) {
+	t.Helper()
+
+	writeRound(t, roundsDir, round, "")
+
+	manifest := `{"round":"` + round + `","started_at":"` + startedAt.UTC().Format(time.RFC3339Nano) + `"}`
+
+	err := os.WriteFile(filepath.Join(roundsDir, round, "round.json"), []byte(manifest), 0o600)
+	if err != nil {
+		t.Fatal(err)
 	}
 }

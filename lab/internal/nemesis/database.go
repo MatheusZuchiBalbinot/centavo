@@ -27,6 +27,7 @@ type databaseRecord struct {
 	Fault    string `json:"fault"`
 	Action   string `json:"action"`
 	Duration string `json:"duration,omitempty"`
+	Via      string `json:"via,omitempty"`
 }
 
 // A failover sets up replication right away, so a stack without the replica
@@ -67,14 +68,14 @@ func (n *Nemesis) databaseEpisodes(ctx context.Context, fault scenarios.Fault) {
 		case <-time.After(wait):
 		}
 
-		err := n.hitDatabase(ctx, fault, length)
+		err := n.hitDatabase(ctx, fault, length, "")
 		if err != nil {
 			n.config.Logger.WarnContext(ctx, "database fault", "fault", fault.ID, "action", fault.Action, "error", err)
 		}
 	}
 }
 
-func (n *Nemesis) hitDatabase(ctx context.Context, fault scenarios.Fault, length time.Duration) error {
+func (n *Nemesis) hitDatabase(ctx context.Context, fault scenarios.Fault, length time.Duration, via string) error {
 	container, err := n.config.Docker.Find(ctx, databaseService)
 	if err != nil {
 		return err
@@ -87,7 +88,7 @@ func (n *Nemesis) hitDatabase(ctx context.Context, fault scenarios.Fault, length
 		return nil
 	}
 
-	value := databaseRecord{Fault: fault.ID, Action: fault.Action}
+	value := databaseRecord{Fault: fault.ID, Action: fault.Action, Via: via}
 	if fault.Action == scenarios.DatabaseFreeze {
 		value.Duration = length.String()
 	}

@@ -14,6 +14,10 @@ type limit struct {
 // minutes.
 var roundStartLimit = limit{count: 6, window: time.Hour}
 
+// Each manual fault heals itself in seconds; the limit keeps a script from
+// holding the bank down for the whole round.
+var manualAttackLimit = limit{count: 12, window: time.Minute}
+
 type windowLimiter struct {
 	limit limit
 	now   func() time.Time

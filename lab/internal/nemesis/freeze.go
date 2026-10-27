@@ -9,8 +9,9 @@ import (
 
 type freezeRecord struct {
 	Target    string `json:"target"`
-	Failpoint string `json:"failpoint"`
+	Failpoint string `json:"failpoint,omitempty"`
 	Duration  string `json:"duration"`
+	Via       string `json:"via,omitempty"`
 }
 
 // The process blocked its own path; the lab pauses the whole container for
@@ -23,20 +24,20 @@ func (n *Nemesis) freeze(event failpointEvent) {
 		return
 	}
 
-	n.freezes.Go(func() { n.pauseFor(event, duration) })
+	n.freezes.Go(func() { n.pauseFor(event.Instance, event.Failpoint, "", duration) })
 }
 
-func (n *Nemesis) pauseFor(event failpointEvent, duration time.Duration) {
+func (n *Nemesis) pauseFor(service, failpoint, via string, duration time.Duration) {
 	ctx := context.Background()
 
-	container, err := n.config.Docker.Find(ctx, event.Instance)
+	container, err := n.config.Docker.Find(ctx, service)
 	if err != nil {
-		n.config.Logger.WarnContext(ctx, "finding a container to freeze", "target", event.Instance, "error", err)
+		n.config.Logger.WarnContext(ctx, "finding a container to freeze", "target", service, "error", err)
 
 		return
 	}
 
-	value := freezeRecord{Target: event.Instance, Failpoint: event.Failpoint, Duration: duration.String()}
+	value := freezeRecord{Target: service, Failpoint: failpoint, Duration: duration.String(), Via: via}
 
 	err = n.record(history.FunctionFreeze, value)
 	if err != nil {
@@ -47,7 +48,7 @@ func (n *Nemesis) pauseFor(event failpointEvent, duration time.Duration) {
 
 	err = n.config.Docker.Pause(ctx, container.ID)
 	if err != nil {
-		n.config.Logger.WarnContext(ctx, "pausing a container", "target", event.Instance, "error", err)
+		n.config.Logger.WarnContext(ctx, "pausing a container", "target", service, "error", err)
 
 		return
 	}
@@ -56,6 +57,6 @@ func (n *Nemesis) pauseFor(event failpointEvent, duration time.Duration) {
 
 	err = n.config.Docker.Unpause(ctx, container.ID)
 	if err != nil {
-		n.config.Logger.WarnContext(ctx, "resuming a frozen container", "target", event.Instance, "error", err)
+		n.config.Logger.WarnContext(ctx, "resuming a frozen container", "target", service, "error", err)
 	}
 }

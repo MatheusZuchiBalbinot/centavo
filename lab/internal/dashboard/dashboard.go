@@ -63,7 +63,8 @@ func NewHandler(config Config) http.Handler {
 	mux.HandleFunc("GET "+eventsRoute, panel.events)
 
 	if config.Runner != nil {
-		handleControl(mux, control{panel: panel, runner: config.Runner, limiter: newWindowLimiter(roundStartLimit)})
+		routes := control{panel: panel, runner: config.Runner, startLimiter: newWindowLimiter(roundStartLimit), attackLimiter: newWindowLimiter(manualAttackLimit)}
+		handleControl(mux, routes)
 	}
 
 	return withSecurityHeaders(mux)
@@ -74,6 +75,7 @@ func handleControl(mux *http.ServeMux, routes control) {
 	mux.HandleFunc("GET "+attacksRoute, routes.menu)
 	mux.HandleFunc("POST "+roundsRoute, routes.start)
 	mux.HandleFunc("POST "+stopRoute, routes.stop)
+	mux.HandleFunc("POST "+manualAttacksRoute, routes.attack)
 }
 
 func withSecurityHeaders(next http.Handler) http.Handler {

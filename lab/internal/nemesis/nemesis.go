@@ -51,6 +51,9 @@ type Config struct {
 	Logger          *slog.Logger
 	PartnerAdminURL string
 	ParticipantID   string
+	// CommandsDir receives the attacks a person launches from the panel;
+	// empty, the round takes none.
+	CommandsDir string
 }
 
 type Nemesis struct {
@@ -132,6 +135,11 @@ func (n *Nemesis) Start(ctx context.Context) error {
 	n.wg.Go(func() { n.failpoints.run(ctx) })
 	n.wg.Go(func() { n.watch(ctx) })
 
+	err = n.openManual(ctx)
+	if err != nil {
+		return err
+	}
+
 	err = n.armPartner(ctx)
 	if err != nil {
 		return err
@@ -162,6 +170,8 @@ func (n *Nemesis) Start(ctx context.Context) error {
 
 // heal_complete marks t_h, from which liveness is judged.
 func (n *Nemesis) Heal(ctx context.Context) error {
+	n.closeManual(ctx)
+
 	if n.cancel != nil {
 		n.cancel()
 	}

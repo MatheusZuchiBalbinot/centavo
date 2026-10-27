@@ -30,6 +30,7 @@ type networkRecord struct {
 	Proxies []string `json:"proxies"`
 	Toxic   string   `json:"toxic"`
 	Phase   string   `json:"phase"`
+	Via     string   `json:"via,omitempty"`
 }
 
 type toxicBody struct {
@@ -55,7 +56,7 @@ func (n *Nemesis) startNetwork(ctx context.Context) {
 			continue
 		}
 
-		n.applyNetwork(ctx, fault)
+		n.applyNetwork(ctx, fault, "")
 	}
 }
 
@@ -73,7 +74,7 @@ func (n *Nemesis) networkEpisodes(ctx context.Context, fault scenarios.Fault) {
 		case <-time.After(wait):
 		}
 
-		n.applyNetwork(ctx, fault)
+		n.applyNetwork(ctx, fault, "")
 
 		select {
 		case <-ctx.Done():
@@ -82,12 +83,12 @@ func (n *Nemesis) networkEpisodes(ctx context.Context, fault scenarios.Fault) {
 		case <-time.After(length):
 		}
 
-		n.removeNetwork(ctx, fault)
+		n.removeNetwork(ctx, fault, "")
 	}
 }
 
-func (n *Nemesis) applyNetwork(ctx context.Context, fault scenarios.Fault) {
-	err := n.record(history.FunctionNetwork, networkRecord{Fault: fault.ID, Proxies: fault.Proxies, Toxic: fault.Toxic.Type, Phase: phaseStart})
+func (n *Nemesis) applyNetwork(ctx context.Context, fault scenarios.Fault, via string) {
+	err := n.record(history.FunctionNetwork, networkRecord{Fault: fault.ID, Proxies: fault.Proxies, Toxic: fault.Toxic.Type, Phase: phaseStart, Via: via})
 	if err != nil {
 		n.config.Logger.ErrorContext(ctx, "recording a network fault", "error", err)
 
@@ -102,7 +103,7 @@ func (n *Nemesis) applyNetwork(ctx context.Context, fault scenarios.Fault) {
 	}
 }
 
-func (n *Nemesis) removeNetwork(ctx context.Context, fault scenarios.Fault) {
+func (n *Nemesis) removeNetwork(ctx context.Context, fault scenarios.Fault, via string) {
 	for _, proxy := range fault.Proxies {
 		err := n.removeToxic(ctx, proxy, fault)
 		if err != nil {
@@ -110,7 +111,7 @@ func (n *Nemesis) removeNetwork(ctx context.Context, fault scenarios.Fault) {
 		}
 	}
 
-	err := n.record(history.FunctionNetwork, networkRecord{Fault: fault.ID, Proxies: fault.Proxies, Toxic: fault.Toxic.Type, Phase: phaseEnd})
+	err := n.record(history.FunctionNetwork, networkRecord{Fault: fault.ID, Proxies: fault.Proxies, Toxic: fault.Toxic.Type, Phase: phaseEnd, Via: via})
 	if err != nil {
 		n.config.Logger.ErrorContext(ctx, "recording a network fault", "error", err)
 	}
