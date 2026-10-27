@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { appRoutes } from '../../App';
 import { formatClock } from '../../domain/duration';
 import type { RoundId } from '../../api/ids';
-import { API_ROUTES, roundEventsPath } from '../../api/routes';
+import { API_ROUTES, replayPath, roundEventsPath } from '../../api/routes';
 import { expectNoAxeViolations } from '../../test/axe';
 import { FakeEventSource, installFakeEventSource } from '../../test/eventSource';
 import { answerFetch } from '../../test/fetch';
@@ -333,5 +333,44 @@ describe('the round page', () => {
     fireEvent(confirmation, new Event('cancel', { cancelable: true }));
 
     expect(screen.getByRole('dialog', { name: /O banco está sob ataque/ })).toBeInTheDocument();
+  });
+
+  it('says the round does not exist when the lab refuses its stream and has no such round', async () => {
+    installFakeEventSource();
+    answerFetch({ [API_ROUTES.lab]: { status: 200, body: { status: 'idle' } } });
+
+    renderRound();
+
+    act(() => {
+      stream().refuse();
+    });
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'A rodada r0007 não existe.' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Ver todas as rodadas' })).toHaveAttribute('href', '/rounds');
+  });
+
+  it('offers to try again when the lab does not answer, and opens a new stream', async () => {
+    installFakeEventSource();
+    const failure = { status: 500, body: { error: { code: 'internal', message: 'boom' } } };
+    answerFetch({
+      [API_ROUTES.lab]: { status: 200, body: { status: 'idle' } },
+      [replayPath('r0007' as RoundId)]: failure,
+    });
+    const user = userEvent.setup();
+
+    renderRound();
+
+    const refused = stream();
+
+    act(() => {
+      refused.refuse();
+    });
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'O laboratório não respondeu.' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Tentar de novo' }));
+
+    expect(stream()).not.toBe(refused);
+    expect(screen.getByRole('heading', { level: 1, name: 'Conectando à rodada…' })).toBeInTheDocument();
   });
 });
