@@ -17,8 +17,6 @@ const (
 // into the round directory before the check.
 const previousStateFile = "state_before.json"
 
-// checkImmutability compares every band the previous round saw complete with
-// the same band now: an entry checked before can never change or vanish.
 // The previous round's last band could still grow, so it is left out; a
 // ledger that starts with another transaction is a rebuilt database.
 func (e *evaluation) checkImmutability(previous *snapshot.LedgerState, bands []snapshot.Band, firstTransactionID string) {

@@ -9,10 +9,8 @@ import (
 	"time"
 )
 
-// ID names an attack in the API and in the panel's messages.
 type ID string
 
-// The attacks on the menu.
 const (
 	WorkersDown      ID = "workers-down"
 	Network          ID = "network"
@@ -23,22 +21,18 @@ const (
 	Calm             ID = "calm"
 )
 
-// Attack is one card of the menu.
 type Attack struct {
 	ID        ID
 	Scenarios []string
 }
 
 var (
-	// ErrUnknown means the attack is not on the menu.
-	ErrUnknown = errors.New("unknown attack")
-	// ErrDuration means the duration is not one the panel offers.
+	ErrUnknown  = errors.New("unknown attack")
 	ErrDuration = errors.New("duration not offered")
 )
 
-// durations are the attack lengths the panel offers: long enough for the
-// faults to land, short enough that a round with its cure and check stays
-// around ten minutes.
+// Long enough for the faults to land, short enough that a round with its
+// cure and check stays around ten minutes.
 var durations = []time.Duration{3 * time.Minute, 5 * time.Minute, 10 * time.Minute}
 
 var (
@@ -56,8 +50,7 @@ var (
 	calm             = []string{"smoke", "concurrency-hotspot"}
 )
 
-// menu is in the order the panel shows it; Everything draws from every
-// family that injects faults.
+// Everything draws from every family that injects faults.
 var menu = []Attack{
 	{ID: WorkersDown, Scenarios: workersDown},
 	{ID: Network, Scenarios: network},
@@ -68,7 +61,6 @@ var menu = []Attack{
 	{ID: Calm, Scenarios: calm},
 }
 
-// Menu returns a copy of the attacks, in the panel's order.
 func Menu() []Attack {
 	copied := make([]Attack, len(menu))
 
@@ -79,13 +71,11 @@ func Menu() []Attack {
 	return copied
 }
 
-// Durations returns the attack lengths the panel offers.
 func Durations() []time.Duration {
 	return slices.Clone(durations)
 }
 
-// Pick returns the scenario of a round of the attack; index chooses among
-// the family's scenarios and must return a number in [0, n).
+// index must return a number in [0, n).
 func Pick(id ID, duration time.Duration, index func(n int) int) (string, error) {
 	isOffered := slices.Contains(durations, duration)
 	if !isOffered {

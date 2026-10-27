@@ -16,9 +16,7 @@ import (
 	"centavo/lab/internal/replay"
 )
 
-// Bounds of what the panel keeps.
 const (
-	// maxSummaries bounds the cache of finished rounds' counters.
 	maxSummaries = 1_000
 	// launchTolerance absorbs clock rounding between the panel noting a
 	// start and the round writing its own.
@@ -28,11 +26,9 @@ const (
 // A round is finished once the checker has written its report.
 const reportJSONFile = "report.json"
 
-// roundDirPattern matches a round's directory, r0001; only such names are
-// ever joined to the rounds directory.
+// Only names matching this are ever joined to the rounds directory.
 var roundDirPattern = regexp.MustCompile(`^r(\d{4,})$`)
 
-// summary is what the headline adds up from one finished round.
 type summary struct {
 	Round      string          `json:"round"`
 	Scenario   string          `json:"scenario"`
@@ -48,8 +44,7 @@ type summary struct {
 	ReportURL string `json:"report_url"`
 }
 
-// tracker reads the rounds directory for the panel and remembers the
-// finished rounds' summaries, so a long list is parsed once.
+// Remembers the finished rounds' summaries, so a long list is parsed once.
 type tracker struct {
 	roundsDir string
 
@@ -57,7 +52,7 @@ type tracker struct {
 	summaries map[string]summary
 }
 
-// follower reads a round's history as it grows, parsing each byte once.
+// Parses each byte of the growing history once.
 type follower struct {
 	dir     string
 	builder *replay.Builder
@@ -72,8 +67,6 @@ func newFollower(dir string) *follower {
 	return &follower{dir: dir}
 }
 
-// advance reads what was appended since the last call and returns the round
-// so far, or nil while the round has no round.json or history yet.
 func (f *follower) advance() (*replay.Replay, error) {
 	manifest, err := replay.ReadManifest(f.dir)
 	if err != nil {
@@ -109,9 +102,7 @@ func (f *follower) advance() (*replay.Replay, error) {
 	return &current, nil
 }
 
-// roundStartedSince is the newest round when it started at or after since,
-// give or take the moment between launching `lab run` and its first write;
-// empty while that round has no round.json yet.
+// Give or take the moment between launching `lab run` and its first write.
 func (t *tracker) roundStartedSince(since time.Time) string {
 	entries, err := os.ReadDir(t.roundsDir)
 	if err != nil {
@@ -136,8 +127,6 @@ func (t *tracker) roundStartedSince(since time.Time) string {
 	return ids[0]
 }
 
-// page returns up to size finished rounds older than cursor, newest first,
-// and the cursor of the next page when there is one.
 func (t *tracker) page(cursor string, size int) (roundsPage, error) {
 	entries, err := os.ReadDir(t.roundsDir)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -177,9 +166,8 @@ func (t *tracker) page(cursor string, size int) (roundsPage, error) {
 	return page, nil
 }
 
-// indexAfter is where the rounds older than cursor start in ids, newest
-// first; a cursor that is no longer there starts from the round numbered
-// right below it.
+// A cursor that is no longer there starts from the round numbered right
+// below it.
 func indexAfter(ids []string, cursor string) int {
 	cursorNumber := roundNumberOf(cursor)
 
@@ -192,7 +180,6 @@ func indexAfter(ids []string, cursor string) int {
 	return len(ids)
 }
 
-// roundNumberOf is the number of a round id that matched roundDirPattern.
 func roundNumberOf(id string) int {
 	match := roundDirPattern.FindStringSubmatch(id)
 	if match == nil {
@@ -207,7 +194,6 @@ func roundNumberOf(id string) int {
 	return number
 }
 
-// summaryOf returns a finished round's summary: one with a report.
 func (t *tracker) summaryOf(id string) (summary, bool) {
 	cached, isCached := t.summaries[id]
 	if isCached {
@@ -243,7 +229,6 @@ func (t *tracker) summaryOf(id string) (summary, bool) {
 	return round, true
 }
 
-// roundsNewestFirst lists the round directories, highest number first.
 func roundsNewestFirst(entries []os.DirEntry) []string {
 	type numbered struct {
 		id     string

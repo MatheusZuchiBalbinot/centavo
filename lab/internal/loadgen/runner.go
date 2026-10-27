@@ -21,17 +21,14 @@ import (
 	"centavo/lab/scenarios"
 )
 
-// politePolicy is the polite client.
 var politePolicy = retryPolicy{
 	attemptTimeout: 2 * time.Second, maxRetries: 8, backoffBase: 100 * time.Millisecond, backoffCap: 5 * time.Second, deadline: 30 * time.Second,
 }
 
-// aggressivePolicy retries at once, up to 20 times, with the same key.
 var aggressivePolicy = retryPolicy{
 	attemptTimeout: 2 * time.Second, maxRetries: 20, deadline: 30 * time.Second,
 }
 
-// Amounts the workload draws, in cents.
 const (
 	initialFundingCents = 100_000
 	minDepositCents     = 500
@@ -42,11 +39,8 @@ const (
 	percent             = 100
 )
 
-// ErrPreparationFailed means the accounts or balances a round needs could not
-// be created, so the round never started.
 var ErrPreparationFailed = errors.New("round preparation failed")
 
-// mixes are the workload profiles.
 var mixes = map[scenarios.Profile][]weightedFunction{
 	scenarios.ProfileLedgerOnly: {
 		{function: history.FunctionTransfer, weight: 50},
@@ -85,22 +79,18 @@ const (
 	destinationKeys   = 10_000
 )
 
-// duplicateCopies is how many times a duplicator sends each operation.
 const duplicateCopies = 2
 
 // endToEndDigestBytes are the bytes of the digest a PIX in id keeps: 32 hex
 // digits, like the bank's own ids.
 const endToEndDigestBytes = 16
 
-// Result is what the load leaves for the cure: the writes whose outcome is
-// unknown, to resolve, and the next free process number.
 type Result struct {
 	Indeterminate []IndeterminateWrite
 	NextProcess   int
 }
 
-// IndeterminateWrite is a write whose outcome the client does not know, with
-// the request it sent: resolve must name the request, not only its key.
+// resolve must name the request, not only its key.
 type IndeterminateWrite struct {
 	// Op is the operation being resolved; Key is the key it sent, its own or
 	// the one a buggy client reused.
@@ -110,18 +100,15 @@ type IndeterminateWrite struct {
 	Body json.RawMessage
 }
 
-// Config is one load phase of a round.
 type Config struct {
-	Round    string
-	Seed     seed.Seed
-	Workload scenarios.Workload
-	Duration time.Duration
-	BankURL  string
-	History  *history.Writer
-	Logger   *slog.Logger
-	// PartnerURL is the partner's admin port, where the lab asks for PIX in.
-	PartnerURL string
-	// ParticipantID is the bank at the partner.
+	Round         string
+	Seed          seed.Seed
+	Workload      scenarios.Workload
+	Duration      time.Duration
+	BankURL       string
+	History       *history.Writer
+	Logger        *slog.Logger
+	PartnerURL    string
 	ParticipantID string
 	// BeforeLoad runs once the accounts exist and before the load starts;
 	// the nemesis arms its faults here, so preparation never sees chaos.
@@ -131,7 +118,6 @@ type Config struct {
 	Stop <-chan struct{}
 }
 
-// retryPolicy is how a client times out and retries one operation.
 type retryPolicy struct {
 	attemptTimeout time.Duration
 	maxRetries     int
@@ -141,13 +127,11 @@ type retryPolicy struct {
 	deadline time.Duration
 }
 
-// weightedFunction is one slice of an operation mix.
 type weightedFunction struct {
 	function history.Function
 	weight   int
 }
 
-// run is the state the clients of one round share.
 type run struct {
 	config      Config
 	policy      retryPolicy
@@ -160,8 +144,8 @@ type run struct {
 	indeterminate []IndeterminateWrite
 }
 
-// client is one logical client: a goroutine that runs one operation at a time.
-// Its process number changes when an operation ends as info.
+// One operation at a time. Its process number changes when an operation
+// ends as info.
 type client struct {
 	run     *run
 	index   int
@@ -178,8 +162,7 @@ type client struct {
 	accounts  []int
 }
 
-// Run prepares the accounts, then runs the workload for the configured
-// duration. Operations in flight when the time is up finish normally.
+// Operations in flight when the time is up finish normally.
 func Run(ctx context.Context, config Config) (Result, error) {
 	return runWith(ctx, config, politePolicy)
 }
@@ -225,8 +208,6 @@ func runWith(ctx context.Context, config Config, policy retryPolicy) (Result, er
 	return r.result(), err
 }
 
-// stopOnSignal ends the load when stop closes, and returns once the load is
-// over either way.
 func stopOnSignal(loadCtx context.Context, stop <-chan struct{}, stopLoad context.CancelFunc) {
 	select {
 	case <-stop:
@@ -242,7 +223,6 @@ func (r *run) result() Result {
 	return Result{Indeterminate: slices.Clone(r.indeterminate), NextProcess: int(r.nextProcess.Load()) + 1}
 }
 
-// noteIndeterminate keeps a write whose outcome the client does not know.
 func (r *run) noteIndeterminate(write IndeterminateWrite) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -250,8 +230,6 @@ func (r *run) noteIndeterminate(write IndeterminateWrite) {
 	r.indeterminate = append(r.indeterminate, write)
 }
 
-// forEachClient runs step on every client concurrently and returns the first
-// error, canceling the others.
 func forEachClient(ctx context.Context, clients []*client, step func(*client, context.Context) error) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -281,8 +259,8 @@ func forEachClient(ctx context.Context, clients []*client, step func(*client, co
 	return firstErr
 }
 
-// emitTokens paces the whole workload. A tick nobody is waiting for is
-// dropped: the rate is a ceiling, and a slow bank lowers the real throughput.
+// A tick nobody is waiting for is dropped: the rate is a ceiling, and a
+// slow bank lowers the real throughput.
 func emitTokens(ctx context.Context, ratePerSecond float64, tokens chan<- struct{}) {
 	ticker := time.NewTicker(time.Duration(float64(time.Second) / ratePerSecond))
 	defer ticker.Stop()
@@ -315,7 +293,6 @@ func (r *run) newClient(index int) *client {
 	}
 }
 
-// targetOf is who serves the operation: the partner for a PIX in, the bank otherwise.
 func (r *run) targetOf(op operation) bankClient {
 	if op.isToPartner {
 		return r.partner
@@ -324,7 +301,6 @@ func (r *run) targetOf(op operation) bankClient {
 	return r.bank
 }
 
-// policyOf is how a profile retries; the polite policy can be replaced in tests.
 func (r *run) policyOf(profile scenarios.ClientProfile) retryPolicy {
 	if profile == scenarios.ClientAggressive {
 		return aggressivePolicy
@@ -333,8 +309,7 @@ func (r *run) policyOf(profile scenarios.ClientProfile) retryPolicy {
 	return r.policy
 }
 
-// ownedAccounts deals accounts round-robin: client i prepares accounts i,
-// i+clients, i+2*clients...
+// Round-robin: client i prepares accounts i, i+clients, i+2*clients...
 func (r *run) ownedAccounts(index int) []int {
 	var owned []int
 
@@ -345,8 +320,6 @@ func (r *run) ownedAccounts(index int) []int {
 	return owned
 }
 
-// prepare opens and funds the client's accounts (the preparation phase). A
-// round cannot start without them.
 func (c *client) prepare(ctx context.Context) error {
 	for _, account := range c.accounts {
 		holderName := fmt.Sprintf("%s client %d account %d", c.run.config.Round, c.index+1, account)
@@ -392,7 +365,7 @@ func mustSucceed[Args any](ctx context.Context, worker *client, build func(Args)
 	return result.value, nil
 }
 
-// load runs operations until loadCtx ends; ctx bounds the operations themselves.
+// loadCtx ends the load; ctx bounds the operations themselves.
 func (c *client) load(ctx, loadCtx context.Context, tokens <-chan struct{}) error {
 	for {
 		select {
@@ -447,7 +420,6 @@ func (c *client) nextOperation() (operation, error) {
 	}
 }
 
-// workingAccounts are the accounts this client operates on during the load.
 func (c *client) workingAccounts() []accountID {
 	if !c.run.config.Workload.HasExclusiveAccounts {
 		return c.run.accounts
@@ -461,7 +433,6 @@ func (c *client) workingAccounts() []accountID {
 	return owned
 }
 
-// perform runs a load operation the way the client's profile behaves.
 func (c *client) perform(ctx context.Context, op operation) error {
 	if c.profile == scenarios.ClientDuplicator {
 		return c.executeTwice(ctx, op)
@@ -482,8 +453,6 @@ func (c *client) perform(ctx context.Context, op operation) error {
 	return err
 }
 
-// invoke assigns the operation id, durably records the invoke and returns the
-// request to send.
 func (c *client) invoke(op operation) (string, request, error) {
 	c.seq++
 	opID := fmt.Sprintf("%s-p%02d-%06d", c.run.config.Round, c.process, c.seq)
@@ -510,8 +479,7 @@ func (c *client) invoke(op operation) (string, request, error) {
 	return opID, call, err
 }
 
-// execute records the invoke, retries like a polite client and records how
-// the operation ended. It only returns an error when the history itself fails.
+// Only returns an error when the history itself fails.
 func (c *client) execute(ctx context.Context, op operation) (attemptResult, error) {
 	opID, call, err := c.invoke(op)
 	if err != nil {
@@ -546,8 +514,8 @@ func (c *client) execute(ctx context.Context, op operation) (attemptResult, erro
 	}
 }
 
-// executeTwice is the duplicator client: the same request, with the same key,
-// twice in parallel. One success is a success; two definitive failures are a
+// The duplicator client: the same request, with the same key, twice in
+// parallel. One success is a success; two definitive failures are a
 // failure; anything else is info.
 func (c *client) executeTwice(ctx context.Context, op operation) error {
 	opID, call, err := c.invoke(op)
@@ -603,7 +571,6 @@ func combineCopies(results []attemptResult) attemptResult {
 	return results[0]
 }
 
-// pickProfile draws the client's behavior from the scenario's weighted mix.
 func pickProfile(stream *mathrand.Rand, mix map[scenarios.ClientProfile]float64) scenarios.ClientProfile {
 	profiles := slices.Sorted(maps.Keys(mix))
 
@@ -625,7 +592,6 @@ func pickProfile(stream *mathrand.Rand, mix map[scenarios.ClientProfile]float64)
 	return profiles[len(profiles)-1]
 }
 
-// complete writes the ok, fail or info record; an info retires the process.
 func (c *client) complete(op operation, opID string, attempts int, result attemptResult) error {
 	record := history.Record{Process: history.Client(c.process), F: op.function, Op: opID, Attempts: attempts}
 
@@ -667,8 +633,8 @@ func (c *client) complete(op operation, opID string, attempts int, result attemp
 	return nil
 }
 
-// retire gives the client a new process number: after an info the old
-// operation may still be in flight, so the old process is no longer sequential.
+// After an info the old operation may still be in flight, so the old
+// process is no longer sequential.
 func (c *client) retire() {
 	c.process = int(c.run.nextProcess.Add(1))
 	c.seq = 0
@@ -681,7 +647,6 @@ func (p retryPolicy) backoff(jitter *mathrand.Rand, attempt int) time.Duration {
 	return time.Duration(jitter.Int64N(int64(ceiling) + 1))
 }
 
-// sleep waits for d, or reports false if ctx ends first.
 func sleep(ctx context.Context, d time.Duration) bool {
 	timer := time.NewTimer(d)
 	defer timer.Stop()
@@ -712,7 +677,6 @@ func pickOne(stream *mathrand.Rand, accounts []accountID) accountID {
 	return accounts[stream.IntN(len(accounts))]
 }
 
-// pickPair draws two distinct accounts.
 func pickPair(stream *mathrand.Rand, accounts []accountID) (accountID, accountID) {
 	from := stream.IntN(len(accounts))
 	to := (from + 1 + stream.IntN(len(accounts)-1)) % len(accounts)
@@ -733,8 +697,8 @@ func drawDestinationKey(stream *mathrand.Rand) string {
 	return fmt.Sprintf("dest-%04d", stream.IntN(destinationKeys))
 }
 
-// incomingEndToEndID is the id the lab gives a PIX in: E plus 32 hex digits
-// derived from the operation, so the checker can find it again.
+// E plus 32 hex digits derived from the operation, so the checker can find
+// it again.
 func incomingEndToEndID(round string, process, seq int) string {
 	digest := sha256.Sum256(fmt.Appendf(nil, "%s-p%02d-%06d", round, process, seq))
 

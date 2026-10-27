@@ -8,8 +8,7 @@ import (
 	"centavo/lab/internal/runner"
 )
 
-// apiError is a failure the client can act on: the status, and the code it
-// branches on. The message only describes the rule.
+// The message only describes the rule; clients branch on the code.
 type apiError struct {
 	status  int
 	code    string
@@ -29,7 +28,6 @@ func (e apiError) Error() string {
 	return e.message
 }
 
-// The panel API's errors, in one place; clients branch on the code.
 var (
 	errInvalidRequest   = apiError{http.StatusBadRequest, "invalid_request", "the request body or query is not valid"}
 	errUnsupportedMedia = apiError{http.StatusUnsupportedMediaType, "unsupported_media_type", "send the body as application/json"}
@@ -45,8 +43,7 @@ var (
 	errInternal         = apiError{http.StatusInternalServerError, "internal", "the lab could not answer; its log has the details"}
 )
 
-// apiErrorOf translates an error into what the client sees; anything not
-// listed is an internal error, whose detail stays in the log.
+// Anything not listed is an internal error, whose detail stays in the log.
 func apiErrorOf(err error) apiError {
 	var known apiError
 

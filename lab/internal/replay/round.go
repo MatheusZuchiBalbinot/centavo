@@ -20,18 +20,15 @@ import (
 // backticks: the panel says what happens, not where in the code.
 var codeNames = regexp.MustCompile("\\s*\\([^)]*`[^)]*\\)")
 
-// Files of a round directory the replay reads.
 const (
 	HistoryFile  = "history.jsonl"
 	manifestFile = "round.json"
 	reportFile   = "report.json"
-	// File is where `lab export-replay` writes the replay.
-	File = "replay.json"
+	File         = "replay.json"
 	// maxLineBytes matches the checker's limit for one history record.
 	maxLineBytes = 1 << 20
 )
 
-// Manifest is the part of round.json a replay shows.
 type Manifest struct {
 	Round     string          `json:"round"`
 	Scenario  string          `json:"scenario"`
@@ -49,7 +46,6 @@ type report struct {
 	Invariants []Check         `json:"invariants"`
 }
 
-// ReadManifest loads round.json.
 func ReadManifest(roundDir string) (Manifest, error) {
 	content, err := os.ReadFile(filepath.Join(roundDir, manifestFile)) //nolint:gosec // G304: a round directory of the operator's rounds.
 	if err != nil {
@@ -66,8 +62,6 @@ func ReadManifest(roundDir string) (Manifest, error) {
 	return manifest, nil
 }
 
-// FromRound builds the replay of an archived round: its history, and the
-// verdict of its report when the checker wrote one.
 func FromRound(roundDir string) (Replay, error) {
 	manifest, err := ReadManifest(roundDir)
 	if err != nil {
@@ -103,8 +97,8 @@ func FromRound(roundDir string) (Replay, error) {
 	return replay, nil
 }
 
-// FeedFrom feeds every complete line of reader to the builder and returns
-// how many bytes it consumed: a line still being written waits for later.
+// Returns how many bytes it consumed: a line still being written waits for
+// later.
 func FeedFrom(builder *Builder, reader io.Reader) (int64, error) {
 	buffered := bufio.NewReaderSize(reader, maxLineBytes)
 
@@ -153,8 +147,6 @@ func readReport(roundDir string) (*report, error) {
 	return &verdict, nil
 }
 
-// WithManifest adds what round.json says about the round: its plan, the bank's
-// profile and, once the round ended, its verdict.
 func (r Replay) WithManifest(manifest Manifest) Replay {
 	r.Verdict = manifest.Verdict
 	r.StartedAt = manifest.StartedAt

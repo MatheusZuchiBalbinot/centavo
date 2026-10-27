@@ -12,7 +12,6 @@ import (
 	"centavo/lab/internal/dashboard"
 )
 
-// historyLines are one deposit and one random kill, as the lab writes them.
 var historyLines = strings.Join([]string{
 	`{"index":0,"round":"r0001","time_ns":100000000,"wall":"x","process":1,"type":"invoke","f":"deposit","op":"r0001-p01-000001"}`,
 	`{"index":1,"round":"r0001","time_ns":300000000,"wall":"x","process":1,"type":"ok","f":"deposit","op":"r0001-p01-000001"}`,

@@ -1,6 +1,5 @@
-// Package partner reads the partner's admin port: its truth and how many
-// webhooks it still has to deliver. The lab keeps its own types; it never
-// imports the partner.
+// Package partner reads the partner's admin port. The lab keeps its own
+// types; it never imports the partner.
 package partner
 
 import (
@@ -18,34 +17,27 @@ const (
 	maxTruthBytes = 512 << 20
 )
 
-// Client reads one participant's truth.
 type Client struct {
 	baseURL       string
 	participantID string
 	http          *http.Client
 }
 
-// Pending is what the partner has not finished for the participant.
 type Pending struct {
-	Webhooks int `json:"pending_deliveries"`
-	// LastStatementSeq is the newest entry of the participant's statement.
+	Webhooks         int   `json:"pending_deliveries"`
 	LastStatementSeq int64 `json:"last_statement_seq"`
 }
 
-// New builds a client for the partner's admin port.
 func New(baseURL, participantID string) Client {
 	return Client{baseURL: baseURL, participantID: participantID, http: &http.Client{Timeout: callTimeout}}
 }
 
-// Truth returns GET /internal/truth as the partner sent it, for truth.json,
-// from since on.
 func (c Client) Truth(ctx context.Context, since time.Time) ([]byte, error) {
 	query := url.Values{"participant_id": {c.participantID}, "since": {since.UTC().Format(time.RFC3339Nano)}}
 
 	return c.get(ctx, truthPath+"?"+query.Encode())
 }
 
-// Pending reads the partner's unfinished work.
 func (c Client) Pending(ctx context.Context) (Pending, error) {
 	body, err := c.get(ctx, pendingPath+"?participant_id="+url.QueryEscape(c.participantID))
 	if err != nil {
@@ -62,7 +54,6 @@ func (c Client) Pending(ctx context.Context) (Pending, error) {
 	return pending, nil
 }
 
-// PendingWebhooks counts the deliveries the partner has not finished.
 func (c Client) PendingWebhooks(ctx context.Context) (int, error) {
 	pending, err := c.Pending(ctx)
 

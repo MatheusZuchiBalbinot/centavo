@@ -13,7 +13,6 @@ import (
 	"centavo/lab/internal/replay"
 )
 
-// Bounds of the round streams.
 const (
 	// streamInterval is how often a stream reads the round again; the
 	// panel's charts move a second at a time.
@@ -23,16 +22,13 @@ const (
 	// maxStreamDuration ends a stream; the client reopens it and gets a
 	// fresh snapshot, so nothing is lost.
 	maxStreamDuration = 30 * time.Minute
-	// maxStreams bounds the open streams of the whole panel.
-	maxStreams = 200
+	maxStreams        = 200
 	// streamWriteTimeout bounds each write, so a stuck client is dropped
 	// instead of holding a slot.
 	streamWriteTimeout = 10 * time.Second
 	eventStreamMedia   = "text/event-stream"
 )
 
-// The kinds of message a round stream sends, in the order a client sees
-// them: one snapshot, then updates, then finished.
 const (
 	streamSnapshot = "snapshot"
 	streamSeconds  = "seconds"
@@ -46,7 +42,6 @@ type secondsUpdate struct {
 	Seconds []replay.Second `json:"seconds"`
 }
 
-// streamSession is one client following one round.
 type streamSession struct {
 	w          io.Writer
 	controller *http.ResponseController
@@ -60,9 +55,6 @@ type streamSession struct {
 	lastWrite   time.Time
 }
 
-// events streams a round as server-sent events: a snapshot of the round so
-// far, then each second, chaos event and auditor reading as it happens, and
-// finished with the verdict.
 func (p panelHandlers) events(w http.ResponseWriter, r *http.Request) {
 	round := r.PathValue("round")
 	if !roundDirPattern.MatchString(round) {
@@ -101,8 +93,6 @@ func (p panelHandlers) events(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// run ticks until the round finishes, the client leaves or the stream has
-// lasted maxStreamDuration.
 func (s *streamSession) run(r *http.Request, interval time.Duration) error {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -129,8 +119,6 @@ func (s *streamSession) run(r *http.Request, interval time.Duration) error {
 	return nil
 }
 
-// tick sends what changed since the last tick and reports whether the round
-// is over.
 func (s *streamSession) tick() (bool, error) {
 	current, err := s.follower.advance()
 	if err != nil {
@@ -166,7 +154,6 @@ func (s *streamSession) tick() (bool, error) {
 	return true, s.send(streamFinished, final)
 }
 
-// sendRound sends the snapshot the first time, and what was added after.
 func (s *streamSession) sendRound(current *replay.Replay) error {
 	if !s.hasSnapshot {
 		s.hasSnapshot = true
@@ -199,7 +186,6 @@ func (s *streamSession) sendRound(current *replay.Replay) error {
 	return nil
 }
 
-// sendReading sends the auditor's reading each time it changes.
 func (s *streamSession) sendReading() error {
 	if s.live == nil {
 		return nil
@@ -234,8 +220,8 @@ func (s *streamSession) send(name string, data any) error {
 	return s.write("event: " + name + "\ndata: " + string(content) + "\n\n")
 }
 
-// write sends one message and flushes it. The write deadline moves with each
-// message, since the server's own write timeout would end the stream.
+// The write deadline moves with each message, since the server's own write
+// timeout would end the stream.
 func (s *streamSession) write(message string) error {
 	err := s.controller.SetWriteDeadline(time.Now().Add(streamWriteTimeout))
 	if err != nil && !errors.Is(err, http.ErrNotSupported) {

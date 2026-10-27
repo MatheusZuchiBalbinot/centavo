@@ -14,8 +14,6 @@ import (
 // never needs them.
 var portugueseLetters = regexp.MustCompile(`[áàâãéêíóôõúçÁÉÍÓÚÇ]`)
 
-// TestMessages_LiveOnlyInTheirCatalogs: every text these packages write for
-// people is a constant of their messages.go, so the language is one file away.
 func TestMessages_LiveOnlyInTheirCatalogs(t *testing.T) {
 	t.Parallel()
 

@@ -13,7 +13,6 @@ import (
 // entry written by an earlier round.
 const unknownTime int64 = -1
 
-// Outcomes resolve can give.
 const (
 	outcomeApplied = "applied"
 	outcomeVoided  = "voided"
@@ -22,15 +21,12 @@ const (
 	outcomeSuperseded = "superseded"
 )
 
-// transactionKindOf maps a client write to the ledger transaction it produces
-// (K).
 var transactionKindOf = map[history.Function]snapshot.TransactionKind{
 	history.FunctionDeposit:  snapshot.TransactionDeposit,
 	history.FunctionTransfer: snapshot.TransactionInternalTransfer,
 	history.FunctionPixOut:   snapshot.TransactionPixOutReserve,
 }
 
-// operation is everything the history says about one client operation.
 type operation struct {
 	op       string
 	function history.Function
@@ -43,7 +39,6 @@ type operation struct {
 	key string
 }
 
-// reusedKeyArgs reads the key a buggy client reused, if it reused one.
 type reusedKeyArgs struct {
 	ReusedKey string `json:"reused_key"`
 }
@@ -110,16 +105,13 @@ type statementEntry struct {
 	BalanceAfterCents int64 `json:"balance_after_cents"`
 }
 
-// operations indexes the history by operation id, in invoke order.
 type operations struct {
-	byID    map[string]*operation
-	ordered []*operation
-	lastT   int64
-	// resolutions are the answers resolve gave for each key, in order.
+	byID        map[string]*operation
+	ordered     []*operation
+	lastT       int64
 	resolutions map[string][]string
 }
 
-// ledger indexes the export.
 type ledger struct {
 	accounts          map[string]snapshot.Account
 	accountIDs        []string
@@ -139,14 +131,11 @@ type ledger struct {
 	incomingByE2E     map[string][]snapshot.Incoming
 }
 
-// isOpen reports an operation without a completion: the lab stopped before it
-// ended, so it is as indeterminate as an info.
+// The lab stopped before it ended, so it is as indeterminate as an info.
 func (o *operation) isOpen() bool {
 	return o.result == ""
 }
 
-// isClientKind tells the transactions a client operation causes from those
-// the partner's events cause (settlements, refunds, returns, PIX in).
 func isClientKind(kind snapshot.TransactionKind) bool {
 	for _, clientKind := range transactionKindOf {
 		if clientKind == kind {
@@ -173,9 +162,9 @@ func indexOperations(records []history.Record) operations {
 	return index
 }
 
-// add takes the next history record. Only what the invariants read is
-// kept: a long round's records would not fit in the checker's memory, so the
-// report reads the few it shows again from the file.
+// Only what the invariants read is kept: a long round's records would not
+// fit in the checker's memory, so the report reads the few it shows again
+// from the file.
 func (ops *operations) add(record history.Record) {
 	ops.lastT = max(ops.lastT, record.TimeNS)
 
@@ -199,7 +188,6 @@ func (ops *operations) add(record history.Record) {
 	}
 }
 
-// indexResolutions collects what every successful resolve answered.
 func (ops operations) indexResolutions() {
 	for _, o := range ops.ordered {
 		isAnswered := o.function == history.FunctionResolve && o.result == history.TypeOK
@@ -218,8 +206,7 @@ func (ops operations) indexResolutions() {
 	}
 }
 
-// resolutionOf is the single answer resolve gave for a key, and whether
-// there is one at all; answers that disagree are a violation of their own.
+// Answers that disagree are a violation of their own.
 func (ops operations) resolutionOf(key string) (string, bool) {
 	answers := ops.resolutions[key]
 	if len(answers) == 0 {
@@ -229,8 +216,6 @@ func (ops operations) resolutionOf(key string) (string, bool) {
 	return answers[0], true
 }
 
-// timeOf places a ledger transaction in time through the operation that
-// caused it.
 func (ops operations) timeOf(clientRef string) int64 {
 	o, isKnown := ops.byID[clientRef]
 	if !isKnown {
@@ -240,7 +225,6 @@ func (ops operations) timeOf(clientRef string) int64 {
 	return o.invokeT
 }
 
-// systemID is the id of a system account by its code.
 func (l ledger) systemID(code string) string {
 	return l.systemIDs[code]
 }
@@ -307,10 +291,9 @@ func transactionOfEntry(entry snapshot.Entry) string { return entry.TransactionI
 
 func accountOfEntry(entry snapshot.Entry) string { return entry.AccountID }
 
-// groupEntries sorts the entries it is given, in place, by key and then by
-// id, and indexes their runs: each group is a window of that slice, so a long
-// round pays for the entries once per index, not once per group. Entry ids
-// grow in insertion order, which is the order the bank wrote them.
+// Each group is a window of the sorted slice, so a long round pays for its
+// entries once per index, not once per group. Entry ids grow in insertion
+// order, the order the bank wrote them.
 func groupEntries(sorted []snapshot.Entry, keyOf func(snapshot.Entry) string) map[string][]snapshot.Entry {
 	slices.SortFunc(sorted, func(a, b snapshot.Entry) int {
 		byKey := cmp.Compare(keyOf(a), keyOf(b))
@@ -336,8 +319,6 @@ func groupEntries(sorted []snapshot.Entry, keyOf func(snapshot.Entry) string) ma
 	return groups
 }
 
-// applications are the transactions of the operation's own kind (A(o)): the
-// ones under the key it sent that it owns.
 func (e *evaluation) applications(o *operation) []snapshot.Transaction {
 	kind := transactionKindOf[o.function]
 
@@ -353,9 +334,8 @@ func (e *evaluation) applications(o *operation) []snapshot.Transaction {
 	return matching
 }
 
-// isReplayOfTheKey reports a buggy write that reused a key with the same
-// request: the bank answered with the stored response of the write that owns
-// the key, so both operations are the one application (equal body).
+// A buggy write that reused a key with the same request: the bank answered
+// with the stored response, so both operations are one application.
 func (e *evaluation) isReplayOfTheKey(o *operation) bool {
 	isReusedOK := o.key != o.op && o.result == history.TypeOK
 	if !isReusedOK {
@@ -378,10 +358,9 @@ func (e *evaluation) isReplayOfTheKey(o *operation) bool {
 	return false
 }
 
-// ownerOf is the operation a client transaction applied. Its client_ref is the
-// key, which names the operation that owns it, unless a buggy client took an
-// idle key for another request: the bank then records that request's
-// correlation id, which is its operation id.
+// client_ref is the key, which names the operation that owns it, unless a
+// buggy client took an idle key for another request: the bank then records
+// that request's correlation id, which is its operation id.
 func (e *evaluation) ownerOf(transaction snapshot.Transaction) string {
 	sender, isKnown := e.ops.byID[transaction.CorrelationID]
 	isSentWithThisKey := isKnown && sender.key == transaction.ClientRef

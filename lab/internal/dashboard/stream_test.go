@@ -15,8 +15,7 @@ import (
 	"centavo/lab/internal/dashboard"
 )
 
-// messageWithin bounds the wait for one stream message; the stream reads the
-// round once a second.
+// The stream reads the round once a second.
 const messageWithin = 5 * time.Second
 
 type streamMessage struct {
@@ -33,8 +32,6 @@ type streamedRound struct {
 	} `json:"events"`
 }
 
-// openStream reads the server-sent events of a round into a channel, which
-// closes when the server ends the stream.
 func openStream(t *testing.T, serverURL, round string) <-chan streamMessage {
 	t.Helper()
 
@@ -104,7 +101,6 @@ func nextMessage(t *testing.T, messages <-chan streamMessage) streamMessage {
 	return streamMessage{}
 }
 
-// nextMessageNamed skips the per-second updates until the named message.
 func nextMessageNamed(t *testing.T, messages <-chan streamMessage, name string) streamMessage {
 	t.Helper()
 

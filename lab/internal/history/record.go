@@ -1,10 +1,7 @@
-// Package history writes and validates history.jsonl, the record of what
-// clients asked and what they got back.
 package history
 
 import "encoding/json"
 
-// The kinds of history record.
 const (
 	TypeInvoke  Type = "invoke"
 	TypeAttempt Type = "attempt"
@@ -13,55 +10,40 @@ const (
 	TypeInfo    Type = "info"
 )
 
-// The operations and injections a history records.
 const (
 	FunctionCreateAccount Function = "create_account"
 	FunctionDeposit       Function = "deposit"
 	FunctionTransfer      Function = "transfer"
 	FunctionReadBalance   Function = "read_balance"
 	FunctionReadStatement Function = "read_statement"
-	// FunctionResolve asks the bank how an indeterminate write ended.
-	FunctionResolve Function = "resolve"
-	FunctionPixOut  Function = "pix_out"
-	// FunctionPixIn asks the partner to send a PIX to an account of the bank.
-	FunctionPixIn Function = "pix_in"
-	// FunctionReadPixOut reads a PIX out's final state during the cure.
-	FunctionReadPixOut Function = "read_pix_out"
+	FunctionResolve       Function = "resolve"
+	FunctionPixOut        Function = "pix_out"
+	FunctionPixIn         Function = "pix_in"
+	FunctionReadPixOut    Function = "read_pix_out"
 )
 
-// What the nemesis records: injections, the cure and fired failpoints.
 const (
 	FunctionKill           Function = "kill"
 	FunctionArmFailpoint   Function = "arm_failpoint"
 	FunctionArmPartner     Function = "arm_partner_modes"
 	FunctionFailpointFired Function = "failpoint_fired"
 	FunctionHealStart      Function = "heal_start"
-	// FunctionFreeze pauses a whole container for a freeze failpoint.
-	FunctionFreeze Function = "freeze"
-	// FunctionFailover sets up the replica or promotes it.
-	FunctionFailover Function = "failover"
-	// FunctionDatabase kills or freezes PostgreSQL.
-	FunctionDatabase Function = "database"
-	// FunctionNetwork starts or ends a network fault.
-	FunctionNetwork Function = "network"
-	// FunctionSkewClock moves a process's wall clock.
-	FunctionSkewClock    Function = "skew_clock"
-	FunctionHealComplete Function = "heal_complete"
-	// FunctionProcessState is a target's state as Docker reports it, each
-	// time it changes: up, starting, frozen or down.
+	FunctionFreeze         Function = "freeze"
+	FunctionFailover       Function = "failover"
+	FunctionDatabase       Function = "database"
+	FunctionNetwork        Function = "network"
+	FunctionSkewClock      Function = "skew_clock"
+	FunctionHealComplete   Function = "heal_complete"
+	// As Docker reports it, each time it changes.
 	FunctionProcessState Function = "process_state"
-	// FunctionDefense is a defense of the bank acting, as the bank recorded it.
-	FunctionDefense Function = "defense"
+	FunctionDefense      Function = "defense"
 )
 
-// Type is the kind of a history record.
 type Type string
 
-// Function is the operation a client performed, or the injection the nemesis made.
 type Function string
 
-// Record is one line of history.jsonl. The writer fills Index, Round, TimeNS
-// and Wall; the caller fills the rest.
+// The writer fills Index, Round, TimeNS and Wall; the caller fills the rest.
 type Record struct {
 	Index    int64           `json:"index"`
 	Round    string          `json:"round"`
@@ -78,7 +60,6 @@ type Record struct {
 	Attempts int             `json:"attempts,omitempty"`
 }
 
-// IsCompletion reports whether the record closes an operation.
 func (r Record) IsCompletion() bool {
 	return r.Type == TypeOK || r.Type == TypeFail || r.Type == TypeInfo
 }

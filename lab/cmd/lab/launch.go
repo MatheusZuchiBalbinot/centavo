@@ -16,14 +16,12 @@ import (
 // asks it to stop because the panel itself is shutting down.
 const shutdownGrace = 30 * time.Second
 
-// roundLauncher starts the rounds the panel asks for as `lab run`
-// subprocesses, so a round that runs out of memory never takes the panel
-// with it.
+// Rounds run as `lab run` subprocesses, so a round that runs out of memory
+// never takes the panel with it.
 type roundLauncher struct {
 	roundsDir string
 }
 
-// roundProcess is a running `lab run`.
 type roundProcess struct {
 	command *exec.Cmd
 }

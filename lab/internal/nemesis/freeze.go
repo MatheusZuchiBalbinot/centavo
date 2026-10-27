@@ -7,17 +7,14 @@ import (
 	"centavo/lab/internal/history"
 )
 
-// freezeRecord is a container pause in the history.
 type freezeRecord struct {
 	Target    string `json:"target"`
 	Failpoint string `json:"failpoint"`
 	Duration  string `json:"duration"`
 }
 
-// freeze completes a freeze failpoint: the process blocked its own path, and
-// the lab pauses the whole container for the same time, so the lease renewals
-// stop too and the lease really expires. The cure unpauses whatever is still
-// paused.
+// The process blocked its own path; the lab pauses the whole container for
+// the same time, so the lease renewals stop too and the lease really expires.
 func (n *Nemesis) freeze(event failpointEvent) {
 	duration, err := time.ParseDuration(event.Arg)
 	if err != nil {

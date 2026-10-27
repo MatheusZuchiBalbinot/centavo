@@ -1,7 +1,5 @@
-// Package replay turns a round's history into what the panel draws: operations
-// and latency per second, the nemesis timeline and the chaos counters. The live
-// panel feeds it the lines of a history still being written; `lab
-// export-replay` feeds it a whole round, for the replay page.
+// The live panel feeds it the lines of a history still being written;
+// `lab export-replay` feeds it a whole round.
 package replay
 
 import (
@@ -18,7 +16,6 @@ import (
 // maxEvents bounds the timeline a replay keeps; the counters see them all.
 const maxEvents = 2_000
 
-// The families of the timeline.
 const (
 	familyProcess   EventFamily = "process"
 	familyFailpoint EventFamily = "failpoint"
@@ -31,40 +28,35 @@ const (
 	familyState     EventFamily = "state"
 )
 
-// The phases of a network episode in the history.
 const (
 	networkStart = "start"
 	networkEnd   = "end"
 )
 
-// The percentiles the panel draws, and the scale they are written in.
 const (
 	medianPercentile = 50
 	tailPercentile   = 99
 	percentScale     = 100
 )
 
-// Replay is one round as the panel plays it.
 type Replay struct {
-	Round    string          `json:"round"`
-	Scenario string          `json:"scenario"`
-	Seed     string          `json:"seed"`
-	Seconds  []Second        `json:"seconds"`
-	Events   []Event         `json:"events"`
-	Counters Counters        `json:"counters"`
-	Verdict  checker.Verdict `json:"verdict,omitempty"`
-	// Description says in plain words what the scenario does to the bank.
-	Description     string    `json:"description,omitempty"`
-	DurationSeconds int       `json:"duration_seconds,omitempty"`
-	StartedAt       time.Time `json:"started_at"`
-	Defenses        string    `json:"defenses,omitempty"`
-	Stopped         bool      `json:"stopped,omitempty"`
-	Error           string    `json:"error,omitempty"`
-	Checks          []Check   `json:"checks,omitempty"`
-	BuiltAt         time.Time `json:"built_at"`
+	Round           string          `json:"round"`
+	Scenario        string          `json:"scenario"`
+	Seed            string          `json:"seed"`
+	Seconds         []Second        `json:"seconds"`
+	Events          []Event         `json:"events"`
+	Counters        Counters        `json:"counters"`
+	Verdict         checker.Verdict `json:"verdict,omitempty"`
+	Description     string          `json:"description,omitempty"`
+	DurationSeconds int             `json:"duration_seconds,omitempty"`
+	StartedAt       time.Time       `json:"started_at"`
+	Defenses        string          `json:"defenses,omitempty"`
+	Stopped         bool            `json:"stopped,omitempty"`
+	Error           string          `json:"error,omitempty"`
+	Checks          []Check         `json:"checks,omitempty"`
+	BuiltAt         time.Time       `json:"built_at"`
 }
 
-// Second is what the clients saw in one second of the round.
 type Second struct {
 	T    int `json:"t"`
 	OK   int `json:"ok"`
@@ -75,12 +67,10 @@ type Second struct {
 	P99 float64 `json:"p99_ms"`
 }
 
-// EventFamily groups the timeline's events; the panel colors them by family.
 type EventFamily string
 
-// Event is one entry of the chaos timeline. Kind, Target, Detail and
-// Duration are the facts, for a client that words the event itself; Text is
-// the same event already worded.
+// Kind, Target, Detail and Duration are the facts, for a client that words
+// the event itself; Text is the same event already worded.
 type Event struct {
 	TMillis  int64            `json:"t_ms"`
 	Family   EventFamily      `json:"family"`
@@ -95,7 +85,6 @@ type Event struct {
 	Text    string `json:"text"`
 }
 
-// Counters add up the chaos of the round.
 type Counters struct {
 	Kills          int `json:"kills"`
 	FailpointFires int `json:"failpoint_fires"`
@@ -108,21 +97,18 @@ type Counters struct {
 	Resolved       int `json:"resolved"`
 }
 
-// Check is one invariant's result, from the report.
 type Check struct {
 	ID         string         `json:"id"`
 	Status     checker.Status `json:"status"`
 	Violations int            `json:"violations"`
 }
 
-// Builder accumulates a replay a record at a time.
 type Builder struct {
 	replay    Replay
 	invokes   map[string]int64
 	latencies map[int][]float64
 }
 
-// nemesisValue reads the fields the timeline shows, whatever the record.
 type nemesisValue struct {
 	Target    string   `json:"target"`
 	Instance  string   `json:"instance"`
@@ -141,15 +127,14 @@ type nemesisValue struct {
 	Count     int      `json:"count"`
 }
 
-// NewBuilder starts the replay of a round.
 func NewBuilder(round, scenario, seed string) *Builder {
 	replay := Replay{Round: round, Scenario: scenario, Seed: seed, Seconds: []Second{}, Events: []Event{}}
 
 	return &Builder{replay: replay, invokes: map[string]int64{}, latencies: map[int][]float64{}}
 }
 
-// FeedLine takes one line of history.jsonl; a line that is not a record is
-// skipped, since the live file may end in a line still being written.
+// A line that is not a record is skipped, since the live file may end in a
+// line still being written.
 func (b *Builder) FeedLine(line []byte) {
 	var record history.Record
 
@@ -161,7 +146,6 @@ func (b *Builder) FeedLine(line []byte) {
 	b.Feed(record)
 }
 
-// Feed takes one record.
 func (b *Builder) Feed(record history.Record) {
 	if record.Process.IsNemesis() {
 		b.feedNemesis(record)
@@ -182,7 +166,6 @@ func (b *Builder) Feed(record history.Record) {
 	b.feedCompletion(record)
 }
 
-// Replay returns the replay so far, with the latency percentiles computed.
 func (b *Builder) Replay() Replay {
 	replay := b.replay
 	replay.Seconds = slices.Clone(b.replay.Seconds)
@@ -229,7 +212,6 @@ func (b *Builder) feedCompletion(record history.Record) {
 	b.latencies[second.T] = append(b.latencies[second.T], latency)
 }
 
-// secondAt returns the second a time falls in, growing the series as needed.
 func (b *Builder) secondAt(timeNS int64) *Second {
 	t := int(timeNS / int64(time.Second))
 
@@ -240,7 +222,7 @@ func (b *Builder) secondAt(timeNS int64) *Second {
 	return &b.replay.Seconds[t]
 }
 
-// percentile reads a sorted slice by the nearest-rank method.
+// Nearest-rank method.
 func percentile(sorted []float64, percent int) float64 {
 	if len(sorted) == 0 {
 		return 0
@@ -251,7 +233,6 @@ func percentile(sorted []float64, percent int) float64 {
 	return sorted[max(rank-1, 0)]
 }
 
-// addEvent stamps the event with the record's time and kind.
 func (b *Builder) addEvent(record history.Record, event Event) {
 	if len(b.replay.Events) >= maxEvents {
 		return
@@ -310,8 +291,8 @@ func (b *Builder) feedNemesis(record history.Record) {
 	}
 }
 
-// feedNetwork counts a network episode when it starts; its end comes too,
-// marked with the subject "end", so the map knows when the link is back.
+// Its end is marked with the subject "end", so the map knows when the link
+// is back.
 func (b *Builder) feedNetwork(record history.Record, value nemesisValue) {
 	target := strings.Join(value.Proxies, ", ")
 

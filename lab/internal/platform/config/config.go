@@ -1,4 +1,3 @@
-// Package config loads and validates the lab configuration at startup.
 package config
 
 import (
@@ -22,7 +21,6 @@ const (
 	minChaosTokenLength   = 32
 )
 
-// Errors of reading the configuration.
 var (
 	ErrMissingVariable  = errors.New("required environment variable is not set")
 	ErrInvalidBankURL   = errors.New("BANK_API_URL must be an absolute http or https URL")
@@ -31,38 +29,30 @@ var (
 	ErrWeakChaosToken   = errors.New("CENTAVO_CHAOS_TOKEN must have at least 32 characters")
 )
 
-// LookupFunc reads one environment variable; os.LookupEnv satisfies it.
 type LookupFunc func(key string) (string, bool)
 
-// Serve is the configuration of `lab serve`.
 type Serve struct {
-	// RoundsDir is where rounds are archived.
 	RoundsDir string
 	// AuditorURL connects straight to PostgreSQL as bank_auditor, never
 	// through Toxiproxy: auditing is not a chaos target.
 	AuditorURL string
 }
 
-// Run is the configuration of `lab run`.
 type Run struct {
 	Serve
-	// BankURL is the bank's client API, through the client_api proxy.
+	// Through the client_api proxy.
 	BankURL string
 	// ControlURL is the same API without Toxiproxy, for the cure's calls.
 	ControlURL string
-	// ChaosToken authenticates the lab on the chaos ports.
 	ChaosToken string
 	// DockerHost is docker-proxy, the only way to the Docker API.
 	DockerHost string
 	// Project is the Compose project whose chaos targets the bot may touch.
-	Project string
-	// PartnerURL is the partner's admin port: PIX in, truth and lies.
-	PartnerURL string
-	// ParticipantID is the bank at the partner.
+	Project       string
+	PartnerURL    string
 	ParticipantID string
 }
 
-// LoadServe reads the configuration of `lab serve`.
 func LoadServe(lookup LookupFunc) (Serve, error) {
 	store, err := require(lookup, artifactStoreVariable)
 	if err != nil {
@@ -92,7 +82,6 @@ func LoadServe(lookup LookupFunc) (Serve, error) {
 	return Serve{RoundsDir: roundsDir, AuditorURL: auditorURL}, nil
 }
 
-// LoadRun reads the configuration of `lab run`.
 func LoadRun(lookup LookupFunc) (Run, error) {
 	serve, err := LoadServe(lookup)
 	if err != nil {
@@ -197,8 +186,6 @@ func validateBankURL(raw string) error {
 	return nil
 }
 
-// roundsDirOf maps the store URL to a directory. S3 arrives with an earlier
-// version.
 func roundsDirOf(store string) (string, error) {
 	parsed, err := url.Parse(store)
 	if err != nil {

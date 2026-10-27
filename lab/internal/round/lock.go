@@ -14,11 +14,10 @@ import (
 // the accounts and the faults, and each would judge the other's chaos.
 const lockFile = ".round.lock"
 
-// ErrAnotherRound means a round is already running against this lab.
 var ErrAnotherRound = errors.New("another round is already running")
 
-// Lock holds the lab for one round until unlock. The kernel releases the lock
-// when the process dies, so a crashed round never leaves the lab locked.
+// The kernel releases the lock when the process dies, so a crashed round
+// never leaves the lab locked.
 func Lock(roundsDir string) (func(), error) {
 	err := os.MkdirAll(roundsDir, fsmode.PrivateDir)
 	if err != nil {
@@ -44,7 +43,6 @@ func Lock(roundsDir string) (func(), error) {
 	return func() { unlock(file) }, nil
 }
 
-// IsLocked reports whether a round holds the lab right now.
 func IsLocked(roundsDir string) (bool, error) {
 	unlock, err := Lock(roundsDir)
 	if errors.Is(err, ErrAnotherRound) {
@@ -60,8 +58,8 @@ func IsLocked(roundsDir string) (bool, error) {
 	return false, nil
 }
 
-// unlock releases the lock; closing the file alone would release it too, so
-// an error here leaves nothing held.
+// Closing the file alone would release it too, so an error here leaves
+// nothing held.
 func unlock(file *os.File) {
 	_ = syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
 	_ = file.Close()

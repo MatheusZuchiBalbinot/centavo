@@ -5,17 +5,15 @@ import (
 	"time"
 )
 
-// limit is how many events a window allows.
 type limit struct {
 	count  int
 	window time.Duration
 }
 
-// roundStartLimit caps the rounds the panel starts, for everyone together:
-// each one takes the bank down on purpose for minutes.
+// For everyone together: each round takes the bank down on purpose for
+// minutes.
 var roundStartLimit = limit{count: 6, window: time.Hour}
 
-// windowLimiter counts events over a sliding window.
 type windowLimiter struct {
 	limit limit
 	now   func() time.Time
@@ -28,7 +26,6 @@ func newWindowLimiter(rule limit) *windowLimiter {
 	return &windowLimiter{limit: rule, now: time.Now}
 }
 
-// wait returns how long until the next event is allowed; zero means now.
 func (l *windowLimiter) wait() time.Duration {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -42,7 +39,6 @@ func (l *windowLimiter) wait() time.Duration {
 	return l.events[0].Add(l.limit.window).Sub(l.now())
 }
 
-// record counts an event that happened.
 func (l *windowLimiter) record() {
 	l.mu.Lock()
 	defer l.mu.Unlock()

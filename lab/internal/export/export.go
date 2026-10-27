@@ -29,13 +29,12 @@ JOIN accounts a ON a.id = b.account_id
 WHERE a.kind = 'system' OR a.id = ANY($1::uuid[])
 ORDER BY b.account_id`
 
-	// The round's PIX out are the transfers its clients created; left()
-	// instead of LIKE, because a round id never needs escaping this way.
+	// left() instead of LIKE, because a round id then never needs escaping.
 	roundTransfersSQL = `
 SELECT id FROM external_transfers WHERE left(client_ref, length($1::text) + 1) = $1::text || '-'`
 
-	// roundEndToEndsSQL are the end_to_end_ids of the round's PIX out, as the
-	// bank derives them: a naive retry's E<id>-<attempt> starts the same way.
+	// As the bank derives them: a naive retry's E<id>-<attempt> starts the same
+	// way.
 	roundEndToEndsSQL = `SELECT 'E' || replace(id::text, '-', '') FROM external_transfers WHERE id IN (` + roundTransfersSQL + `)`
 
 	// A round's ledger transactions carry its client_refs, or belong to its
@@ -101,14 +100,13 @@ SELECT (SELECT count(*) FROM external_transfers
 
 const roundTransferIDsSQL = `SELECT id::text FROM external_transfers WHERE id IN (` + roundTransfersSQL + `) ORDER BY id`
 
-// Request says which round to export and which accounts it created.
 type Request struct {
 	Round      string
 	AccountIDs []string
 }
 
-// Take reads the snapshot. Every query runs in the same read-only
-// transaction, so the tables agree with each other.
+// Every query runs in the same read-only transaction, so the tables agree
+// with each other.
 func Take(ctx context.Context, pool *pgxpool.Pool, request Request) (snapshot.Snapshot, error) {
 	options := pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}
 
@@ -170,8 +168,6 @@ func Take(ctx context.Context, pool *pgxpool.Pool, request Request) (snapshot.Sn
 	return state, nil
 }
 
-// InFlight counts what still moves the round's sagas: transfers not yet in a
-// final status and events waiting in the inbox, for the quiescence of the cure.
 func InFlight(ctx context.Context, pool *pgxpool.Pool, round string) (int, error) {
 	var count int
 
@@ -183,7 +179,6 @@ func InFlight(ctx context.Context, pool *pgxpool.Pool, round string) (int, error
 	return count, nil
 }
 
-// TransferIDs lists the round's transfers, for the final reads.
 func TransferIDs(ctx context.Context, pool *pgxpool.Pool, round string) ([]string, error) {
 	rows, err := pool.Query(ctx, roundTransferIDsSQL, round)
 	if err != nil {
@@ -193,8 +188,6 @@ func TransferIDs(ctx context.Context, pool *pgxpool.Pool, round string) ([]strin
 	return pgx.CollectRows(rows, pgx.RowTo[string])
 }
 
-// ReconciledUpTo is the bank's reconciliation cursor: the last statement
-// entry it booked.
 func ReconciledUpTo(ctx context.Context, pool *pgxpool.Pool) (int64, error) {
 	var seq int64
 
@@ -206,7 +199,6 @@ func ReconciledUpTo(ctx context.Context, pool *pgxpool.Pool) (int64, error) {
 	return seq, nil
 }
 
-// collect reads every row of one export query.
 func collect[T any](ctx context.Context, tx pgx.Tx, sql string, scan pgx.RowToFunc[T], values ...any) ([]T, error) { //nolint:revive // as in pgx.Tx.Query
 	rows, err := tx.Query(ctx, sql, values...)
 	if err != nil {

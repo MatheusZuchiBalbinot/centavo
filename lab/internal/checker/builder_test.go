@@ -19,8 +19,8 @@ type fataler interface {
 	Fatal(args ...any)
 }
 
-// roundBuilder writes a history and the ledger a correct bank would leave
-// behind; tests then plant faults in either side.
+// Writes the history and the ledger a correct bank would leave; tests then
+// plant faults in either side.
 type roundBuilder struct {
 	t         fataler
 	records   []history.Record
@@ -45,7 +45,7 @@ func newRoundBuilder(t fataler) *roundBuilder {
 	return b
 }
 
-// record appends a history record; time advances one millisecond per record.
+// Time advances one millisecond per record.
 func (b *roundBuilder) record(record history.Record) {
 	b.nextIndex++
 	record.Index = b.nextIndex
@@ -61,17 +61,14 @@ func (b *roundBuilder) newOp() string {
 	return op
 }
 
-// upcomingOp is the id the next operation will get.
 func (b *roundBuilder) upcomingOp() string {
 	return fmt.Sprintf("r0001-p01-%06d", b.nextOp+1)
 }
 
-// upcomingTransaction is the id the next applied transaction will get.
 func (b *roundBuilder) upcomingTransaction() string {
 	return fmt.Sprintf("tx-%04d", b.nextTx+1)
 }
 
-// operation records an invoke and its completion, returning the op id.
 func (b *roundBuilder) operation(function history.Function, arguments any, result history.Type, value any) string {
 	op := b.newOp()
 	b.record(history.Record{Process: history.Client(1), Type: history.TypeInvoke, F: function, Op: op, Value: mustJSON(b.t, arguments)})
@@ -86,13 +83,11 @@ func (b *roundBuilder) operation(function history.Function, arguments any, resul
 	return op
 }
 
-// apply writes a correct ledger transaction: entries in sequence, chained.
 func (b *roundBuilder) apply(clientRef string, kind snapshot.TransactionKind, amounts map[string]int64) string {
 	return b.applyFor(clientRef, clientRef, kind, amounts)
 }
 
-// applyFor is apply for a request sent under another operation's key: the
-// bank keeps the key as client_ref and the sender's id as correlation_id.
+// The bank keeps the key as client_ref and the sender's id as correlation_id.
 func (b *roundBuilder) applyFor(clientRef, correlationID string, kind snapshot.TransactionKind, amounts map[string]int64) string {
 	id := b.upcomingTransaction()
 	b.nextTx++
@@ -139,17 +134,14 @@ func (b *roundBuilder) transfer(from, to string, amount int64) {
 	b.apply(op, snapshot.TransactionInternalTransfer, map[string]int64{from: -amount, to: amount})
 }
 
-// resolve records the cure's answer for an indeterminate operation.
 func (b *roundBuilder) resolve(op, outcome string) {
 	b.resolveWith(op, op, outcome)
 }
 
-// resolveWith is resolve for an operation that sent another operation's key.
 func (b *roundBuilder) resolveWith(op, key, outcome string) {
 	b.operation(history.FunctionResolve, resolveArgs{Key: key, Op: op}, history.TypeOK, map[string]string{"key": key, "outcome": outcome})
 }
 
-// snapshot returns the export, with materialized balances that match the entries.
 func (b *roundBuilder) snapshot() snapshot.Snapshot {
 	state := b.snap
 	state.Balances = nil
@@ -181,7 +173,6 @@ func mustJSON(t fataler, value any) json.RawMessage {
 	return encoded
 }
 
-// rulesOf lists the distinct rules a result broke.
 func rulesOf(result Result) []Rule {
 	var rules []Rule
 

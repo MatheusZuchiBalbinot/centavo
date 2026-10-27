@@ -14,7 +14,6 @@ import (
 	"centavo/lab/scenarios"
 )
 
-// toxiproxyURL is Toxiproxy's API, on the Compose network only.
 const toxiproxyURL = "http://toxiproxy:8474"
 
 // timeoutToxic is the toxic that holds data, the base of both partitions
@@ -26,7 +25,6 @@ const (
 	phaseEnd   = "end"
 )
 
-// networkRecord is a network episode in the history.
 type networkRecord struct {
 	Fault   string   `json:"fault"`
 	Proxies []string `json:"proxies"`
@@ -34,7 +32,6 @@ type networkRecord struct {
 	Phase   string   `json:"phase"`
 }
 
-// toxicBody is one toxic in Toxiproxy's API.
 type toxicBody struct {
 	Name       string           `json:"name"`
 	Type       string           `json:"type"`
@@ -43,8 +40,8 @@ type toxicBody struct {
 	Attributes map[string]int64 `json:"attributes"`
 }
 
-// startNetwork runs every network fault: a fault without a schedule holds
-// for the whole round, a scheduled one comes in episodes.
+// A fault without a schedule holds for the whole round; a scheduled one
+// comes in episodes.
 func (n *Nemesis) startNetwork(ctx context.Context) {
 	for _, fault := range n.config.Scenario.Faults {
 		if fault.Kind != scenarios.FaultNetwork {
@@ -119,9 +116,8 @@ func (n *Nemesis) removeNetwork(ctx context.Context, fault scenarios.Fault) {
 	}
 }
 
-// applyToxic turns the scenario's toxic into Toxiproxy calls. The three
-// partitions are not toxics of their own: reject disables the proxy,
-// blackhole holds both directions, one_way holds only the answers.
+// The three partitions are not toxics of their own: reject disables the
+// proxy, blackhole holds both directions, one_way holds only the answers.
 func (n *Nemesis) applyToxic(ctx context.Context, proxy string, fault scenarios.Fault) error {
 	toxic := fault.Toxic
 
@@ -182,8 +178,7 @@ func (n *Nemesis) setProxyEnabled(ctx context.Context, proxy string, isEnabled b
 	return n.toxiproxy(ctx, http.MethodPost, "/proxies/"+url.PathEscape(proxy), map[string]bool{"enabled": isEnabled})
 }
 
-// resetNetwork is the network part of the cure: every proxy enabled, every
-// toxic gone. Toxics never expire by themselves.
+// Toxics never expire by themselves.
 func (n *Nemesis) resetNetwork(ctx context.Context) {
 	err := n.toxiproxy(ctx, http.MethodPost, "/reset", nil)
 	if err != nil {

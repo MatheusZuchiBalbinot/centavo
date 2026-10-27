@@ -20,13 +20,10 @@ const (
 	reportMDFile   = "report.md"
 	// maxReportedViolations keeps report.json bounded; the count stays exact.
 	maxReportedViolations = 1_000
-	// maxFailurePaths is how many violations get their story told.
-	maxFailurePaths = 10
-	// maxPathLines bounds one story.
-	maxPathLines = 20
+	maxFailurePaths       = 10
+	maxPathLines          = 20
 )
 
-// Report is report.json.
 type Report struct {
 	Round            string            `json:"round"`
 	Scenario         string            `json:"scenario,omitempty"`
@@ -44,8 +41,6 @@ type Report struct {
 	FailurePaths     []FailurePath     `json:"failure_paths"`
 }
 
-// FailurePath tells the story of one violation: the operation's history and
-// the ledger rows it touched.
 type FailurePath struct {
 	Violation Violation         `json:"violation"`
 	History   []history.Record  `json:"history"`
@@ -53,8 +48,6 @@ type FailurePath struct {
 	Ledger    []string          `json:"ledger"`
 }
 
-// operationHistories are the history records of the operations a report
-// tells the story of.
 type operationHistories map[string][]history.Record
 
 func newReport(meta roundMeta, result Result, events chaosEvents, histories operationHistories) Report {
@@ -134,12 +127,10 @@ func failurePathOf(result Result, violation Violation) FailurePath {
 	return path
 }
 
-// storiedViolations are the violations whose failure path the report shows.
 func storiedViolations(result Result) []Violation {
 	return result.Violations[:min(len(result.Violations), maxFailurePaths)]
 }
 
-// storiedOperations are the operations behind them.
 func storiedOperations(result Result) map[string]bool {
 	ops := map[string]bool{}
 
@@ -173,8 +164,7 @@ func writeReports(roundDir string, report Report) error {
 	return nil
 }
 
-// renderMarkdown writes report.md: text in Portuguese, invariant names and
-// codes in English.
+// Text in Portuguese; invariant names and codes in English.
 func renderMarkdown(report Report) string {
 	var b strings.Builder
 
@@ -302,8 +292,7 @@ func recordDetail(record history.Record) string {
 	}
 }
 
-// formatTime prints a round time like +312,4s, with the decimal comma of the
-// Portuguese report.
+// With the decimal comma of the Portuguese report.
 func formatTime(timeNS int64) string {
 	if timeNS == unknownTime {
 		return textBeforeRound

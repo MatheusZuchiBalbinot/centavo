@@ -1,6 +1,5 @@
 package dashboard
 
-// Routes of the panel.
 const (
 	replayRoute  = "/api/replay/{round}"
 	reportRoute  = "/rounds/{round}/" + reportMDFile
@@ -13,7 +12,6 @@ const (
 	eventsRoute  = "/api/rounds/{round}/events"
 )
 
-// reportURLOf is where the panel serves a round's report.
 func reportURLOf(round string) string {
 	return "/rounds/" + round + "/" + reportMDFile
 }

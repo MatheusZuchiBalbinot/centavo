@@ -60,17 +60,13 @@ const (
 	panelAddr          = ":8090"
 	healthcheckURL     = "http://127.0.0.1:8090" + dashboard.HealthPath
 	healthcheckTimeout = 3 * time.Second
-	// Pool sizes.
 	auditorConnections = 2
 	exportConnections  = 2
-	// eventsDir is the shared volume where services record fired failpoints.
-	eventsDir = "/lab/events"
-	// checkerMemoryLimit is the soft limit of the checker subprocess.
+	eventsDir          = "/lab/events"
 	checkerMemoryLimit = "GOMEMLIMIT=256MiB"
 )
 
-// attackStopSignal asks a running `lab run` to end its attack early; the
-// cure and the check still run, so the round gets a verdict.
+// The cure and the check still run, so the round gets a verdict.
 const attackStopSignal = syscall.SIGUSR1
 
 // Exit codes; lab check uses the checker's own.
@@ -281,7 +277,6 @@ func runRound(ctx context.Context, arguments []string) error {
 	return verdictError(result.Verdict)
 }
 
-// stopOnSignal returns a channel that closes when attackStopSignal arrives.
 func stopOnSignal(ctx context.Context) <-chan struct{} {
 	signals := make(chan os.Signal, 1)
 	stop := make(chan struct{})
@@ -316,8 +311,8 @@ func verdictError(verdict checker.Verdict) error {
 	}
 }
 
-// sagaOptions let the cure watch the round's PIX: in flight in the ledger,
-// pending at the partner, and the partner's truth at the end.
+// The cure watches the round's PIX: in flight in the ledger, pending at the
+// partner, and the partner's truth at the end.
 func sagaOptions(pool *pgxpool.Pool, runConfig config.Run) round.SagaOptions {
 	partnerClient := partner.New(runConfig.PartnerURL, runConfig.ParticipantID)
 
@@ -336,7 +331,6 @@ func sagaOptions(pool *pgxpool.Pool, runConfig config.Run) round.SagaOptions {
 	}
 }
 
-// unreconciled is how many statement entries the bank still has to book.
 func unreconciled(ctx context.Context, pool *pgxpool.Pool, partnerClient partner.Client) (int64, error) {
 	pending, err := partnerClient.Pending(ctx)
 	if err != nil {
@@ -351,8 +345,8 @@ func unreconciled(ctx context.Context, pool *pgxpool.Pool, partnerClient partner
 	return max(pending.LastStatementSeq-cursor, 0), nil
 }
 
-// checkInSubprocess runs `lab check` in its own process with its own memory
-// limit, so a checker that runs out of memory never takes the lab with it.
+// Its own process with its own memory limit, so a checker that runs out of
+// memory never takes the lab with it.
 func checkInSubprocess(ctx context.Context, roundDir string) (checker.Verdict, error) {
 	executable, err := os.Executable()
 	if err != nil {
@@ -405,8 +399,6 @@ func runCheck(arguments []string) error {
 	return verdictError(result.Verdict)
 }
 
-// exportReplay writes the replay of an archived round, the file the replay page
-// plays.
 func exportReplay(arguments []string) error {
 	flags := flag.NewFlagSet(commandExportReplay, flag.ContinueOnError)
 	flags.SetOutput(io.Discard)

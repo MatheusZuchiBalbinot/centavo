@@ -1,6 +1,5 @@
-// Package scenarios embeds and parses the named scenarios. Only the fields the
-// lab implements are accepted; an unknown field fails loudly instead of being
-// ignored.
+// Package scenarios embeds and parses the named scenarios. An unknown field
+// fails loudly instead of being ignored.
 package scenarios
 
 import (
@@ -24,7 +23,6 @@ import (
 //go:embed *.yaml
 var files embed.FS
 
-// The operation mixes of a workload.
 const (
 	ProfileLedgerOnly    Profile = "ledger-only"
 	ProfileBalanced      Profile = "balanced"
@@ -36,44 +34,32 @@ const (
 
 var workloadProfiles = []Profile{ProfileLedgerOnly, ProfileBalanced, ProfilePaymentsHeavy, ProfilePaymentsOut}
 
-// The client behaviors around timeouts and retries.
 const (
-	ClientPolite ClientProfile = "polite"
-	// ClientDuplicator sends each operation twice, in parallel, with the same key.
+	ClientPolite     ClientProfile = "polite"
 	ClientDuplicator ClientProfile = "duplicator"
-	// ClientAggressive retries at once, up to 20 times, with the same key.
 	ClientAggressive ClientProfile = "aggressive"
-	// ClientBuggy reuses the previous operation's key with another body.
-	ClientBuggy ClientProfile = "buggy"
+	ClientBuggy      ClientProfile = "buggy"
 )
 
 var clientProfiles = []ClientProfile{ClientPolite, ClientDuplicator, ClientAggressive, ClientBuggy}
 
-// The fault families.
 const (
 	FaultFailpoint FaultKind = "failpoint"
 	FaultProcess   FaultKind = "process"
-	// FaultPartner makes the partner lie.
-	FaultPartner FaultKind = "partner"
-	// FaultClock skews a process's wall clock.
-	FaultClock FaultKind = "clock"
-	// FaultNetwork puts toxics on Toxiproxy's links.
-	FaultNetwork FaultKind = "network"
-	// FaultDatabase kills or freezes PostgreSQL.
-	FaultDatabase FaultKind = "database"
+	FaultPartner   FaultKind = "partner"
+	FaultClock     FaultKind = "clock"
+	FaultNetwork   FaultKind = "network"
+	FaultDatabase  FaultKind = "database"
 )
 
-// Database actions.
 const (
 	DatabaseKillPostmaster = "kill_postmaster"
 	DatabaseKillBackend    = "kill_backend"
 	DatabaseFreeze         = "freeze"
-	// DatabaseFailover kills the primary and promotes the replica; it needs the
-	// replica profile.
+	// Needs the replica profile.
 	DatabaseFailover = "failover"
 )
 
-// Replication modes of the replica profile.
 const (
 	ReplicationAsync = "async"
 	ReplicationSync  = "sync"
@@ -84,9 +70,8 @@ var (
 	replicationModes = []string{ReplicationAsync, ReplicationSync}
 )
 
-// Toxic types the bot puts on a link, with the three partitions: reject (the
-// proxy is down), blackhole (nothing moves either way) and one_way (requests
-// arrive, answers do not).
+// The three partitions: reject (the proxy is down), blackhole (nothing moves
+// either way) and one_way (requests arrive, answers do not).
 const (
 	ToxicReject    = "reject"
 	ToxicBlackhole = "blackhole"
@@ -94,28 +79,24 @@ const (
 )
 
 var (
-	toxicTypes = []string{"latency", "timeout", "reset_peer", "limit_data", "slicer", "bandwidth", "slow_close", ToxicReject, ToxicBlackhole, ToxicOneWay}
-	// networkLinks are Toxiproxy's proxies.
+	toxicTypes   = []string{"latency", "timeout", "reset_peer", "limit_data", "slicer", "bandwidth", "slow_close", ToxicReject, ToxicBlackhole, ToxicOneWay}
 	networkLinks = []string{"client_api", "api_pg", "worker1_pg", "worker2_pg", "worker1_partner", "worker2_partner", "partner_webhooks"}
 	toxicStreams = []string{"upstream", "downstream"}
 )
 
-// partnerModeFields are the lies a scenario may ask for; the lab adds the
-// participant, the seed and the TTL itself.
+// The lab adds the participant, the seed and the TTL itself.
 var partnerModeFields = []string{
 	"timeout_after_process", "error_after_process", "double_process", "return_after_settle", "reject_rate",
 	"settle_delay", "webhook_duplicate", "webhook_duplicate_new_id", "webhook_delay_max",
 	"webhook_reorder_window", "webhook_drop", "outage",
 }
 
-// The ways a scheduled fault spreads over the round.
 const (
 	SchedulePoisson ScheduleType = "poisson"
-	// ScheduleAt fires once, at a fixed time after the round starts.
-	ScheduleAt ScheduleType = "at"
+	ScheduleAt      ScheduleType = "at"
 )
 
-// Targets the bot may hit; failpoints live only in the bank processes.
+// Failpoints live only in the bank processes.
 var (
 	processTargets   = []string{"bank-api", "bank-worker-1", "bank-worker-2", "partner"}
 	failpointTargets = []string{"bank-api", "bank-worker-1", "bank-worker-2"}
@@ -142,7 +123,6 @@ const (
 
 var namePattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
-// Errors of loading a scenario.
 var (
 	ErrUnknownScenario = errors.New("unknown scenario")
 	ErrInvalidScenario = errors.New("invalid scenario")
@@ -151,19 +131,14 @@ var (
 // maxClockSkew bounds a clock fault, as the bank does.
 const maxClockSkew = 48 * time.Hour
 
-// Profile is the operation mix of a workload.
 type Profile string
 
-// ClientProfile is how a client behaves around timeouts and retries.
 type ClientProfile string
 
-// FaultKind is the fault family.
 type FaultKind string
 
-// ScheduleType is how a scheduled fault spreads over the round.
 type ScheduleType string
 
-// Scenario is a validated scenario.
 type Scenario struct {
 	Name        string
 	Description string
@@ -178,7 +153,6 @@ type Scenario struct {
 	SHA256 string
 }
 
-// Workload describes the load generator of a round.
 type Workload struct {
 	Profile              Profile
 	Clients              int
@@ -188,8 +162,8 @@ type Workload struct {
 	ClientMix            map[ClientProfile]float64
 }
 
-// Fault is one fault of a scenario. Failpoint faults use Failpoint, Action,
-// Arg, Probability and MaxFires; process faults use Schedule.
+// Failpoint faults use Failpoint, Action, Arg, Probability and MaxFires;
+// process faults use Schedule.
 type Fault struct {
 	ID          string
 	Kind        FaultKind
@@ -200,8 +174,7 @@ type Fault struct {
 	Probability float64
 	MaxFires    int
 	Schedule    Schedule
-	// Modes are the partner's lies, as JSON for PUT /chaos/modes.
-	Modes json.RawMessage
+	Modes       json.RawMessage
 	// Offset is a clock fault's skew, ahead when positive.
 	Offset time.Duration
 	// Proxies, Toxic and Window describe a network fault: which links, what
@@ -215,7 +188,6 @@ type Fault struct {
 	Lag         time.Duration
 }
 
-// Toxic is what a network fault does to a link.
 type Toxic struct {
 	Type   string
 	Stream string
@@ -224,13 +196,11 @@ type Toxic struct {
 	Attributes map[string]int64
 }
 
-// Window bounds an episode of a scheduled network fault.
 type Window struct {
 	Min time.Duration
 	Max time.Duration
 }
 
-// Schedule spreads a fault over the round.
 type Schedule struct {
 	Type         ScheduleType
 	MeanInterval time.Duration
@@ -287,7 +257,6 @@ type rawWorkload struct {
 	ClientMix            map[ClientProfile]float64 `yaml:"client_mix"`
 }
 
-// Names lists the embedded scenarios.
 func Names() []string {
 	entries, err := fs.Glob(files, "*"+fileExtension)
 	if err != nil {
@@ -303,7 +272,6 @@ func Names() []string {
 	return names
 }
 
-// Load reads and validates one embedded scenario.
 func Load(name string) (Scenario, error) {
 	if !namePattern.MatchString(name) {
 		return Scenario{}, fmt.Errorf("%w: %q", ErrUnknownScenario, name)
@@ -319,7 +287,7 @@ func Load(name string) (Scenario, error) {
 	return Parse(name, content)
 }
 
-// Parse validates a scenario file; name is the file name it must declare.
+// name is the file name it must declare.
 func Parse(name string, content []byte) (Scenario, error) {
 	var raw rawScenario
 
@@ -453,8 +421,7 @@ func validateFault(r rawFault) (Fault, error) {
 	}
 }
 
-// validatePartnerFault checks the names of the lies; the partner itself
-// validates their values when the lab arms them.
+// The partner itself validates their values when the lab arms them.
 func validatePartnerFault(fault Fault, r rawFault) (Fault, error) {
 	if len(r.Modes) == 0 {
 		return Fault{}, errors.New("a partner fault needs modes")

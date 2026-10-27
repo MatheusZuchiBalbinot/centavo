@@ -28,9 +28,8 @@ const (
 	startsPerHour = 6
 )
 
-// fakeRunner records the rounds it was asked for. isSingleRound makes it
-// refuse a second round like the real one; otherwise every start succeeds,
-// so a test can reach the rate limit.
+// isSingleRound refuses a second round like the real one; otherwise every
+// start succeeds, so a test can reach the rate limit.
 type fakeRunner struct {
 	isSingleRound bool
 

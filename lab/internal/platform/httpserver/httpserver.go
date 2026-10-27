@@ -1,5 +1,3 @@
-// Package httpserver runs HTTP servers until the context ends, then shuts
-// them down gracefully.
 package httpserver
 
 import (
@@ -16,15 +14,13 @@ const (
 	shutdownTimeout   = 10 * time.Second
 )
 
-// New builds a server with the timeouts.
 func New(address string, handler http.Handler) *http.Server {
 	return &http.Server{
 		Addr: address, Handler: handler, ReadHeaderTimeout: readHeaderTimeout, WriteTimeout: writeTimeout,
 	}
 }
 
-// Run serves every server until ctx is canceled or one of them fails, then
-// gives in-flight requests up to shutdownTimeout to finish.
+// In-flight requests get up to shutdownTimeout to finish.
 func Run(ctx context.Context, servers ...*http.Server) error {
 	serveErrors := make(chan error, len(servers))
 

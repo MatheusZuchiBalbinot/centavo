@@ -15,12 +15,10 @@ import (
 	"centavo/lab/internal/runner"
 )
 
-// Bounds of the control API.
 const (
 	// maxBodyBytes is far above the largest valid start request.
-	maxBodyBytes = 1 << 10
-	jsonMedia    = "application/json"
-	// Round list pages.
+	maxBodyBytes    = 1 << 10
+	jsonMedia       = "application/json"
 	defaultPageSize = 25
 	maxPageSize     = 100
 	// The audit log keeps the network of the caller, not the address.
@@ -30,15 +28,13 @@ const (
 	ipv6Bits       = 128
 )
 
-// RoundRunner starts and stops the rounds the panel asks for.
 type RoundRunner interface {
 	Start(request runner.Request) (runner.State, error)
 	Stop() (runner.State, error)
 	State() runner.State
 }
 
-// labResponse is what the lab is doing; Round appears once `lab run` has
-// allocated the round's id.
+// Round appears once `lab run` has allocated the round's id.
 type labResponse struct {
 	Status          runner.Status `json:"status"`
 	Round           string        `json:"round,omitempty"`
@@ -68,7 +64,6 @@ type roundsPage struct {
 	NextCursor string    `json:"next_cursor,omitempty"`
 }
 
-// control serves the routes that start and stop rounds.
 type control struct {
 	panel   panelHandlers
 	runner  RoundRunner
@@ -101,7 +96,6 @@ func (c control) menu(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, response)
 }
 
-// start picks a scenario of the attack and starts the round. It answers
 // 202: the round runs for minutes, and GET /api/lab follows it.
 func (c control) start(w http.ResponseWriter, r *http.Request) {
 	var body startRequest
@@ -251,8 +245,6 @@ func pickIndex(n int) int {
 	return rand.IntN(n) //nolint:gosec // G404: picking a test scenario, not a secret.
 }
 
-// networkOf keeps the caller's network for the audit log, never the full
-// address.
 func networkOf(remoteAddr string) string {
 	host, _, err := net.SplitHostPort(remoteAddr)
 	if err != nil {

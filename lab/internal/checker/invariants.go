@@ -9,7 +9,6 @@ import (
 	"centavo/lab/internal/snapshot"
 )
 
-// The invariants the checker judges.
 const (
 	// InvariantI1 is conservation: every transaction sums to zero (I1a), each
 	// account's entries chain from one balance to the next (I1b), and the
@@ -28,7 +27,6 @@ const (
 	InvariantI4 Invariant = "I4"
 )
 
-// The rules inside each invariant.
 const (
 	RuleI1aZeroSum          Rule = "I1a.zero_sum"
 	RuleI1bSequence         Rule = "I1b.account_seq"
@@ -58,13 +56,10 @@ const (
 	standingUnknown
 )
 
-// Invariant names one invariant.
 type Invariant string
 
-// Rule names the precise rule inside an invariant.
 type Rule string
 
-// Violation is one broken rule, placed in time by the operation behind it.
 type Violation struct {
 	Invariant     Invariant `json:"invariant"`
 	Rule          Rule      `json:"rule"`
@@ -79,12 +74,10 @@ type evaluation struct {
 	ops        operations
 	ledger     ledger
 	violations []Violation
-	// unresolved are indeterminate writes resolve never answered; they make a
-	// round inconclusive, never failed.
+	// They make a round inconclusive, never failed.
 	unresolved []string
 }
 
-// standing is what the round knows about whether a write applied.
 type standing int
 
 func (e *evaluation) add(violation Violation) {
@@ -427,8 +420,6 @@ func (e *evaluation) checkIndeterminate(o *operation, applied int) {
 	}
 }
 
-// depositStanding settles an operation with its result and, for an info,
-// with resolve's answer.
 func (e *evaluation) depositStanding(o *operation) standing {
 	// A replay is the key owner's deposit again; the owner counts it.
 	if e.isReplayOfTheKey(o) {
@@ -499,7 +490,6 @@ func (e *evaluation) checkOKWrite(o *operation, applications []snapshot.Transact
 	}
 }
 
-// expectedEntries is what each account must receive for the operation's args.
 func (e *evaluation) expectedEntries(o *operation) map[string]int64 {
 	if o.function == history.FunctionDeposit {
 		var args depositArgs
@@ -657,7 +647,6 @@ func entryAmounts(entries []snapshot.Entry) map[string]int64 {
 	return amounts
 }
 
-// amountsEqual compares two account-to-amount maps.
 func amountsEqual(expected, actual map[string]int64) bool {
 	if len(expected) != len(actual) {
 		return false

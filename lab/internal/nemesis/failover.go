@@ -11,21 +11,16 @@ import (
 	"centavo/lab/scenarios"
 )
 
-// replicaService is the hot standby of the replica profile.
 const replicaService = "postgres-replica"
 
 // replicaUpstream is where the database links point after a failover: Toxiproxy
 // plays the part of the virtual IP.
 const replicaUpstream = "postgres-replica:5432"
 
-// replicationLink carries the WAL from the primary to the replica.
 const replicationLink = "replication"
 
-// databaseLinks are every link that reaches the primary.
 var databaseLinks = []string{"api_pg", "worker1_pg", "worker2_pg", "auditor_pg"}
 
-// promoteCommand turns the standby into a primary; it runs as the postgres
-// user inside the replica.
 var promoteCommand = []string{"psql", "--username", "postgres", "--command", "SELECT pg_promote()"}
 
 const (
@@ -33,7 +28,6 @@ const (
 	phasePromoted = "promoted"
 )
 
-// failoverRecord is a failover in the history.
 type failoverRecord struct {
 	Fault       string `json:"fault"`
 	Replication string `json:"replication"`
@@ -41,8 +35,6 @@ type failoverRecord struct {
 	Phase       string `json:"phase"`
 }
 
-// synchronousStandbyCommand sets who the primary waits for on every commit:
-// the replica in sync mode, nobody in async mode.
 func synchronousStandbyCommand(replication string) []string {
 	standby := ""
 	if replication == scenarios.ReplicationSync {
@@ -55,8 +47,8 @@ func synchronousStandbyCommand(replication string) []string {
 	return []string{"psql", "--username", "postgres", "--command", setting, "--command", "SELECT pg_reload_conf()"}
 }
 
-// failOverAt is the procedure: at the set time the primary dies for good, the
-// replica is promoted and every database link moves to it.
+// At the set time the primary dies for good, the replica is promoted and
+// every database link moves to it.
 func (n *Nemesis) failOverAt(ctx context.Context, fault scenarios.Fault) {
 	select {
 	case <-ctx.Done():
@@ -72,7 +64,6 @@ func (n *Nemesis) failOverAt(ctx context.Context, fault scenarios.Fault) {
 	}
 }
 
-// setUpReplication makes the replica follow in the scenario's mode and lag.
 func (n *Nemesis) setUpReplication(ctx context.Context, fault scenarios.Fault) error {
 	_, err := n.config.Docker.Find(ctx, replicaService)
 	if err != nil {

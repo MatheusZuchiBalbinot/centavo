@@ -1,5 +1,3 @@
-// Package loadgen drives the bank like its clients would and records every
-// request and answer in the history.
 package loadgen
 
 import (
@@ -34,11 +32,10 @@ const (
 	verdictGiveUp
 )
 
-// maxResponseBytes bounds what the client reads from one response.
 const maxResponseBytes = 1 << 20
 
-// definitiveCodes are the 4xx codes after which nothing was applied. The lab
-// keeps its own list: it never imports the bank.
+// The 4xx codes after which nothing was applied. The lab keeps its own list:
+// it never imports the bank.
 var definitiveCodes = map[string]bool{
 	"VALIDATION_FAILED": true, "IDEMPOTENCY_KEY_MISSING": true, "ACCOUNT_NOT_FOUND": true, "TRANSFER_NOT_FOUND": true,
 	"SAME_ACCOUNT_TRANSFER": true, "INSUFFICIENT_FUNDS": true, "AMOUNT_ABOVE_LIMIT": true, "IDEMPOTENCY_KEY_MISMATCH": true, "OPERATION_VOIDED": true,
@@ -46,13 +43,10 @@ var definitiveCodes = map[string]bool{
 
 const requestInProgressCode = "REQUEST_IN_PROGRESS"
 
-// outcomeKind classifies what one HTTP attempt showed the client.
 type outcomeKind string
 
-// verdict is what the client does after an attempt.
 type verdict int
 
-// outcome is how history.jsonl records an attempt or a failed operation.
 type outcome struct {
 	Kind       outcomeKind `json:"kind"`
 	HTTPStatus int         `json:"http_status,omitempty"`
@@ -66,7 +60,6 @@ type attemptResult struct {
 	value   json.RawMessage
 }
 
-// request is one HTTP call to the bank.
 type request struct {
 	method        string
 	path          string
@@ -75,7 +68,6 @@ type request struct {
 	correlationID string
 }
 
-// bankClient sends requests to the bank's client API.
 type bankClient struct {
 	baseURL string
 	http    *http.Client
@@ -94,8 +86,8 @@ func newBankClient(baseURL string, connections int) bankClient {
 	return bankClient{baseURL: baseURL, http: &http.Client{Transport: transport}}
 }
 
-// attempt sends the request once and classifies what came back. parse turns a
-// 2xx body into the value the history records, or fails when fields are missing.
+// parse turns a 2xx body into the value the history records, or fails when
+// fields are missing.
 func (c bankClient) attempt(ctx context.Context, call request, timeout time.Duration, parse parseFunc) attemptResult {
 	started := time.Now()
 

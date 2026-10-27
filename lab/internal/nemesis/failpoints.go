@@ -46,7 +46,6 @@ type failpointMatch struct {
 	CorrelationPrefix string `json:"correlation_prefix"`
 }
 
-// failpointEvent is what a service writes when a failpoint fires.
 type failpointEvent struct {
 	Instance      string `json:"instance"`
 	Failpoint     string `json:"failpoint"`
@@ -132,9 +131,8 @@ func (c *failpointController) run(ctx context.Context) {
 	}
 }
 
-// push (re)arms every failpoint fault on every target. The rule carries the
-// fires left: when it changes the bank replaces the rule, and when none are
-// left the probability drops to zero.
+// The rule carries the fires left: when it changes the bank replaces the
+// rule, and when none are left the probability drops to zero.
 func (c *failpointController) push(ctx context.Context) {
 	for _, armed := range c.snapshot() {
 		for _, service := range armed.fault.Targets {
@@ -169,9 +167,8 @@ func (c *failpointController) pushTo(ctx context.Context, armed armedFault, serv
 	}
 }
 
-// ruleFor derives the rule's seed from the round seed, the target and its
-// restart count: each incarnation of a process gets its own decisions, and the
-// same round replays them.
+// Each incarnation of a process gets its own decisions, and the same round
+// replays them.
 func (c *failpointController) ruleFor(armed armedFault, service string, restartCount int) failpointRule {
 	fault := armed.fault
 	stream := fmt.Sprintf("failpoints.%s#%d/%s", service, restartCount, fault.ID)
@@ -209,8 +206,6 @@ func (c *failpointController) snapshot() []armedFault {
 	return copies
 }
 
-// collectEvents reads what the services wrote since the last look and puts
-// every fired failpoint of this round in the history.
 func (c *failpointController) collectEvents() {
 	for _, path := range c.eventFiles() {
 		for _, line := range c.readNewLines(path) {
@@ -254,8 +249,7 @@ func (c *failpointController) handleEvent(line []byte) {
 	}
 }
 
-// readNewLines returns the complete lines appended to path since the last
-// read; a line still being written waits for the next look.
+// A line still being written waits for the next look.
 func (c *failpointController) readNewLines(path string) [][]byte {
 	file, err := os.Open(path) //nolint:gosec // G304: files of the configured events directory.
 	if err != nil {

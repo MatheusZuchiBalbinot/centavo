@@ -23,7 +23,6 @@ type killRecord struct {
 	Fault  string `json:"fault"`
 }
 
-// killRandomly is family 2: SIGKILL a random target at exponential intervals.
 func (n *Nemesis) killRandomly(ctx context.Context, fault scenarios.Fault) {
 	schedule := n.config.Seed.Stream("nemesis.schedule/" + fault.ID)
 	choices := n.config.Seed.Stream("nemesis.targets/" + fault.ID)
@@ -56,8 +55,8 @@ func (n *Nemesis) killRandomly(ctx context.Context, fault scenarios.Fault) {
 	}
 }
 
-// kill records the kill, then runs chaos-kill inside the target, so the
-// process dies of its own SIGKILL and the restart policy brings it back.
+// chaos-kill runs inside the target, so the process dies of its own SIGKILL
+// and the restart policy brings it back.
 func (n *Nemesis) kill(ctx context.Context, fault scenarios.Fault, service string) error {
 	t, isKnown := targetByService(service)
 	if !isKnown {

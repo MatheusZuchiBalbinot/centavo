@@ -1,6 +1,3 @@
-// Package nemesis is the chaos bot: it arms failpoints, kills processes,
-// records every injection in the history and cures everything at the end of a
-// round.
 package nemesis
 
 import (
@@ -30,14 +27,12 @@ const (
 	maxResponseBytes = 1 << 20
 )
 
-// Errors of injecting and healing faults.
 var (
 	ErrUnsafeTarget = errors.New("a target is not a chaoslab build in the chaoslab environment")
 	ErrHealTimeout  = errors.New("targets did not become healthy before the heal timeout")
 )
 
-// targets are the chaos targets of the Compose stack; their ports never leave
-// the Compose network.
+// Their ports never leave the Compose network.
 var targets = []target{
 	{service: "bank-api", binary: "/app/bank", adminURL: "http://bank-api:9090", chaosURL: "http://bank-api:9091"},
 	{service: "bank-worker-1", binary: "/app/bank", adminURL: "http://bank-worker-1:9090", chaosURL: "http://bank-worker-1:9091"},
@@ -45,22 +40,19 @@ var targets = []target{
 	{service: "partner", binary: "/app/partner", adminURL: "http://partner:9092"},
 }
 
-// Config is one round of chaos.
 type Config struct {
-	Round      string
-	Seed       seed.Seed
-	Scenario   scenarios.Scenario
-	History    *history.Writer
-	Docker     docker.Client
-	ChaosToken string
-	EventsDir  string
-	Logger     *slog.Logger
-	// PartnerAdminURL is the partner's admin port, where its lies are set.
+	Round           string
+	Seed            seed.Seed
+	Scenario        scenarios.Scenario
+	History         *history.Writer
+	Docker          docker.Client
+	ChaosToken      string
+	EventsDir       string
+	Logger          *slog.Logger
 	PartnerAdminURL string
 	ParticipantID   string
 }
 
-// Nemesis runs the faults of one round.
 type Nemesis struct {
 	config  Config
 	http    *http.Client
@@ -68,19 +60,17 @@ type Nemesis struct {
 
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
-	// freezes are the container pauses in progress; the cure waits for them.
+	// The cure waits for them.
 	freezes sync.WaitGroup
 
 	failpoints *failpointController
-	// defenses is the profile the bank reported in the preflight.
-	defenses string
-	// toxiproxyURL is Toxiproxy's API; tests point it at a fake.
+	defenses   string
+	// Tests point it at a fake.
 	toxiproxyURL string
 	// hasFailedOver keeps the cure from starting a fenced old primary.
 	hasFailedOver atomic.Bool
 }
 
-// target is one process the bot may hit.
 type target struct {
 	service  string
 	binary   string
@@ -96,7 +86,6 @@ type healthBody struct {
 	Defenses string `json:"defenses"`
 }
 
-// New builds the nemesis of a round.
 func New(config Config) *Nemesis {
 	bot := &Nemesis{config: config, http: &http.Client{Timeout: requestTimeout}, started: time.Now().UTC(), toxiproxyURL: toxiproxyURL}
 	bot.failpoints = newFailpointController(bot)
@@ -104,10 +93,9 @@ func New(config Config) *Nemesis {
 	return bot
 }
 
-// Preflight is the safety rule that a chaoslab build refuses to run in
-// production seen from the lab: it refuses to run against anything that is not
-// a chaoslab build in the chaoslab environment, then cures what a previous run
-// may have left behind (toxics never expire by themselves).
+// Refuses to run against anything that is not a chaoslab build in the
+// chaoslab environment, then cures what a previous run may have left
+// behind: toxics never expire by themselves.
 func (n *Nemesis) Preflight(ctx context.Context) error {
 	err := n.waitHealthy(ctx, n.config.Scenario.HealTimeout)
 	if err != nil {
@@ -129,12 +117,10 @@ func (n *Nemesis) Preflight(ctx context.Context) error {
 	return nil
 }
 
-// Defenses is the defense profile the bank reported in the preflight.
 func (n *Nemesis) Defenses() string {
 	return n.defenses
 }
 
-// Start arms the scenario's faults; they run until Heal.
 func (n *Nemesis) Start(ctx context.Context) error {
 	ctx, n.cancel = context.WithCancel(ctx)
 
@@ -174,9 +160,7 @@ func (n *Nemesis) Start(ctx context.Context) error {
 	return nil
 }
 
-// Heal is the cure: stop injecting, clear every failpoint, resume and start
-// every target, and wait until all of them are healthy. heal_complete marks
-// t_h.
+// heal_complete marks t_h, from which liveness is judged.
 func (n *Nemesis) Heal(ctx context.Context) error {
 	if n.cancel != nil {
 		n.cancel()
@@ -207,12 +191,10 @@ func (n *Nemesis) Heal(ctx context.Context) error {
 	return n.record(history.FunctionHealComplete, nil)
 }
 
-// Events returns the failpoint events of the round, for events.jsonl.
 func (n *Nemesis) Events() []json.RawMessage {
 	return n.failpoints.roundEvents()
 }
 
-// waitHealthy resumes and starts every target until all are healthy.
 func (n *Nemesis) waitHealthy(ctx context.Context, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -235,7 +217,6 @@ func (n *Nemesis) waitHealthy(ctx context.Context, timeout time.Duration) error 
 	}
 }
 
-// nudgeTargets unpauses paused targets and starts stopped ones.
 func (n *Nemesis) nudgeTargets(ctx context.Context) (bool, error) {
 	isEveryoneHealthy := true
 
@@ -284,8 +265,6 @@ func (n *Nemesis) checkSafety(ctx context.Context, t target) error {
 	return nil
 }
 
-// clearFailpoints asks every bank process to drop its rules; a process that
-// is down has none to drop.
 func (n *Nemesis) clearFailpoints(ctx context.Context) {
 	for _, t := range targets {
 		if t.chaosURL == "" {
@@ -299,7 +278,7 @@ func (n *Nemesis) clearFailpoints(ctx context.Context) {
 	}
 }
 
-// record writes a nemesis record durably, before the action it announces.
+// Durably, before the action it announces.
 func (n *Nemesis) record(function history.Function, value any) error {
 	record := history.Record{Process: history.Nemesis(), Type: history.TypeInfo, F: function}
 

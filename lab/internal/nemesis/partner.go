@@ -19,7 +19,6 @@ type armPartnerRecord struct {
 	Modes json.RawMessage `json:"modes"`
 }
 
-// partnerFaults are the scenario's lies of the partner.
 func (n *Nemesis) partnerFaults() []scenarios.Fault {
 	var faults []scenarios.Fault
 
@@ -32,7 +31,6 @@ func (n *Nemesis) partnerFaults() []scenarios.Fault {
 	return faults
 }
 
-// armPartner records and sets the partner's lies.
 func (n *Nemesis) armPartner(ctx context.Context) error {
 	for _, fault := range n.partnerFaults() {
 		err := n.record(history.FunctionArmPartner, armPartnerRecord{Fault: fault.ID, Modes: fault.Modes})
@@ -46,7 +44,7 @@ func (n *Nemesis) armPartner(ctx context.Context) error {
 	return nil
 }
 
-// pushPartner (re)sends every lie; the partner extends a mode it already has.
+// The partner extends a mode it already has.
 func (n *Nemesis) pushPartner(ctx context.Context) {
 	for _, fault := range n.partnerFaults() {
 		body, err := n.partnerModes(fault)
@@ -63,7 +61,6 @@ func (n *Nemesis) pushPartner(ctx context.Context) {
 	}
 }
 
-// partnerModes adds the participant, the seed and the TTL to the scenario's lies.
 func (n *Nemesis) partnerModes(fault scenarios.Fault) ([]byte, error) {
 	var modes map[string]any
 
@@ -79,8 +76,7 @@ func (n *Nemesis) partnerModes(fault scenarios.Fault) ([]byte, error) {
 	return json.Marshal(modes)
 }
 
-// clearPartner makes the partner honest again; deliveries already planned still
-// go out.
+// Deliveries already planned still go out.
 func (n *Nemesis) clearPartner(ctx context.Context) {
 	if n.config.PartnerAdminURL == "" {
 		return
@@ -92,7 +88,6 @@ func (n *Nemesis) clearPartner(ctx context.Context) {
 	}
 }
 
-// renewPartner keeps the lies alive while the round runs.
 func (n *Nemesis) renewPartner(ctx context.Context) {
 	ticker := time.NewTicker(renewInterval)
 	defer ticker.Stop()

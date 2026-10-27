@@ -14,8 +14,6 @@ const (
 	suspense   = "sys-suspense"
 )
 
-// pixRound is a round builder with PIX out, a partner truth and the system
-// accounts the PIX saga moves.
 type pixRound struct {
 	*roundBuilder
 	truth     PartnerTruth
@@ -42,8 +40,6 @@ func TestPocketPix_SettledTransferPasses(t *testing.T) {
 	assertPasses(t, fixture.evaluate())
 }
 
-// TestPocketPix_DuplicateWebhookSettlesTwice: a webhook applied twice settles
-// the transfer twice, and the checker sees the second settlement.
 func TestPocketPix_DuplicateWebhookSettlesTwice(t *testing.T) {
 	t.Parallel()
 
@@ -59,8 +55,6 @@ func TestPocketPix_DuplicateWebhookSettlesTwice(t *testing.T) {
 	assertBreaks(t, fixture.evaluate(), RuleI7Path, RuleI7Postings, RuleI6Settlements, RuleI5Transit)
 }
 
-// TestPocketPix_LostPublishLeavesTheTransferStuck: a publication lost after the
-// commit leaves the transfer in created, which liveness catches.
 func TestPocketPix_LostPublishLeavesTheTransferStuck(t *testing.T) {
 	t.Parallel()
 
@@ -72,8 +66,7 @@ func TestPocketPix_LostPublishLeavesTheTransferStuck(t *testing.T) {
 	assertBreaks(t, fixture.evaluate(), RuleI5NotTerminal, RuleI5Transit)
 }
 
-// TestPocketPix_TimeoutTakenAsFailureCreatesMoney: the partner paid, the bank
-// refunded the customer too.
+// The partner paid, and the bank refunded the customer too.
 func TestPocketPix_TimeoutTakenAsFailureCreatesMoney(t *testing.T) {
 	t.Parallel()
 
@@ -110,8 +103,6 @@ func TestPocketPix_RetryWithANewIDPaysTwice(t *testing.T) {
 	assertBreaks(t, fixture.evaluate(), RuleI6Settlements, RuleI1cPartnerReserve)
 }
 
-// TestPocketPix_PartnerDoubleProcessing: the same end_to_end_id settled twice
-// is money the partner owes.
 func TestPocketPix_PartnerDoubleProcessing(t *testing.T) {
 	t.Parallel()
 
@@ -182,7 +173,6 @@ func newPixRound(t *testing.T) *pixRound {
 	return &pixRound{roundBuilder: b, truth: PartnerTruth{ParticipantID: "centavo-robust"}}
 }
 
-// pixOut is a PIX out the client created and the bank reserved.
 func (p *pixRound) pixOut(account string, cents int64) snapshot.ExternalTransfer {
 	p.nextPix++
 	id := fmt.Sprintf("00000000-0000-7000-8000-%012d", p.nextPix)
@@ -199,7 +189,6 @@ func (p *pixRound) pixOut(account string, cents int64) snapshot.ExternalTransfer
 	return transfer
 }
 
-// step moves a transfer, posting what the target status implies.
 func (p *pixRound) step(transfer snapshot.ExternalTransfer, from, to snapshot.TransferStatus) {
 	var ledgerID string
 
@@ -236,7 +225,6 @@ func (p *pixRound) linkTransfer(transactionID, transferID string) {
 	}
 }
 
-// partnerSays records what the partner really did with the transfer.
 func (p *pixRound) partnerSays(transfer snapshot.ExternalTransfer, status string, entries ...string) {
 	p.truth.Transfers = append(p.truth.Transfers, truthTransfer{EndToEndID: transfer.EndToEndID, AmountCents: transfer.AmountCents, Status: status})
 

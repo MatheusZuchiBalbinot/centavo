@@ -12,10 +12,8 @@ import (
 	"centavo/lab/internal/attacks"
 )
 
-// roundEndsWithin bounds how long a test waits for a fake round to end.
 const roundEndsWithin = 5 * time.Second
 
-// fakeProcess is a round that ends when the test finishes it.
 type fakeProcess struct {
 	mu        sync.Mutex
 	stopCalls int

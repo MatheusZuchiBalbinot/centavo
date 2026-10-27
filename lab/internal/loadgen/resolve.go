@@ -15,7 +15,6 @@ import (
 // match the first (I3, stability).
 const stabilitySample = 0.1
 
-// ResolveConfig is the resolve step of the cure.
 type ResolveConfig struct {
 	Round string
 	Seed  seed.Seed
@@ -35,7 +34,6 @@ type resolveArgs struct {
 	Op string `json:"op"`
 }
 
-// resolveBody is the request being resolved, as it was sent.
 type resolveBody struct {
 	Endpoint string          `json:"endpoint"`
 	Body     json.RawMessage `json:"body"`
@@ -48,8 +46,7 @@ type resolveResult struct {
 	HTTPStatus int             `json:"http_status"`
 }
 
-// Resolve asks the bank for the outcome of every indeterminate write, as
-// operations of their own processes, after heal_complete. It returns the
+// As operations of their own processes, after heal_complete. Returns the
 // next free process number.
 func Resolve(ctx context.Context, config ResolveConfig) (int, error) {
 	r := &run{
@@ -87,8 +84,6 @@ func Resolve(ctx context.Context, config ResolveConfig) (int, error) {
 	return int(r.nextProcess.Load()) + 1, nil
 }
 
-// ReadPixOuts records the final state of every PIX out of the round, after the
-// quiescence (read_pix_out).
 func ReadPixOuts(ctx context.Context, config ResolveConfig, transferIDs []string) error {
 	r := &run{
 		config: Config{Round: config.Round, History: config.History, Logger: config.Logger}, policy: politePolicy, bank: newBankClient(config.ControlURL, 1),

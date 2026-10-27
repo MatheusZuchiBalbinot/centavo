@@ -14,13 +14,11 @@ const maxLineBytes = 1 << 20
 // maxViolations keeps the report readable when a history is badly broken.
 const maxViolations = 100
 
-// Violation is one broken well-formedness rule.
 type Violation struct {
 	Index   int64
 	Message string
 }
 
-// Report summarizes a history and lists what is wrong with it.
 type Report struct {
 	Records     int
 	Invocations int
@@ -46,14 +44,12 @@ type validator struct {
 	retiredProcess map[Process]bool
 }
 
-// IsWellFormed reports whether every rule, holds. Open operations are allowed:
-// they are what a crashed lab leaves behind, and the caller decides whether
-// they are acceptable.
+// Open operations are allowed: they are what a crashed lab leaves behind,
+// and the caller decides whether they are acceptable.
 func (r Report) IsWellFormed() bool {
 	return len(r.Violations) == 0
 }
 
-// Validate reads a whole history and checks its well-formedness.
 func Validate(reader io.Reader) (Report, error) {
 	validation := validator{
 		open: map[string]openOperation{}, closed: map[string]bool{}, busyProcesses: map[Process]string{}, retiredProcess: map[Process]bool{},
@@ -127,8 +123,8 @@ func (v *validator) checkEnvelope(record Record) {
 	}
 }
 
-// checkNemesis accepts the chaos bot's records: always info, always naming
-// what was done, never part of a client operation.
+// Always info, always naming what was done, never part of a client
+// operation.
 func (v *validator) checkNemesis(record Record) {
 	isWellFormed := record.Type == TypeInfo && record.F != "" && record.Op == ""
 	if !isWellFormed {
@@ -200,8 +196,8 @@ func (v *validator) checkCompletion(record Record) {
 	v.count(record)
 }
 
-// count tallies a completion; an info retires its process (Jepsen's rule: after
-// an indeterminate result the process is no longer sequential).
+// An info retires its process (Jepsen's rule: after an indeterminate result
+// the process is no longer sequential).
 func (v *validator) count(record Record) {
 	// Only completions are counted.
 	//exhaustive:ignore

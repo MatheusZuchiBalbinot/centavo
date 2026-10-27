@@ -18,11 +18,10 @@ const groupSyncInterval = 10 * time.Millisecond
 
 const wallFormat = "2006-01-02T15:04:05.000Z07:00"
 
-// ErrWriterClosed means a record arrived after the writer closed.
 var ErrWriterClosed = errors.New("history writer is closed")
 
-// Writer appends records to history.jsonl. Index and time are assigned under
-// one lock, so file order, index order and time order agree.
+// Index and time are assigned under one lock, so file order, index order and
+// time order agree.
 type Writer struct {
 	round   string
 	started time.Time
@@ -41,7 +40,7 @@ type Writer struct {
 	stopped chan struct{}
 }
 
-// Create opens a new history file; it refuses to overwrite an existing one.
+// Refuses to overwrite an existing file.
 func Create(path, round string) (*Writer, error) {
 	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, fsmode.PrivateFile) //nolint:gosec // G304: a path from its own config
 	if err != nil {
@@ -58,8 +57,8 @@ func Create(path, round string) (*Writer, error) {
 	return writer, nil
 }
 
-// Append writes a record without waiting for it to reach the disk. Completions
-// use it: losing one in a crash only turns an operation into an open one.
+// Completions use it: losing one in a crash only turns an operation into an
+// open one.
 func (w *Writer) Append(record Record) (Record, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -67,9 +66,8 @@ func (w *Writer) Append(record Record) (Record, error) {
 	return w.appendLocked(record)
 }
 
-// AppendDurable writes a record and returns only after it is on disk. Invokes
-// use it, before the request leaves: a request the history does not know about
-// would look like a phantom write to the checker.
+// Invokes use it, before the request leaves: a request the history does not
+// know about would look like a phantom write to the checker.
 func (w *Writer) AppendDurable(record Record) (Record, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -90,7 +88,6 @@ func (w *Writer) AppendDurable(record Record) (Record, error) {
 	return written, nil
 }
 
-// Close syncs what is left and closes the file.
 func (w *Writer) Close() error {
 	w.mu.Lock()
 	if w.isClosed {
@@ -164,8 +161,8 @@ func (w *Writer) syncLoop() {
 	}
 }
 
-// syncOnce flushes the buffer under the lock and fsyncs outside it, so
-// appends keep flowing while the disk works.
+// Flushes under the lock and fsyncs outside it, so appends keep flowing
+// while the disk works.
 func (w *Writer) syncOnce() {
 	w.mu.Lock()
 
@@ -197,8 +194,7 @@ func (w *Writer) syncOnce() {
 	w.synced.Broadcast()
 }
 
-// fail records the first write error and wakes every waiter; the history is
-// unusable from here on.
+// The history is unusable after the first write error.
 func (w *Writer) fail(err error) {
 	if w.err == nil {
 		w.err = fmt.Errorf("writing history: %w", err)

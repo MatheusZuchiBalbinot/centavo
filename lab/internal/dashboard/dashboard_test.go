@@ -94,7 +94,7 @@ func noReading() (audit.Reading, bool) {
 	return audit.Reading{}, false
 }
 
-// writeRound creates a round directory; an empty report leaves it unverified.
+// An empty report leaves it unverified.
 func writeRound(t *testing.T, roundsDir, round, report string) {
 	t.Helper()
 

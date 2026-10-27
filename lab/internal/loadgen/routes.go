@@ -2,7 +2,6 @@ package loadgen
 
 import "net/url"
 
-// Paths of the bank's client API and of the partner's admin port.
 const (
 	accountsPath          = "/v1/accounts"
 	depositsPath          = "/v1/deposits"

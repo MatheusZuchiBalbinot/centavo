@@ -1,5 +1,5 @@
 // Package docker talks to the Docker Engine API through docker-proxy, which
-// exposes only the calls the chaos bot needs. It acts only on containers
+// exposes only the calls the chaos bot needs, and acts only on containers
 // labeled as chaos targets.
 package docker
 
@@ -25,7 +25,6 @@ const (
 	maxBodyBytes = 1 << 20
 )
 
-// Errors of acting on the chaos targets.
 var (
 	ErrNotATarget      = errors.New("container is not a chaos target")
 	ErrUnknownService  = errors.New("no chaos target runs this service")
@@ -33,27 +32,23 @@ var (
 	errUnexpectedReply = errors.New("unexpected answer from the Docker API")
 )
 
-// The states of a container.
 const (
 	StateStopped ContainerState = "stopped"
 	StateRunning ContainerState = "running"
 	StatePaused  ContainerState = "paused"
 )
 
-// The healthcheck results the bot tells apart.
 const (
 	HealthNone    HealthStatus = ""
 	HealthHealthy HealthStatus = "healthy"
 )
 
-// ContainerState is where a container stands. Docker reports a paused
-// container as running too; here the three are exclusive.
+// Docker reports a paused container as running too; here the three are
+// exclusive.
 type ContainerState string
 
-// HealthStatus is a container's healthcheck result, empty without one.
 type HealthStatus string
 
-// Container is what the bot needs to know about a chaos target.
 type Container struct {
 	ID           string
 	Service      string
@@ -62,7 +57,6 @@ type Container struct {
 	RestartCount int
 }
 
-// Client is a Docker API client scoped to one Compose project.
 type Client struct {
 	baseURL string
 	project string
@@ -93,23 +87,19 @@ type execCreated struct {
 	ID string `json:"Id"`
 }
 
-// apiCall is one request to the Docker Engine API; body is sent as JSON when
-// it is not nil.
 type apiCall struct {
 	method string
 	path   string
 	body   any
 }
 
-// IsHealthy reports a running container whose healthcheck passes; a
-// container without a healthcheck counts as healthy once it runs.
+// A container without a healthcheck counts as healthy once it runs.
 func (c Container) IsHealthy() bool {
 	isCheckPassing := c.Health == HealthNone || c.Health == HealthHealthy
 
 	return c.State == StateRunning && isCheckPassing
 }
 
-// New builds a client for DOCKER_HOST=tcp://docker-proxy:2375.
 func New(dockerHost, project string) (Client, error) {
 	address, isTCP := strings.CutPrefix(dockerHost, tcpScheme)
 	isInvalidHost := !isTCP || address == ""
@@ -120,7 +110,6 @@ func New(dockerHost, project string) (Client, error) {
 	return Client{baseURL: "http://" + address, project: project, http: &http.Client{Timeout: callTimeout}}, nil
 }
 
-// Targets lists the chaos targets of the project, running or not.
 func (c Client) Targets(ctx context.Context) ([]Container, error) {
 	filters, err := json.Marshal(map[string][]string{"label": {targetLabel + "=true", projectLabel + "=" + c.project}})
 	if err != nil {
@@ -148,7 +137,6 @@ func (c Client) Targets(ctx context.Context) ([]Container, error) {
 	return targets, nil
 }
 
-// Find returns the target running a Compose service.
 func (c Client) Find(ctx context.Context, service string) (Container, error) {
 	targets, err := c.Targets(ctx)
 	if err != nil {
@@ -164,8 +152,7 @@ func (c Client) Find(ctx context.Context, service string) (Container, error) {
 	return Container{}, fmt.Errorf("%w: %s", ErrUnknownService, service)
 }
 
-// Inspect reads a container's state; it refuses containers that are not
-// chaos targets of this project.
+// Refuses containers that are not chaos targets of this project.
 func (c Client) Inspect(ctx context.Context, id string) (Container, error) {
 	var details inspected
 
@@ -190,8 +177,8 @@ func (c Client) Inspect(ctx context.Context, id string) (Container, error) {
 	return container, nil
 }
 
-// Exec runs a command in a target and does not wait for it: chaos-kill ends
-// the container, so there is nothing to wait for.
+// Does not wait: chaos-kill ends the container, so there is nothing to wait
+// for.
 func (c Client) Exec(ctx context.Context, id string, command []string) error {
 	_, err := c.Inspect(ctx, id)
 	if err != nil {
@@ -208,7 +195,6 @@ func (c Client) Exec(ctx context.Context, id string, command []string) error {
 	return c.post(ctx, "/exec/"+url.PathEscape(created.ID)+"/start", map[string]bool{"Detach": true}, nil)
 }
 
-// Start starts a stopped target; starting a running one is a no-op.
 func (c Client) Start(ctx context.Context, id string) error {
 	_, err := c.Inspect(ctx, id)
 	if err != nil {
@@ -218,8 +204,6 @@ func (c Client) Start(ctx context.Context, id string) error {
 	return c.post(ctx, "/containers/"+url.PathEscape(id)+"/start", nil, nil)
 }
 
-// Pause freezes a running target, every goroutine of it included; pausing
-// one already paused is a no-op.
 func (c Client) Pause(ctx context.Context, id string) error {
 	container, err := c.Inspect(ctx, id)
 	if err != nil {
@@ -233,9 +217,9 @@ func (c Client) Pause(ctx context.Context, id string) error {
 	return c.post(ctx, "/containers/"+url.PathEscape(id)+"/pause", nil, nil)
 }
 
-// Kill sends SIGKILL from outside. Docker counts it as a manual stop, so the
-// restart policy leaves the container down: the fencing of an old primary after
-// a failover.
+// Docker counts a SIGKILL from outside as a manual stop, so the restart
+// policy leaves the container down: the fencing of an old primary after a
+// failover.
 func (c Client) Kill(ctx context.Context, id string) error {
 	_, err := c.Inspect(ctx, id)
 	if err != nil {
@@ -245,7 +229,6 @@ func (c Client) Kill(ctx context.Context, id string) error {
 	return c.post(ctx, "/containers/"+url.PathEscape(id)+"/kill?signal=SIGKILL", nil, nil)
 }
 
-// Unpause resumes a paused target; resuming one that is not paused is a no-op.
 func (c Client) Unpause(ctx context.Context, id string) error {
 	container, err := c.Inspect(ctx, id)
 	if err != nil {
@@ -279,7 +262,7 @@ func (c Client) post(ctx context.Context, path string, body, into any) error {
 	return c.call(ctx, apiCall{method: http.MethodPost, path: path, body: body}, into)
 }
 
-// call sends one request. 304 (already started) is not an error.
+// 304 (already started) is not an error.
 func (c Client) call(ctx context.Context, sent apiCall, into any) error {
 	var payload io.Reader = http.NoBody
 

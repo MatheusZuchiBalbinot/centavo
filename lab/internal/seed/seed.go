@@ -1,5 +1,3 @@
-// Package seed derives the independent random streams of a round from one
-// 64-bit seed.
 package seed
 
 import (
@@ -13,13 +11,11 @@ import (
 	"strings"
 )
 
-// The bases a seed may be written in.
 const (
 	decimalBase = 10
 	hexBase     = 16
 )
 
-// seedBytes is the size of a seed.
 const seedBytes = 8
 
 // The constants of the splitmix64 finalizer (Steele, Lea and Flood, 2014):
@@ -33,13 +29,10 @@ const (
 	splitmixShift3      = 31
 )
 
-// ErrInvalidSeed means the text is not a 64-bit number.
 var ErrInvalidSeed = errors.New("seed must be a 64-bit number, such as 0x5eed0142")
 
-// Seed is the 64-bit seed of a round.
 type Seed uint64
 
-// Parse reads a seed in hexadecimal (0x...) or decimal form.
 func Parse(raw string) (Seed, error) {
 	normalized := strings.ToLower(strings.TrimSpace(raw))
 	digits, isHex := strings.CutPrefix(normalized, "0x")
@@ -57,7 +50,6 @@ func Parse(raw string) (Seed, error) {
 	return Seed(value), nil
 }
 
-// Random draws a fresh seed for a round started without one.
 func Random() (Seed, error) {
 	var buffer [seedBytes]byte
 
@@ -69,13 +61,12 @@ func Random() (Seed, error) {
 	return Seed(binary.LittleEndian.Uint64(buffer[:])), nil
 }
 
-// String prints the seed in the form Parse accepts and reports show.
 func (s Seed) String() string {
 	return fmt.Sprintf("%#x", uint64(s))
 }
 
-// Stream returns the random stream named name. Streams are independent: adding
-// a new one never changes the sequence of the others.
+// Streams are independent: adding a new one never changes the sequence of
+// the others.
 func (s Seed) Stream(name string) *mathrand.Rand {
 	derived := splitmix64(uint64(s) ^ hashName(name))
 
@@ -94,7 +85,6 @@ func hashName(name string) uint64 {
 	return hasher.Sum64()
 }
 
-// splitmix64 spreads nearby inputs over the whole 64-bit range.
 func splitmix64(value uint64) uint64 {
 	value += splitmixIncrement
 	value = (value ^ (value >> splitmixShift1)) * splitmixMultiplier1

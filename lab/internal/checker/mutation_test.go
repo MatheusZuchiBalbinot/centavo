@@ -28,12 +28,10 @@ var mutations = []mutation{
 	{name: "move an entry to another account", want: RuleI2Mismatch, apply: moveEntry},
 }
 
-// mutation plants one fault in a correct round. apply reports false when the
-// round has nothing to mutate (a round without transfers, for instance).
+// apply reports false when the round has nothing to mutate.
 type mutation struct {
-	name string
-	want Rule
-	// apply returns the mutated history and export.
+	name  string
+	want  Rule
 	apply func(t *rapid.T, b *roundBuilder) ([]history.Record, snapshot.Snapshot, bool)
 }
 
@@ -131,7 +129,6 @@ func generateTransfer(t *rapid.T, b *roundBuilder, accounts []string, from strin
 	b.operation(history.FunctionTransfer, transferArgs{From: from, To: to, AmountCents: amount}, history.TypeFail, nil)
 }
 
-// okTransactions are the transactions of operations that ended ok.
 func okTransactions(b *roundBuilder) []snapshot.Transaction {
 	ops := indexOperations(b.records)
 
@@ -198,8 +195,7 @@ func deleteEntry(t *rapid.T, b *roundBuilder) ([]history.Record, snapshot.Snapsh
 	return b.records, state, true
 }
 
-// duplicateTransaction applies an ok operation a second time, with entries
-// in sequence and chained: only the link to the history can tell.
+// Entries in sequence and chained: only the link to the history can tell.
 func duplicateTransaction(t *rapid.T, b *roundBuilder) ([]history.Record, snapshot.Snapshot, bool) {
 	transaction, isFound := pickTransaction(t, b, "")
 	if !isFound {

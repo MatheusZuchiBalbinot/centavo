@@ -1,6 +1,6 @@
-// Package snapshot is the ledger export the checker reads: one CSV per table,
-// taken from a single REPEATABLE READ snapshot. The ledger schema is an audit
-// contract: changing it means changing this package on purpose.
+// Package snapshot is the ledger export the checker reads. The ledger
+// schema is an audit contract: changing it means changing this package on
+// purpose.
 package snapshot
 
 import (
@@ -18,7 +18,6 @@ import (
 	"centavo/lab/internal/platform/fsmode"
 )
 
-// Dir is the export directory inside a round directory.
 const Dir = "export"
 
 const (
@@ -33,7 +32,6 @@ const (
 	metaFile         = "meta.json"
 )
 
-// Account kinds and the system accounts the checker reads by code.
 const (
 	KindCustomer AccountKind = "customer"
 	KindSystem   AccountKind = "system"
@@ -44,7 +42,6 @@ const (
 	SuspenseCode          = "sys_reconciliation_suspense"
 )
 
-// Ledger transaction kinds the checker reads.
 const (
 	TransactionDeposit                  TransactionKind = "deposit"
 	TransactionInternalTransfer         TransactionKind = "internal_transfer"
@@ -56,7 +53,6 @@ const (
 	TransactionReconciliationAdjustment TransactionKind = "reconciliation_adjustment"
 )
 
-// ErrMalformedExport means the bank's export does not decode.
 var ErrMalformedExport = errors.New("malformed export")
 
 // BandSize is how many entry ids one immutability band covers (I8).
@@ -85,7 +81,6 @@ var tables = []table{
 	{file: bandsFile, header: []string{"band", "count", "sum_cents", "hash"}, rows: bandRows, load: loadBand},
 }
 
-// Columns of each CSV, in the order of its header in tables.
 const (
 	colTransferID = iota
 	colTransferEndToEnd
@@ -143,30 +138,24 @@ const (
 	colEntryBalanceAfter
 )
 
-// AccountKind tells customer accounts from system ones.
 type AccountKind string
 
-// TransactionKind is the kind of a ledger transaction.
 type TransactionKind string
 
-// TransferStatus is one state of an external transfer.
 type TransferStatus string
 
-// Account is a row of accounts.
 type Account struct {
 	ID         string
 	Kind       AccountKind
 	SystemCode string
 }
 
-// Balance is a row of account_balances.
 type Balance struct {
 	AccountID    string
 	BalanceCents int64
 	LastEntrySeq int64
 }
 
-// Transaction is a row of ledger_transactions.
 type Transaction struct {
 	ID                 string
 	Kind               TransactionKind
@@ -176,7 +165,6 @@ type Transaction struct {
 	IncomingTransferID string
 }
 
-// ExternalTransfer is a row of external_transfers.
 type ExternalTransfer struct {
 	ID          string
 	EndToEndID  string
@@ -188,7 +176,7 @@ type ExternalTransfer struct {
 	FailureCode string
 }
 
-// Transition is a row of external_transfer_transitions; From is "" for the first.
+// From is "" for the first.
 type Transition struct {
 	TransferID          string
 	Seq                 int64
@@ -198,7 +186,6 @@ type Transition struct {
 	LedgerTransactionID string
 }
 
-// Incoming is a row of incoming_transfers.
 type Incoming struct {
 	ID          string
 	EndToEndID  string
@@ -206,7 +193,6 @@ type Incoming struct {
 	AmountCents int64
 }
 
-// Entry is a row of ledger_entries.
 type Entry struct {
 	ID                int64
 	TransactionID     string
@@ -216,7 +202,6 @@ type Entry struct {
 	BalanceAfterCents int64
 }
 
-// Meta says what the export covers.
 type Meta struct {
 	Round   string    `json:"round"`
 	TakenAt time.Time `json:"taken_at"`
@@ -225,7 +210,6 @@ type Meta struct {
 	FirstTransactionID string `json:"first_transaction_id"`
 }
 
-// Band is the fingerprint of the ledger entries whose ids fall in one band.
 type Band struct {
 	Band     int64 `json:"band"`
 	Count    int64 `json:"count"`
@@ -233,9 +217,8 @@ type Band struct {
 	Hash     int64 `json:"hash"`
 }
 
-// Snapshot is the part of the ledger a round touched: the accounts it
-// created, every system account, the transactions with its client_refs and
-// every entry of those accounts and transactions.
+// The accounts the round created, every system account, the transactions
+// with its client_refs and every entry of those accounts and transactions.
 type Snapshot struct {
 	Meta         Meta
 	Accounts     []Account
@@ -249,8 +232,8 @@ type Snapshot struct {
 	Bands []Band
 }
 
-// LedgerState is what a round leaves for the next one to check I8 against: the
-// fingerprint of the whole ledger when it was exported.
+// The fingerprint of the whole ledger, for the next round to check I8
+// against.
 type LedgerState struct {
 	FirstTransactionID string `json:"first_transaction_id"`
 	Bands              []Band `json:"bands"`
@@ -263,7 +246,6 @@ type table struct {
 	load   func(s *Snapshot, record []string) error
 }
 
-// Write stores the snapshot in roundDir/export.
 func Write(roundDir string, state Snapshot) error {
 	dir := filepath.Join(roundDir, Dir)
 
@@ -287,7 +269,6 @@ func Write(roundDir string, state Snapshot) error {
 	return os.WriteFile(filepath.Join(dir, metaFile), append(meta, '\n'), fsmode.PrivateFile)
 }
 
-// Read loads the snapshot of roundDir/export.
 func Read(roundDir string) (Snapshot, error) {
 	dir := filepath.Join(roundDir, Dir)
 
@@ -313,12 +294,10 @@ func Read(roundDir string) (Snapshot, error) {
 	return s, nil
 }
 
-// StateOf is the state the snapshot leaves behind.
 func StateOf(state Snapshot) LedgerState {
 	return LedgerState{FirstTransactionID: state.Meta.FirstTransactionID, Bands: append([]Band{}, state.Bands...)}
 }
 
-// WriteState stores a ledger state.
 func WriteState(path string, state LedgerState) error {
 	content, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
@@ -328,7 +307,6 @@ func WriteState(path string, state LedgerState) error {
 	return os.WriteFile(path, append(content, '\n'), fsmode.PrivateFile)
 }
 
-// ReadState loads a ledger state; false means there is none yet.
 func ReadState(path string) (LedgerState, bool, error) {
 	content, err := os.ReadFile(path) //nolint:gosec // G304: the path comes from the operator's rounds directory.
 	if errors.Is(err, os.ErrNotExist) {

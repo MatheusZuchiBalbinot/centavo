@@ -1,6 +1,3 @@
-// Package dashboard serves the lab panel: the React app, the API that starts
-// and stops rounds, the list of finished rounds, their replays and reports,
-// and the live stream of the round being played.
 package dashboard
 
 import (
@@ -14,7 +11,6 @@ import (
 	"centavo/lab/internal/replay"
 )
 
-// HealthPath is the route the container healthcheck polls.
 const HealthPath = "/internal/health"
 
 const reportMDFile = "report.md"
@@ -27,16 +23,14 @@ var securityHeaders = map[string]string{
 	"Permissions-Policy": "camera=(), microphone=(), geolocation=()",
 }
 
-// LiveFunc returns the auditor's latest reading, and false before the first.
 type LiveFunc func() (audit.Reading, bool)
 
-// Config is what the panel reads from.
 type Config struct {
 	Version   string
 	Live      LiveFunc
 	RoundsDir string
 	Logger    *slog.Logger
-	// Runner starts and stops rounds. Without one, the panel only reads.
+	// Without one, the panel only reads.
 	Runner RoundRunner
 }
 
@@ -53,11 +47,9 @@ type healthHandler struct {
 type panelHandlers struct {
 	config  Config
 	tracker *tracker
-	// streams holds one slot per open round stream.
 	streams chan struct{}
 }
 
-// NewHandler serves the panel port (8090).
 func NewHandler(config Config) http.Handler {
 	panel := panelHandlers{config: config, tracker: newTracker(config.RoundsDir), streams: make(chan struct{}, maxStreams)}
 
@@ -98,8 +90,7 @@ func (h healthHandler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, h.response)
 }
 
-// rounds lists the finished rounds, newest first, a page at a time; the
-// cursor is the last round of the previous page.
+// The cursor is the last round of the previous page.
 func (p panelHandlers) rounds(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	cursor := query.Get("cursor")
@@ -129,7 +120,6 @@ func (p panelHandlers) rounds(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, page)
 }
 
-// replay is a finished round for the side-by-side mode.
 func (p panelHandlers) replay(w http.ResponseWriter, r *http.Request) {
 	round := r.PathValue("round")
 	if !roundDirPattern.MatchString(round) {
@@ -148,8 +138,8 @@ func (p panelHandlers) replay(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, built)
 }
 
-// report serves report.md as plain text; the round id is checked against the
-// round directory pattern, so the path never leaves the rounds directory.
+// The round id is checked against the round directory pattern, so the path
+// never leaves the rounds directory.
 func (p panelHandlers) report(w http.ResponseWriter, r *http.Request) {
 	round := r.PathValue("round")
 	if !roundDirPattern.MatchString(round) {

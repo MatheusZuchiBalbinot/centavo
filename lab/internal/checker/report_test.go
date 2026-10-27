@@ -11,9 +11,8 @@ import (
 	"centavo/lab/internal/snapshot"
 )
 
-// TestCheck_FailurePathKeepsTheOperationHistory covers the second read of
-// the history: the index keeps no records, so the report must find them
-// again in the file.
+// The index keeps no records, so the report must find them again in the
+// file.
 func TestCheck_FailurePathKeepsTheOperationHistory(t *testing.T) {
 	t.Parallel()
 
@@ -50,9 +49,8 @@ func TestCheck_FailurePathKeepsTheOperationHistory(t *testing.T) {
 	}
 }
 
-// TestCheck_StopsOnAValueItCannotRead: an amount the checker cannot decode
-// would count as zero in the deposit term and match no ledger entry. The
-// check stops instead of judging the round on that.
+// An amount the checker cannot decode would count as zero in the deposit
+// term and match no ledger entry.
 func TestCheck_StopsOnAValueItCannotRead(t *testing.T) {
 	t.Parallel()
 

@@ -1,5 +1,3 @@
-// Package round runs one round of a scenario and archives what it produced:
-// history.jsonl and round.json.
 package round
 
 import (
@@ -43,10 +41,8 @@ const (
 
 var roundDirPattern = regexp.MustCompile(`^r(\d{4,})$`)
 
-// ErrNoRoundID means every candidate round directory was already taken.
 var ErrNoRoundID = errors.New("could not allocate a round id")
 
-// quiescencePoll is how often the cure looks at the sagas in flight.
 const quiescencePoll = time.Second
 
 // The ledger state (I8): one file at the root of the rounds, the last round's,
@@ -56,63 +52,50 @@ const (
 	previousStateFile = "state_before.json"
 )
 
-// Options configure one round.
 type Options struct {
 	Scenario scenarios.Scenario
 	Seed     seed.Seed
 	BankURL  string
-	// ControlURL is the bank's API without Toxiproxy, for resolve.
+	// Without Toxiproxy, for resolve.
 	ControlURL string
 	RoundsDir  string
 	LabVersion string
 	Logger     *slog.Logger
-	// Export reads the part of the ledger the round touched.
-	Export func(ctx context.Context, request export.Request) (snapshot.Snapshot, error)
-	// Check runs the checker on the archived round and returns its verdict.
-	Check func(ctx context.Context, roundDir string) (checker.Verdict, error)
-	// Chaos is how the nemesis reaches the targets.
-	Chaos ChaosOptions
-	// Saga is how the cure watches the PIX of the round settle.
-	Saga SagaOptions
+	Export     func(ctx context.Context, request export.Request) (snapshot.Snapshot, error)
+	Check      func(ctx context.Context, roundDir string) (checker.Verdict, error)
+	Chaos      ChaosOptions
+	Saga       SagaOptions
 	// Stop ends the attack early when it closes; the cure and the check still
 	// run, so a stopped round leaves the bank clean and gets a verdict.
 	Stop <-chan struct{}
 }
 
-// SagaOptions read the state of the round's PIX for the cure.
 type SagaOptions struct {
 	InFlight        func(ctx context.Context, round string) (int, error)
 	TransferIDs     func(ctx context.Context, round string) ([]string, error)
 	PendingWebhooks func(ctx context.Context) (int, error)
-	// Unreconciled counts the partner's statement entries the bank has not
-	// booked yet: I1c holds only after the final reconciliation.
-	Unreconciled func(ctx context.Context) (int64, error)
-	// Truth reads the partner's truth from a time on.
-	Truth func(ctx context.Context, since time.Time) ([]byte, error)
-	// PartnerURL and ParticipantID are where the load asks for PIX in.
+	// The partner's statement entries the bank has not booked yet: I1c holds
+	// only after the final reconciliation.
+	Unreconciled  func(ctx context.Context) (int64, error)
+	Truth         func(ctx context.Context, since time.Time) ([]byte, error)
 	PartnerURL    string
 	ParticipantID string
 }
 
-// ChaosOptions are the nemesis's means of action.
 type ChaosOptions struct {
 	Docker    docker.Client
 	Token     string
 	EventsDir string
 }
 
-// Result is where a round was archived, what its history looks like and
-// what the checker concluded.
 type Result struct {
 	ID        string
 	Dir       string
 	StartedAt time.Time
 	History   history.Report
 	Verdict   checker.Verdict
-	// Defenses is the bank's profile, as it reported it before the round.
-	Defenses string
-	// Stopped is true when the attack ended before its duration.
-	Stopped bool
+	Defenses  string
+	Stopped   bool
 }
 
 type manifest struct {
@@ -156,13 +139,12 @@ type cureState struct {
 	load   loadgen.Result
 }
 
-// IsClean reports whether the history is well formed and every operation ended.
 func (r Result) IsClean() bool {
 	return r.History.IsWellFormed() && len(r.History.Open) == 0
 }
 
-// Run executes the round. A load error is returned after the round is
-// archived, so a failed round still leaves its history behind.
+// A load error is returned after the round is archived, so a failed round
+// still leaves its history behind.
 func Run(ctx context.Context, options Options) (Result, error) {
 	id, dir, err := allocate(options.RoundsDir)
 	if err != nil {
@@ -246,9 +228,8 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	return result, errors.Join(runErr, err)
 }
 
-// cure is the end of the round after heal_complete: resolve every indeterminate
-// write, wait for the sagas to settle until t_h + Δ, then read every PIX out
-// once.
+// After heal_complete: resolve every indeterminate write, wait for the sagas
+// to settle until t_h + Δ, then read every PIX out once.
 func cure(ctx context.Context, options Options, state cureState) error {
 	resolveConfig := loadgen.ResolveConfig{
 		Round: state.round, Seed: options.Seed, ControlURL: options.ControlURL, History: state.writer,
@@ -279,9 +260,7 @@ func cure(ctx context.Context, options Options, state cureState) error {
 	return loadgen.ReadPixOuts(ctx, resolveConfig, ids)
 }
 
-// waitQuiescence waits until no PIX of the round is in flight and the partner
-// has no webhook left, or the liveness deadline passes; then I5 judges what is
-// still open.
+// Then I5 judges what is still open.
 func waitQuiescence(ctx context.Context, options Options, round string) error {
 	deadline := time.Now().Add(options.Scenario.LivenessDeadline)
 
@@ -318,7 +297,6 @@ func waitQuiescence(ctx context.Context, options Options, round string) error {
 	return nil
 }
 
-// newLoadConfig is the workload of the round, started once the nemesis is.
 func newLoadConfig(options Options, id string, writer *history.Writer, bot *nemesis.Nemesis) loadgen.Config {
 	return loadgen.Config{
 		Round: id, Seed: options.Seed, Workload: options.Scenario.Workload, Duration: options.Scenario.Duration,
@@ -327,7 +305,6 @@ func newLoadConfig(options Options, id string, writer *history.Writer, bot *neme
 	}
 }
 
-// isClosed reports whether stop has closed; a nil stop never does.
 func isClosed(stop <-chan struct{}) bool {
 	select {
 	case <-stop:
@@ -337,8 +314,7 @@ func isClosed(stop <-chan struct{}) bool {
 	}
 }
 
-// writeEvents keeps the failpoint events of the round next to its history;
-// the checker uses them only to tell the story of a violation.
+// The checker uses them only to tell the story of a violation.
 func writeEvents(dir string, events []json.RawMessage) error {
 	var content []byte
 
@@ -355,7 +331,6 @@ func writeEvents(dir string, events []json.RawMessage) error {
 	return nil
 }
 
-// exportAndCheck takes the ledger snapshot of the round and runs the checker on it.
 func exportAndCheck(ctx context.Context, options Options, result Result) (checker.Verdict, error) {
 	state, err := exportSnapshot(ctx, options, result)
 	if err != nil {
@@ -395,8 +370,6 @@ func exportAndCheck(ctx context.Context, options Options, result Result) (checke
 	return verdict, snapshot.WriteState(statePath, state)
 }
 
-// handOverState copies the ledger state the last round left into this
-// round's directory, where the checker reads it.
 func handOverState(statePath, roundCopy string) error {
 	state, isFound, err := snapshot.ReadState(statePath)
 	if err != nil {
@@ -410,8 +383,7 @@ func handOverState(statePath, roundCopy string) error {
 	return snapshot.WriteState(roundCopy, state)
 }
 
-// exportSnapshot writes the ledger snapshot of the round to its directory and
-// keeps only its I8 state, which is small, for after the checker.
+// Keeps only its I8 state, which is small, for after the checker.
 func exportSnapshot(ctx context.Context, options Options, result Result) (snapshot.LedgerState, error) {
 	accounts, err := createdAccounts(result.Dir)
 	if err != nil {
@@ -433,8 +405,8 @@ func exportSnapshot(ctx context.Context, options Options, result Result) (snapsh
 	return snapshot.StateOf(state), nil
 }
 
-// createdAccounts lists the accounts the history says the round opened: the
-// export reads exactly those, so older rounds never leak into this verdict.
+// The export reads exactly these, so older rounds never leak into this
+// verdict.
 func createdAccounts(dir string) ([]string, error) {
 	file, err := os.Open(filepath.Join(dir, historyFile)) //nolint:gosec // G304: dir comes from allocate, inside the configured rounds directory.
 	if err != nil {
@@ -475,8 +447,8 @@ func createdAccounts(dir string) ([]string, error) {
 	return accounts, nil
 }
 
-// allocate creates the next rNNNN directory; Mkdir failing on an existing
-// directory makes two concurrent labs pick different ids.
+// Mkdir failing on an existing directory makes two concurrent labs pick
+// different ids.
 func allocate(roundsDir string) (string, string, error) {
 	err := os.MkdirAll(roundsDir, fsmode.PrivateDir)
 	if err != nil {

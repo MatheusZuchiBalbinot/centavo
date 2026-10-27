@@ -10,14 +10,12 @@ import (
 	"centavo/lab/scenarios"
 )
 
-// skewRecord is a clock fault in the history.
 type skewRecord struct {
 	Fault   string   `json:"fault"`
 	Targets []string `json:"targets"`
 	Offset  string   `json:"offset"`
 }
 
-// skewRequest is the bank's PUT /chaos/clock body.
 type skewRequest struct {
 	Offset string `json:"offset"`
 	TTL    string `json:"ttl"`
@@ -35,9 +33,8 @@ func (n *Nemesis) clockFaults() []scenarios.Fault {
 	return faults
 }
 
-// skewClocks records the clock faults and keeps them set: like the
-// failpoint rules, a skew is a lease the lab renews, so it ends by itself
-// when the lab dies and comes back to a restarted process.
+// A skew is a lease the lab renews, like the failpoint rules, so it ends by
+// itself when the lab dies and comes back to a restarted process.
 func (n *Nemesis) skewClocks(ctx context.Context) error {
 	faults := n.clockFaults()
 
@@ -95,8 +92,7 @@ func (n *Nemesis) pushSkew(ctx context.Context, fault scenarios.Fault) {
 	}
 }
 
-// clearClocks puts every bank process's clock right; a process that is down
-// has no skew to clear.
+// A process that is down has no skew to clear.
 func (n *Nemesis) clearClocks(ctx context.Context) {
 	for _, t := range targets {
 		if t.chaosURL == "" {

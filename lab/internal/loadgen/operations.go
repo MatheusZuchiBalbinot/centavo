@@ -13,11 +13,10 @@ import (
 
 var errMissingField = errors.New("response is missing an expected field")
 
-// parseFunc turns a 2xx body into the value history.jsonl records; it fails
-// when an expected field is missing, which the client treats as a cut response.
+// Fails when an expected field is missing, which the client treats as a cut
+// response.
 type parseFunc func(body []byte, status int) (json.RawMessage, error)
 
-// operation is one client operation, ready to send and to record.
 type operation struct {
 	function    history.Function
 	request     request
@@ -25,10 +24,8 @@ type operation struct {
 	parse       parseFunc
 	// reusedKey is the key of an earlier operation that a buggy client sends
 	// with this operation's body; the bank must refuse it.
-	reusedKey string
-	// hasNoKey marks control calls such as resolve, which carry no key.
-	hasNoKey bool
-	// isToPartner sends the request to the partner instead of the bank.
+	reusedKey   string
+	hasNoKey    bool
 	isToPartner bool
 }
 
@@ -176,8 +173,8 @@ func pixOutOperation(arguments pixOutArgs) (operation, error) {
 	return newOperation(history.FunctionPixOut, writeRequest, arguments, parsePixOut)
 }
 
-// pixInOperation asks the partner to send a PIX in; it goes to the partner,
-// not to the bank, and carries no idempotency key: the end_to_end_id is it.
+// Goes to the partner, not the bank, and carries no idempotency key: the
+// end_to_end_id is it.
 func pixInOperation(arguments pixInArgs, participantID string) (operation, error) {
 	body, err := json.Marshal(
 		pixInBody{ParticipantID: participantID, EndToEndID: arguments.EndToEndID, AccountID: arguments.AccountID, AmountCents: arguments.AmountCents},
@@ -227,13 +224,10 @@ func newOperation(function history.Function, call request, arguments any, parse 
 	return operation{function: function, request: call, invokeValue: invokeValue, parse: parse}, nil
 }
 
-// isWrite tells which operations carry an Idempotency-Key.
 func (o operation) isWrite() bool {
 	return o.request.method == http.MethodPost && !o.hasNoKey
 }
 
-// reusingKey returns the operation sent under another operation's key; the
-// history records which key it reused.
 func (o operation) reusingKey(key string) (operation, error) {
 	var value map[string]json.RawMessage
 
@@ -364,7 +358,6 @@ func parsePixIn(body []byte, status int) (json.RawMessage, error) {
 	return json.Marshal(response)
 }
 
-// parseReadPixOut keeps the transfer as the bank sent it, transitions included.
 func parseReadPixOut(body []byte, status int) (json.RawMessage, error) {
 	var response map[string]json.RawMessage
 

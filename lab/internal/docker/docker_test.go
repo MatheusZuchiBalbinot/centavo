@@ -12,7 +12,6 @@ import (
 	"centavo/lab/internal/docker"
 )
 
-// fakeEngine answers the few Engine API calls the bot makes.
 type fakeEngine struct {
 	mu       sync.Mutex
 	labels   map[string]map[string]string
@@ -74,8 +73,6 @@ func TestActions_RunOnlyOnTargetsOfTheProject(t *testing.T) {
 	}
 }
 
-// TestPause_FreezesARunningTargetOnce: a freeze pauses the container, and a
-// second pause of a paused one asks the engine for nothing.
 func TestPause_FreezesARunningTargetOnce(t *testing.T) {
 	engine := newFakeEngine()
 	engine.paused["api"] = false

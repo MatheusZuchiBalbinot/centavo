@@ -23,16 +23,14 @@ var (
 	killBackendCommand    = []string{"pkill", "-KILL", "-n", "-f", "postgres: bank_app"}
 )
 
-// databaseRecord is a database fault in the history.
 type databaseRecord struct {
 	Fault    string `json:"fault"`
 	Action   string `json:"action"`
 	Duration string `json:"duration,omitempty"`
 }
 
-// startDatabase starts the database faults. A failover sets up replication
-// right away, so a stack without the replica fails the round instead of
-// passing it without the fault.
+// A failover sets up replication right away, so a stack without the replica
+// fails the round instead of passing it without the fault.
 func (n *Nemesis) startDatabase(ctx context.Context) error {
 	for _, fault := range n.config.Scenario.Faults {
 		if fault.Kind != scenarios.FaultDatabase {
@@ -124,8 +122,8 @@ func (n *Nemesis) freezeDatabase(ctx context.Context, id string, length time.Dur
 	return n.config.Docker.Unpause(context.WithoutCancel(ctx), id)
 }
 
-// healDatabase starts or resumes PostgreSQL if a fault left it down. After
-// a failover the old primary stays down: starting it would be split brain.
+// After a failover the old primary stays down: starting it would be split
+// brain.
 func (n *Nemesis) healDatabase(ctx context.Context) {
 	if n.hasFailedOver.Load() {
 		return

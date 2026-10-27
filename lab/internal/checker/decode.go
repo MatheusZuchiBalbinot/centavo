@@ -13,8 +13,6 @@ import (
 // would hide or invent violations, so the check stops instead.
 var ErrMalformedHistory = errors.New("history value does not decode")
 
-// shapesOf returns empty values of the types an operation's arguments and ok
-// result decode into, or nil where the checker reads none.
 func shapesOf(function history.Function) (args, value any) {
 	switch function {
 	case history.FunctionCreateAccount:
@@ -53,8 +51,6 @@ func shapesOf(function history.Function) (args, value any) {
 	}
 }
 
-// validate decodes every operation the invariants read, once, before any
-// of them runs.
 func (ops operations) validate() error {
 	for _, o := range ops.ordered {
 		arguments, value := shapesOf(o.function)

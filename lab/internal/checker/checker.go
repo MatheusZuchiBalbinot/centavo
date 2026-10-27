@@ -18,7 +18,6 @@ import (
 	"centavo/lab/internal/snapshot"
 )
 
-// Version identifies the checker in every report.
 const Version = "1"
 
 const (
@@ -30,7 +29,6 @@ const (
 	maxLineBytes = 1 << 20
 )
 
-// The verdicts of a round.
 const (
 	VerdictPass Verdict = "pass"
 	VerdictFail Verdict = "fail"
@@ -38,14 +36,12 @@ const (
 	VerdictInconclusive Verdict = "inconclusive"
 )
 
-// The outcomes of one invariant.
 const (
 	StatusOK         Status = "ok"
 	StatusFailed     Status = "failed"
 	StatusNotChecked Status = "not_checked"
 )
 
-// invariantsOfThisVersion lists every invariant with what version 1 covers.
 var invariantsOfThisVersion = []struct {
 	id        Invariant
 	isChecked bool
@@ -61,13 +57,10 @@ var invariantsOfThisVersion = []struct {
 	{id: InvariantI8, isChecked: true, note: noteI8},
 }
 
-// Verdict is the outcome of a round.
 type Verdict string
 
-// Status is the outcome of one invariant.
 type Status string
 
-// InvariantResult is one row of the invariants table.
 type InvariantResult struct {
 	ID         Invariant `json:"id"`
 	Status     Status    `json:"status"`
@@ -75,7 +68,6 @@ type InvariantResult struct {
 	Note       string    `json:"note,omitempty"`
 }
 
-// OperationCounts summarizes how the round's operations ended.
 type OperationCounts struct {
 	Total int `json:"total"`
 	OK    int `json:"ok"`
@@ -84,7 +76,6 @@ type OperationCounts struct {
 	Open  int `json:"open"`
 }
 
-// Result is the verdict and everything that supports it.
 type Result struct {
 	Verdict    Verdict
 	Operations OperationCounts
@@ -97,19 +88,16 @@ type Result struct {
 	ledger     ledger
 }
 
-// outsideSources are what the checker compares the ledger with besides the
-// history: the partner's truth and the previous round's ledger state.
 type outsideSources struct {
 	truth    *PartnerTruth
 	previous *snapshot.LedgerState
 }
 
-// chaosEvents are the failpoint events of the round, by correlation id. They
-// never decide an invariant; they only tell the story of a violation.
+// They never decide an invariant; they only tell the story of a violation.
 type chaosEvents map[string][]json.RawMessage
 
-// roundMeta is the part of round.json the report shows; round.json is
-// optional, so the checker also works on a hand-made round directory.
+// round.json is optional, so the checker also works on a hand-made round
+// directory.
 type roundMeta struct {
 	Round    string `json:"round"`
 	Scenario string `json:"scenario"`
@@ -117,19 +105,16 @@ type roundMeta struct {
 	Duration string `json:"duration"`
 }
 
-// Evaluate checks a history against a ledger snapshot, without the partner.
 func Evaluate(records []history.Record, state snapshot.Snapshot) Result {
 	return EvaluateWithTruth(records, state, nil)
 }
 
-// EvaluateWithTruth also compares the ledger with the partner's truth (I6, the
-// R and S terms of I1c, the authoritative part of I7).
+// Also compares the ledger with the partner's truth: I6, the R and S terms
+// of I1c, and the authoritative part of I7.
 func EvaluateWithTruth(records []history.Record, state snapshot.Snapshot, truth *PartnerTruth) Result {
 	return evaluate(indexOperations(records), state, outsideSources{truth: truth})
 }
 
-// Check reads a round directory, evaluates it and writes report.json and
-// report.md next to the history.
 func Check(roundDir string) (Result, error) {
 	ops, err := readHistory(roundDir)
 	if err != nil {
@@ -206,8 +191,7 @@ func verdictOf(violations []Violation, unresolved []string) Verdict {
 	return VerdictPass
 }
 
-// byTime orders violations by when the operation behind them started;
-// violations the history cannot place go last.
+// Violations the history cannot place go last.
 func byTime(a, b Violation) int {
 	isAUnknown, isBUnknown := a.TimeNS == unknownTime, b.TimeNS == unknownTime
 	if isAUnknown != isBUnknown {
@@ -268,7 +252,6 @@ func invariantResults(violations []Violation) []InvariantResult {
 	return results
 }
 
-// readHistory streams the history into the operations index.
 func readHistory(roundDir string) (operations, error) {
 	ops := newOperations()
 
@@ -282,8 +265,7 @@ func readHistory(roundDir string) (operations, error) {
 	return ops, nil
 }
 
-// readHistoriesOf reads the history again for the records of a few
-// operations, the ones the report shows.
+// Read again for the few operations the report shows.
 func readHistoriesOf(roundDir string, wanted map[string]bool) (operationHistories, error) {
 	histories := operationHistories{}
 	if len(wanted) == 0 {
@@ -332,7 +314,6 @@ func scanHistory(roundDir string, take func(history.Record)) error {
 	return nil
 }
 
-// readPreviousState loads the state the round before left, if any.
 func readPreviousState(roundDir string) (*snapshot.LedgerState, error) {
 	state, isFound, err := snapshot.ReadState(filepath.Join(roundDir, previousStateFile))
 	if err != nil {
@@ -346,8 +327,7 @@ func readPreviousState(roundDir string) (*snapshot.LedgerState, error) {
 	return &state, nil
 }
 
-// readTruth loads truth.json, the partner's record for the round; a round
-// that never touched the partner has none.
+// A round that never touched the partner has none.
 func readTruth(roundDir string) (*PartnerTruth, error) {
 	content, err := os.ReadFile(filepath.Join(roundDir, truthFile)) //nolint:gosec // G304: the round directory comes from the operator.
 	if errors.Is(err, fs.ErrNotExist) {
@@ -368,7 +348,7 @@ func readTruth(roundDir string) (*PartnerTruth, error) {
 	return &truth, nil
 }
 
-// readEvents loads events.jsonl when it exists; a round without chaos has none.
+// A round without chaos has none.
 func readEvents(roundDir string) chaosEvents {
 	events := chaosEvents{}
 

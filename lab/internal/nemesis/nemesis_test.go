@@ -94,8 +94,6 @@ func TestCollectEvents_RecordsThisRoundAndCountsFires(t *testing.T) {
 	}
 }
 
-// TestClockFaults_AreRecordedAndCleared: the skew is in the history before
-// it is set, and the faults of the scenario are the ones pushed.
 func TestClockFaults_AreRecordedAndCleared(t *testing.T) {
 	bot, historyPath := newTestNemesis(t, t.TempDir())
 	skew := scenarios.Fault{ID: "ahead", Kind: scenarios.FaultClock, Targets: []string{"bank-worker-2"}, Offset: 2 * time.Minute}

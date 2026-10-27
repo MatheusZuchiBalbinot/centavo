@@ -10,7 +10,6 @@ import (
 	"centavo/lab/scenarios"
 )
 
-// fakeToxiproxy records the calls the bot makes.
 type fakeToxiproxy struct {
 	mu    sync.Mutex
 	calls []string

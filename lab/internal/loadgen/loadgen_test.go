@@ -19,12 +19,10 @@ import (
 	"centavo/lab/scenarios"
 )
 
-// fastPolicy keeps retry tests short.
 var fastPolicy = retryPolicy{
 	attemptTimeout: 500 * time.Millisecond, maxRetries: 2, backoffBase: time.Millisecond, backoffCap: 2 * time.Millisecond, deadline: 2 * time.Second,
 }
 
-// fakeBank is a correct in-memory bank with optional faults.
 type fakeBank struct {
 	shouldFailFirstAttempt bool
 	shouldFailTransfers    bool
@@ -398,8 +396,8 @@ func runRound(t *testing.T, bankURL string, workload scenarios.Workload, policy 
 	return report, path
 }
 
-// assertEveryWriteReachedTheBankWithItsKey checks the link the checker relies
-// on: the idempotency key of each write is its operation id, and reads carry none.
+// The link the checker relies on: the idempotency key of each write is its
+// operation id, and reads carry none.
 func assertEveryWriteReachedTheBankWithItsKey(t *testing.T, path string, bank *fakeBank) {
 	t.Helper()
 

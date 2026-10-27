@@ -8,7 +8,6 @@ import (
 	"centavo/lab/internal/snapshot"
 )
 
-// Invariants of the PIX saga.
 const (
 	// InvariantI5 is liveness: after the cure and the liveness deadline, every
 	// transfer is final and sys_pix_out_transit is back to zero.
@@ -40,7 +39,6 @@ const (
 	RuleI7Authority       Rule = "I7.authoritative_status"
 )
 
-// Statuses of the bank's state machine.
 const (
 	statusCreated   snapshot.TransferStatus = "created"
 	statusSent      snapshot.TransferStatus = "sent"
@@ -49,7 +47,6 @@ const (
 	statusReversed  snapshot.TransferStatus = "reversed"
 )
 
-// Statuses and entry kinds of the partner's truth.
 const (
 	truthSettled    = "settled"
 	truthRejected   = "rejected"
@@ -72,14 +69,10 @@ var allowedTransitions = map[[2]snapshot.TransferStatus]bool{
 	{statusConfirmed, statusReversed}: true,
 }
 
-// terminalStatuses end the saga (I5).
 var terminalStatuses = map[snapshot.TransferStatus]bool{statusConfirmed: true, statusFailed: true, statusReversed: true}
 
-// authoritativeOf is what the partner's truth must say for a final status.
 var authoritativeOf = map[snapshot.TransferStatus]string{statusConfirmed: truthSettled, statusFailed: truthRejected, statusReversed: truthReturned}
 
-// PartnerTruth is the partner's record (GET /internal/truth), read with the
-// checker's own types.
 type PartnerTruth struct {
 	ParticipantID string          `json:"participant_id"`
 	Transfers     []truthTransfer `json:"transfers"`
@@ -108,9 +101,8 @@ type truthIncoming struct {
 	AmountCents int64  `json:"amount_cents"`
 }
 
-// truthIndex is the round's part of the truth, keyed by the bank's
-// transfer: the naive relay sends E<id>-<attempt>, so every attempt of a
-// transfer maps back to it by its base E<id>.
+// Keyed by the bank's transfer: the naive relay sends E<id>-<attempt>, so
+// every attempt maps back to its base E<id>.
 type truthIndex struct {
 	statusByE2E   map[string]string
 	settlements   map[string][]truthEntry
@@ -120,14 +112,12 @@ type truthIndex struct {
 	reserveCents  int64
 }
 
-// baseEndToEnd strips the naive attempt suffix.
 func baseEndToEnd(endToEndID string) string {
 	base, _, _ := strings.Cut(endToEndID, "-")
 
 	return base
 }
 
-// fixedEndToEnd is a transfer's end_to_end_id as the bank derives it.
 func fixedEndToEnd(transferID string) string {
 	return "E" + strings.ReplaceAll(transferID, "-", "")
 }
@@ -188,7 +178,6 @@ func (t *truthIndex) addEntry(entry truthEntry, roundTransfers map[string]bool) 
 	}
 }
 
-// distinctPixOf counts the end_to_end_ids among a transfer's entries.
 func distinctPixOf(entries []truthEntry) int {
 	seen := map[string]bool{}
 
@@ -211,8 +200,8 @@ func (t *truthIndex) settlementsOf(endToEndID, base string) int {
 	return count
 }
 
-// checkPix runs I5, I6, I7 and the R and S terms of I1c. Without the partner's
-// truth, only what the ledger alone can tell is checked.
+// Without the partner's truth, only what the ledger alone can tell is
+// checked.
 func (e *evaluation) checkPix(truth *PartnerTruth) {
 	for _, transfer := range e.ledger.transfers {
 		e.checkPath(transfer)
@@ -469,7 +458,6 @@ func (e *evaluation) checkReserveTerms(index truthIndex) {
 	}
 }
 
-// roundSum adds an account's entries that belong to the round's transactions.
 func (e *evaluation) roundSum(accountID string) int64 {
 	var sum int64
 

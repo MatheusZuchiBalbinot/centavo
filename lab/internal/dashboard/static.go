@@ -24,8 +24,8 @@ const (
 //go:embed all:web
 var webFiles embed.FS
 
-// appHandler serves the built files, and the app's page for every other
-// path: the app's own router draws /rounds/r0004 and the rest.
+// Every other path gets the app's page: the app's own router draws
+// /rounds/r0004 and the rest.
 type appHandler struct {
 	files      fs.FS
 	fileServer http.Handler
@@ -44,7 +44,6 @@ func newAppHandler() appHandler {
 	return appHandler{files: files, fileServer: http.FileServerFS(files), page: page}
 }
 
-// panelFiles is the React build when the binary has one, else the placeholder.
 func panelFiles() fs.FS {
 	app, err := fs.Sub(webFiles, appDir)
 	if err == nil {
@@ -90,7 +89,6 @@ func (h appHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(h.page)
 }
 
-// apiNotFound answers an /api/ path that does not exist, instead of the page.
 func (p panelHandlers) apiNotFound(w http.ResponseWriter, r *http.Request) {
 	p.writeError(w, r, errNotFound)
 }

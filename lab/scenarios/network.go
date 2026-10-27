@@ -9,7 +9,6 @@ import (
 	"time"
 )
 
-// The fields of a toxic that are not its attributes.
 const (
 	toxicTypeField     = "type"
 	toxicStreamField   = "stream"
@@ -38,8 +37,6 @@ func validateNetworkFault(fault Fault, r rawFault) (Fault, error) {
 	return scheduledNetworkFault(fault, r)
 }
 
-// validateDatabaseFault reads an action on a poisson schedule; a freeze
-// also needs how long each pause lasts.
 func validateDatabaseFault(fault Fault, r rawFault) (Fault, error) {
 	if !slices.Contains(databaseActions, r.Action) {
 		return Fault{}, fmt.Errorf("database action %q is not one of %s", r.Action, strings.Join(databaseActions, ", "))
@@ -66,8 +63,6 @@ func validateDatabaseFault(fault Fault, r rawFault) (Fault, error) {
 	return fault, err
 }
 
-// failoverFault happens once, at a fixed time, with the replica following in
-// the given mode and lagging by the given time.
 func failoverFault(fault Fault, r rawFault) (Fault, error) {
 	if !slices.Contains(replicationModes, r.Replication) {
 		return Fault{}, fmt.Errorf("a failover needs replication %s", strings.Join(replicationModes, " or "))
@@ -143,7 +138,6 @@ func windowOf(raw rawWindow) (Window, error) {
 	return Window{Min: shortest, Max: longest}, nil
 }
 
-// toxicOf reads {type, stream, toxicity, ...attributes}.
 func toxicOf(raw map[string]any) (Toxic, error) {
 	toxicType, _ := raw[toxicTypeField].(string)
 	if !slices.Contains(toxicTypes, toxicType) {
